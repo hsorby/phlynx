@@ -211,14 +211,14 @@ watch(
 )
 
 const usedOptions = computed(() => {
-  return new Set(editableData.portLabels.map((p) => p.option).filter(Boolean))
+  return new Set(editableData.portLabels.map((p) => p.option).filter(Boolean).flat())
 })
 
 function isOptionDisabled(optionName, currentSelection) {
   // Disable if:
   // 1. It's in the usedOptions Set
-  // 2. And it's NOT the option this row already has selected
-  return usedOptions.value.has(optionName) && optionName !== currentSelection
+  // 2. And it's NOT an option this row already has selected
+  return usedOptions.value.has(optionName) && currentSelection.includes(optionName) === false
 }
 
 function addPortLabel() {
