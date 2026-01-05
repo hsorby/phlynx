@@ -52,6 +52,8 @@
 
         <el-select
           v-model="port.option"
+          multiple
+          collapse-tags
           placeholder="Select Option"
           class="port-select"
         >
