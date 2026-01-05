@@ -89,11 +89,11 @@ Define the ports as shown in the following images:
 
 ###### ENaC
 
-![Defining ports for ENaC module](./assets/images/ports-ENaC.png){.align-center width="600px"}
+![Defining ports for ENaC module](./assets/images/ports-enac.png){.align-center width="600px"}
 
 ###### Cell
 
-![Defining ports for Cell module](./assets/images/ports-Cell.png){.align-center width="600px"}
+![Defining ports for Cell module](./assets/images/ports-cell.png){.align-center width="600px"}
 
 > [!NOTE]
 > Port names can be thought of as a mapping between the variable name in a given CellML module and the shared variable name used in Circulatory Autogen.
@@ -123,6 +123,3 @@ This will download a JSON file representing the current state of the workspace, 
 To load a previously saved workspace, click the "Load Model" button and select the JSON file from your local filesystem.
 The workspace will be restored to the state it was in when it was saved.
 
-```bash
-yarn dev
-```
