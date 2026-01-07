@@ -1,3 +1,5 @@
+[![Netlify Status](https://api.netlify.com/api/v1/badges/94c2ffbc-8f11-4759-9094-626a6efd7d82/deploy-status)](https://app.netlify.com/projects/latest-phlynx/deploys)
+
 =================================
 Circulatory Autogen Model Builder
 =================================
@@ -18,6 +20,12 @@ Features
 * **Workflow Management:** Save and load your visual workflow as a JSON file.
 * **Model Export:** Export your model to formats compatible with Circulatory Autogen.
 * **Cross-Platform:** Runs on macOS, Windows, and Linux as a standalone desktop app.
+
+The latest state of the application can be accessed online at: https://latest-phlynx.netlify.app/
+
+.. Note::
+
+   The latest version is not guaranteed to be stable or working at any given time.
 
 Usage Instructions
 ------------------
