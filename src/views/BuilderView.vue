@@ -61,17 +61,27 @@
               :disabled="!currentImportMode.disabled"
               placement="bottom"
             >
-              <span class="import-button-content">
-                Import
-                <el-tooltip placement="bottom">
-                  <el-icon class="el-icon--right">
-                    <component :is="currentImportMode.icon" />
-                  </el-icon>
+              <div>
+                <el-tooltip
+                  placement="bottom"
+                  :visible="importTooltip.visible.value"
+                  trigger="manual"
+                >
+                  <span
+                    class="import-button-content"
+                    @mouseenter="importTooltip.onMouseEnter"
+                    @mouseleave="importTooltip.onMouseLeave"
+                  >
+                    Import
+                    <el-icon class="el-icon--right">
+                      <component :is="currentImportMode.icon" />
+                    </el-icon>
+                  </span>
                   <template #content>
-                    {{ currentImportMode.label }}
+                    Import {{ currentImportMode.label }}
                   </template>
                 </el-tooltip>
-              </span>
+              </div>
               <template #content>
                 <p>
                   The
@@ -110,17 +120,26 @@
               :disabled="!currentExportMode.disabled"
               placement="bottom"
             >
-              <span class="export-button-content">
-                Export
-                <el-tooltip placement="bottom">
-                  <el-icon class="el-icon--right">
-                    <component :is="currentExportMode.icon" />
-                  </el-icon>
+              <div>
+                <el-tooltip
+                  placement="bottom"
+                  :visible="exportTooltip.visible.value"
+                >
+                  <span
+                    class="export-button-content"
+                    @mouseenter="exportTooltip.onMouseEnter"
+                    @mouseleave="exportTooltip.onMouseLeave"
+                  >
+                    Export
+                    <el-icon class="el-icon--right">
+                      <component :is="currentExportMode.icon" />
+                    </el-icon>
+                  </span>
                   <template #content>
-                    {{ currentExportMode.label }}
+                    Export {{ currentExportMode.label }}
                   </template>
                 </el-tooltip>
-              </span>
+              </div>
               <template #content>
                 <p>
                   The
@@ -294,6 +313,7 @@ import { useFlowHistoryStore } from '../stores/historyStore'
 import useDragAndDrop from '../composables/useDnD'
 import { useLoadFromConfigData } from '../composables/useLoadFromConfigData'
 import { useResizableAside } from '../composables/useResizableAside'
+import { useAutoClosingTooltip } from '../composables/useAutoClosingTooltip'
 import ModuleList from '../components/ModuleList.vue'
 import Workbench from '../components/WorkbenchArea.vue'
 import ModuleNode from '../components/ModuleNode.vue'
@@ -405,6 +425,9 @@ const undoRedoSelection = false
 
 const clipboard = ref({ nodes: [], edges: [] })
 const mousePosition = ref({ x: 0, y: 0 })
+
+const importTooltip = useAutoClosingTooltip(1500)
+const exportTooltip = useAutoClosingTooltip(1500)
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 
