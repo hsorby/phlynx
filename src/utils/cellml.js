@@ -151,3 +151,16 @@ export function isCellML(content) {
 
   return model !== null && errorCount === 0
 }
+
+export function generateFlattenedModel() {
+  let model = new _libcellml.Model()
+  model.setName('PhLynxGenerated')
+
+  let printer = new _libcellml.Printer()
+  const modelString = printer.printModel(model, false)
+
+  printer.delete()
+  model.delete()
+
+  return new Blob([modelString], { type: 'application/x.vnd.cellml+xml' })
+}

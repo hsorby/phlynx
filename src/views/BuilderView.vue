@@ -51,7 +51,7 @@
           <el-divider direction="vertical" style="margin: 0 15px" />
 
           <el-dropdown
-            ref="dropdownRef"
+            ref="importDropdownRef"
             split-button
             type="info"
             @click="triggerCurrentImport"
@@ -86,6 +86,54 @@
               <el-dropdown-menu>
                 <el-dropdown-item
                   v-for="option in importOptions"
+                  :key="option.key"
+                  :command="option"
+                  :disabled="option.disabled"
+                >
+                  <el-icon><component :is="option.icon" /></el-icon>
+                  {{ option.label }}
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+
+          <el-dropdown
+            ref="exportDropdownRef"
+            split-button
+            type="info"
+            @click="triggerCurrentExport"
+            @command="handleExportCommand"
+            :disabled="!exportAvailable"
+          >
+            <el-tooltip
+              :disabled="!currentExportMode.disabled"
+              placement="bottom"
+            >
+              <span class="export-button-content">
+                Export
+                <el-tooltip placement="bottom">
+                  <el-icon class="el-icon--right">
+                    <component :is="currentExportMode.icon" />
+                  </el-icon>
+                  <template #content>
+                    {{ currentExportMode.label }}
+                  </template>
+                </el-tooltip>
+              </span>
+              <template #content>
+                <p>
+                  The
+                  <strong>{{ currentExportMode.label }}</strong>
+                  import option is disabled because the CellML library is not
+                  ready yet. Please wait a moment and try again.
+                </p>
+              </template>
+            </el-tooltip>
+
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item
+                  v-for="option in exportOptions"
                   :key="option.key"
                   :command="option"
                   :disabled="option.disabled"
@@ -187,9 +235,9 @@
   <SaveDialog
     v-model="exportDialogVisible"
     @confirm="onExportConfirm"
-    title="Export for Circulatory Autogen"
+    :title="`Export for ${currentExportMode.label}`"
     :default-name="builderStore.lastExportName"
-    suffix=".zip"
+    :suffix="currentExportMode.suffix"
   />
 
   <ModuleReplacementDialog
@@ -268,11 +316,18 @@ import { generateExportZip } from '../services/caExport'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { getHelperLines } from '../utils/helperLines'
 import {
+  generateFlattenedModel,
   initLibCellML,
   processModuleData,
   processUnitsData,
 } from '../utils/cellml'
-import { edgeLineOptions, FLOW_IDS, IMPORT_KEYS } from '../utils/constants'
+import {
+  edgeLineOptions,
+  FLOW_IDS,
+  IMPORT_KEYS,
+  EXPORT_KEYS,
+  JSON_FILE_TYPES,
+} from '../utils/constants'
 import {
   getId as getNextNodeId,
   generateUniqueModuleName,
@@ -284,6 +339,7 @@ import testModuleBGContent from '../assets/bg_modules.cellml?raw'
 import testModuleColonContent from '../assets/colon_FTU_modules.cellml?raw'
 import testModuleNewColonContent from '../assets/colon_FTU_modules_new.cellml?raw'
 import testParamertersCSV from '../assets/colon_FTU_parameters.csv?raw'
+import { legacyDownload, saveFileHandle, writeFileHandle } from '../utils/save'
 
 const {
   addEdges,
@@ -322,7 +378,7 @@ const { width: asideWidth, startResize } = useResizableAside(200, 150, 400)
 const helperLineHorizontal = ref(null)
 const helperLineVertical = ref(null)
 const alignment = ref('edge')
-const dropdownRef = ref(null)
+const importDropdownRef = ref(null)
 
 const testData = {
   filename: 'colon_FTU_modules.cellml',
@@ -349,6 +405,8 @@ const currentEditingNode = ref({
 
 const currentImportMode = ref(null)
 const currentImportConfig = ref({})
+
+const currentExportMode = ref(null)
 
 const activeInteractionBuffer = new Map()
 const undoRedoSelection = false
@@ -395,6 +453,24 @@ const importOptions = computed(() => [
   },
 ])
 currentImportMode.value = importOptions.value[0]
+
+const exportOptions = computed(() => [
+  {
+    key: EXPORT_KEYS.CA,
+    label: 'Circulatory Autogen',
+    icon: markRaw(IconVessel),
+    disabled: false,
+    suffix: '.zip',
+  },
+  {
+    key: EXPORT_KEYS.CELLML,
+    label: 'CellML',
+    icon: markRaw(IconCellML),
+    disabled: libcellml.status !== 'ready',
+    suffix: '.cellml'
+  },
+])
+currentExportMode.value = exportOptions.value[0]
 
 onConnect((connection) => {
   // Match what we specify in connectionLineOptions.
@@ -723,6 +799,29 @@ async function onImportConfirm(importPayload) {
   }
 }
 
+const performExport = async () => {
+  const result = await saveFileHandle(
+    builderStore.lastSaveName,
+    JSON_FILE_TYPES
+  )
+  if (result.status) {
+    if (result.handle) {
+      onExportConfirm(undefined, result.handle)
+    }
+  } else {
+    exportDialogVisible.value = true
+  }
+}
+
+const triggerCurrentExport = () => {
+  performExport()
+}
+
+const handleExportCommand = (option) => {
+  currentExportMode.value = option
+  performExport(option)
+}
+
 function onOpenEditDialog(eventPayload) {
   currentEditingNode.value = {
     ...eventPayload,
@@ -856,41 +955,79 @@ async function onReplaceConfirm(updatedData) {
   replacementDialogVisible.value = false
 }
 
-function handleSaveWorkspace() {
-  saveDialogVisible.value = true
+async function handleSaveWorkspace() {
+  const result = await saveFileHandle(
+    builderStore.lastSaveName,
+    JSON_FILE_TYPES
+  )
+  if (result.status) {
+    if (result.handle) {
+      const blob = createSaveBlob()
+      try {
+        writeFileHandle(result.handle, blob)
+        builderStore.setLastSaveName(result.handle.name)
+        ElNotification.success({ message: 'Workflow saved!' })
+      } catch (err) {
+        ElNotification.error({
+          title: 'Error Saving Workflow',
+          message: err.message,
+        })
+      }
+    }
+  } else {
+    saveDialogVisible.value = true
+  }
 }
 
-function handleExport() {
-  exportDialogVisible.value = true
+async function handleExport() {
+  const result = await saveFileHandle(
+    builderStore.lastExportName,
+    JSON_FILE_TYPES
+  )
+  if (result.status) {
+    if (result.handle) {
+      onExportConfirm(undefined, result.handle)
+    }
+  } else {
+    exportDialogVisible.value = true
+  }
 }
 
 /**
- * Collects all state and processes it into a zip file for CA ingestion.
+ * Collects all state and processes it into a the current export format.
  */
-async function onExportConfirm(fileName) {
+async function onExportConfirm(fileName, handle) {
+  const caExport = currentExportMode.value.key === EXPORT_KEYS.CA
+  const message = caExport ? 'Generating and zipping CA files.' : 'Generating flattened CellML model.'
   const notification = ElNotification.info({
-    title: 'Exporting...',
-    message: 'Generating and zipping files.',
+    title: 'Exporting ...',
+    message: message,
     duration: 0, // Stays open until closed
   })
 
   try {
-    const zipBlob = await generateExportZip(
-      fileName,
-      nodes.value,
-      edges.value,
-      builderStore.parameterData
-    )
-
-    if (!import.meta.env.DEVOFF) {
-      const link = document.createElement('a')
-      link.href = URL.createObjectURL(zipBlob)
-      link.download = `${fileName}.zip`
-      link.click()
-
-      URL.revokeObjectURL(link.href)
+    let blob = undefined
+    if (caExport) {
+      blob = await generateExportZip(
+        fileName,
+        nodes.value,
+        edges.value,
+        builderStore.parameterData
+      )
+    } else if (currentExportMode.value.key === EXPORT_KEYS.CELLML) {
+      blob = generateFlattenedModel()
     }
-    builderStore.setLastExportName(fileName)
+
+    let finalName = undefined
+    if (fileName) {
+      finalName = fileName.endsWith(currentExportMode.value.suffix) ? fileName : `${fileName}${currentExportMode.value.suffix}`
+      legacyDownload(finalName, blob)
+    } else if (handle) {
+      writeFileHandle(handle, blob)
+      finalName = handle.name
+    }
+
+    builderStore.setLastExportName(finalName)
     notification.close()
     ElNotification.success({ message: 'Export successful!' })
   } catch (error) {
@@ -900,19 +1037,11 @@ async function onExportConfirm(fileName) {
 }
 
 /**
- * Collects all state and downloads it as a JSON file.
+ * Collects all state and creates blob from it.
  */
-function onSaveConfirm(fileName) {
-  // Ensure the filename ends with .json
-  const finalName = fileName.endsWith('.json') ? fileName : `${fileName}.json`
-
+function createSaveBlob() {
   const saveState = {
     flow: toObject(),
-    // flow: {
-    //   nodes: nodes.value,
-    //   edges: edges.value,
-    //   viewport: viewport.value,
-    // },
     store: {
       availableModules: builderStore.availableModules,
       parameterData: builderStore.parameterData,
@@ -920,15 +1049,19 @@ function onSaveConfirm(fileName) {
   }
 
   const jsonString = JSON.stringify(saveState, null, 2)
-  const blob = new Blob([jsonString], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
+  return new Blob([jsonString], { type: 'application/json' })
+}
 
-  const link = document.createElement('a')
-  link.href = url
-  link.download = finalName
-  link.click()
+/**
+ * Collects all state and downloads it as a JSON file.
+ */
+function onSaveConfirm(fileName) {
+  // Ensure the filename ends with .json
+  const finalName = fileName.endsWith('.json') ? fileName : `${fileName}.json`
 
-  URL.revokeObjectURL(url)
+  const blob = createSaveBlob()
+
+  legacyDownload(finalName, blob)
 
   builderStore.setLastSaveName(fileName)
   ElNotification.success({ message: 'Workflow saved!' })
@@ -1193,11 +1326,12 @@ onUnmounted(() => {
 
 watchPostEffect(() => {
   // Safety check: ensure component is mounted
-  if (!dropdownRef.value || !dropdownRef.value.$el) return
+  if (!importDropdownRef.value || !importDropdownRef.value.$el) return
 
   // Find the FIRST button inside the split-dropdown (The Action Button)
   // The second button is the trigger arrow, which we want to leave alone.
-  const actionBtn = dropdownRef.value.$el.querySelector('button:first-child')
+  const actionBtn =
+    importDropdownRef.value.$el.querySelector('button:first-child')
 
   if (!actionBtn) return
 
