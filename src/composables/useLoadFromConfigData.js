@@ -59,12 +59,14 @@ export function useLoadFromConfigData() {
     if (!layoutPending.value || initializedNodes.length === 0) return
 
     try {
+      // If position is not declared in vessel array file, 
       // Run Layout (Calculates positions & sorts port arrays).
       // Could make this choice configurable later.
-      // runPortGranularLayout(initializedNodes, pendingEdges)
-      // runElkLayout(initializedNodes, pendingEdges)
-      runFcoseLayout(initializedNodes, pendingEdges)
-
+      if (initializedNodes[0].data.x === undefined || initializedNodes[0].data.y === undefined) 
+        // runPortGranularLayout(initializedNodes, pendingEdges)
+        // runElkLayout(initializedNodes, pendingEdges)
+        runFcoseLayout(initializedNodes, pendingEdges)
+      
       await nextTick()
 
       // Handles may have moved from initial positions. Update node data from pending map.
@@ -86,5 +88,5 @@ export function useLoadFromConfigData() {
     }
   })
 
-  return { loadFromConfigData}
+  return { loadFromConfigData }
 }
