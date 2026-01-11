@@ -175,14 +175,19 @@ const addDynamicFields = async (validation) => {
     const { createDynamicFields } = await import('../utils/import')
     const newFields = createDynamicFields(validation)
     
-    if (JSON.stringify(newFields) !== JSON.stringify(dynamicFields.value)) {
-      dynamicFields.value = newFields
-      dynamicFields.value.forEach((field) => {
-        if (!formState[field.key]) {
-          formState[field.key] = createEmptyFieldState()
+    // Merge new fields with existing ones
+    const existingKeys = new Set(dynamicFields.value.map(f => f.key))
+    
+    newFields.forEach((newField) => {
+      if (!existingKeys.has(newField.key)) {
+        dynamicFields.value.push(newField)
+        
+        // Initialize form state for new field
+        if (!formState[newField.key]) {
+          formState[newField.key] = createEmptyFieldState()
         }
-      })
-    }
+      }
+    })
   } catch (error) {
     console.error("Failed to create dynamic fields:", error)
   }
@@ -376,7 +381,6 @@ async function updateVesselValidation(validation) {
   validationStatus.value = validation
 
   if (validation.isComplete) {
-    dynamicFields.value = []
     ElNotification.success({
       title: 'All Resources Available',
       message: 'All required modules and configurations are now loaded!',
@@ -435,7 +439,6 @@ async function stageFile(field, parsedData, fileName) {
     )
 
     formState[IMPORT_KEYS.VESSEL].validation = newValidation
-    //await nextTick()
     updateVesselValidation(newValidation)
 
     if (newValidation.isComplete) {
