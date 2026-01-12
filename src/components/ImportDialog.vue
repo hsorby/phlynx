@@ -512,20 +512,31 @@ defineExpose({
 
   0%,
   100% {
-    transform: scale(1);
+    transform: scale(0.95);
   }
 
   50% {
-    transform: scale(1.1);
+    transform: scale(1.05);
   }
 }
 
 :deep(.el-loading-spinner svg) {
+  width: 120px;
+  height: 120px;
   animation: breathe 2s ease-in-out infinite !important;
   transform-origin: center;
 }
 
+:deep(.el-loading-spinner) {
+  transform: translateY(-35%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 :deep(.el-loading-text) {
   color: #000000ce;
+  font-size: 16px;
+  margin-top: 12px;
 }
 </style>
