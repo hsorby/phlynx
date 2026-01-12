@@ -53,39 +53,44 @@ export const useBuilderStore = defineStore('builder', () => {
     }
   }
 
- /**
-   * Adds configuration(s) to the appropriate module(s)
-   * @param {Array} payload - Array of configs 
-   * @param {string} filename - Optional filename (when first param is array)
-   * 
-   * Usage:
-   *   addConfigFile([{...}], 'config.json')  
-   * 
-   * Structure of availableModules after adding configs:
-   * [
-   *   {
-   *     filename: "module.cellml",
-   *     modules: [
-   *       {
-   *         name: "artery",
-   *         type: "artery",
-   *         configs: [
-   *           { BC_type: "nn", vessel_type: "aorta", ... },
-   *           { BC_type: "qv", vessel_type: "pulmonary", ... }
-   *         ]
-   *       }
-   *     ],
-   *     model: "<?xml..."
-   *   }
-   * ]
-   */
+  /**
+    * Adds configuration(s) to the appropriate module(s)
+    * @param {Array} payload - Array of configs 
+    * @param {string} filename - Optional filename (when first param is array)
+    * 
+    * Usage:
+    *   addConfigFile([{...}], 'config.json')  
+    * 
+    * Structure of availableModules after adding configs:
+    * [
+    *   {
+    *     filename: "module.cellml",
+    *     modules: [
+    *       {
+    *         name: "artery",
+    *         type: "artery",
+    *         configs: [
+    *           { BC_type: "nn", vessel_type: "aorta", ... },
+    *           { BC_type: "pv", vessel_type: "pulmonary", ... }
+    *         ]
+    *       }
+    *     ],
+    *     model: "<?xml..."
+    *   }
+    * ]
+    */
   function addConfigFile(payload, filename) {
     const configs = payload
     const configFilename = filename
 
     configs.forEach((config) => {
+      if (!config.module_file || typeof config.module_file !== "string") {
+        console.warn("[builderStore] Skipping config: missing module_file", config)
+        return
+      }
+
       let moduleFile = availableModules.value.find(
-        (f) => f.filename === config.module_file 
+        (f) => f.filename === config.module_file
       )
 
       if (!moduleFile) {
@@ -98,8 +103,8 @@ export const useBuilderStore = defineStore('builder', () => {
       }
 
       let module = moduleFile.modules.find(
-        (m) => m.name === config.module_type || 
-               m.type === config.module_type
+        (m) => m.name === config.module_type ||
+          m.type === config.module_type
       )
 
       if (!module) {
@@ -139,18 +144,18 @@ export const useBuilderStore = defineStore('builder', () => {
     )
 
     if (existingFile) {
-        if (existingFile.isStub) {
-            delete existingFile.isStub
-        }
+      if (existingFile.isStub) {
+        delete existingFile.isStub
+      }
 
-        if (existingFile.modules) {
-            payload.modules.forEach(newMod => {
-                const oldMod = existingFile.modules.find(m => m.name === newMod.name)
-                if (oldMod && oldMod.configs && oldMod.configs.length > 0) {
-                newMod.configs = oldMod.configs
-                }
-            })
-        }
+      if (existingFile.modules) {
+        payload.modules.forEach(newMod => {
+          const oldMod = existingFile.modules.find(m => m.name === newMod.name)
+          if (oldMod && oldMod.configs && oldMod.configs.length > 0) {
+            newMod.configs = oldMod.configs
+          }
+        })
+      }
     }
 
     addOrUpdateFile(availableModules, payload)
@@ -190,7 +195,7 @@ export const useBuilderStore = defineStore('builder', () => {
       }
 
       // For stub files, check if any module has configs
-      const hasAnyConfigs = file.modules.some((module) => 
+      const hasAnyConfigs = file.modules.some((module) =>
         module.configs && module.configs.length > 0
       )
 
@@ -307,17 +312,17 @@ export const useBuilderStore = defineStore('builder', () => {
     // Find the base definition
 
     let foundModule = null
-    for(const file of availableModules.value) {
-        const match = file.modules?.find(mod => mod.name === moduleName || mod.componentName === moduleName)
-        if(match) {
-            foundModule = match
-            break
-        }
+    for (const file of availableModules.value) {
+      const match = file.modules?.find(mod => mod.name === moduleName || mod.componentName === moduleName)
+      if (match) {
+        foundModule = match
+        break
+      }
     }
 
     if (foundModule) {
       const newModuleInstance = {
-        ...foundModule, 
+        ...foundModule,
         id: `instance_${Date.now()}`,
         x: position.x,
         y: position.y,
