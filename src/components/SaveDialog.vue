@@ -71,7 +71,7 @@ function closeDialog() {
 
 function handleConfirm() {
   if (!fileName.value || !fileName.value.trim()) {
-    ElNotification.error("Filename cannot be empty.")
+    ElNotification.error({message: "Filename cannot be empty."})
     return
   }
   

@@ -176,7 +176,7 @@ function closeDialog() {
 
 function handleConfirm() {
   if (!editableData.name || !editableData.name.trim()) {
-    ElNotification.error("Module name cannot be empty.")
+    ElNotification.error({message: "Module name cannot be empty."})
     return
   }
 
@@ -184,7 +184,7 @@ function handleConfirm() {
     (name) => name === editableData.name && name !== props.initialName
   )
   if (nameExists) {
-    ElNotification.error("A module with this name already exists.")
+    ElNotification.error({message: "A module with this name already exists."})
     return
   }
 

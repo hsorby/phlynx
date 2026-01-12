@@ -47,7 +47,7 @@ export function useLoadFromVesselArray() {
       layoutPending.value = true
       addNodes(result.nodes) // Adds invisible nodes
     } catch (error) {
-      ElNotification.error(`Failed to load workflow: ${error.message}`)
+      ElNotification.error({message: `Failed to load workflow: ${error.message}`})
       layoutPending.value = false
     }
   }
@@ -82,7 +82,7 @@ export function useLoadFromVesselArray() {
       fitView({ padding: 0.2, duration: 800 })
     } catch (err) {
       historyStore.clear()
-      ElNotification.error('Error organizing graph layout')
+      ElNotification.error({message: 'Error organizing graph layout'})
     } finally {
       layoutPending.value = false
       pendingEdges = []

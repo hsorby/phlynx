@@ -259,7 +259,7 @@ export async function generateExportZip(fileName, nodes, edges, parameters) {
 
     return zipBlob
   } catch (error) {
-    ElNotification.error(`Failed to export config files: ${error.message}`)
+    ElNotification.error({message: `Failed to export config files: ${error.message}`})
     throw error
   }
 }
