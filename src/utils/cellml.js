@@ -332,6 +332,7 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
 
       // Add to Main Model.
       model.addComponent(componentClone)
+      console.log(componentClone.math())
 
       // Iterate through all variables in this component
       for (let i = 0; i < componentClone.variableCount(); i++) {

@@ -100,8 +100,8 @@
 
 <script setup>
 import { reactive, computed, watch, ref } from 'vue'
-import { ElNotification } from 'element-plus'
 import { Check } from '@element-plus/icons-vue'
+import { notify} from '../utils/notify'
 import { IMPORT_KEYS } from '../utils/constants'
 
 const props = defineProps({
@@ -356,7 +356,7 @@ const handleFileChange = async (uploadFile, field) => {
 
     // Surface warnings (notifications only once)
     state.warnings.forEach((w) => {
-      ElNotification.warning({
+      nofity.warning({
         title: 'Import Warning',
         message: w,
         duration: 5000,
@@ -369,7 +369,7 @@ const handleFileChange = async (uploadFile, field) => {
     state.payload = null
     state.warnings = []
 
-    ElNotification.error({
+    notify.error({
       title: 'Import Error',
       message: error.message || 'Failed to parse file.',
       duration: 6000,
@@ -381,7 +381,7 @@ async function updateVesselValidation(validation) {
   validationStatus.value = validation
 
   if (validation.isComplete) {
-    ElNotification.success({
+    notify.success({
       title: 'All Resources Available',
       message: 'All required modules and configurations are now loaded!',
       duration: 3000,
@@ -446,7 +446,7 @@ async function stageFile(field, parsedData, fileName) {
     }
   }
 
-  ElNotification.success({
+  notify.success({
     title: field.processUpload === 'cellml'
       ? 'CellML File Staged'
       : 'Config Staged',

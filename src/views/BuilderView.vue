@@ -295,7 +295,6 @@ import {
   ref,
   watchPostEffect,
 } from 'vue'
-import { ElNotification } from 'element-plus'
 import { useVueFlow, VueFlow } from '@vue-flow/core'
 import {
   DCaret,
@@ -328,6 +327,7 @@ import HelperLines from '../components/HelperLines.vue'
 import { useScreenshot } from '../services/useScreenshot'
 import { generateExportZip } from '../services/caExport'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
+import { notify} from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
 import {
   generateFlattenedModel,
@@ -806,12 +806,12 @@ const loadCellMLModuleData = (content, filename, builderStore) => {
       modules: augmentedData,
       model: result.model,
     })
-    ElNotification.success({
+    notify.success({
       title: 'CellML Modules Loaded',
       message: `Loaded ${result.data.length} parameters from ${filename}.`,
     })
   } else if (result.issues) {
-    ElNotification.error({
+    notify.error({
       title: 'Loading Module Error',
       message: `${result.issues.length} issues found in model file.`,
     })
@@ -826,12 +826,12 @@ const loadCellMLUnitsData = (content, filename, builderStore) => {
       filename: filename,
       model: result.model,
     })
-    ElNotification.success({
+    notify.success({
       title: 'CellML Units Loaded',
       message: `Loaded ${result.units.count} units from ${filename}.`,
     })
   } else if (result.issues) {
-    ElNotification.error({
+    notify.error({
       title: 'Loading Units Error',
       message: `${result.issues[0].description}`,
     })
@@ -924,7 +924,7 @@ async function onEditConfirm(updatedData) {
 
 const handleParametersFile = (file) => {
   if (!file) {
-    ElNotification.error({message: 'No file selected.'})
+    notify.error({message: 'No file selected.'})
     return
   }
 
@@ -937,14 +937,14 @@ const handleParametersFile = (file) => {
       // e.g., [{ param_name: 'a', value: '1' }, { param_name: 'b', value: '2' }]
       builderStore.setParameterData(results.data)
 
-      ElNotification.success({
+      notify.success({
         title: 'Parameters Loaded',
         message: `Loaded ${results.data.length} parameters from ${file.name}.`,
       })
     },
 
     error: (err) => {
-      ElNotification.error({
+      notify.error({
         title: 'CSV Parse Error',
         message: err.message,
       })
@@ -1001,9 +1001,9 @@ async function handleSaveWorkspace() {
       try {
         writeFileHandle(result.handle, blob)
         builderStore.setLastSaveName(result.handle.name)
-        ElNotification.success({ message: 'Workflow saved!' })
+        notify.success({ message: 'Workflow saved!' })
       } catch (err) {
-        ElNotification.error({
+        notify.error({
           title: 'Error Saving Workflow',
           message: err.message,
         })
@@ -1036,7 +1036,7 @@ async function onExportConfirm(fileName, handle) {
   const message = caExport
     ? 'Generating and zipping CA files.'
     : 'Generating flattened CellML model.'
-  const notification = ElNotification.info({
+  const notification = notify.info({
     title: 'Exporting ...',
     message: message,
     duration: 0, // Stays open until closed
@@ -1073,10 +1073,10 @@ async function onExportConfirm(fileName, handle) {
 
     builderStore.setLastExportName(finalName)
     notification.close()
-    ElNotification.success({ message: 'Export successful!' })
+    notify.success({ message: 'Export successful!' })
   } catch (error) {
     notification.close()
-    ElNotification.error({message: `Export failed: ${error.message}`})
+    notify.error({message: `Export failed: ${error.message}`})
   }
 }
 
@@ -1109,7 +1109,7 @@ function onSaveConfirm(fileName) {
   legacyDownload(finalName, blob)
 
   builderStore.setLastSaveName(fileName)
-  ElNotification.success({ message: 'Workflow saved!' })
+  notify.success({ message: 'Workflow saved!' })
 }
 
 function mergeIntoStore(newModules, target) {
@@ -1174,11 +1174,11 @@ function handleLoadWorkspace(file) {
         builderStore.availableModules
       )
 
-      ElNotification.success({
+      notify.success({
         message: 'Workflow loaded successfully!',
       })
     } catch (error) {
-      ElNotification.error({message: `Failed to load workflow: ${error.message}`})
+      notify.error({message: `Failed to load workflow: ${error.message}`})
     }
   }
 
@@ -1370,7 +1370,7 @@ onMounted(async () => {
   })
 
   // Clear any notifications created on load
-  ElNotification.closeAll()
+  notify.closeAll()
 
   for (const [path, content] of Object.entries(moduleConfigs)) {
     builderStore.addConfigFile(content.default, path.split('/').pop())

@@ -1,6 +1,7 @@
 import JSZip from 'jszip'
 import Papa from 'papaparse'
-import { ElNotification } from 'element-plus'
+import { notify} from '../utils/notify'
+
 
 /**
  * Classifies a variable based on a list of parameters.
@@ -259,7 +260,7 @@ export async function generateExportZip(fileName, nodes, edges, parameters) {
 
     return zipBlob
   } catch (error) {
-    ElNotification.error({message: `Failed to export config files: ${error.message}`})
+    notify.error({message: `Failed to export config files: ${error.message}`})
     throw error
   }
 }

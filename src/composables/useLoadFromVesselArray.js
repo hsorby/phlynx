@@ -1,6 +1,5 @@
 import { useVueFlow } from '@vue-flow/core'
 import { nextTick, ref } from 'vue'
-import { ElNotification } from 'element-plus'
 
 import { useBuilderStore } from '../stores/builderStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
@@ -10,6 +9,7 @@ import { runElkLayout } from '../services/layouts/elk'
 import { runFcoseLayout } from '../services/layouts/cytoscape'
 import { runPortGranularLayout } from '../services/layouts/dagre'
 import { runRescaleLayout } from '../services/layouts/rescale'
+import { notify} from '../utils/notify'
 
 export function useLoadFromVesselArray() {
   const {
@@ -47,7 +47,7 @@ export function useLoadFromVesselArray() {
       layoutPending.value = true
       addNodes(result.nodes) // Adds invisible nodes
     } catch (error) {
-      ElNotification.error({message: `Failed to load workflow: ${error.message}`})
+      notify.error({message: `Failed to load workflow: ${error.message}`})
       layoutPending.value = false
     }
   }
@@ -82,7 +82,7 @@ export function useLoadFromVesselArray() {
       fitView({ padding: 0.2, duration: 800 })
     } catch (err) {
       historyStore.clear()
-      ElNotification.error({message: 'Error organizing graph layout'})
+      notify.error({message: 'Error organizing graph layout'})
     } finally {
       layoutPending.value = false
       pendingEdges = []
