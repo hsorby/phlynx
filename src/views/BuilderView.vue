@@ -305,6 +305,7 @@ import {
   Setting as IconModuleConfig,
   ScaleToOriginal as IconUnits,
 } from '@element-plus/icons-vue'
+
 import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import Papa from 'papaparse'
@@ -327,7 +328,7 @@ import HelperLines from '../components/HelperLines.vue'
 import { useScreenshot } from '../services/useScreenshot'
 import { generateExportZip } from '../services/caExport'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
-import { notify} from '../utils/notify'
+import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
 import {
   generateFlattenedModel,
@@ -794,7 +795,12 @@ const screenshotDisabled = computed(
   () => nodes.value.length === 0 && vueFlowRef.value !== null
 )
 
-const loadCellMLModuleData = (content, filename, builderStore) => {
+const loadCellMLModuleData = (
+  content,
+  filename,
+  builderStore,
+  broadcaseNotifications = true
+) => {
   const result = processModuleData(content)
   if (result.type === 'success') {
     const augmentedData = result.data.map((item) => ({
@@ -806,36 +812,53 @@ const loadCellMLModuleData = (content, filename, builderStore) => {
       modules: augmentedData,
       model: result.model,
     })
-    notify.success({
-      title: 'CellML Modules Loaded',
-      message: `Loaded ${result.data.length} parameters from ${filename}.`,
-    })
+    if (broadcaseNotifications) {
+      notify.success({
+        title: 'CellML Modules Loaded',
+        message: `Loaded ${result.data.length} parameters from ${filename}.`,
+      })
+    }
   } else if (result.issues) {
-    notify.error({
-      title: 'Loading Module Error',
-      message: `${result.issues.length} issues found in model file.`,
-    })
+    if (broadcaseNotifications) {
+      notify.error({
+        title: 'Loading Module Error',
+        message: `${result.issues.length} issues found in model file.`,
+      })
+    }
     console.error('Model import issues:', result.issues)
   }
+
+  return result.type === 'success'
 }
 
-const loadCellMLUnitsData = (content, filename, builderStore) => {
+const loadCellMLUnitsData = (
+  content,
+  filename,
+  builderStore,
+  broadcaseNotifications = true
+) => {
   const result = processUnitsData(content)
   if (result.type === 'success') {
     builderStore.addUnitsFile({
       filename: filename,
       model: result.model,
     })
-    notify.success({
-      title: 'CellML Units Loaded',
-      message: `Loaded ${result.units.count} units from ${filename}.`,
-    })
+    if (broadcaseNotifications) {
+      notify.success({
+        title: 'CellML Units Loaded',
+        message: `Loaded ${result.units.count} units from ${filename}.`,
+      })
+    }
   } else if (result.issues) {
-    notify.error({
-      title: 'Loading Units Error',
-      message: `${result.issues[0].description}`,
-    })
+    if (broadcaseNotifications) {
+      notify.error({
+        title: 'Loading Units Error',
+        message: `${result.issues[0].description}`,
+      })
+    }
   }
+
+  return result.type === 'success'
 }
 
 const performImport = (mode) => {
@@ -922,33 +945,43 @@ async function onEditConfirm(updatedData) {
   updateNodeData(nodeId, updatedData)
 }
 
-const handleParametersFile = (file) => {
-  if (!file) {
-    notify.error({message: 'No file selected.'})
-    return
-  }
+const handleParametersFile = (file, broadcaseNotifications = true) => {
+  return new Promise((resolve) => {
+    if (!file) {
+      if (broadcaseNotifications) {
+        notify.error({ message: 'No file selected.' })
+      }
+      return resolve(false)
+    }
 
-  Papa.parse(file.raw, {
-    header: true, // Converts row 1 to object keys
-    skipEmptyLines: true,
+    Papa.parse(file.raw, {
+      header: true, // Converts row 1 to object keys
+      skipEmptyLines: true,
 
-    complete: (results) => {
-      // results.data will be an array of objects
-      // e.g., [{ param_name: 'a', value: '1' }, { param_name: 'b', value: '2' }]
-      builderStore.setParameterData(results.data)
+      complete: (results) => {
+        // results.data will be an array of objects
+        // e.g., [{ param_name: 'a', value: '1' }, { param_name: 'b', value: '2' }]
+        builderStore.setParameterData(results.data)
 
-      notify.success({
-        title: 'Parameters Loaded',
-        message: `Loaded ${results.data.length} parameters from ${file.name}.`,
-      })
-    },
+        if (broadcaseNotifications) {
+          notify.success({
+            title: 'Parameters Loaded',
+            message: `Loaded ${results.data.length} parameters from ${file.name}.`,
+          })
+        }
+        resolve(true)
+      },
 
-    error: (err) => {
-      notify.error({
-        title: 'CSV Parse Error',
-        message: err.message,
-      })
-    },
+      error: (err) => {
+        if (broadcaseNotifications) {
+          notify.error({
+            title: 'CSV Parse Error',
+            message: err.message,
+          })
+        }
+        resolve(false)
+      },
+    })
   })
 }
 
@@ -1076,7 +1109,7 @@ async function onExportConfirm(fileName, handle) {
     notify.success({ message: 'Export successful!' })
   } catch (error) {
     notification.close()
-    notify.error({message: `Export failed: ${error.message}`})
+    notify.error({ message: `Export failed: ${error.message}` })
   }
 }
 
@@ -1178,7 +1211,7 @@ function handleLoadWorkspace(file) {
         message: 'Workflow loaded successfully!',
       })
     } catch (error) {
-      notify.error({message: `Failed to load workflow: ${error.message}`})
+      notify.error({ message: `Failed to load workflow: ${error.message}` })
     }
   }
 
@@ -1357,20 +1390,53 @@ onMounted(async () => {
   })
   await libcellmlReadyPromise
 
+  const loadStatuses = []
   for (const [path, content] of Object.entries(cellmlModules)) {
-    loadCellMLModuleData(content.default, path.split('/').pop(), builderStore)
+    loadStatuses.push(
+      loadCellMLModuleData(
+        content.default,
+        path.split('/').pop(),
+        builderStore,
+        false
+      )
+    )
   }
 
   for (const [path, content] of Object.entries(cellmlUnits)) {
-    loadCellMLUnitsData(content.default, path.split('/').pop(), builderStore)
+    loadStatuses.push(
+      loadCellMLUnitsData(
+        content.default,
+        path.split('/').pop(),
+        builderStore,
+        false
+      )
+    )
   }
 
+  const promises = []
   Object.values(parameterFiles).forEach((content) => {
-    handleParametersFile({ raw: content.default })
+    promises.push(handleParametersFile({ raw: content.default }, false))
   })
 
-  // Clear any notifications created on load
-  notify.closeAll()
+  const results = await Promise.all(promises)
+  results.push(...loadStatuses)
+
+  const successCount = results.filter(result => result === true).length
+  const failCount = results.length - successCount
+
+  if (successCount > 0) {
+    notify.success({
+      title: 'Initialisation Complete',
+      message: `Successfully loaded ${successCount} files.`
+    })
+  }
+
+  if (failCount > 0) {
+    notify.warning({
+      title: 'Load Warnings',
+      message: `${failCount} files failed to parse or were empty.`
+    })
+  }
 
   for (const [path, content] of Object.entries(moduleConfigs)) {
     builderStore.addConfigFile(content.default, path.split('/').pop())
