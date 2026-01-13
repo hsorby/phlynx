@@ -107,6 +107,7 @@ export function processUnitsData(content) {
   }
 
   let unitsModel = new _libcellml.Model()
+  unitsModel.setName('OnlyUnits')
   const unitsCount = model.unitsCount()
 
   let i = 0
@@ -260,6 +261,54 @@ function createSummationComponent(
   model.addComponent(sumComp)
 }
 
+function extractUnitsFromMath(multiBlockMathString) {
+  const wrappedString = `<root>${multiBlockMathString}</root>`
+
+  // Parse the XML String
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(wrappedString, 'application/xml')
+
+  // Check for parsing errors (optional safety)
+  const parserError = doc.querySelector('parsererror')
+  if (parserError) {
+    console.error('XML Parse Error:', parserError.textContent)
+    throw new Error('XML Parse Error:', parserError.textContent)
+  }
+
+  // Define the Namespaces.
+  const CELLML_NS = 'http://www.cellml.org/cellml/2.0#'
+  const MATHML_NS = 'http://www.w3.org/1998/Math/MathML'
+
+  // Find all <cn> elements
+  // We use getElementsByTagNameNS to be strictly safe,
+  // ensuring we only get MathML <cn> tags, not other tags named 'cn'.
+  const cnElements = doc.getElementsByTagNameNS(MATHML_NS, 'cn')
+
+  // Extract Unique Units
+  const foundUnits = new Set()
+
+  for (const cn of cnElements) {
+    const unitName = cn.getAttributeNS(CELLML_NS, 'units')
+
+    if (unitName) {
+      foundUnits.add(unitName)
+    }
+  }
+
+  return Array.from(foundUnits)
+}
+
+function handleLoggerErrors(logger, headerMessage) {
+  const errMessages = [headerMessage]
+  for (let i = 0; i < logger.errorCount(); i++) {
+    const error = logger.error(i)
+    console.log(`[${i}]: ${error.description()}`)
+    errMessages.push(`[${i}]: ${error.description()}`)
+    error.delete()
+  }
+  throw new Error(errMessages.join('\n'))
+}
+
 export function generateFlattenedModel(nodes, edges, builderStore) {
   const appVersion = __APP_VERSION__ || '1.0.0'
 
@@ -269,14 +318,83 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
 
   const printer = new _libcellml.Printer()
   const validator = new _libcellml.Validator()
-  const parser = new _libcellml.Parser(false) // Needed to read strings from store
+  const parser = new _libcellml.Parser(false)
+  const importer = new _libcellml.Importer(true)
 
   // --- Helper State ---
   const modelCache = new Map() // Key: sourceFileName, Value: libcellml.Model
-  const nodeComponentMap = new Map() // Key: NodeID, Value: libcellml.Component (The clone in the new model)
+  const nodeComponentMap = new Map() // Key: NodeID, Value: libcellml.Component
+  const unitsLibraryCache = new Map() // Key: filename, Value: libcellml.Model
   const unitsImportSourceMap = new Map() // Key: filename, Value: libcellml.ImportSource
 
-  const importer = new _libcellml.Importer(true)
+  // ------------------------------
+  // HELPER: Reusable Unit Importer
+  // ------------------------------
+  const ensureUnitImported = (unitsName) => {
+    // Safety Checks
+    if (!unitsName) return
+    // If it's already in the model (or is a standard unit like 'volt'), skip.
+    if (model.hasUnitsByName(unitsName) || isStandardUnit(unitsName)) return
+
+    // Search available libraries.
+    let found = false
+
+    for (const entry of builderStore.availableUnits) {
+      // Lazy Load: Parse library only if not already cached
+      if (!unitsLibraryCache.has(entry.filename)) {
+        const libModel = parser.parseModel(entry.model)
+        // Check for parse errors (optional but recommended)
+        if (parser.errorCount() === 0) {
+          unitsLibraryCache.set(entry.filename, libModel)
+        } else {
+          libModel.delete()
+          console.log('hhhhhhhhhhh')
+          console.log(entry.model)
+          handleLoggerErrors(
+            parser,
+            `Parser found ${parser.errorCount()} errors:`
+          )
+          continue
+        }
+      }
+
+      const libModel = unitsLibraryCache.get(entry.filename)
+
+      // Check if this library has the unit we need
+      if (libModel.hasUnitsByName(unitsName)) {
+        // Ensure we have an ImportSource for this file
+        if (!unitsImportSourceMap.has(entry.filename)) {
+          const importSource = new _libcellml.ImportSource()
+          importSource.setUrl(entry.filename)
+          importSource.setModel(libModel)
+
+          // Register model with importer so it doesn't try to load from disk
+          importer.addModel(libModel, entry.filename)
+
+          unitsImportSourceMap.set(entry.filename, importSource)
+        }
+
+        // Create the Units object in our main model
+        const importSource = unitsImportSourceMap.get(entry.filename)
+        const importedUnits = new _libcellml.Units()
+        importedUnits.setName(unitsName)
+        importedUnits.setImportReference(unitsName)
+        importedUnits.setImportSource(importSource)
+
+        model.addUnits(importedUnits)
+
+        // Cleanup the JS wrapper (C++ object is now owned by 'model')
+        importedUnits.delete()
+
+        found = true
+        break // Stop searching other libraries
+      }
+    }
+
+    if (!found) {
+      console.log(`Warning: Could not find definition for unit '${unitsName}'`)
+    }
+  }
 
   try {
     // ---------------------------------
@@ -284,36 +402,25 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
     // ---------------------------------
     for (const node of nodes) {
       const fileName = node.data?.sourceFile
-      const componentName = node.data?.componentName // The name inside the source file
+      const componentName = node.data?.componentName
 
-      // Load and Cache the Source Model if not already present
+      // ... (Load and Cache Source Model Logic - Unchanged) ...
       if (!modelCache.has(fileName)) {
-        if (!builderStore.hasModuleFile(fileName)) {
-          throw new Error(`Missing file in store: ${fileName}`)
-        }
-
-        // Retrieve content string from the store
-        const fileContent = builderStore.getModuleContent(fileName)
-        const parsedModel = parser.parseModel(fileContent)
-
+        if (!builderStore.hasModuleFile(fileName))
+          throw new Error(`Missing file: ${fileName}`)
+        const parsedModel = parser.parseModel(
+          builderStore.getModuleContent(fileName)
+        )
         if (parser.errorCount() > 0) {
-          const errMessages = [`Error parsing ${fileName}:`]
-          for (let i = 0; i < parser.errorCount(); i++) {
-            const error = parser.error(i)
-            console.log(`[${i}]: ${error.description()}`)
-            errMessages.push(`[${i}]: ${error.description()}`)
-            error.delete()
-          }
-          parsedModel.delete()
-          throw new Error(errMessages.join('\n'))
+          handleLoggerErrors(
+            parser,
+            `Error parsing ${fileName} [${parser.errorCount()} errors]:`
+          )
         }
         modelCache.set(fileName, parsedModel)
       }
 
-      // Get the Source Model
       const sourceModel = modelCache.get(fileName)
-
-      // Find the specific component
       const originalComponent = sourceModel.componentByName(componentName, true)
       if (!originalComponent) {
         throw new Error(
@@ -321,77 +428,39 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
         )
       }
 
-      // CLONE the component
-      // We must clone because we are moving it into a new model,
-      // and we might use this same component definition multiple times.
+      // Clone Component
       const componentClone = originalComponent.clone()
-      originalComponent.delete()
+      originalComponent.delete() // Only deleting the lookup wrapper
+      // Set this early so any thrown errors will still delete this.
+      nodeComponentMap.set(node.id, componentClone)
 
-      // Set the name to the value from the current node.
       componentClone.setName(node.data.name)
-
-      // Add to Main Model.
       model.addComponent(componentClone)
-      console.log(componentClone.math())
 
-      // Iterate through all variables in this component
+      // Add Units found in MathML.
+      const mathUnits = extractUnitsFromMath(componentClone.math())
+      for (const unitsName of mathUnits) {
+        ensureUnitImported(unitsName)
+      }
+
+      // Add Units found in Variables.
       for (let i = 0; i < componentClone.variableCount(); i++) {
         const variable = componentClone.variableByIndex(i)
 
-        // Get the name of the units (e.g., "millivolt_per_second", "micromolar")
         const units = variable.units()
         const unitsName = units.name()
+
+        // Use our helper
+        ensureUnitImported(unitsName)
+
         variable.delete()
         units.delete()
-
-        // Safety check: ensure the variable actually has a unit name assigned.
-        if (!unitsName) continue
-
-        // Check if this Unit definition already exists in our main Model
-        // If it's already there (e.g., imported by a previous node), skip it.
-        if (model.hasUnitsByName(unitsName)) {
-          continue
-        }
-
-        // Search for the definition in the builderStore.availableUnits cache.
-        for (const entry of builderStore.availableUnits) {
-          const unitsModel = parser.parseModel(entry.model)
-          // Try to find the unit in this library model
-          const hasUnits = unitsModel.hasUnitsByName(unitsName)
-
-          if (hasUnits) {
-            if (!unitsImportSourceMap.has(entry.filename)) {
-              const importSource = new _libcellml.ImportSource()
-              importSource.setUrl(entry.filename)
-              importSource.setModel(unitsModel)
-              importer.addModel(unitsModel, entry.filename)
-              unitsImportSourceMap.set(entry.filename, importSource)
-            }
-            const importSource = unitsImportSourceMap.get(entry.filename)
-
-            const importedUnits = new _libcellml.Units()
-            importedUnits.setName(unitsName)
-            importedUnits.setImportReference(unitsName)
-            importedUnits.setImportSource(importSource)
-
-            model.addUnits(importedUnits)
-
-            importedUnits.delete()
-            unitsModel.delete()
-            break // Found it! Stop searching.
-          }
-          unitsModel.delete()
-        }
       }
-
-      nodeComponentMap.set(node.id, componentClone)
     }
 
     // ----------------------------------
     // Process Edges (Create Connections)
     // ----------------------------------
-    // Inside generateFlattenedModel...
-
     for (const edge of edges) {
       // Get Node Data
       const sourceNode = edge.sourceNode
@@ -455,29 +524,23 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
 
     validator.validateModel(model)
     if (validator.errorCount()) {
-      const errMessages = ['Validator error count:', validator.errorCount()]
-      for (let i = 0; i < validator.errorCount(); i++) {
-        const error = validator.error(i)
-        console.log(`[${i}]: ${error.description()}`)
-        errMessages.push(`[${i}]: ${error.description()}`)
-        error.delete()
-      }
-      throw new Error(errMessages.join('\n'))
+      handleLoggerErrors(
+        validator,
+        'Validator error count:',
+        validator.errorCount()
+      )
     }
 
+    // Resolve and Flatten
     importer.resolveImports(model, '.')
     const flattenedModel = importer.flattenModel(model)
 
     if (importer.errorCount()) {
-      const errMessages = ['Importer error count:', importer.errorCount()]
-      console.error('Importer error count:', importer.errorCount())
-      for (let i = 0; i < importer.errorCount(); i++) {
-        const error = importer.error(i)
-        console.error(`[${i}]: ${error.description()}`)
-        errMessages.push(`[${i}]: ${error.description()}`)
-        error.delete()
-      }
-      throw new Error(errMessages.join('\n'))
+      handleLoggerErrors(
+        validator,
+        'Importer error count:',
+        importer.errorCount()
+      )
     }
 
     const flattenedModelString = printer.printModel(flattenedModel, false)
@@ -487,24 +550,20 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
       type: 'application/x.vnd.cellml+xml',
     })
   } finally {
-    // ---------------------------------------------------------
-    // CLEANUP (Very Important for WASM/C++)
-    // ---------------------------------------------------------
+    // -------
+    // CLEANUP
+    // -------
 
-    // Delete cached objects.
-    for (const cachedModel of modelCache.values()) {
-      cachedModel.delete()
-    }
+    // Delete Component/Module Caches.
+    for (const cachedModel of modelCache.values()) cachedModel.delete()
+    for (const component of nodeComponentMap.values()) component.delete()
 
-    for (const component of nodeComponentMap.values()) {
-      component.delete()
-    }
-
-    for (const importSource of unitsImportSourceMap.values()) {
+    // Delete Unit Caches.
+    for (const libModel of unitsLibraryCache.values()) libModel.delete()
+    for (const importSource of unitsImportSourceMap.values())
       importSource.delete()
-    }
 
-    // Delete the Main objects
+    // Delete Main Objects.
     model.delete()
     printer.delete()
     validator.delete()
