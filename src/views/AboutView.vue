@@ -1,89 +1,105 @@
 <template>
   <el-scrollbar native>
-    <div class="image-container">
-      <img src="../../public/phlynxlogo.svg" alt="PhLynx Logo" class="centred-image"/>
+    <div class="about-wrapper">
+      <transition name="fade-slide" appear>
+        <div class="image-container">
+          <img src="../../public/phlynxlogo.svg" alt="PhLynx Logo" class="centred-image" />
+        </div>
+      </transition>
+
+      <transition name="fade-slide-delayed" appear>
+        <el-container class="about-page">
+          <el-main>
+            <h1>About Physiome Links</h1>
+            <p class="intro-text">
+              <strong>Physiome Links (or PhLynx)</strong> is a specialised tool to streamline the coupling and editing
+              models written in CellML.
+            </p>
+
+            <el-divider />
+
+            <h3>The Workflow</h3>
+            <p>
+              This application serves as the visual frontend for the
+              <strong>Circulatory Autogen</strong> project. It allows users to:
+            </p>
+            <ul>
+              <li>Visually connect independent CellML modules.</li>
+              <li>Construct cohesive system representations.</li>
+              <li>
+                Generate configuration files ready for parameter identification to
+                calibrate to clinical data.
+              </li>
+            </ul>
+
+            <p>
+              For more information on the science and methodology behind the broader
+              project, please visit the
+              <el-link type="primary" href="https://physiomelinks.github.io/circulatory_autogen/" target="_blank">
+                Circulatory Autogen website</el-link>.
+            </p>
+
+            <el-divider />
+
+            <h3>Credits & Support</h3>
+            <p>
+              <strong>Developed by: </strong>
+              <el-link type="primary" href="https://github.com/jmdowrick" target="_blank">Jarrah Dowrick</el-link>,
+              <el-link type="primary" href="https://github.com/finbarargus" target="_blank">Finbar Argus</el-link> &
+              <el-link type="primary" href="https://github.com/hsorby" target="_blank">Hugh Sorby</el-link>
+            </p>
+            <p>
+              For reporting bugs or requesting features, please visit our
+              <el-link type="primary" href="https://github.com/physiomelinks/phlynx" target="_blank">
+                GitHub Repository </el-link>.
+            </p>
+
+            <el-divider />
+
+            <h3>License</h3>
+            <p>This project is licensed under the Apache License, Version 2.0.</p>
+          </el-main>
+        </el-container>
+      </transition>
+
     </div>
-
-    <el-container class="about-page">
-    <el-main>
-      <h1>About Physiome Links</h1>
-      <p class="intro-text">
-        <strong>Physiome Links (or PhLynx)</strong> is a specialised tool to streamline the coupling and editing models written in CellML.
-      </p>
-
-      <el-divider />
-
-      <h3>The Workflow</h3>
-      <p>
-        This application serves as the visual frontend for the
-        <strong>Circulatory Autogen</strong> project. It allows users to:
-      </p>
-      <ul>
-        <li>Visually connect independent CellML modules.</li>
-        <li>Construct cohesive system representations.</li>
-        <li>
-          Generate configuration files ready for parameter identification to
-          calibrate to clinical data.
-        </li>
-      </ul>
-
-      <p>
-        For more information on the science and methodology behind the broader
-        project, please visit the
-        <el-link
-          type="primary"
-          href="https://physiomelinks.github.io/circulatory_autogen/"
-          target="_blank"
-        >
-          Circulatory Autogen website</el-link
-        >.
-      </p>
-
-      <el-divider />
-
-      <h3>Credits & Support</h3>
-      <p>
-        <strong>Developed by: </strong>
-        <el-link
-          type="primary"
-          href="https://github.com/jmdowrick"
-          target="_blank"
-          >Jarrah Dowrick</el-link
-        >,
-        <el-link type="primary" href="https://github.com/finbarargus" target="_blank"
-          >Finbar Argus</el-link
-        >
-        &
-        <el-link type="primary" href="https://github.com/hsorby" target="_blank"
-          >Hugh Sorby</el-link
-        >
-      </p>
-      <p>
-        For reporting bugs or requesting features, please visit our
-        <el-link
-          type="primary"
-          href="https://github.com/physiomelinks/phlynx"
-          target="_blank"
-        >
-          GitHub Repository </el-link
-        >.
-      </p>
-
-      <el-divider />
-
-      <h3>License</h3>
-      <p>This project is licensed under the Apache License, Version 2.0.</p>
-    </el-main>
-  </el-container>
   </el-scrollbar>
 </template>
 
 <style scoped>
+.fade-slide-enter-from {
+  transform: translateY(-8px);
+}
+
+.fade-slide-delayed-enter-from {
+  opacity: 0;
+  transform: translateY(-12px);
+}
+
+.fade-slide-enter-to,
+.fade-slide-delayed-enter-to {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.fade-slide-enter-active {
+  transition:
+    opacity 0.45s cubic-bezier(0.25, 0.8, 0.25, 1),
+    transform 0.45s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.fade-slide-delayed-enter-active {
+  transition:
+    opacity 0.8s cubic-bezier(0.25, 0.8, 0.25, 1),
+    transform 0.8s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transition-delay: 0.15s;
+}
+
 .image-container {
   margin-top: 70px;
-  display: flex; 
-  justify-content: center; 
-  align-items: center; 
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .centred-image {
@@ -110,14 +126,17 @@
 h1 {
   margin-bottom: 20px;
 }
+
 h3 {
   margin-top: 30px;
   margin-bottom: 10px;
 }
+
 ul {
   margin-bottom: 20px;
   padding-left: 20px;
 }
+
 li {
   margin-bottom: 8px;
 }
