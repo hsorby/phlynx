@@ -1,22 +1,22 @@
 
-# CA Model Builder Introduction
+# PhLynx Introduction
 
 
-Circulatory Autogen Model Builder (CAMB) has been designed to as a companion application for [Circulatory Autogen ](https://github.com/FinbarArgus/circulatory_autogen/tree/master), a software package for coupling CellML modules and facilitating model calibration, parameter identifiability, and sensitivity analysis.
+Physiome Links (PhLynx - pronounced "flinks") was designed as a companion application for [Circulatory Autogen](https://github.com/FinbarArgus/circulatory_autogen/tree/master), a software package for coupling CellML modules and facilitating model calibration, parameter identifiability, and sensitivity analysis. 
 When generating coupled models using Circulatory Autogen, users need to provide two key configuration files (among others):
 
 - vessel_array.csv: A CSV file defining the relationships between modules with shared parameters.
 - module_config.json: A JSON file defining parameters and ports with CellML modules.
 
-The intention underlying CAMB was to simplify the process of creating these configuration files by providing an intuitive visual interface.
+The intention underlying PhLynx was to simplify the process of creating these configuration files by providing an intuitive visual interface.
 
 ## User Interface
 
 
-The CAMB user interface is designed to be intuitive and user-friendly.
+The PhLynx user interface is designed to be intuitive and user-friendly.
 The main components of the interface are highlighted in the image below:
 
-![CA Model Builder User Interface with workspace and module list highlighted](./assets/images/ca-model-build_ui.png){.align-center width="600px"}
+![PhLynx User Interface with workspace and module list highlighted](./assets/images/ca-model-build_ui.png){.align-center width="600px"}
 
 - Module List: (Left-hand side) Collapsible list of available CellML modules that can be dragged and dropped into the workspace area.
 - Workspace Area: The main area for users to place modules, draw connections, and edit ports (shared variables)
@@ -30,7 +30,7 @@ The main components of the interface are highlighted in the image below:
 Each module node represents a CellML module that has been imported and placed into the workspace area.
 The module node displays an editable module name (equivalent to the vessel_name in Circulatory Autogen) and the CellML component and file of origin.
 Users can drag and drop these nodes onto the workspace area from the module list.
-Each module node contains three icons that enable users to edit the colour (key), add port nodes, and edit the module.
+Each module node contains three icons that enable users to edit the colour (key), add port nodes, and edit the module configuration.
 
 ![Labelled module node](./assets/images/module-elements.png){.align-center width="600px"}
 
@@ -56,7 +56,7 @@ Port names are manually editable and variables are selectable from a dropdown li
 ![Expanded Add Port Node menu](./assets/images/edit-module-detail.png){.align-center width="600px"}
 
 > [!NOTE]
-> Module name (vessel_name) can also be edited by double-clicking while in the Workspace Area view.
+> Module name (vessel_name) can also be edited by double-clicking on a module node in the Workspace Area view.
 
 ###### Selecting Multiple Modules
 

@@ -1,5 +1,5 @@
 {
-  "name": "ca-system-builder",
+  "name": "phlynx",
   "description": "A Circulatory Autogen system builder application.",
   "author": {
     "name": "Hugh Sorby",
@@ -18,8 +18,8 @@
     "preview": "vite preview"
   },
   "build": {
-    "appId": "nz.ac.auckland.circulatory-autogen.ca-system-builder",
-    "productName": "CA System Builder",
+    "appId": "nz.ac.auckland.circulatory-autogen.phlynx",
+    "productName": "Physiome Links",
     "files": [
       "dist-electron/**/*",
       "dist/**/*",

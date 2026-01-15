@@ -1,12 +1,10 @@
 <template>
   <el-container class="about-page">
     <el-main>
-      <h1>About Circulatory Autogen Model Builder</h1>
+      <h1>About PhLynx</h1>
 
       <p class="intro-text">
-        The <strong>Circulatory Autogen Model Builder</strong> is a specialized
-        tool designed to streamline the creation and management of circulatory
-        autogen system models.
+        <strong>PhLynx</strong> is a specialized tool designed to streamline the creation and management of CellML-based system models.
       </p>
 
       <el-divider />
@@ -30,10 +28,10 @@
         project, please visit the
         <el-link
           type="primary"
-          href="https://finbarargus.github.io/circulatory_autogen/"
+          href="https://physiomelinks.github.io/circulatory_autogen/"
           target="_blank"
         >
-          Circulatory Autogen website </el-link
+          Circulatory Autogen website</el-link
         >.
       </p>
 
@@ -41,12 +39,15 @@
 
       <h3>Credits & Support</h3>
       <p>
-        <strong>Developed by:</strong>
+        <strong>Developed by: </strong>
         <el-link
           type="primary"
           href="https://github.com/jmdowrick"
           target="_blank"
           >Jarrah Dowrick</el-link
+        >,
+        <el-link type="primary" href="https://github.com/finbarargus" target="_blank"
+          >Finbar Argus</el-link
         >
         &
         <el-link type="primary" href="https://github.com/hsorby" target="_blank"
@@ -57,7 +58,7 @@
         For reporting bugs or requesting features, please visit our
         <el-link
           type="primary"
-          href="https://github.com/your-repo-here"
+          href="https://github.com/physiomelinks/phlynx"
           target="_blank"
         >
           GitHub Repository </el-link

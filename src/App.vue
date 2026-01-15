@@ -2,7 +2,7 @@
   <div class="app-layout">
     <header class="global-nav">
       <div class="brand">
-        Circulatory Autogen Model Builder v{{ appVersion }}
+        PhLynx v{{ appVersion }}
       </div>
       <nav>
         <router-link to="/">Workbench</router-link>

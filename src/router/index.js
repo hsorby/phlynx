@@ -18,7 +18,7 @@ const router = createRouter({
     },
     {
       path: '/docs/',
-      redirect: '/docs/ca-model-builder-introduction',
+      redirect: '/docs/phlynx-introduction',
     },
     {
       path: '/docs/:slug?',

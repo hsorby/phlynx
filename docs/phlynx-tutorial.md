@@ -1,22 +1,22 @@
-# Building Your First Model with CA Model Builder
+# Building Your First Model with PhLynx
 
 
-This tutorial builds on the introduction provided in [CA model builder introduction ](./ca-model-builder-introduction.md) to help users in assembling their first model.
-Before starting the tutorial, please ensure you have cloned the repository and installed the necessary dependencies as outlined in the [README ](../README.rst).
-Start the application by navigating the ca-model-builder directory in your terminal and running the command
+This tutorial builds on the [PhLynx Introduction](./phlynx-introduction.md) to help users in assembling their first model.
+Before starting the tutorial, please ensure you have cloned the repository and installed the necessary dependencies as outlined in the [README](../README.rst).
+Start the application by navigating the phlynx directory in your terminal and running the command
 
 ```bash
 yarn dev
 ```
 
-Copy and paste the local development server address (usually <http://localhost:5173>) into your web browser to access the CA Model Builder user interface.
+Copy and paste the local development server address (usually <http://localhost:5173>) into your web browser to access the PhLynx user interface.
 The terminal should look similar to the image below and the server address follows the "Local:" label:
 
 ![Local development server address in terminal](./assets/images/local-dev-server.png){.align-center width="600px"}
 
 ## Step 1: Import CellML Modules
 
-The first step in building a model is to import the desired CellML modules into CAMB.
+The first step in building a model is to import the desired CellML modules into PhLynx.
 This can be done by clicking the "Load Modules" button located in the upper-right-hand corner of the user interface.
 
 ![Load Modules button highlighted in user interface](./assets/images/import-module.png){.align-center width="600px"}
@@ -24,7 +24,7 @@ This can be done by clicking the "Load Modules" button located in the upper-righ
 A file dialog will appear, allowing users to select one or more CellML files from their local filesystem.
 Once selected, the components listed in the module file will be added to the Module List on the left-hand side of the interface.
 
-For the purposes of this tutorial, the CellML file colon_FTU_modules.cellml has already been imported into CAMB.
+For the purposes of this tutorial, the CellML file colon_FTU_modules.cellml has already been imported into PhLynx.
 
 ## Step 2: Add Modules to Workspace
 
@@ -100,15 +100,15 @@ Define the ports as shown in the following images:
 
 ## Step 6: Import Parameter File
 
-CAMB currently requires the user to upload the Circulatory Autogen parameter file (model_name_parameters.csv) to determine which variables are constants or global_constants.
+PhLynx currently requires the user to upload the Circulatory Autogen parameter file (model_name_parameters.csv) to determine which variables are constants or global_constants.
 This can be done by clicking the "Load Parameters" button located in the upper-right-hand corner of the user interface.
 A file dialog will appear, allowing users to select the parameter CSV file from their local filesystem.
 
-For the purposes of this tutorial, the parameters file colon_FTU_parameters.csv has already been imported into CAMB.
+For the purposes of this tutorial, the parameters file colon_FTU_parameters.csv has already been imported into PhLynx.
 
 > [!NOTE]
 > Parameter names in the parameter file must follow the naming convention required by Circulatory Autogen ([module_name]_[parameter_name] for constants and > [parameter_name] for global_constants).
-> It is essential that these exactly match parameter and module names in CAMB.
+> It is essential that these exactly match parameter and module names in PhLynx.
 
 ## Step 7: Export Model Workspace
 

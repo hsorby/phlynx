@@ -8,8 +8,8 @@ export const useBuilderStore = defineStore("builder", () => {
   // Holds the *definitions* loaded from your file
   const availableModules = ref([])
   const parameterData = ref([])
-  const lastSaveName = ref('ca-model-builder')
-  const lastExportName = ref('ca-model-builder')
+  const lastSaveName = ref('phlynx')
+  const lastExportName = ref('phlynx')
 
   // Holds the *instances* of modules placed on the workbench
   // We'll add x/y coordinates and a unique ID

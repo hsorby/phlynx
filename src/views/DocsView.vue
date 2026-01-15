@@ -3,8 +3,8 @@
     <el-aside width="300px">
       <h2>Documentation Pages</h2>
       <el-menu :default-active="currentSlug" router>
-        <el-menu-item index="/docs/ca-model-builder-introduction">Introduction</el-menu-item>
-        <el-menu-item index="/docs/model-builder-tutorial">Tutorial</el-menu-item>
+        <el-menu-item index="/docs/phlynx-introduction">Introduction</el-menu-item>
+        <el-menu-item index="/docs/phlynx-tutorial">Tutorial</el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -36,9 +36,10 @@ for (const path in markdownFiles) {
   docsMap[fileName] = markdownFiles[path].default
 }
 
-// 3. Determine the current slug from the URL (default to 'ca-model-builder-introduction')
+// 3. Determine the current slug from the URL (default to 'phlynx-introduction')
 const currentSlug = computed(() => {
-  return route.params.slug || 'ca-model-builder-introduction'
+  console.log(currentSlug)
+  return route.params.slug || 'phlynx-introduction'
 })
 
 // 4. Get the matching component

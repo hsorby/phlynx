@@ -6,12 +6,13 @@
 Physiome Links (PhLynx)
 =======================
 
-PhLynx is a desktop application for visually constructing and configuring CellML system models from CellML modules.
+PhLynx is a web application for visually constructing and configuring CellML system models from CellML modules.
 
 Built with Vue 3 and Electron, this tool provides a node-based interface
 (powered by Vue Flow) that allows users to drag, drop, and connect different
 physiological components. It is designed to work with CellML models
-(using ``vue3-libcellml.js``) and exports system configurations (JSON, CSV) for use with the Circulatory
+(using ``vue3-libcellml.js``) and exports flattened CellML (2.0) models for use with 
+web OpenCOR or system configurations (JSON, CSV) for use with the Circulatory
 Autogen software.
 
 Features
@@ -21,7 +22,7 @@ Features
 * **CellML Integration:** Based on ``vue3-libcellml.js`` for working with CellML files.
 * **Workflow Management:** Save and load your visual workflow as a JSON file.
 * **Model Export:** Export your model to formats compatible with Circulatory Autogen.
-* **Cross-Platform:** Runs on macOS, Windows, and Linux as a standalone desktop app.
+* **Web-based:** Runs on macOS, Windows, and Linux in any browser.
 
 The latest state of the application can be accessed online at: https://latest-phlynx.netlify.app/
 
@@ -55,44 +56,13 @@ Clone the repository and install the dependencies:
 Development
 ~~~~~~~~~~~
 
-**Run as a Desktop Application (Recommended)**
-
-This will launch the Electron app with hot-reloading for the Vue frontend.
-
-.. code-block:: bash
-
-    yarn app:dev
-
-**Run as a Web Application (for quick UI testing)**
-
-This will launch the app in your browser. Note: Electron-specific features
-(like native file saving) will not be available.
+Use the following command to launch the app in your browser 
+with hot-reloading for the Vue frontend.
 
 .. code-block:: bash
 
     yarn dev
 
-Building the Application
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-To build the final, distributable application, you can use the following scripts.
-The output will be placed in the ``dist-applications`` directory, as defined
-in ``package.json``.
-
-**Build Installers (Recommended for distribution)**
-
-This command builds the packaged application and creates platform-specific
-installers (e.g., ``.dmg`` for macOS, ``.exe`` for Windows).
-
-.. code-block:: bash
-
-    yarn app:build
-
-**Build a "Packed" Directory**
-
-This command builds the application without creating an installer. This is
-useful for testing the final packaged app without running an installer.
-
-.. code-block:: bash
-
-    yarn app:pack
+.. admonition:: Note
+    Electron-specific features (like native file saving) will not be available. Using Chrome
+    will enable users to specify file download location.
