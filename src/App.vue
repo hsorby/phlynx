@@ -6,7 +6,7 @@
       </div>
       <nav>
         <router-link to="/">Workbench</router-link>
-        <router-link to="/docs">Documentation</router-link>
+        <router-link to="/docs/" :class="{ 'force-active': isDocsActive }">User Guide</router-link>
         <router-link to="/about">About</router-link>
       </nav>
     </header>
@@ -22,7 +22,15 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+
 const appVersion = __APP_VERSION__
+const route = useRoute()
+
+const isDocsActive = computed(() => {
+  return route.path.startsWith('/docs')
+})
 </script>
 
 <style>
@@ -58,7 +66,8 @@ body {
   cursor: pointer;
 }
 
-.global-nav nav a.router-link-active {
+.global-nav nav a.router-link-active,
+.global-nav nav a.force-active {
   color: #409eff;
   pointer-events: none;
   cursor: default;
