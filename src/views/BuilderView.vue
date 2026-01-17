@@ -1045,7 +1045,6 @@ const handleKeyDown = (event) => {
   }
 
   if (isCtrl && event.key === 'v') {
-    console.log(event.clientX)
     pasteSelection(true)
   }
 

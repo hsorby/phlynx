@@ -2,6 +2,7 @@ import { createApp } from "vue"
 import { createPinia } from "pinia" // Import Pinia
 import ElementPlus from "element-plus"
 import libcellmlPlugin from "vue3-libcellml.js"
+import GlossaryLink from './components/GlossaryLink.vue'
 
 import "element-plus/dist/index.css"
 import "@vue-flow/core/dist/style.css"
@@ -25,4 +26,5 @@ app.use(pinia) // Use Pinia
 app.use(router)
 app.use(ElementPlus)
 app.use(libcellmlPlugin)
+app.component('GlossaryLink', GlossaryLink)
 app.mount("#app")
