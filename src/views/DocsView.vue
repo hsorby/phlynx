@@ -9,10 +9,23 @@
           <template #title>Getting Started</template>
           <el-menu-item index="/docs/phlynx-introduction">Introduction</el-menu-item>
           <el-menu-item index="/docs/phlynx-tutorial">Quick Start</el-menu-item>
+          <el-menu-item index="/docs/ui-overview">User Interface Overview</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="2">
           <template #title>How to Guides</template>
-          <el-menu-item index="/docs/how-to-guides">Test</el-menu-item>
+          <el-menu-item index="/docs/howto-use-with-CA">Edit Circulatory Autogen Files</el-menu-item>
+          <el-menu-item index="/docs/howto-develop-phlynx">Developing PhLynx</el-menu-item>
+        </el-sub-menu>
+        <el-sub-menu index="3">
+          <template #title>Reference</template>
+          <el-menu-item index="/docs/phlynx-glossary">Glossary</el-menu-item>
+          <el-menu-item index="/docs/reference-file-type">File Formats</el-menu-item>
+          <el-menu-item index="/docs/reference-module-format">CellML Module Requirements</el-menu-item>
+        </el-sub-menu>
+        <el-sub-menu indddex="4">
+          <template #title>Support</template>
+          <el-menu-item index="/docs/faq">FAQs</el-menu-item>
+          <el-menu-item index="/docs/support-getting-help">Getting Help</el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>
