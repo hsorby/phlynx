@@ -69,7 +69,7 @@ import { reactive, computed, watch, ref, nextTick } from 'vue'
 import { ElNotification } from 'element-plus'
 import { Check } from '@element-plus/icons-vue'
 import { IMPORT_KEYS } from '../utils/constants'
-import phlynxspinner from '../../public/phlynxspinner.svg?raw'
+import phlynxspinner from '/src/assets/phlynxspinner.svg?raw'
 
 const props = defineProps({
   modelValue: Boolean,
