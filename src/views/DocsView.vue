@@ -52,6 +52,7 @@
             <span>Help</span>
           </template>
           <el-menu-item index="/docs/support/faq">FAQs</el-menu-item>
+          <el-menu-item index="/docs/support/feature-request">Feature request</el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>
