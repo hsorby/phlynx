@@ -78,6 +78,9 @@ Now that you're familiar with editing and connecting port nodes, let's connect o
 
 ![PhLynx Workspace with connected modules in position](../assets/images/quick-start-step-two.png){.align-center width="800px"}
 
+> [!NOTE]
+>  In this example, each arrow has its own port, but multiple arrows can leave or enter a single port node if desired.
+
 ### Editing
 
 Before we can export our model, we need to provide PhLynx with more information. 
