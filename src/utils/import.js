@@ -179,7 +179,7 @@ export const parseParametersFile = (file) => {
         // results.data will be an array of objects
         // e.g., [{ param_name: 'a', value: '1' }, { param_name: 'b', value: '2' }]
         if (
-          results.data.length === 35 ||
+          results.data.length === 0 ||
           !(
             'variable_name' in results.data[0] &&
             'units' in results.data[0] &&
