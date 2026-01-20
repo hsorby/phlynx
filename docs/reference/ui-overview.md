@@ -5,8 +5,6 @@ This page provides a comprehensive reference for all user interface elements in 
 
 ## Main Interface Layout
 
-![PhLynx User Interface with workspace and module list highlighted](./assets/images/ca-model-build_ui.png){.align-center width="600px"}
-
 ### Module List (Left Sidebar)
 
 The module list displays all CellML components that have been imported into PhLynx and are available for use in your workspace.

@@ -18,10 +18,10 @@ const router = createRouter({
     },
     {
       path: '/docs/',
-      redirect: '/docs/phlynx-introduction',
+      redirect: '/docs/getting-started/introduction',
     },
     {
-      path: '/docs/:slug?',
+      path: '/docs/:slug(.*)*',
       name: 'docs',
       component: () => import('../views/DocsView.vue'),
     },

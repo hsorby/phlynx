@@ -14,8 +14,8 @@
             </el-icon>
             <span>Getting Started</span>
           </template>
-          <el-menu-item index="/docs/phlynx-introduction">Introduction</el-menu-item>
-          <el-menu-item index="/docs/phlynx-tutorial">Quick Start</el-menu-item>
+          <el-menu-item index="/docs/getting-started/introduction">Introduction</el-menu-item>
+          <el-menu-item index="/docs/getting-started/quick-start-guide">Quick Start</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="2">
           <template #title>
@@ -24,8 +24,9 @@
             </el-icon>
             <span>How to Guides</span>
           </template>
-          <el-menu-item index="/docs/howto-use-with-CA">Edit Circulatory Autogen Files</el-menu-item>
-          <el-menu-item index="/docs/howto-develop-phlynx">Developing PhLynx</el-menu-item>
+          <el-menu-item index="/docs/guides/build-custom-module">Build Custom CellML Modules</el-menu-item>
+          <el-menu-item index="/docs/guides/use-with-circulatory-autogen">Edit Circulatory Autogen Files</el-menu-item>
+          <el-menu-item index="/docs/guides/develop-phlynx">Developing PhLynx</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="3">
           <template #title>
@@ -36,10 +37,11 @@
               Reference
             </span>
           </template>
-          <el-menu-item index="/docs/phlynx-glossary">Glossary</el-menu-item>
-          <el-menu-item index="/docs/reference-file-type">File Formats</el-menu-item>
-          <el-menu-item index="/docs/reference-module-format">CellML Module Requirements</el-menu-item>
-          <el-menu-item index="/docs/ui-overview">User Interface Overview</el-menu-item>
+          <el-menu-item index="/docs/reference/ui-overview">User Interface Overview</el-menu-item>
+          <el-menu-item index="/docs/reference/glossary">Glossary</el-menu-item>
+          <el-menu-item index="/docs/reference/file-types">File Formats</el-menu-item>
+          <el-menu-item index="/docs/reference/cellml-module-format">CellML Module Requirements</el-menu-item>
+          <el-menu-item index="/docs/reference/change-log">PhLynx Change Logs</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="4">
           <template #title>
@@ -48,7 +50,7 @@
             </el-icon>
             <span>Support</span>
           </template>
-          <el-menu-item index="/docs/faq">FAQs</el-menu-item>
+          <el-menu-item index="/docs/support/faq">FAQs</el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>
@@ -94,20 +96,28 @@ import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const isCollapse = ref(true)
-const markdownFiles = import.meta.glob('@docs/*.md', { eager: true })
+const markdownFiles = import.meta.glob('@docs/**/*.md', { eager: true })
 const docsMap = {}
 
 for (const path in markdownFiles) {
-  const fileName = path.split('/').pop().replace('.md', '')
+  const fileName = path.replace('.md', '')
   docsMap[fileName] = markdownFiles[path].default
 }
 
 const currentSlug = computed(() => {
-  return route.params.slug || 'phlynx-introduction'
+  const slug = route.params.slug
+  
+  if (Array.isArray(slug)) {
+    const joined = slug.join('/')
+    return joined
+  }
+  return route.params.slug || 'getting-started/introduction'
 })
 
 const currentPageComponent = computed(() => {
-  return docsMap[currentSlug.value]
+  const slug = currentSlug.value
+  
+  return docsMap[`/docs/${slug}`]
 })
 
 const headings = ref([])

@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 
-const glossaryPath = path.resolve('./docs/phlynx-glossary.md')
+const glossaryPath = path.resolve('./docs/reference/glossary.md')
 const outputPath = path.resolve('./docs/glossary.json')
 
 const md = fs.readFileSync(glossaryPath, 'utf8')
