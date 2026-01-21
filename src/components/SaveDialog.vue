@@ -51,7 +51,7 @@ const props = defineProps({
   },
   defaultName: {
     type: String,
-    default: 'ca-model-builder',
+    default: 'PhLynx',
   }
 })
 
