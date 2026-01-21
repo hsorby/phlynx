@@ -1,16 +1,29 @@
-# Valid port configurations
+# Port Logic
 
-Ports may be defined as an input, output, or general type. When exporting the system model, PhLynx will connect variables that are associated with a port with the same label and a compatible port type. 
+Ports determine how data flows between connected modules. Each port must be assigned a specific type—**Input**, **Output**, or **General**—which dictates its compatibility with other ports in the system.
 
-Valid connections are as follows:
+## Connection Logic
 
-| Port type | Valid connections | 
-|---|---|
-| Input | Output, General |
-| Output | Input, General |
-| General | Input, Output, General |
+During model export, PhLynx connects variables between modules only if two conditions are met:
+1.  **Matching Labels:** The connected ports share the exact same port label.
+2.  **Compatible Types:** The port types form a valid pair as defined below.
+
+## Compatibility Table
+
+The following table outlines valid connections between port types:
+
+| Port Type | Connects With |
+| :--- | :--- |
+| **Input** | Output, General |
+| **Output** | Input, General |
+| **General** | Input, Output, General |
 
 > [!NOTE]
-> Input and output port types are equivalent to entrance and exit port types in [Circulatory Autogen](https://github.com/physiomelinks/circulatory_autogen).
+> **Circulatory Autogen Users:** "Input" and "Output" port types are equivalent to "Entrance" and "Exit" port types respectively in [Circulatory Autogen](https://github.com/physiomelinks/circulatory_autogen).
 
-Should two ports share a port label but have incompatible port types, they will not be connected during model export. For now, no warning or error will be generated.
+## Incompatible Connections
+
+If two connected ports share a label but have incompatible types (e.g., Input to Input), **the connection will be ignored** during model export.
+
+> [!IMPORTANT]
+> Currently, PhLynx does not generate a warning or error message for incompatible connections. Ensure your port types are configured correctly before exporting to avoid missing connections in your final model.

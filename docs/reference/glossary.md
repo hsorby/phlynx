@@ -26,7 +26,7 @@ User-assigned colour to indicate module category.
 
 ### Port Type {#port-type}
 <!-- aliases: port-types -->
-Indicates directionality of flow. A port can be input, output, or general (directionless).
+Indicates directionality of a port. Can be input, output, or general (directionless).
 
 ### Module List {#module-list}
 <!-- aliases: -->

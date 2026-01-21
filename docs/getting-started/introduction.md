@@ -1,24 +1,27 @@
-
 # Welcome to PhLynx
 
-
-Physiome Links (**PhLynx** - pronounced "flinks") is a web-based graphical interface for coupling existing <GlossaryLink term="CellML"/> modules into a single system model. Common use cases include generating coupled biophysical cell models and patient-specific blood and/or lymph flow networks.
+Physiome Links (**PhLynx** — pronounced "flinks") is a web-based graphical interface designed to couple existing <GlossaryLink term="CellML"/> modules into unified system models. It is commonly used to generate coupled biophysical cell models and blood or lymph flow networks.
 
 ## Why PhLynx?
 
+PhLynx streamlines the model-building workflow by offering the following key advantages:
 
-PhLynx streamlines the model-building workflow by providing:
+- **Visual Model Assembly:** Replace manual variable mapping with a graphical interface. PhLynx allows you to visually connect modules, define shared variables, and inspect your system architecture at a glance.
 
-- **Visual Model Assembly:** Instead of manually mapping variables between <GlossaryLink term="CellML"/> components, you can graphically connect modules, define shared variables, and visualise your system architecture.
+- **Module Reusability:** Avoid creating monolithic, single-use models. PhLynx encourages the integration of modular, reusable components. You can access a wide library of open modules and easily couple them with your own custom developments, creating systems that others can build upon.
 
-- **Module Reusability:** This software promotes reusability and easy coupling of <GlossaryLink term="CellML"/> modules. Access a wide range of openly available modules and easily couple them with whatever modules you develop. Instead of creating one monolithic model that is unlikely to be reused, you can integrate modular components into system models that others can build upon.
+- **The Power of CellML:** Models generated in PhLynx are fully compatible with the <GlossaryLink term="CellML"/> standard. This ensures unit consistency and allows you to regenerate your model in various languages (C++, Python, MATLAB) for integration with other model types (e.g., PDEs) or embedded systems.
 
-- **The Benefits of CellML:** By generating models in <GlossaryLink term="CellML"/>, you can regenerate your model in whatever language you need (C++, Python, MATLAB). This enables easy coupling with other model types (PDEs), C generation for embedded systems, and much more. Consistency in units is also guaranteed.
+- **Open Source:** PhLynx is completely open source. This promotes reproducible science by allowing the community to freely use, audit, and verify the modules and models created within the platform.
 
-- **Open Source Code:** PhLynx is completely open source, promoting reproducible science by encouraging anyone to use and check the modules or models that are created.
+## Workflow Integration
 
+PhLynx fits seamlessly into the <GlossaryLink term="CellML"/> ecosystem to facilitate model composition:
 
-## How PhLynx Fits Into Your Workflow
-
-
-PhLynx works as part of the <GlossaryLink term="CellML"/> ecosystem to facilitate model composition. After creating <GlossaryLink term="CellML"/> modules in your preferred IDE, or downloading existing <GlossaryLink term="CellML"/> modules, import the <GlossaryLink term="CellML"/> files into PhLynx. Here, you can connect modules and export a flattened <GlossaryLink term="CellML"/> model for simulation in [OpenCOR](https://opencor.ws/) or for calibration, parameter identifiability, and sensitivity analysis in [Circulatory Autogen](https://physiomelinks.github.io/circulatory_autogen/).
+1.  **Create or Acquire:** Develop <GlossaryLink term="CellML"/> modules in your preferred IDE or download existing components.
+2.  **Import:** Load your <GlossaryLink term="CellML"/> files into the PhLynx Workbench.
+3.  **Assemble:** Visually connect modules and define their interactions.
+4.  **Export:** Generate a flattened <GlossaryLink term="CellML"/> model.
+5.  **Next Steps:**
+    * **Simulate:** Run your model in [OpenCOR](https://opencor.ws/).
+    * **Analyze:** Perform calibration, parameter identifiability, and sensitivity analysis using [Circulatory Autogen](https://physiomelinks.github.io/circulatory_autogen/).

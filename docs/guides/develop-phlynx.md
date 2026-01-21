@@ -1,29 +1,32 @@
-# For Developers
+# Developer Guide
 
-This guide is for developers who wish to run or build the application from
-the source code.
+This guide details the setup process for developers contributing to PhLynx or building the application from source.
 
 ## Prerequisites
 
-- Node.js (v20 or later recommended)
-- A package manager (npm or yarn)
+Ensure your development environment meets the following requirements:
+* **Node.js:** v20 or later.
+* **Package Manager:** `npm` or `yarn`.
 
 ## Installation
 
-Clone the repository and install the dependencies:
+1.  **Clone the repository:**
+    ```bash
+    git clone [https://github.com/physiomelinks/phlynx.git](https://github.com/physiomelinks/phlynx.git)
+    cd phlynx
+    ```
 
-```bash
-git clone https://github.com/physiomelinks/phlynx.git
-cd phlynx
-yarn install
-```
+2.  **Install dependencies:**
+    ```bash
+    yarn install
+    ```
 
-## Development
+## Development Server
 
-Use the following command to launch the app in your browser 
-with hot-reloading for the Vue frontend.
-
+To launch the application in development mode with hot-reloading enabled:
 
 ```bash
 yarn dev
 ```
+
+The application will be accessible at http://localhost:5173 (or the port specified in your terminal).
