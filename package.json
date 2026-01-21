@@ -19,7 +19,7 @@
     "preview": "yarn build:glossary && vite preview"
   },
   "build": {
-    "appId": "nz.ac.auckland.circulatory-autogen.phlynx",
+    "appId": "nz.ac.auckland.physiome-links.phlynx",
     "productName": "Physiome Links",
     "files": [
       "dist-electron/**/*",
