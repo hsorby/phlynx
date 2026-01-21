@@ -253,7 +253,7 @@ export default {
 </script>
 
 <script setup>
-import { computed, inject, markRaw, nextTick, onMounted, onUnmounted, ref, watchPostEffect } from 'vue'
+import { computed, h, inject, markRaw, nextTick, onMounted, onUnmounted, ref, watchPostEffect } from 'vue'
 import { useVueFlow, VueFlow } from '@vue-flow/core'
 import {
   DCaret,
@@ -267,7 +267,6 @@ import {
 
 import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
-import Papa from 'papaparse'
 
 import { useBuilderStore } from '../stores/builderStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
@@ -1035,7 +1034,22 @@ async function onExportConfirm(fileName, handle) {
 
     builderStore.setLastExportName(finalName)
     notification.close()
-    notify.success({ message: 'Export successful!' })
+    notify.success({
+      title: 'Export successful!',
+      message: h('div', null, [
+        'Model downloaded. ',
+        h(
+          'a',
+          {
+            href: 'https://opencor.ws/app/',
+            target: '_blank',
+            style: { color: 'var(--el-color-primary)', fontWeight: 'bold' },
+          },
+          'Open in OpenCOR'
+        ),
+      ]),
+      duration: 5000,
+    })
   } catch (error) {
     notification.close()
     notify.error({ message: `Export failed: ${error.message}` })
