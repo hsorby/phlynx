@@ -1,0 +1,34 @@
+name: PR Compliance Check
+
+on:
+  pull_request:
+    branches:
+      - production
+
+jobs:
+  check-branch-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Source Branch Name and Origin
+        run: |
+          SOURCE_BRANCH="${{ github.head_ref }}"
+          SOURCE_REPO="${{ github.event.pull_request.head.repo.full_name }}"
+          TARGET_REPO="${{ github.repository }}"
+
+          echo "Checking PR from $SOURCE_REPO ($SOURCE_BRANCH)..."
+
+          # 1. Check if PR is from the same organization/repo
+          if [ "$SOURCE_REPO" != "$TARGET_REPO" ]; then
+            echo "❌ Error: External Pull Requests are not allowed on production."
+            exit 1
+          fi
+
+          # 2. Check if branch starts with 'staging-'
+          if [[ ! "$SOURCE_BRANCH" =~ ^staging- ]]; then
+            echo "❌ Error: The production branch only accepts PRs from branches starting with 'staging-'."
+            echo "Current branch: $SOURCE_BRANCH"
+            exit 1
+          fi
+
+          echo "✅ Compliance check passed."
+
