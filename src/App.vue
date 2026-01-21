@@ -1,15 +1,19 @@
 <template>
   <div class="app-layout">
-    <header class="global-nav">
+    <el-header class="global-nav">
+      <!-- <div class="image-container">
+        
+      </div> -->
       <div class="brand">
-        Circulatory Autogen Model Builder v{{ appVersion }}
+        <img src="/phlynxlogo.svg" alt="PhLynx Logo" class="centred-image" />
+        <strong>PhLynx v{{ appVersion }}</strong>
       </div>
       <nav>
         <router-link to="/">Workbench</router-link>
-        <router-link to="/docs">Documentation</router-link>
+        <router-link to="/docs/" :class="{ 'force-active': isDocsActive }">User Guide</router-link>
         <router-link to="/about">About</router-link>
       </nav>
-    </header>
+    </el-header>
 
     <div class="view-container">
       <router-view v-slot="{ Component }">
@@ -22,7 +26,15 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+
 const appVersion = __APP_VERSION__
+const route = useRoute()
+
+const isDocsActive = computed(() => {
+  return route.path.startsWith('/docs')
+})
 </script>
 
 <style>
@@ -51,7 +63,8 @@ const appVersion = __APP_VERSION__
   cursor: pointer;
 }
 
-.global-nav nav a.router-link-active {
+.global-nav nav a.router-link-active,
+.global-nav nav a.force-active {
   color: #409eff;
   pointer-events: none;
   cursor: default;
@@ -61,5 +74,17 @@ const appVersion = __APP_VERSION__
   flex-grow: 1;
   position: relative;
   overflow: hidden;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  width: 200px;
+}
+
+.centred-image {
+  max-width: 40px;
+  height: auto;
+  padding-right: 10px;
 }
 </style>
