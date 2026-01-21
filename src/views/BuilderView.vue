@@ -1,7 +1,5 @@
 <template>
-  <el-container
-    style="height: 100%; display: flex; flex-direction: column; flex-grow: 1"
-  >
+  <el-container style="height: 100%; display: flex; flex-direction: column; flex-grow: 1">
     <el-header class="app-header">
       <div class="file-uploads">
         <div class="file-io-buttons">
@@ -26,28 +24,15 @@
 
           <el-divider direction="vertical" style="margin: 0 15px" />
 
-          <el-button
-            type="info"
-            @click="handleUndo"
-            :disabled="!historyStore.canUndo"
-          >
-            Undo
-          </el-button>
+          <el-button type="info" @click="handleUndo" :disabled="!historyStore.canUndo"> Undo </el-button>
 
-          <el-button
-            type="info"
-            @click="handleRedo"
-            style="margin-left: 10px"
-            :disabled="!historyStore.canRedo"
-          >
+          <el-button type="info" @click="handleRedo" style="margin-left: 10px" :disabled="!historyStore.canRedo">
             Redo
           </el-button>
 
           <el-divider direction="vertical" style="margin: 0 15px" />
 
-          <el-button type="primary" @click="onOpenMacroBuilderDialog">
-            Macro Build
-          </el-button>
+          <el-button type="primary" @click="onOpenMacroBuilderDialog"> Macro Build </el-button>
 
           <el-button
             type="primary"
@@ -67,16 +52,9 @@
             @click="triggerCurrentImport"
             @command="handleImportCommand"
           >
-            <el-tooltip
-              :disabled="!currentImportMode.disabled"
-              placement="bottom"
-            >
+            <el-tooltip :disabled="!currentImportMode.disabled" placement="bottom">
               <div>
-                <el-tooltip
-                  placement="bottom"
-                  :visible="importTooltip.visible.value"
-                  trigger="manual"
-                >
+                <el-tooltip placement="bottom" :visible="importTooltip.visible.value" trigger="manual">
                   <span
                     class="import-button-content"
                     @mouseenter="importTooltip.onMouseEnter"
@@ -87,17 +65,15 @@
                       <component :is="currentImportMode.icon" />
                     </el-icon>
                   </span>
-                  <template #content>
-                    Import {{ currentImportMode.label }}
-                  </template>
+                  <template #content> Import {{ currentImportMode.label }} </template>
                 </el-tooltip>
               </div>
               <template #content>
                 <p>
                   The
                   <strong>{{ currentImportMode.label }}</strong>
-                  import option is disabled because the CellML library is not
-                  ready yet. Please wait a moment and try again.
+                  import option is disabled because the CellML library is not ready yet. Please wait a moment and try
+                  again.
                 </p>
               </template>
             </el-tooltip>
@@ -126,15 +102,9 @@
             @command="handleExportCommand"
             :disabled="!somethingAvailable"
           >
-            <el-tooltip
-              :disabled="!currentExportMode.disabled"
-              placement="bottom"
-            >
+            <el-tooltip :disabled="!currentExportMode.disabled" placement="bottom">
               <div>
-                <el-tooltip
-                  placement="bottom"
-                  :visible="exportTooltip.visible.value"
-                >
+                <el-tooltip placement="bottom" :visible="exportTooltip.visible.value">
                   <span
                     class="export-button-content"
                     @mouseenter="exportTooltip.onMouseEnter"
@@ -145,17 +115,15 @@
                       <component :is="currentExportMode.icon" />
                     </el-icon>
                   </span>
-                  <template #content>
-                    Export {{ currentExportMode.label }}
-                  </template>
+                  <template #content> Export {{ currentExportMode.label }} </template>
                 </el-tooltip>
               </div>
               <template #content>
                 <p>
                   The
                   <strong>{{ currentExportMode.label }}</strong>
-                  import option is disabled because the CellML library is not
-                  ready yet. Please wait a moment and try again.
+                  import option is disabled because the CellML library is not ready yet. Please wait a moment and try
+                  again.
                 </p>
               </template>
             </el-tooltip>
@@ -203,18 +171,10 @@
             :nodes="nodes"
             :delete-key-code="['Backspace', 'Delete']"
           >
-            <HelperLines
-              :horizontal="helperLineHorizontal"
-              :vertical="helperLineVertical"
-              :alignment="alignment"
-            />
+            <HelperLines :horizontal="helperLineHorizontal" :vertical="helperLineVertical" :alignment="alignment" />
             <MiniMap :pannable="true" :zoomable="true" />
             <Controls>
-              <ControlButton
-                :disabled="screenshotDisabled"
-                title="PNG Screenshot"
-                @click="doPngScreenshot"
-              >
+              <ControlButton :disabled="screenshotDisabled" title="PNG Screenshot" @click="doPngScreenshot">
                 <CameraFilled />
               </ControlButton>
             </Controls>
@@ -247,11 +207,7 @@
     @confirm="onEditConfirm"
   />
 
-  <SaveDialog
-    v-model="saveDialogVisible"
-    @confirm="onSaveConfirm"
-    :default-name="builderStore.lastSaveName"
-  />
+  <SaveDialog v-model="saveDialogVisible" @confirm="onSaveConfirm" :default-name="builderStore.lastSaveName" />
 
   <SaveDialog
     v-model="exportDialogVisible"
@@ -279,6 +235,7 @@
   <ModuleParameterMatchDialog v-model="moduleParameterMatchDialogVisible" />
 
   <ImportDialog
+    ref="importDialogRef"
     v-model="importDialogVisible"
     :config="currentImportConfig"
     :builder-store="builderStore"
@@ -296,16 +253,7 @@ export default {
 </script>
 
 <script setup>
-import {
-  computed,
-  inject,
-  markRaw,
-  nextTick,
-  onMounted,
-  onUnmounted,
-  ref,
-  watchPostEffect,
-} from 'vue'
+import { computed, inject, markRaw, nextTick, onMounted, onUnmounted, ref, watchPostEffect } from 'vue'
 import { useVueFlow, VueFlow } from '@vue-flow/core'
 import {
   DCaret,
@@ -342,23 +290,9 @@ import { generateExportZip } from '../services/caExport'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
-import {
-  generateFlattenedModel,
-  initLibCellML,
-  processModuleData,
-  processUnitsData,
-} from '../utils/cellml'
-import {
-  edgeLineOptions,
-  FLOW_IDS,
-  IMPORT_KEYS,
-  EXPORT_KEYS,
-  JSON_FILE_TYPES,
-} from '../utils/constants'
-import {
-  getId as getNextNodeId,
-  generateUniqueModuleName,
-} from '../utils/nodes'
+import { generateFlattenedModel, initLibCellML, processModuleData, processUnitsData } from '../utils/cellml'
+import { edgeLineOptions, FLOW_IDS, IMPORT_KEYS, EXPORT_KEYS, JSON_FILE_TYPES } from '../utils/constants'
+import { getId as getNextNodeId, generateUniqueModuleName } from '../utils/nodes'
 import { getId as getNextEdgeId } from '../utils/edges'
 import { getImportConfig, parseParametersFile } from '../utils/import'
 import { legacyDownload, saveFileHandle, writeFileHandle } from '../utils/save'
@@ -396,8 +330,7 @@ const { processMacroGeneration } = useMacroGenerator()
 
 const pendingHistoryNodes = new Set()
 
-const { onDragOver, onDrop, onDragLeave, isDragOver } =
-  useDragAndDrop(pendingHistoryNodes)
+const { onDragOver, onDrop, onDragLeave, isDragOver } = useDragAndDrop(pendingHistoryNodes)
 const historyStore = useFlowHistoryStore()
 const { loadFromVesselArray } = useLoadFromVesselArray()
 const { capture } = useScreenshot()
@@ -447,6 +380,7 @@ const currentEditingNode = ref({
   ports: [],
   name: '',
 })
+const importDialogRef = ref(null)
 
 const currentImportMode = ref(null)
 const currentImportConfig = ref({})
@@ -464,9 +398,7 @@ const exportTooltip = useAutoClosingTooltip(1500)
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 
-const somethingAvailable = computed(
-  () => nodes.value.length > 0 && builderStore.parameterFiles.size > 0
-)
+const somethingAvailable = computed(() => nodes.value.length > 0 && builderStore.parameterFiles.size > 0)
 
 const importOptions = computed(() => [
   {
@@ -552,12 +484,7 @@ function updateHelperLines(changes, nodes) {
   helperLineHorizontal.value = undefined
   helperLineVertical.value = undefined
 
-  if (
-    changes.length === 1 &&
-    changes[0].type === 'position' &&
-    changes[0].dragging &&
-    changes[0].position
-  ) {
+  if (changes.length === 1 && changes[0].type === 'position' && changes[0].dragging && changes[0].position) {
     const helperLines = getHelperLines(changes[0], nodes)
 
     // if we have a helper line, we snap the node to the helper line position
@@ -607,11 +534,7 @@ const processPositionChange = (c, buffer, moveChanges) => {
     const start = buffer.get(c.id)
     const end = snapshotNode({ id: c.id })
 
-    if (
-      end &&
-      (start.position.x !== end.position.x ||
-        start.position.y !== end.position.y)
-    ) {
+    if (end && (start.position.x !== end.position.x || start.position.y !== end.position.y)) {
       moveChanges.push({ start, end })
     }
     buffer.delete(c.id)
@@ -805,15 +728,9 @@ const onEdgeChange = (changes) => {
   applyEdgeChanges(changes)
 }
 
-const screenshotDisabled = computed(
-  () => nodes.value.length === 0 && vueFlowRef.value !== null
-)
+const screenshotDisabled = computed(() => nodes.value.length === 0 && vueFlowRef.value !== null)
 
-const loadCellMLModuleData = (
-  content,
-  filename,
-  broadcaseNotifications = true
-) => {
+const loadCellMLModuleData = (content, filename, broadcaseNotifications = true) => {
   return new Promise((resolve) => {
     const result = processModuleData(content)
     if (result.type === 'success') {
@@ -846,11 +763,7 @@ const loadCellMLModuleData = (
   })
 }
 
-const loadCellMLUnitsData = (
-  content,
-  filename,
-  broadcaseNotifications = true
-) => {
+const loadCellMLUnitsData = (content, filename, broadcaseNotifications = true) => {
   return new Promise((resolve) => {
     const result = processUnitsData(content)
     if (result.type === 'success') {
@@ -877,11 +790,7 @@ const loadCellMLUnitsData = (
   })
 }
 
-const loadParametersData = async (
-  content,
-  filename,
-  broadcastNotifications = true
-) => {
+const loadParametersData = async (content, filename, broadcastNotifications = true) => {
   try {
     const result = await parseParametersFile(content)
 
@@ -929,37 +838,56 @@ const handleImportCommand = (option) => {
   performImport(option)
 }
 
-async function onImportConfirm(importPayload) {
+async function onImportConfirm(importPayload, updateProgress) {
   if (currentImportMode.value.key === IMPORT_KEYS.VESSEL) {
-    loadFromVesselArray({
-      vessels: importPayload[IMPORT_KEYS.VESSEL]?.data,
-      //module: importPayload[IMPORT_KEYS.MODULE_CONFIG]?.data,
-    })
+    const vessels = importPayload[IMPORT_KEYS.VESSEL]?.data
+
+    if (!vessels || vessels.length === 0) {
+      console.warn('no vessel data provided')
+      return
+    }
+
+    try {
+      await loadFromVesselArray({ vessels }, (current, total, statusMessage) => {
+        if (updateProgress) {
+          updateProgress(`${statusMessage || 'Loading vessel array...'} (${current}/${total})`)
+        }
+      })
+
+      notify.success({
+        title: 'Import Complete',
+        message: 'Workflow built successfully!',
+      })
+    } catch (error) {
+      notify.error({
+        title: 'Import Failed',
+        message: error.message,
+      })
+    }
   } else if (currentImportMode.value.key === IMPORT_KEYS.CELLML_FILE) {
-    loadCellMLModuleData(
-      importPayload[IMPORT_KEYS.CELLML_FILE]?.data,
-      importPayload[IMPORT_KEYS.CELLML_FILE]?.fileName
-    )
-  } else if (currentImportMode.value.key === IMPORT_KEYS.UNITS) {
-    loadCellMLUnitsData(
-      importPayload[IMPORT_KEYS.UNITS]?.data,
-      importPayload[IMPORT_KEYS.UNITS]?.fileName
-    )
+    const cellmlPayload = importPayload[IMPORT_KEYS.CELLML_FILE]
+    loadCellMLModuleData(cellmlPayload?.data, cellmlPayload?.fileName)
+  } else if (currentImportMode.value.key === IMPORT_KEYS.MODULE_CONFIG) {
+    const configPayload = importPayload[IMPORT_KEYS.MODULE_CONFIG]
+    if (configPayload) {
+      builderStore.addConfigFile(configPayload.data, configPayload.fileName)
+    }
   } else if (currentImportMode.value.key === IMPORT_KEYS.PARAMETER) {
-    loadParametersData(
-      importPayload[IMPORT_KEYS.PARAMETER]?.data,
-      importPayload[IMPORT_KEYS.PARAMETER]?.fileName
-    )
+    const paramPayload = importPayload[IMPORT_KEYS.PARAMETER]
+    loadParametersData(paramPayload?.data, paramPayload?.fileName)
+  } else if (currentImportMode.value.key === IMPORT_KEYS.UNITS) {
+    const unitsPayload = importPayload[IMPORT_KEYS.UNITS]
+    loadCellMLUnitsData(unitsPayload?.data, unitsPayload?.fileName)
   } else {
     console.log('Handle this import:', currentImportMode.value.key)
+  }
+  if (importDialogRef.value) {
+    importDialogRef.value.finishLoading()
   }
 }
 
 const performExport = async () => {
-  const result = await saveFileHandle(
-    builderStore.lastSaveName,
-    JSON_FILE_TYPES
-  )
+  const result = await saveFileHandle(builderStore.lastSaveName, JSON_FILE_TYPES)
   if (result.status) {
     if (result.handle) {
       onExportConfirm(undefined, result.handle)
@@ -1038,10 +966,7 @@ async function onReplaceConfirm(updatedData) {
 }
 
 async function handleSaveWorkspace() {
-  const result = await saveFileHandle(
-    builderStore.lastSaveName,
-    JSON_FILE_TYPES
-  )
+  const result = await saveFileHandle(builderStore.lastSaveName, JSON_FILE_TYPES)
   if (result.status) {
     if (result.handle) {
       const blob = createSaveBlob()
@@ -1062,10 +987,7 @@ async function handleSaveWorkspace() {
 }
 
 async function handleExport() {
-  const result = await saveFileHandle(
-    builderStore.lastExportName,
-    JSON_FILE_TYPES
-  )
+  const result = await saveFileHandle(builderStore.lastExportName, JSON_FILE_TYPES)
   if (result.status) {
     if (result.handle) {
       onExportConfirm(undefined, result.handle)
@@ -1080,9 +1002,7 @@ async function handleExport() {
  */
 async function onExportConfirm(fileName, handle) {
   const caExport = currentExportMode.value.key === EXPORT_KEYS.CA
-  const message = caExport
-    ? 'Generating and zipping CA files.'
-    : 'Generating flattened CellML model.'
+  const message = caExport ? 'Generating and zipping CA files.' : 'Generating flattened CellML model.'
   const notification = notify.info({
     title: 'Exporting ...',
     message: message,
@@ -1092,12 +1012,7 @@ async function onExportConfirm(fileName, handle) {
   try {
     let blob = undefined
     if (caExport) {
-      blob = await generateExportZip(
-        fileName,
-        nodes.value,
-        edges.value,
-        builderStore.parameterData
-      )
+      blob = await generateExportZip(fileName, nodes.value, edges.value, builderStore.parameterData)
     } else if (currentExportMode.value.key === EXPORT_KEYS.CELLML) {
       blob = generateFlattenedModel(nodes.value, edges.value, builderStore)
     }
@@ -1213,15 +1128,9 @@ function handleLoadWorkspace(file) {
       // Restore Pinia store state.
       builderStore.parameterData = loadedState.store.parameterData
       // Merge available units.
-      mergeIntoStore(
-        loadedState.store.availableUnits,
-        builderStore.availableUnits
-      )
+      mergeIntoStore(loadedState.store.availableUnits, builderStore.availableUnits)
       // Merge available modules.
-      mergeIntoStore(
-        loadedState.store.availableModules,
-        builderStore.availableModules
-      )
+      mergeIntoStore(loadedState.store.availableModules, builderStore.availableModules)
 
       builderStore.lastSaveName = loadedState.store.lastSaveName
       builderStore.lastExportName = loadedState.store.lastExportName
@@ -1322,10 +1231,7 @@ const pasteSelection = (atMouse = false) => {
     idMap[node.id] = newId
     nodeIdSet.push(newId)
 
-    const finalName = generateUniqueModuleName(
-      { name: node.data.componentName },
-      namesSet
-    )
+    const finalName = generateUniqueModuleName({ name: node.data.componentName }, namesSet)
     namesSet.add(finalName)
 
     // Create the new node with offset position.
@@ -1411,21 +1317,15 @@ onMounted(async () => {
 
   const promises = []
   for (const [path, content] of Object.entries(cellmlModules)) {
-    promises.push(
-      loadCellMLModuleData(content.default, path.split('/').pop(), false)
-    )
+    promises.push(loadCellMLModuleData(content.default, path.split('/').pop(), false))
   }
 
   for (const [path, content] of Object.entries(cellmlUnits)) {
-    promises.push(
-      loadCellMLUnitsData(content.default, path.split('/').pop(), false)
-    )
+    promises.push(loadCellMLUnitsData(content.default, path.split('/').pop(), false))
   }
 
   for (const [path, content] of Object.entries(parameterFiles)) {
-    promises.push(
-      loadParametersData(content.default, path.split('/').pop(), false)
-    )
+    promises.push(loadParametersData(content.default, path.split('/').pop(), false))
   }
 
   const results = await Promise.all(promises)
@@ -1435,9 +1335,7 @@ onMounted(async () => {
   if (successCount > 0) {
     notify.success({
       title: 'Internal Resource Loading',
-      message: `Successfully loaded ${successCount} file${
-        successCount > 1 ? 's' : ''
-      }.`,
+      message: `Successfully loaded ${successCount} file${successCount > 1 ? 's' : ''}.`,
     })
   }
 
@@ -1453,10 +1351,7 @@ onMounted(async () => {
     builderStore.addConfigFile(content.default, path.split('/').pop())
   }
 
-  const rawSuggestions = generateParameterAssociations(
-    builderStore.availableModules,
-    builderStore.parameterFiles
-  )
+  const rawSuggestions = generateParameterAssociations(builderStore.availableModules, builderStore.parameterFiles)
 
   const linkMap = new Map()
   rawSuggestions.forEach((suggestion) => {
@@ -1483,8 +1378,7 @@ watchPostEffect(() => {
 
   // Find the FIRST button inside the split-dropdown (The Action Button)
   // The second button is the trigger arrow, which we want to leave alone.
-  const actionBtn =
-    importDropdownRef.value.$el.querySelector('button:first-child')
+  const actionBtn = importDropdownRef.value.$el.querySelector('button:first-child')
 
   if (!actionBtn) return
 
