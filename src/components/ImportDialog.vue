@@ -65,7 +65,7 @@
 </template>
 
 <script setup>
-import { reactive, computed, watch, ref, nextTick } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { Check } from '@element-plus/icons-vue'
 import { notify } from '../utils/notify'
 import { IMPORT_KEYS } from '../utils/constants'
@@ -319,16 +319,15 @@ const handleFileChange = async (uploadFile, field) => {
 
     // Vessel-specific validation
     if (field.key === IMPORT_KEYS.VESSEL && validation) {
-    if (field.key === IMPORT_KEYS.VESSEL && validation) {
       await updateVesselValidation(validation)
     }
 
     // Surface warnings (notifications only once)
     state.warnings.forEach((w) => {
-      nofity.warning({
+      await nextTick()
+      notify.warning({
         title: 'Import Warning',
         message: w,
-        duration: 5000,
       })
     })
 
@@ -341,7 +340,6 @@ const handleFileChange = async (uploadFile, field) => {
     notify.error({
       title: 'Import Error',
       message: error.message || 'Failed to parse file.',
-      duration: 6000,
     })
   }
 }
