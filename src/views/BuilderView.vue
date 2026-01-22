@@ -259,11 +259,13 @@ import {
   DCaret,
   CameraFilled,
   Menu as IconVessel,
-  Box as IconCellML,
   Operation as IconParameters,
   Setting as IconModuleConfig,
   ScaleToOriginal as IconUnits,
 } from '@element-plus/icons-vue'
+import CellMLIcon from '../components/icons/CellMLIcon.vue'
+import RulerIcon from '../components/icons/RulerIcon.vue'
+import UnitsIcon from '../components/icons/UnitsIcon.vue'
 
 import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -409,7 +411,7 @@ const importOptions = computed(() => [
   {
     key: IMPORT_KEYS.CELLML_FILE,
     label: 'CellML File',
-    icon: markRaw(IconCellML),
+    icon: markRaw(CellMLIcon),
     disabled: libcellml.status !== 'ready',
   },
   {
@@ -427,7 +429,7 @@ const importOptions = computed(() => [
   {
     key: IMPORT_KEYS.UNITS,
     label: 'Units',
-    icon: markRaw(IconUnits),
+    icon: markRaw(UnitsIcon),
     disabled: libcellml.status !== 'ready',
   },
 ])
@@ -437,7 +439,7 @@ const exportOptions = computed(() => [
   {
     key: EXPORT_KEYS.CELLML,
     label: 'CellML',
-    icon: markRaw(IconCellML),
+    icon: markRaw(CellMLIcon),
     disabled: libcellml.status !== 'ready',
     suffix: '.cellml',
   },
