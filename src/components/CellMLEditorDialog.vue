@@ -160,6 +160,14 @@ const handleDirectSave = async () => {
   const componentName = props.nodeData.componentName
   const modelString = await store.getModuleContent(USER_MODULES_FILE)
   const mergedModelString = mergeModelComponents(modelString, currentCode.value, componentName)
+  if (!mergedModelString) {
+    ElMessageBox.alert(
+      `Failed to merge changes into User Modules.`,
+      'Save Error',
+      { type: 'error' }
+    )
+    return
+  }
   emit('save-update', formSaveData(componentName, mergedModelString))
   emit('update:modelValue', false)
 }
@@ -178,6 +186,14 @@ const handleForkSave = async () => {
   }
 
   const mergedModelString = mergeModelComponents(modelString, currentCode.value, trimmedComponentName)
+  if (!mergedModelString) {
+    ElMessageBox.alert(
+      `Failed to merge new component into User Modules.`,
+      'Save Error',
+      { type: 'error' }
+    )
+    return
+  }
 
   emit('save-fork', formSaveData(trimmedComponentName, mergedModelString))
   showSaveAsPrompt.value = false

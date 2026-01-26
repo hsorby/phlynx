@@ -889,13 +889,31 @@ export function doesComponentExistInModel(modelString, componentName) {
 
 export function mergeModelComponents(targetModelString, sourceModelString, newComponentName) {
   const parser = new _libcellml.Parser(false)
-  let targetModel = parser.parseModel(targetModelString)
+  
+  let targetModel = null
+  if (targetModelString && targetModelString.trim().length > 0) {
+    try {
+      targetModel = parser.parseModel(targetModelString)
+    } catch (error) {
+      parser.delete()
+      return ''
+      // Handle parsing error if needed
+    }
+  }
+
   if (!targetModel) {
     targetModel = new _libcellml.Model()
     targetModel.setName('UserModules')
   }
 
-  const sourceModel = parser.parseModel(sourceModelString)
+  let sourceModel = null
+  try {
+    sourceModel = parser.parseModel(sourceModelString)
+  } catch (error) {
+    targetModel.delete()
+    parser.delete()
+    return ''
+  }
 
   if (sourceModel.componentCount() > 0) {
     const component = sourceModel.componentByIndex(0)
