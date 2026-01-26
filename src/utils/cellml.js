@@ -1,5 +1,3 @@
-import { ta } from "element-plus/es/locales.mjs"
-
 let _libcellml = null
 
 // Define the Namespaces.
