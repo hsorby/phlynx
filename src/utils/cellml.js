@@ -858,13 +858,11 @@ function removeComments(node) {
 }
 
 function hasParserError(parsedDocument) {
-  // parser and parsererrorNS could be cached on startup for efficiency
   var parser = new DOMParser(),
     errorneousParse = parser.parseFromString('<', 'application/xml'),
     parsererrorNS = errorneousParse.getElementsByTagName('parsererror')[0].namespaceURI
 
   if (parsererrorNS === 'http://www.w3.org/1999/xhtml') {
-    // In PhantomJS the parseerror element doesn't seem to have a special namespace, so we are just guessing here :(
     return parsedDocument.getElementsByTagName('parsererror').length > 0
   }
 
