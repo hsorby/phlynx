@@ -81,7 +81,7 @@ Connect the modules placed in [Step 1](#step-1-place-and-rename) as shown below.
 
 Before exporting, the model requires specific data configuration. Click the **Edit Module** (pencil) icon to open the configuration dialog.
 
-![Labelled Edit Module dialogue](../assets/images/edit-module-detail.png){.align-center width="800px"}
+![Labelled Edit Module dialog](../assets/images/edit-module-detail.png){.align-center width="800px"}
 
 Use this dialog to define <GlossaryLink term="ports"/>—collections of variables shared between connected modules. A port definition consists of:
 
