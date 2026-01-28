@@ -272,12 +272,12 @@ async function handleConfirm() {
   const linkMap = new Map(builderStore.fileParameterMap)
   const typeMap = new Map(builderStore.fileAssignmentTypeMap)
   
- associationTable.value.forEach((row) => {
+  associationTable.value.forEach((row) => {
     if (row.sourceFileName) {
       if (row.matchedParameterFile) {
         linkMap.set(row.sourceFileName, row.matchedParameterFile)
         if (row.assignmentType) {
-           typeMap.set(row.sourceFileName, row.assignmentType)
+          typeMap.set(row.sourceFileName, row.assignmentType)
         }
       } else {
         linkMap.delete(row.sourceFileName)
