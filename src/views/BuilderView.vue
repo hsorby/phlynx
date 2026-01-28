@@ -240,18 +240,12 @@
     @edit-node="onOpenEditDialog"
   />
 
-  <ModuleParameterMatchDialog 
-    v-model="moduleParameterMatchDialogVisible" 
-    :builder-store="builderStore"
-    :activeFiles="activeWorkspaceFiles"
-  />
+  <ModuleParameterMatchDialog v-model="moduleParameterMatchDialogVisible" :activeFiles="activeWorkspaceFiles" />
 
   <ImportDialog
     ref="importDialogRef"
     v-model="importDialogVisible"
     :config="currentImportConfig"
-    :builder-store="builderStore"
-    :activeFiles="activeWorkspaceFiles"
     @confirm="onImportConfirm"
   />
 </template>
@@ -748,7 +742,7 @@ const screenshotDisabled = computed(() => nodes.value.length === 0 && vueFlowRef
 
 const activeWorkspaceFiles = computed(() => {
   const fileSet = new Set()
-  nodes.value.forEach(node => {
+  nodes.value.forEach((node) => {
     if (node.data?.sourceFile) {
       fileSet.add(node.data.sourceFile)
     }
@@ -771,11 +765,11 @@ const loadCellMLModuleData = (content, filename, broadcaseNotifications = true) 
       })
       if (broadcaseNotifications) {
         trackEvent('modules_load_action', {
-        category: 'Modules',
-        action: 'load_cellml_module',
-        label: `Modules: ${result.data.length}`,
-        file_type: 'cellml'
-      })
+          category: 'Modules',
+          action: 'load_cellml_module',
+          label: `Modules: ${result.data.length}`,
+          file_type: 'cellml',
+        })
         notify.success({
           title: 'CellML Modules Loaded',
           message: `Loaded ${result.data.length} parameters from ${filename}.`,
@@ -787,7 +781,7 @@ const loadCellMLModuleData = (content, filename, broadcaseNotifications = true) 
           category: 'Modules',
           action: 'load_cellml_module',
           label: `Error: encountered ${result.issues.length} error(s)`,
-          file_type: 'cellml'
+          file_type: 'cellml',
         })
         notify.error({
           title: 'Loading Module Error',
@@ -814,7 +808,7 @@ const loadCellMLUnitsData = (content, filename, broadcaseNotifications = true) =
           category: 'Units',
           action: 'load_cellml_units',
           label: `Units: ${result.units.count}`,
-          file_type: 'cellml'
+          file_type: 'cellml',
         })
         notify.success({
           title: 'CellML Units Loaded',
@@ -827,7 +821,7 @@ const loadCellMLUnitsData = (content, filename, broadcaseNotifications = true) =
           category: 'Units',
           action: 'load_cellml_units',
           label: `Error: encountered ${result.issues.length} error(s)`,
-          file_type: 'cellml'
+          file_type: 'cellml',
         })
         notify.error({
           title: 'Loading Units Error',
@@ -851,7 +845,7 @@ const loadParametersData = async (content, filename, broadcastNotifications = tr
         category: 'Parameters',
         action: 'load_parameters',
         label: `Parameters: ${result.length}`,
-        file_type: 'csv'
+        file_type: 'csv',
       })
       notify.success({
         title: 'Parameters Loaded',
@@ -871,7 +865,7 @@ const loadParametersData = async (content, filename, broadcastNotifications = tr
         category: 'Parameters',
         action: 'load_parameters',
         label: `Error: ${err.message}`,
-        file_type: 'csv'
+        file_type: 'csv',
       })
       notify.error({
         title: 'Loading Parameters Error',
@@ -1080,7 +1074,7 @@ async function handleSaveWorkspace() {
           category: 'Save',
           action: 'save_workflow',
           label: `File: ${result.handle.name}`,
-          file_type: 'json'
+          file_type: 'json',
         })
         notify.success({ message: 'Workflow saved!' })
       } catch (err) {
@@ -1088,7 +1082,7 @@ async function handleSaveWorkspace() {
           category: 'Save',
           action: 'save_workflow',
           label: `Error: ${err.message}`,
-          file_type: 'json'
+          file_type: 'json',
         })
         notify.error({
           title: 'Error Saving Workflow',
@@ -1144,7 +1138,7 @@ async function onExportConfirm(fileName, handle) {
       category: 'Export',
       action: 'export_model',
       label: `File: ${finalName}`,
-      file_type: currentExportMode.value.key
+      file_type: currentExportMode.value.key,
     })
 
     notify.success({
@@ -1170,7 +1164,7 @@ async function onExportConfirm(fileName, handle) {
       category: 'Export',
       action: 'export_model',
       label: `Error: ${error.message}`,
-      file_type: currentExportMode.value.key
+      file_type: currentExportMode.value.key,
     })
     notify.error({ message: `Export failed: ${error.message}` })
   }
@@ -1182,13 +1176,7 @@ async function onExportConfirm(fileName, handle) {
 function createSaveBlob() {
   const saveState = {
     flow: toObject(),
-    store: {
-      availableModules: builderStore.availableModules,
-      availableUnits: builderStore.availableUnits,
-      lastExportName: builderStore.lastExportName,
-      lastSaveName: builderStore.lastSaveName,
-      parameterData: builderStore.parameterData,
-    },
+    store: builderStore.getSaveState(),
   }
 
   const jsonString = JSON.stringify(saveState, null, 2)
@@ -1208,22 +1196,6 @@ function onSaveConfirm(fileName) {
 
   builderStore.setLastSaveName(fileName)
   notify.success({ message: 'Workflow saved!' })
-}
-
-function mergeIntoStore(newModules, target) {
-  const moduleMap = new Map(target.map((mod) => [mod.filename, mod]))
-
-  if (newModules) {
-    for (const newModule of newModules) {
-      if (newModule && newModule.filename) {
-        // Safety check
-        moduleMap.set(newModule.filename, newModule)
-      }
-    }
-  }
-
-  target.length = 0
-  target.push(...moduleMap.values())
 }
 
 /**
@@ -1247,7 +1219,6 @@ function handleLoadWorkspace(file) {
       edges.value = []
       setViewport({ x: 0, y: 0, zoom: 1 }) // Reset viewport.
       // Clear the current parameter data.
-      builderStore.parameterData = []
 
       await nextTick()
 
@@ -1260,20 +1231,13 @@ function handleLoadWorkspace(file) {
       // edges.value = loadedState.flow.edges
 
       // Restore Pinia store state.
-      builderStore.parameterData = loadedState.store.parameterData
-      // Merge available units.
-      mergeIntoStore(loadedState.store.availableUnits, builderStore.availableUnits)
-      // Merge available modules.
-      mergeIntoStore(loadedState.store.availableModules, builderStore.availableModules)
-
-      builderStore.lastSaveName = loadedState.store.lastSaveName
-      builderStore.lastExportName = loadedState.store.lastExportName
+      builderStore.loadState(loadedState.store)
 
       trackEvent('workflow_load_action', {
         category: 'Workflow',
         action: 'load_workflow',
         label: `Nodes: ${nodes.value.length}, Edges: ${edges.value.length}`,
-        file_type: 'json'
+        file_type: 'json',
       })
       notify.success({
         message: 'Workflow loaded successfully!',
@@ -1283,7 +1247,7 @@ function handleLoadWorkspace(file) {
         category: 'Workflow',
         action: 'load_workflow',
         label: `Error: ${error.message}`,
-        file_type: 'json'
+        file_type: 'json',
       })
       notify.error({ message: `Failed to load workflow: ${error.message}` })
     }

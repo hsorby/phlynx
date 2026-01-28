@@ -79,6 +79,7 @@
     </div>
     <template #footer>
       <span class="dialog-footer">
+        <el-form-item v-if="requiredFieldsCount > 0" :label="`Required field${requiredFieldsCount > 1 ? 's' : ''}`" :required="true" />
         <el-button @click="closeDialog" :disabled="isLoading">Cancel</el-button>
         <el-button type="primary" @click="handleConfirm" :disabled="!isFormValid || isLoading" :loading="isLoading">
           Import
@@ -93,6 +94,7 @@ import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElDialog, ElForm, ElFormItem, ElInput, ElButton, ElUpload, ElAlert, ElIcon } from 'element-plus'
 import { Check } from '@element-plus/icons-vue'
 
+import { useBuilderStore } from '../stores/builderStore'
 import { useGtm } from '../composables/useGtm'
 import { notify } from '../utils/notify'
 import { IMPORT_KEYS } from '../utils/constants'
@@ -107,19 +109,11 @@ const props = defineProps({
     required: true,
     default: () => ({ title: '', fields: [] }),
   },
-  builderStore: {
-    type: Object,
-    default: null,
-  },
-  activeFiles: {
-    type: Array,
-    required: true,
-    default: []
-  }
 })
 
 const emit = defineEmits(['update:modelValue', 'confirm'])
 const { trackEvent } = useGtm()
+const builderStore = useBuilderStore()
 
 // --- State Management ---
 const formState = reactive({})
@@ -172,6 +166,10 @@ const displayFields = computed(() => {
   return [...baseFields, ...dynamicFields.value]
 })
 
+const requiredFieldsCount = computed(() => {
+  return displayFields.value.filter((field) => field.required !== false).length
+})
+
 const addDynamicFields = async (validation) => {
   try {
     const newFields = createDynamicFields(validation)
@@ -206,10 +204,8 @@ function createEmptyFieldState() {
 
 // Create a temporary store-like object for validation that includes staged files
 const createValidationStore = () => {
-  if (!props.builderStore) return null
-
   // Create a deep copy of availableModules
-  const availableModules = JSON.parse(JSON.stringify(props.builderStore.availableModules))
+  const availableModules = JSON.parse(JSON.stringify(builderStore.availableModules))
 
   // Apply staged config files
   stagedFiles.value.configFiles.forEach(({ filename, payload }) => {
@@ -294,8 +290,8 @@ const isFormValid = computed(() => {
 
 // --- Handlers ---
 async function parseFile(field, rawFile) {
-  if (field.requiresStore && props.builderStore) {
-    return field.parser(rawFile, props.builderStore)
+  if (field.requiresStore && builderStore) {
+    return field.parser(rawFile, builderStore)
   }
   return field.parser(rawFile)
 }
@@ -356,7 +352,7 @@ const handleFileChange = async (uploadFile, field) => {
       category: 'Import',
       action: 'import_error',
       label: field.key || 'unknown_field', // useful context
-      file_type: 'various'
+      file_type: 'various',
     })
     notify.error({
       title: 'Import Error',
@@ -419,12 +415,11 @@ async function stageFile(field, parsedData, fileName) {
 }
 
 const commitStagedFiles = () => {
-  if (!props.builderStore) return
   stagedFiles.value.moduleFiles.forEach(({ filename, payload }) => {
-    props.builderStore.addModuleFile(payload)
+    builderStore.addModuleFile(payload)
   })
   stagedFiles.value.configFiles.forEach(({ filename, payload }) => {
-    props.builderStore.addConfigFile(payload, filename)
+    builderStore.addConfigFile(payload, filename)
   })
 }
 
@@ -436,7 +431,7 @@ const handleConfirm = async () => {
   await new Promise((resolve) => setTimeout(resolve, 50))
 
   commitStagedFiles()
-  if (props.builderStore && formState[IMPORT_KEYS.PARAMETER]?.isValid) {
+  if (formState[IMPORT_KEYS.PARAMETER]?.isValid) {
     const paramState = formState[IMPORT_KEYS.PARAMETER]
     const { fileName, data } = paramState.payload
 
@@ -444,25 +439,25 @@ const handleConfirm = async () => {
     const vesselData = vesselState?.payload?.data
 
     if (fileName && data && vesselData) {
-      props.builderStore.addParameterFile(fileName, data)
+      builderStore.addParameterFile(fileName, data)
 
-      const fileLinkMap = new Map(props.builderStore.fileParameterMap)
-      const fileTypeMap = new Map(props.builderStore.fileAssignmentTypeMap || [])
+      const fileLinkMap = new Map(builderStore.fileParameterMap)
+      const fileTypeMap = new Map(builderStore.fileAssignmentTypeMap || [])
 
       const involvedCellMLFiles = new Set()
-      vesselData.forEach(vessel => {
-        const config = props.builderStore.getConfigForVessel(vessel.vessel_type, vessel.BC_type)
+      vesselData.forEach((vessel) => {
+        const config = builderStore.getConfigForVessel(vessel.vessel_type, vessel.BC_type)
         if (config?.filename) {
           involvedCellMLFiles.add(config.filename)
         }
       })
 
-      involvedCellMLFiles.forEach(cellmlFile => {
+      involvedCellMLFiles.forEach((cellmlFile) => {
         fileLinkMap.set(cellmlFile, fileName)
         fileTypeMap.set(cellmlFile, 'imported')
       })
       console.log(fileLinkMap, fileTypeMap)
-      props.builderStore.applyFileParameterLinks(fileLinkMap, fileTypeMap)
+      builderStore.applyFileParameterLinks(fileLinkMap, fileTypeMap)
     }
   }
 
@@ -475,7 +470,7 @@ const handleConfirm = async () => {
     category: 'Import',
     action: 'import_file',
     label: props.config.title || 'Import File', // useful context
-    file_type: 'various'
+    file_type: 'various',
   })
   emit('confirm', result, (progressText) => {
     loadingText.value = progressText
@@ -540,8 +535,13 @@ defineExpose({
 }
 
 @keyframes breathe {
-  0%, 100% { transform: scale(0.95); }
-  50% { transform: scale(1.05); }
+  0%,
+  100% {
+    transform: scale(0.95);
+  }
+  50% {
+    transform: scale(1.05);
+  }
 }
 
 :deep(.el-loading-spinner svg) {

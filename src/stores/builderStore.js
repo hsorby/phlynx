@@ -1,19 +1,35 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
+function mergeIntoStore(newModules, target) {
+  const moduleMap = new Map(target.map((mod) => [mod.filename, mod]))
+
+  if (newModules) {
+    for (const newModule of newModules) {
+      if (newModule && newModule.filename) {
+        // Safety check
+        moduleMap.set(newModule.filename, newModule)
+      }
+    }
+  }
+
+  target.length = 0
+  target.push(...moduleMap.values())
+}
+
 // 'builder' is the store's ID
 export const useBuilderStore = defineStore('builder', () => {
   // --- STATE ---
   const availableModules = ref([])
   const availableUnits = ref([])
-  const parameterData = ref([])
+  const lastSaveName = ref('phlynx-project')
+  const lastExportName = ref('phlynx-export')
+
   const parameterFiles = ref(new Map())
   const moduleParameterMap = ref(new Map())
   const moduleAssignmentTypeMap = ref(new Map())
   const fileParameterMap = ref(new Map())
   const fileAssignmentTypeMap = ref(new Map())
-  const lastSaveName = ref('phlynx-project')
-  const lastExportName = ref('phlynx-export')
 
   // --- DEBUG ---
 
@@ -48,7 +64,7 @@ export const useBuilderStore = defineStore('builder', () => {
 
   function applyParameterLinks(linkMap, typeMap = null) {
     moduleParameterMap.value = linkMap
-    fileParameterMap.value = linkMap 
+    fileParameterMap.value = linkMap
     if (typeMap) {
       moduleAssignmentTypeMap.value = typeMap
       fileAssignmentTypeMap.value = typeMap
@@ -120,7 +136,7 @@ export const useBuilderStore = defineStore('builder', () => {
         moduleFile = {
           filename: config.module_file,
           modules: [],
-          isStub: true, 
+          isStub: true,
         }
         availableModules.value.push(moduleFile)
       }
@@ -183,6 +199,18 @@ export const useBuilderStore = defineStore('builder', () => {
     addOrUpdateFile(availableUnits, payload)
   }
 
+  function loadState(state) {
+    availableModules.value = mergeIntoStore(state.availableModules, availableModules.value)
+    availableUnits.value = mergeIntoStore(state.availableUnits, availableUnits.value)
+    fileAssignmentTypeMap.value = new Map(state.fileAssignmentTypeMap || [])
+    fileParameterMap.value = new Map(state.fileParameterMap || [])
+    lastSaveName.value = state.lastSaveName || 'phlynx-project'
+    lastExportName.value = state.lastExportName || 'phlynx-export'
+    moduleAssignmentTypeMap.value = new Map(state.moduleAssignmentTypeMap || [])
+    moduleParameterMap.value = new Map(state.moduleParameterMap || [])
+    parameterFiles.value = new Map(state.parameterFiles || [])
+  }
+
   function removeFile(collection, filename) {
     const index = collection.value.findIndex((f) => f.filename === filename)
     if (index !== -1) {
@@ -240,6 +268,20 @@ export const useBuilderStore = defineStore('builder', () => {
     return null
   }
 
+  function getSaveState() {
+    return {
+      availableModules: availableModules.value,
+      availableUnits: availableUnits.value,
+      lastExportName: lastExportName.value,
+      lastSaveName: lastSaveName.value,
+      moduleParameterMap: Array.from(moduleParameterMap.value.entries()),
+      moduleAssignmentTypeMap: Array.from(moduleAssignmentTypeMap.value.entries()),
+      fileParameterMap: Array.from(fileParameterMap.value.entries()),
+      fileAssignmentTypeMap: Array.from(fileAssignmentTypeMap.value.entries()),
+      parameterFiles: Array.from(parameterFiles.value.entries()),
+    }
+  }
+
   // --- GETTERS (computed) ---
 
   return {
@@ -252,7 +294,6 @@ export const useBuilderStore = defineStore('builder', () => {
     moduleAssignmentTypeMap,
     fileParameterMap,
     fileAssignmentTypeMap,
-    parameterData,
     parameterFiles,
 
     // Actions
@@ -260,20 +301,24 @@ export const useBuilderStore = defineStore('builder', () => {
     addModuleFile,
     addParameterFile,
     addUnitsFile,
-    applyParameterLinks,       // Re-enabled
-    applyFileParameterLinks,   // Updated with syncing
+    applyParameterLinks, // Re-enabled
+    applyFileParameterLinks, // Updated with syncing
+    loadState,
+    removeModuleFile,
+    setLastExportName,
+    setLastSaveName,
+
+    // Getters
     getConfig,
     getConfigForVessel,
     getModuleContent,
     getParametersForFile,
     getParameterFileNameForFile,
-    getParametersForModule,       // Active module lookup
-    getParameterFileNameForModule,// Active module lookup
-    getAssignmentTypeForModule,   // Active assignment lookup
+    getParametersForModule, // Active module lookup
+    getParameterFileNameForModule, // Active module lookup
+    getAssignmentTypeForModule, // Active assignment lookup
+    getSaveState,
     hasModuleFile,
-    removeModuleFile,
-    setLastExportName,
-    setLastSaveName,
 
     // Debug
     listModules,

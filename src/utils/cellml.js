@@ -419,12 +419,6 @@ function prioritizeEnvironmentComponent(xmlString) {
 }
 
 /**
- * Applies parameter data to the model variables.
- * Logic:
- * 1. Look for specific match: VariableName + "_" + ComponentName (e.g. "R" in "axon_SN" -> "R_axon_SN")
- * 2. Look for global match: VariableName (e.g. "Faraday" -> "Faraday")
- */
-/**
  * Applies parameter data to the model variables with strict unit and value validation.
  */
 function applyParameterMappings(model, parameterData, ensureUnitImported) {
@@ -472,7 +466,7 @@ function applyParameterMappings(model, parameterData, ensureUnitImported) {
 
       const matchUnitsTrimmed = match.units ? match.units.trim() : 'dimensionless';
       
-      // CRITICAL FIX 1: Ensure the unit exists in the model scope before assigning to variable
+      // Ensure the unit exists in the model scope before assigning to variable.
       if (ensureUnitImported) {
         ensureUnitImported(matchUnitsTrimmed);
       }
@@ -483,7 +477,7 @@ function applyParameterMappings(model, parameterData, ensureUnitImported) {
         sourceVar = new _libcellml.Variable();
         sourceVar.setName(match.variable_name);
         
-        // CRITICAL FIX 2: Explicitly set initial value to define variable type as 'constant'
+        // Ensure the initial value is explicitly set to define variable type as 'constant'.
         sourceVar.setInitialValueByString(match.value.trim());
         
         const matchUnits = model.unitsByName(matchUnitsTrimmed);
@@ -498,7 +492,7 @@ function applyParameterMappings(model, parameterData, ensureUnitImported) {
         paramComponent.addVariable(sourceVar);
       }
 
-      // Connect the constant parameter to the module variable
+      // Connect the constant parameter to the module variable.
       _libcellml.Variable.addEquivalence(sourceVar, variable);
 
       sourceVar.delete();
@@ -512,7 +506,7 @@ function applyParameterMappings(model, parameterData, ensureUnitImported) {
 export function generateFlattenedModel(nodes, edges, builderStore) {
   const appVersion = __APP_VERSION__ || '1.0.0'
 
-  // 1. Initialize core objects
+  // Initialize core objects
   const model = new _libcellml.Model()
   model.setName(`PhLynxGenerated_v${appVersion}`.replaceAll('.', '_'))
 

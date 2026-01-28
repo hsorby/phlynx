@@ -115,15 +115,12 @@
 <script setup>
 import { computed, ref, watch, nextTick } from 'vue'
 import { Check } from '@element-plus/icons-vue'
-import { notify } from '../utils/notify'
 import { useGtm } from '../composables/useGtm'
+import { useBuilderStore } from '../stores/builderStore'
+import { notify } from '../utils/notify'
 
 const props = defineProps({
   modelValue: Boolean,
-  builderStore: {
-    type: Object,
-    required: true,
-  },
   activeFiles: {
     type: Array,
     required: true,
@@ -159,15 +156,15 @@ function isFileActive(fileObj, activeFiles) {
 
 // --- Data Preparation ---
 const availableFiles = computed(() => {
-  if (!props.builderStore || !props.builderStore.parameterFiles) return []
-  return Array.from(props.builderStore.parameterFiles.keys()).map((name) => ({
+  if (!builderStore.parameterFiles) return []
+  return Array.from(builderStore.parameterFiles.keys()).map((name) => ({
     name,
   }))
 })
 
 function calculateStats(fileObj, fileName) {
   const requiredVars = getRequiredVariablesForFile(fileObj)
-  const fileData = props.builderStore.parameterFiles.get(fileName) || []
+  const fileData = builderStore.parameterFiles.get(fileName) || []
   
   const availableVars = new Set(
     fileData.map((d) => d.variable || d.name || d.Variable || d.variable_name || d.Name)
@@ -212,16 +209,16 @@ function findBestMatchForFile(fileRef, availableParamFiles) {
 async function prepareData() {
   const rows = []
   
-  if (!props.builderStore || !props.builderStore.availableModules) {
+  if (!builderStore.availableModules) {
     associationTable.value = []
     return
   }
 
-  const paramFileNames = Array.from(props.builderStore.parameterFiles.keys())
+  const paramFileNames = Array.from(builderStore.parameterFiles.keys())
 
-  props.builderStore.availableModules.forEach((file) => {
-    const assignedInStore = props.builderStore.fileParameterMap.get(file.filename)
-    const storedType = props.builderStore.fileAssignmentTypeMap?.get(file.filename)
+  builderStore.availableModules.forEach((file) => {
+    const assignedInStore = builderStore.fileParameterMap.get(file.filename)
+    const storedType = builderStore.fileAssignmentTypeMap?.get(file.filename)
     const isActive = props.activeFiles.includes(file.filename)
 
     if (!isActive) {
@@ -272,8 +269,8 @@ async function handleConfirm() {
     })
   }
 
-  const linkMap = new Map(props.builderStore.fileParameterMap)
-  const typeMap = new Map(props.builderStore.fileAssignmentTypeMap)
+  const linkMap = new Map(builderStore.fileParameterMap)
+  const typeMap = new Map(builderStore.fileAssignmentTypeMap)
   
  associationTable.value.forEach((row) => {
     if (row.sourceFileName) {
@@ -290,7 +287,7 @@ async function handleConfirm() {
   })
 
   console.log(linkMap, typeMap)
-  props.builderStore.applyFileParameterLinks(linkMap, typeMap)
+  builderStore.applyFileParameterLinks(linkMap, typeMap)
 
 
   trackEvent('parameter_match_action', {
