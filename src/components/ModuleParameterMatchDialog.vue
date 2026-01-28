@@ -286,7 +286,6 @@ async function handleConfirm() {
     }
   })
 
-  console.log(linkMap, typeMap)
   builderStore.applyFileParameterLinks(linkMap, typeMap)
 
 
