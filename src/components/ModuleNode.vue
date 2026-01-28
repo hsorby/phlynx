@@ -202,7 +202,7 @@ const domainTypeClass = computed(() => {
 })
 
 const isMissingParameters = computed(() => {
-  return !builderStore.moduleParameterMap.get(props.data.sourceFile)
+  return !builderStore.moduleParameterMap.get(props.data.componentName)
 })
 
 function handleSetDomainType(typeCommand) {

@@ -243,6 +243,7 @@
   <ModuleParameterMatchDialog 
     v-model="moduleParameterMatchDialogVisible" 
     :builder-store="builderStore"
+    :nodes="nodes"
   />
 
   <ImportDialog

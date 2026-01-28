@@ -123,6 +123,10 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  nodes: {
+    type: Object,
+    required: true,
+  }
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -144,9 +148,9 @@ function getRequiredVariablesForFile(fileObj) {
 }
 
 // --- Helper: Check if File is "Active" in Workspace ---
-function isFileActive(fileObj) {
+function isFileActive(fileObj, nodes) {
   if (!fileObj.modules) return false
-  return fileObj.modules.some(m => m.configs && m.configs.length > 0)
+  return nodes.some((node) => node.data.sourceFile === fileObj.filename)
 }
 
 // --- Data Preparation ---
@@ -228,7 +232,7 @@ async function prepareData() {
         }
     }
 
-    const isActive = isFileActive(file)
+    const isActive = isFileActive(file, props.nodes)
     if (!isActive && !assignedInStore) {
         return
     }
@@ -286,7 +290,6 @@ async function handleConfirm() {
   const missing = associationTable.value.filter(
     (row) => !row.matchedParameterFile && row.matchStats && row.matchStats.total > 0
   )
-  
   if (missing.length > 0) {
     notify.warning({
       title: 'Incomplete Configuration',
