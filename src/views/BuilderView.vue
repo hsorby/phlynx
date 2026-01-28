@@ -251,6 +251,7 @@
     v-model="importDialogVisible"
     :config="currentImportConfig"
     :builder-store="builderStore"
+    :activeFiles="activeWorkspaceFiles"
     @confirm="onImportConfirm"
   />
 </template>
@@ -1430,17 +1431,6 @@ onMounted(async () => {
   for (const [path, content] of Object.entries(moduleConfigs)) {
     builderStore.addConfigFile(content.default, path.split('/').pop())
   }
-
-  const rawSuggestions = generateParameterAssociations(builderStore.availableModules, builderStore.parameterFiles)
-
-  const linkMap = new Map()
-  rawSuggestions.forEach((suggestion) => {
-    if (suggestion.matchedParameterFile) {
-      linkMap.set(suggestion.moduleSource, suggestion.matchedParameterFile)
-    }
-  })
-
-  builderStore.applyParameterLinks(linkMap)
 })
 
 const onMouseMove = (event) => {

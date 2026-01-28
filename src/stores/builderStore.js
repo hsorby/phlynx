@@ -8,8 +8,10 @@ export const useBuilderStore = defineStore('builder', () => {
   const availableUnits = ref([])
   const parameterData = ref([])
   const parameterFiles = ref(new Map())
-  const moduleParameterMap = ref(new Map())
-  const moduleAssignmentTypeMap = ref(new Map())
+  // const moduleParameterMap = ref(new Map())
+  // const moduleAssignmentTypeMap = ref(new Map())
+  const fileParameterMap = ref(new Map())
+  const fileAssignmentTypeMap = ref(new Map())
   const lastSaveName = ref('phlynx-project')
   const lastExportName = ref('phlynx-export')
 
@@ -36,26 +38,43 @@ export const useBuilderStore = defineStore('builder', () => {
     return true
   }
 
-  function applyParameterLinks(linkMap, typeMap = null) {
-    moduleParameterMap.value = linkMap
+  // function applyParameterLinks(linkMap, typeMap = null) {
+  //   moduleParameterMap.value = linkMap
+  //   if (typeMap) {
+  //     moduleAssignmentTypeMap.value = typeMap
+  //   }
+  // }
+
+  // function getParameterFileNameForModule(moduleName) {
+  //   return moduleParameterMap.value.get(moduleName) || null
+  // }
+
+  function applyFileParameterLinks(linkMap, typeMap = null) {
+    fileParameterMap.value = linkMap
     if (typeMap) {
-      moduleAssignmentTypeMap.value = typeMap
+      fileAssignmentTypeMap.value = typeMap
     }
   }
 
-  function getParameterFileNameForModule(moduleName) {
-    return moduleParameterMap.value.get(moduleName) || null
-  }
-
-  function getAssignmentTypeForModule(moduleName) {
-    return moduleAssignmentTypeMap.value.get(moduleName) || null
-  }
-
-  function getParametersForModule(moduleName) {
-    const paramFileName = moduleParameterMap.value.get(moduleName)
+  function getParametersForFile(filename) {
+    const paramFileName = fileParameterMap.value.get(filename)
     if (!paramFileName) return []
     return parameterFiles.value.get(paramFileName) || []
   }
+
+  function getParameterFileNameForFile(moduleName) {
+    return fileParameterMap.value.get(moduleName) || null
+  }
+
+  // function getAssignmentTypeForModule(moduleName) {
+  //   return moduleAssignmentTypeMap.value.get(moduleName) || null
+  // }
+
+  // function getParametersForModule(moduleName) {
+  //   const paramFileName = moduleParameterMap.value.get(moduleName)
+  //   if (!paramFileName) return []
+  //   return parameterFiles.value.get(paramFileName) || []
+  // }
 
   function setLastSaveName(name) {
     lastSaveName.value = name
@@ -253,23 +272,24 @@ export const useBuilderStore = defineStore('builder', () => {
     availableUnits,
     lastExportName,
     lastSaveName,
-    moduleParameterMap,
-    moduleAssignmentTypeMap,
+    fileParameterMap,
+    fileAssignmentTypeMap,
     parameterData,
     parameterFiles,
-
+    
     // Actions
     addConfigFile,
     addModuleFile,
     addParameterFile,
     addUnitsFile,
-    applyParameterLinks,
+    // applyParameterLinks,
+    applyFileParameterLinks,
     getConfig,
     getConfigForVessel,
     getModuleContent,
-    getParameterFileNameForModule,
-    getAssignmentTypeForModule,
-    getParametersForModule,
+    getParametersForFile,
+    getParameterFileNameForFile,
+    // getParametersForModule,
     hasModuleFile,
     removeModuleFile,
     setLastExportName,

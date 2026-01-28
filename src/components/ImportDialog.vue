@@ -108,6 +108,11 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  activeFiles: {
+    type: Array,
+    required: true,
+    default: []
+  }
 })
 
 const emit = defineEmits(['update:modelValue', 'confirm'])
@@ -431,42 +436,23 @@ const handleConfirm = async () => {
     if (fileName && data && vesselData) {
       props.builderStore.addParameterFile(fileName, data)
 
-      const newLinks = new Map(props.builderStore.moduleParameterMap)
-      const newTypes = new Map(props.builderStore.moduleAssignmentTypeMap)
-      const activeModuleNames = new Set()
-      const configToModuleMap = new Map()
-      props.builderStore.availableModules.forEach((f) => {
-        f.modules?.forEach((m) => {
-          m.configs?.forEach((c) => {
-            if (c.vessel_type && c.BC_type) {
-              const key = `${c.vessel_type}:${c.BC_type}`
-              configToModuleMap.set(key, m.name || m.componentName)
-            }
-          })
-        })
-      })
+      const fileLinkMap = new Map(props.builderStore.fileParameterMap)
+      const fileTypeMap = new Map(props.builderStore.fileAssignmentTypeMap || [])
 
-      vesselData.forEach((row) => {
-        const key = `${row.vessel_type}:${row.BC_type}`
-        const moduleName = configToModuleMap.get(key)
-        if (moduleName) {
-          activeModuleNames.add(moduleName)
+      const involvedCellMLFiles = new Set()
+      vesselData.forEach(vessel => {
+        const config = props.builderStore.getConfigForVessel(vessel.vessel_type, vessel.BC_type)
+        if (config?.filename) {
+          involvedCellMLFiles.add(config.filename)
         }
       })
 
-      props.builderStore.availableModules.forEach((file) => {
-        if (file.modules) {
-          file.modules.forEach((module) => {
-            const moduleName = module.name || module.componentName
-            if (moduleName && activeModuleNames.has(moduleName)) {
-              newLinks.set(moduleName, fileName)
-              newTypes.set(moduleName, 'imported')
-            }
-          })
-        }
+      involvedCellMLFiles.forEach(cellmlFile => {
+        fileLinkMap.set(cellmlFile, fileName)
+        fileTypeMap.set(cellmlFile, 'imported')
       })
-
-      props.builderStore.applyParameterLinks(newLinks, newTypes)
+      console.log(fileLinkMap, fileTypeMap)
+      props.builderStore.applyFileParameterLinks(fileLinkMap, fileTypeMap)
     }
   }
 

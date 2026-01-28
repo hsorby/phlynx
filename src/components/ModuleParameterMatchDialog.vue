@@ -216,23 +216,10 @@ async function prepareData() {
   const paramFileNames = Array.from(props.builderStore.parameterFiles.keys())
 
   props.builderStore.availableModules.forEach((file) => {
-    if (!file.modules || file.modules.length === 0) return;
+    const assignedInStore = props.builderStore.fileParameterMap.get(file.filename)
+    const storedType = props.builderStore.fileAssignmentTypeMap?.get(file.filename)
+    const isActive = props.activeFiles.includes(file.filename)
 
-    let assignedInStore = null
-    let storedType = null
-    for (const mod of file.modules) {
-        const modName = mod.name || mod.componentName
-        if (modName) {
-           const assigned = props.builderStore.getParameterFileNameForModule(modName)
-           if (assigned) {
-               assignedInStore = assigned
-               storedType = props.builderStore.getAssignmentTypeForModule(modName)
-               break 
-           }
-        }
-    }
-
-    const isActive = isFileActive(file, props.activeFiles)
     if (!isActive && !assignedInStore) {
         return
     }
@@ -256,29 +243,13 @@ async function prepareData() {
       fileRef: file, 
       matchedParameterFile: currentParamFile || null,
       assignmentType: assignmentType,
-      matchStats: null
-    }
-    
-    if (currentParamFile) {
-      row.matchStats = calculateStats(file, currentParamFile)
-    } else {
-       row.matchStats = calculateStats(file, null)
+      matchStats: calculateStats(file, currentParamFile)
     }
     
     rows.push(row)
   })
   
   associationTable.value = rows
-}
-
-function handleSelectionChange(row) {
-  if (row.matchedParameterFile) {
-    row.assignmentType = 'manual'
-    row.matchStats = calculateStats(row.fileRef, row.matchedParameterFile)
-  } else {
-    row.assignmentType = 'none'
-    row.matchStats = calculateStats(row.fileRef, null)
-  }
 }
 
 // --- Dialog Controls ---
@@ -297,30 +268,25 @@ async function handleConfirm() {
     })
   }
 
-  const linkMap = new Map(props.builderStore.moduleParameterMap)
-  const typeMap = new Map(props.builderStore.moduleAssignmentTypeMap)
+  const linkMap = new Map(props.builderStore.fileParameterMap)
+  const typeMap = new Map(props.builderStore.fileAssignmentTypeMap)
   
-  associationTable.value.forEach((row) => {
-    if (row.fileRef.modules) {
-      row.fileRef.modules.forEach(module => {
-        const moduleName = module.name || module.componentName
-        if (moduleName) {
-           if (row.matchedParameterFile) {
-             linkMap.set(moduleName, row.matchedParameterFile)
-             if (row.assignmentType) {
-                typeMap.set(moduleName, row.assignmentType)
-             }
-           } else if (linkMap.has(moduleName)) {
-             linkMap.delete(moduleName)
-             typeMap.delete(moduleName)
-           }
+ associationTable.value.forEach((row) => {
+    if (row.sourceFileName) {
+      if (row.matchedParameterFile) {
+        linkMap.set(row.sourceFileName, row.matchedParameterFile)
+        if (row.assignmentType) {
+           typeMap.set(row.sourceFileName, row.assignmentType)
         }
-      })
+      } else {
+        linkMap.delete(row.sourceFileName)
+        typeMap.delete(row.sourceFileName)
+      }
     }
   })
 
-  // Pass both maps to store
-  props.builderStore.applyParameterLinks(linkMap, typeMap)
+  console.log(linkMap, typeMap)
+  props.builderStore.applyFileParameterLinks(linkMap, typeMap)
 
   notify.success({ title: 'Saved', message: 'Parameter links updated.' })
   closeDialog()
