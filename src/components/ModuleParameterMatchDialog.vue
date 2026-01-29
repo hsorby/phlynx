@@ -6,17 +6,10 @@
     :close-on-click-modal="false"
     @close="closeDialog"
   >
-    <span>
-      Assign parameter files to active CellML files in the workspace.
-    </span>
+    <span> Assign parameter files to active CellML files in the workspace. </span>
     <el-divider></el-divider>
-    
-    <el-table
-      :data="associationTable" 
-      stripe
-      border
-      empty-text="No active modules requiring parameters found."
-      >
+
+    <el-table :data="associationTable" stripe border empty-text="No active modules requiring parameters found.">
       <el-table-column prop="sourceFileName" label="CellML File" min-width="250" />
 
       <el-table-column label="Parameter Source" min-width="250">
@@ -28,37 +21,60 @@
             @change="handleSelectionChange(scope.row)"
             style="width: 100%"
           >
-            <el-option
-              v-for="file in availableFiles"
-              :key="file.name"
-              :label="file.name"
-              :value="file.name"
-            />
+            <el-option v-for="file in availableFiles" :key="file.name" :label="file.name" :value="file.name" />
           </el-select>
         </template>
       </el-table-column>
 
       <el-table-column label="Match Info" width="250" align="center">
         <template #default="{ row }">
-          
           <div v-if="row.matchStats && row.matchStats.total === 0">
-             <el-tag type="info" effect="plain" class="full-width-tag">No Params Needed</el-tag>
+            <el-tag type="info" effect="plain" class="full-width-tag">No Params Needed</el-tag>
+          </div>
+
+          <div v-else-if="row.matchStats && row.matchStats.matched === 0">
+            <el-tooltip placement="top" effect="light">
+              <el-tag type="error" effect="dark" class="full-width-tag">
+                <el-icon style="margin-right: 5px"><Close /></el-icon>
+                No Parameters Matched
+              </el-tag>
+            </el-tooltip>
           </div>
 
           <div v-else-if="row.assignmentType === 'manual'">
-            <el-tag type="warning" effect="dark" class="full-width-tag">
-              Manual Override
-            </el-tag>
+            <el-tooltip placement="top" effect="light">
+              <template #content>
+                <div class="tooltip-content">
+                  <div v-if="row.matchStats.missing > 0">
+                    <strong>Matched: {{ row.matchStats.matched }}</strong>
+                  </div>
+                  <div v-else>All {{ row.matchStats.total }} required parameters found.</div>
+                  <div style="margin-top: 5px; font-size: 0.9em; color: #888">(Manually selected)</div>
+                </div>
+              </template>
+              <el-tag type="warning" effect="dark" class="full-width-tag"> Manual Override </el-tag>
+            </el-tooltip>
           </div>
 
           <div v-else-if="row.assignmentType === 'imported'">
-            <el-tag type="success" effect="dark" class="full-width-tag">
-              <el-icon style="margin-right: 5px"><Check /></el-icon> 
-              Imported Parameters
-            </el-tag>
+            <el-tooltip placement="top" effect="light">
+              <template #content>
+                <div class="tooltip-content">
+                  <div v-if="row.matchStats.missing > 0">
+                    <strong>Matched: {{ row.matchStats.matched }}</strong>
+                  </div>
+                  <div v-else>All {{ row.matchStats.total }} required parameters found.</div>
+                  <div style="margin-top: 5px; font-size: 0.9em; color: #888">(Assigned with import)</div>
+                </div>
+              </template>
+              <el-tag type="success" effect="dark" class="full-width-tag">
+                <el-icon style="margin-right: 5px"><Check /></el-icon>
+                Imported Parameters
+              </el-tag>
+            </el-tooltip>
           </div>
 
-          <div v-else-if="row.assignmentType === 'auto'" style="width: 100%; padding: 0 10px;">
+          <div v-else-if="row.assignmentType === 'auto'" style="width: 100%; padding: 0 10px">
             <el-tooltip placement="top" effect="light">
               <template #content>
                 <div class="tooltip-content">
@@ -73,18 +89,14 @@
                       </li>
                     </ul>
                   </div>
-                  <div v-else>
-                    All {{ row.matchStats.total }} required parameters found.
-                  </div>
-                  <div style="margin-top:5px; font-size: 0.9em; color: #888;">
-                    (Auto-detected best match)
-                  </div>
+                  <div v-else>All {{ row.matchStats.total }} required parameters found.</div>
+                  <div style="margin-top: 5px; font-size: 0.9em; color: #888">(Auto-detected best match)</div>
                 </div>
               </template>
-              
+
               <div class="progress-container">
-                <el-progress 
-                  :percentage="Math.round(row.matchStats.matchPercentage)" 
+                <el-progress
+                  :percentage="Math.round(row.matchStats.matchPercentage)"
                   :status="getProgressStatus(row.matchStats.matchPercentage)"
                   :stroke-width="18"
                   text-inside
@@ -96,7 +108,6 @@
           <div v-else>
             <el-tag type="info" effect="plain">Unassigned</el-tag>
           </div>
-
         </template>
       </el-table-column>
     </el-table>
@@ -104,9 +115,7 @@
     <template #footer>
       <span class="dialog-footer">
         <el-button @click="closeDialog">Cancel</el-button>
-        <el-button type="primary" @click="handleConfirm">
-          Save Assignments
-        </el-button>
+        <el-button type="primary" @click="handleConfirm"> Save Assignments </el-button>
       </span>
     </template>
   </el-dialog>
@@ -114,7 +123,7 @@
 
 <script setup>
 import { computed, ref, watch, nextTick } from 'vue'
-import { Check } from '@element-plus/icons-vue'
+import { Check, Close } from '@element-plus/icons-vue'
 import { useGtm } from '../composables/useGtm'
 import { useBuilderStore } from '../stores/builderStore'
 import { notify } from '../utils/notify'
@@ -124,7 +133,7 @@ const props = defineProps({
   activeFiles: {
     type: Array,
     required: true,
-  }
+  },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -137,10 +146,10 @@ const associationTable = ref([])
 function getRequiredVariablesForFile(fileObj) {
   const allVars = new Set()
   if (fileObj.modules && Array.isArray(fileObj.modules)) {
-    fileObj.modules.forEach(module => {
+    fileObj.modules.forEach((module) => {
       if (module.portOptions && Array.isArray(module.portOptions)) {
-        module.portOptions.forEach(p => {
-            if (p.name) allVars.add(p.name)
+        module.portOptions.forEach((p) => {
+          if (p.name) allVars.add(p.name)
         })
       }
     })
@@ -196,7 +205,7 @@ function calculateStats(fileObj, fileName) {
     matched,
     missing: missingVars.length,
     missingVars,
-    matchPercentage: percentage
+    matchPercentage: percentage,
   }
 }
 
@@ -222,7 +231,7 @@ function findBestMatchForFile(fileRef, availableParamFiles) {
 
 async function prepareData() {
   const rows = []
-  
+
   if (!builderStore.availableModules) {
     associationTable.value = []
     return
@@ -236,7 +245,7 @@ async function prepareData() {
     const isActive = props.activeFiles.includes(file.filename)
 
     if (!isActive) {
-        return
+      return
     }
 
     let currentParamFile = null
@@ -246,7 +255,7 @@ async function prepareData() {
       currentParamFile = assignedInStore
       assignmentType = storedType || 'imported'
     } else if (paramFileNames.length > 0) {
-      const bestMatchName = findBestMatchForFile(file, paramFileNames) 
+      const bestMatchName = findBestMatchForFile(file, paramFileNames)
       if (bestMatchName) {
         currentParamFile = bestMatchName
         assignmentType = 'auto'
@@ -255,19 +264,37 @@ async function prepareData() {
 
     const row = {
       sourceFileName: file.filename,
-      fileRef: file, 
+      fileRef: file,
       matchedParameterFile: currentParamFile || null,
       assignmentType: assignmentType,
-      matchStats: currentParamFile ? calculateStats(file, currentParamFile) : null
+      matchStats: currentParamFile ? calculateStats(file, currentParamFile) : null,
     }
-    
+
     rows.push(row)
   })
-  
+
   associationTable.value = rows
 }
 
 // --- Dialog Controls ---
+
+function handleSelectionChange(row) {
+  if (row.matchedParameterFile) {
+    // Determine if this was a manual selection or auto
+    const paramFileNames = Array.from(builderStore.parameterFiles.keys())
+    const bestMatchName = findBestMatchForFile(row.fileRef, paramFileNames)
+    if (row.matchedParameterFile === bestMatchName) {
+      row.assignmentType = 'auto'
+    } else {
+      row.assignmentType = 'manual'
+    }
+    row.matchStats = calculateStats(row.fileRef, row.matchedParameterFile)
+  } else {
+    row.assignmentType = 'none'
+    row.matchStats = null
+  }
+}
+
 function closeDialog() {
   emit('update:modelValue', false)
 }
@@ -285,7 +312,7 @@ async function handleConfirm() {
 
   const linkMap = new Map(builderStore.fileParameterMap)
   const typeMap = new Map(builderStore.fileAssignmentTypeMap)
-  
+
   associationTable.value.forEach((row) => {
     if (row.sourceFileName) {
       if (row.matchedParameterFile) {
@@ -302,12 +329,11 @@ async function handleConfirm() {
 
   builderStore.applyFileParameterLinks(linkMap, typeMap)
 
-
   trackEvent('parameter_match_action', {
     category: 'ModuleParameterMatch',
     action: 'confirm',
     label: `${missing.length} missing assignments`, // useful context
-    file_type: 'json'
+    file_type: 'json',
   })
 
   notify.success({ title: 'Saved', message: 'Parameter links updated.' })
@@ -331,7 +357,7 @@ watch(
   line-height: 1.4;
 }
 .missing-list {
-  padding-left: 16px; 
+  padding-left: 16px;
   margin: 4px 0;
 }
 .full-width-tag {
@@ -343,6 +369,6 @@ watch(
 .progress-container {
   width: 100%;
   padding-top: 5px;
-  cursor: help; 
+  cursor: help;
 }
 </style>
