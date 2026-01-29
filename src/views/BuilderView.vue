@@ -1121,10 +1121,26 @@ async function onExportConfirm(fileName, handle) {
 
   try {
     let blob = undefined
+    let exportMessage = ''
     if (caExport) {
       blob = await generateExportZip(fileName, nodes.value, edges.value, builderStore)
+      exportMessage = 'Circulatory Autogen export zip generated.'
     } else if (currentExportMode.value.key === EXPORT_KEYS.CELLML) {
       blob = generateFlattenedModel(nodes.value, edges.value, builderStore)
+      exportMessage = h('div', null, [
+        'Model exported to CellML. Drag and drop the file into ',
+        h(
+          'a',
+          {
+            href: 'https://opencor.ws/app/',
+            rel: 'noopener noreferrer',
+            style: { color: 'var(--el-color-primary)', fontWeight: 'bold' },
+            target: '_blank',
+          },
+          'OpenCOR'
+        ),
+        ' and run a simulation.',
+      ])
     }
 
     let finalName = undefined
@@ -1155,19 +1171,7 @@ async function onExportConfirm(fileName, handle) {
 
     notify.success({
       title: 'Export successful!',
-      message: h('div', null, [
-        'Model downloaded. ',
-        h(
-          'a',
-          {
-            href: 'https://opencor.ws/app/',
-            rel: 'noopener noreferrer',
-            style: { color: 'var(--el-color-primary)', fontWeight: 'bold' },
-            target: '_blank',
-          },
-          'Open in OpenCOR'
-        ),
-      ]),
+      message: exportMessage,
       duration: 5000,
     })
   } catch (error) {
