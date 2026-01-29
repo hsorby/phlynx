@@ -440,7 +440,7 @@ function prioritizeEnvironmentComponent(xmlString) {
 /**
  * Applies parameter data to the model variables with strict unit and value validation.
  */
-function applyParameterMappings(model, parameterData, ensureUnitImported = () => {}) {
+function applyParameterMappings(model, parameterData) {
   const paramMap = new Map();
   for (const params of parameterData.values()) {
     // Only iterate if params is actually an array of parameter objects
@@ -484,11 +484,6 @@ function applyParameterMappings(model, parameterData, ensureUnitImported = () =>
       }
 
       const matchUnitsTrimmed = match.units ? match.units.trim() : 'dimensionless'
-
-      // Ensure the unit exists in the model scope before assigning to variable.
-      if (ensureUnitImported) {
-        ensureUnitImported(matchUnitsTrimmed)
-      }
 
       let sourceVar = paramComponent.variableByName(match.variable_name)
 
