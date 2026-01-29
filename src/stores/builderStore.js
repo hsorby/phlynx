@@ -200,8 +200,8 @@ export const useBuilderStore = defineStore('builder', () => {
   }
 
   function loadState(state) {
-    availableModules.value = mergeIntoStore(state.availableModules, availableModules.value)
-    availableUnits.value = mergeIntoStore(state.availableUnits, availableUnits.value)
+    mergeIntoStore(state.availableModules, availableModules.value)
+    mergeIntoStore(state.availableUnits, availableUnits.value)
     fileAssignmentTypeMap.value = new Map(state.fileAssignmentTypeMap || [])
     fileParameterMap.value = new Map(state.fileParameterMap || [])
     lastSaveName.value = state.lastSaveName || 'phlynx-project'
