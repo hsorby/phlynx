@@ -6,12 +6,16 @@ import LinkAttributes from 'markdown-it-link-attributes'
 import MarkdownItAttrs from 'markdown-it-attrs'
 import MarkdownItGitHubAlerts from 'markdown-it-github-alerts'
 import packageJson from './package.json'
+import { execSync } from 'child_process'
 
 // https://vite.dev/config/
 export default defineConfig({
   define: {
     // Create a global constant. Strings must be JSON stringified.
     __APP_VERSION__: JSON.stringify(packageJson.version),
+    __COMMIT_HASH__: JSON.stringify(execSync('git rev-parse --short HEAD').toString().trim()),
+    __BRANCH__: JSON.stringify(execSync('git rev-parse --abbrev-ref HEAD').toString().trim()),
+    __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
   },
   optimizeDeps: {
     // Exclude the wasm-based library from pre-bundling
