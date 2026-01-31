@@ -40,7 +40,7 @@
                 <el-button type="success">Browse</el-button>
               </el-upload>
 
-              <el-icon v-if="formState[field.key]?.isValid" color="#67C23A" size="20">
+              <el-icon v-if="isFieldValid(field.key)" color="#67C23A" size="20">
                 <Check />
               </el-icon>
             </div>
@@ -143,6 +143,37 @@ const stagedFiles = ref({
   moduleFiles: [], // { filename: string, payload: object }
   configFiles: [], // { filename: string, payload: object }
 })
+
+// Determine if a specific field should show as valid based on validation status
+const isFieldValid = (fieldKey) => {
+  const fieldState = formState[fieldKey]
+  if (!fieldState?.fileName) {
+    return false // No file selected
+  }
+  
+  // For non-dynamic fields (like vessel CSV), use the basic isValid flag
+  if (fieldKey === IMPORT_KEYS.VESSEL || fieldKey === IMPORT_KEYS.PARAMETER || fieldKey === IMPORT_KEYS.UNITS) {
+    return fieldState.isValid
+  }
+  
+  // For dynamic fields, check against validation status
+  if (!validationStatus.value) {
+    return fieldState.isValid // Fallback to basic validation
+  }
+  
+  // CellML file is valid if needsModuleFile is false
+  if (fieldKey === IMPORT_KEYS.CELLML_FILE) {
+    return !validationStatus.value.needsModuleFile
+  }
+  
+  // Config file is valid if needsConfigFile is false
+  if (fieldKey === IMPORT_KEYS.MODULE_CONFIG) {
+    return !validationStatus.value.needsConfigFile
+  }
+  
+  // Default to basic validation
+  return fieldState.isValid
+}
 
 function resetFormState() {
   Object.keys(formState).forEach((key) => {
@@ -349,6 +380,13 @@ const handleFileChange = async (uploadFile, field) => {
     // Vessel-specific validation
     if (field.key === IMPORT_KEYS.VESSEL && validation) {
       await updateVesselValidation(validation)
+    } else if (field.key !== IMPORT_KEYS.VESSEL) {
+        // For other fields, just update the validation status
+        validationStatus.value = {
+        isComplete: true,
+        errors: [],
+        warnings: []
+      }
     }
 
     // Surface warnings (notifications only once)
@@ -415,7 +453,6 @@ async function stageFile(field, parsedData, fileName) {
       payload: data,
     })
   }
-  formState[field.key].isValid = true
 
   // Re-validate the Vessel CSV with staged files
   const vesselField = formState[IMPORT_KEYS.VESSEL]
