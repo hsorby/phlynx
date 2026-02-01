@@ -18,8 +18,8 @@
     >
       <el-form label-position="top">
         <div class="form-header" v-if="requiredFieldsCount > 0">
-    <span style="color: var(--el-color-danger)">*</span> Indicates required field
-  </div>
+          <span style="color: var(--el-color-danger)">*</span> Indicates required field
+        </div>
         <div v-for="field in displayFields" :key="field.key" class="field-container">
           <el-form-item :label="field.label" :required="field?.required ?? true">
             <div class="upload-row">
@@ -71,7 +71,8 @@
                 <li v-if="validationStatus.needsModuleFile">
                   <strong>CellML Module File</strong>
                   <div v-if="validationStatus.missingResources?.moduleFileIssues?.length > 0" style="margin-top: 4px;">
-                    <div v-for="moduleFileIssue in validationStatus.missingResources.moduleFileIssues" :key="moduleFileIssue.file" style="font-size: 0.9em; margin: 2px 0;">
+                    <div v-for="moduleFileIssue in validationStatus.missingResources.moduleFileIssues"
+                      :key="moduleFileIssue.file" style="font-size: 0.9em; margin: 2px 0;">
                       • {{ moduleFileIssue.message }}
                     </div>
                   </div>

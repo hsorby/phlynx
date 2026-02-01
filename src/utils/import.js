@@ -37,7 +37,7 @@ export const validateVesselData = (vesselData, builderStore) => {
         if (config.vessel_type && config.BC_type) {
           const key = `${config.vessel_type}:${config.BC_type}`
           // Store config with its associated file information
-          availableConfigs.set(key,config)
+          availableConfigs.set(key, config)
 
           if (config.module_type) {
             moduleTypesInConfigs.add(config.module_type)
