@@ -99,7 +99,8 @@
     <template #footer>
       <span class="dialog-footer">
         <el-button @click="closeDialog" :disabled="isLoading">Cancel</el-button>
-        <el-button type="primary" @click="handleConfirm" :disabled="!isFormValid || isLoading || !(validationStatus.isComplete)" :loading="isLoading">
+        <el-button type="primary" @click="handleConfirm"
+          :disabled="!isFormValid || isLoading || !validationStatus?.isComplete" :loading="isLoading">
           Import
         </el-button>
       </span>
