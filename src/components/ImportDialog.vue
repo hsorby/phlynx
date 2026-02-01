@@ -382,11 +382,19 @@ const handleFileChange = async (uploadFile, field) => {
     if (field.key === IMPORT_KEYS.VESSEL && validation) {
       await updateVesselValidation(validation)
     } else if (field.key !== IMPORT_KEYS.VESSEL) {
-        // For other fields, just update the validation status
+      // For other fields:
+      // - If a vessel has been uploaded and we have a validation result (e.g. after staging),
+      //   propagate that vessel validation instead of overwriting the status.
+      // - If no vessel payload exists, preserve existing behavior and mark validation as complete.
+      const hasVesselPayload = !!formState[IMPORT_KEYS.VESSEL]?.payload
+      if (hasVesselPayload && validation) {
+        await updateVesselValidation(validation)
+      } else if (!hasVesselPayload) {
         validationStatus.value = {
-        isComplete: true,
-        errors: [],
-        warnings: []
+          isComplete: true,
+          errors: [],
+          warnings: []
+        }
       }
     }
 
