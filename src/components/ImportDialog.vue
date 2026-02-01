@@ -144,6 +144,7 @@ const stagedFiles = ref({
   moduleFiles: [], // { filename: string, payload: object }
   configFiles: [], // { filename: string, payload: object }
 })
+const isVesselReset = ref(false)
 
 // Determine if a specific field should show as valid based on validation status
 const isFieldValid = (fieldKey) => {
@@ -177,10 +178,12 @@ const isFieldValid = (fieldKey) => {
 }
 
 function resetFormState() {
-  Object.keys(formState).forEach((key) => {
-    formState[key] = createEmptyFieldState()
-  })
   dynamicFields.value = []
+  Object.keys(formState).forEach((key) => {
+    if (!(isVesselReset.value && key === IMPORT_KEYS.VESSEL)) {
+      formState[key] = createEmptyFieldState()
+    }
+  })
   validationStatus.value = null
 }
 
@@ -192,12 +195,16 @@ function initFormFromConfig(fields = []) {
   })
 }
 
-const resetForm = () => {
-  resetFormState()
+const unstageFiles = () => {
   stagedFiles.value = {
     moduleFiles: [],
     configFiles: [],
   }
+}
+
+const resetForm = () => {
+  resetFormState()
+  unstageFiles()
 }
 
 // Initialize formState when config changes
@@ -350,6 +357,15 @@ const handleFileChange = async (uploadFile, field) => {
   const rawFile = uploadFile.raw
   const state = formState[field.key]
 
+  if (field.key === IMPORT_KEYS.VESSEL) {
+    const currentFileName = formState[IMPORT_KEYS.VESSEL]?.fileName
+
+    if (currentFileName && currentFileName !== rawFile.name) {
+      isVesselReset.value = true
+      resetForm()
+      isVesselReset.value = false
+    } 
+  } 
   state.fileName = rawFile.name
   state.isValid = false
   state.payload = null
@@ -361,6 +377,12 @@ const handleFileChange = async (uploadFile, field) => {
     const data = parsed?.data ?? parsed
     const warnings = parsed?.warnings ?? []
     let validation = parsed?.validation ?? null
+
+    // Re-validate using local staged files if using vessel array
+    if (field.key === IMPORT_KEYS.VESSEL) {
+      const validationStore = createValidationStore()
+      validation = validateVesselData(data, validationStore)
+    }
 
     state.payload = { data, fileName: rawFile.name }
     state.validation = validation
