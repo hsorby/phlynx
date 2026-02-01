@@ -2,8 +2,7 @@
   <el-dialog
     :model-value="modelValue"
     :title="config.title || 'Import File'"
-    width="500px"
-    @closed="closeDialog"
+    width="500px" @closed="closeDialog"
     @update:model-value="closeDialog"
     :close-on-click-modal="!isLoading"
     :close-on-press-escape="!isLoading"
@@ -14,11 +13,11 @@
       :element-loading-text="loadingText"
       :element-loading-svg="phlynxspinner"
       element-loading-svg-view-box="0, 0, 100, 100"
-      element-loading-background="rgba(255, 255, 255, 0.9)"
+      element-loading-background="var(--el-mask-color-extra-light)"
     >
-      <el-form label-position="top">
+      <el-form label-position="top" :class="{ 'is-loading-content': isLoading }">
         <div class="form-header" v-if="requiredFieldsCount > 0">
-          <span style="color: var(--el-color-danger)">*</span> Indicates required field
+          <span class="required-asterisk">*</span> Indicates required field
         </div>
         <div v-for="field in displayFields" :key="field.key" class="field-container">
           <el-form-item :label="field.label" :required="field?.required ?? true">
@@ -40,7 +39,7 @@
                 <el-button type="success">Browse</el-button>
               </el-upload>
 
-              <el-icon v-if="isFieldValid(field.key)" color="#67C23A" size="20">
+              <el-icon v-if="isFieldValid(field.key)" color="var(--el-color-success)" size="20">
                 <Check />
               </el-icon>
             </div>
@@ -58,39 +57,54 @@
             <template #default> All necessary modules and configurations are available. </template>
           </el-alert>
 
-          <el-alert 
-            v-else 
-            title="Additional Files Required" 
-            type="warning" 
-            :closable="false" 
+          <el-alert
+            v-else
+            title="Additional Files Required"
+            type="warning"
+            :closable="false"
             show-icon
           >
             <template #default>
               <div>Please provide the following files to complete the import:</div>
               <ul class="missing-resources">
-                <li v-if="validationStatus.needsModuleFile">
+                <li v-if="validationStatus.needsModuleFile" class="config-note">
                   <strong>CellML Module File</strong>
-                  <div v-if="validationStatus.missingResources?.moduleFileIssues?.length > 0" style="margin-top: 4px;">
-                    <div v-for="moduleFileIssue in validationStatus.missingResources.moduleFileIssues"
-                      :key="moduleFileIssue.uniqueKey" style="font-size: 0.9em; margin: 2px 0;">
+                  <div 
+                    v-if="validationStatus.missingResources?.moduleFileIssues?.length > 0" 
+                    class="issue-list-container"
+                  >
+                    <div
+                      v-for="moduleFileIssue in validationStatus.missingResources.moduleFileIssues"
+                      :key="moduleFileIssue.uniqueKey"
+                      class="module-issue-item"
+                    >
                       • {{ moduleFileIssue.message }}
                     </div>
                   </div>
-                  <div v-else-if="validationStatus.missingResources?.moduleTypes?.length > 0">
+                  <div 
+                    v-else-if="validationStatus.missingResources?.moduleTypes?.length > 0"
+                    class="module-type-list"
+                  >
                     containing: {{ validationStatus.missingResources.moduleTypes.join(', ') }}
                   </div>
                 </li>
-                <li v-if="validationStatus.needsConfigFile">
+                <li v-if="validationStatus.needsConfigFile" class="config-note">
                   <strong>Module Configurations</strong> for vessel_types:bc_types:
                   {{ validationStatus.missingResources?.configs?.join(', ') }} and possibly CellML modules.
                 </li>
               </ul>
               <br />
-              <div v-if="validationStatus.needsConfigFile">
+              <div
+                v-if="validationStatus.needsConfigFile"
+                class="config-note"
+              >
                 <strong>NOTE:</strong> CellML Module File(s) may be required after providing the configurations.
               </div>
-              <div v-if="validationStatus.hasModuleFileMismatch" style="margin-top: 8px; color: #E6A23C;">
-                <strong>⚠ Warning:</strong> Some modules are not in the CellML files specified by their configurations.
+              <div
+                v-if="validationStatus.hasModuleFileMismatch"
+                class="mismatch-warning"
+              >
+                Warning: Some modules are not in the CellML files specified by their configurations.
               </div>
             </template>
           </el-alert>
@@ -580,59 +594,94 @@ defineExpose({
 </script>
 
 <style scoped>
+.field-container {
+  margin-bottom: var(--el-spacing-large);
+}
+
 .upload-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--el-spacing-small);
 }
 
 .file-input {
   width: 320px;
 }
 
-.warning-text {
-  font-size: 12px;
-  color: #e6a23c;
-  margin-top: 4px;
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
+.form-header {
+  margin-bottom: var(--el-spacing-base);
+  font-size: var(--el-font-size-extra-small);
+  color: var(--el-text-color-secondary);
+  text-align: right;
 }
 
-.warning-text div {
-  flex: 1;
-}
-
-.field-container {
-  margin-bottom: 20px;
-}
-
+/* Validation & Alerts */
 .validation-status {
-  margin-top: 20px;
-  margin-bottom: 10px;
+  margin-top: var(--el-spacing-large);
+  margin-bottom: var(--el-spacing-base);
+}
+
+.required-asterisk {
+  color: var(--el-color-danger);
 }
 
 .missing-resources {
-  margin: 8px 0 0 0;
+  margin: var(--el-spacing-small) 0 0 0;
   padding-left: 20px;
+  color: var(--el-text-color-regular);
 }
 
 .missing-resources li {
   margin: 4px 0;
 }
 
-@keyframes breathe {
-
-  0%,
-  100% {
-    transform: scale(0.95);
-  }
-
-  50% {
-    transform: scale(1.05);
-  }
+.issue-list-container {
+  margin-top: var(--el-spacing-mini, 4px);
 }
 
+.warning-text {
+  font-size: var(--el-font-size-extra-small);
+  color: var(--el-color-warning);
+  margin-top: 4px;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.module-issue-item {
+  font-size: var(--el-font-size-extra-small);
+  margin: 2px 0;
+  color: var(--el-color-warning);
+}
+
+.module-issue-item::first-letter {
+  color: var(--el-color-warning);
+}
+
+.module-type-list {
+  font-size: var(--el-font-size-extra-small);
+  color: var(--el-text-color-secondary);
+}
+
+.config-note {
+  margin-top: var(--el-spacing-base);
+  font-size: var(--el-font-size-small);
+  color: var(--el-color-warning);
+}
+
+.mismatch-warning {
+  margin-top: var(--el-spacing-small);
+  color: var(--el-color-warning);
+  font-weight: bold;
+  font-size: var(--el-font-size-small);
+}
+
+:deep(.el-alert__description) {
+  margin-top: 5px;
+  line-height: 1.6;
+}
+/* Loading/Spinner Customization */
+/* Deep selectors remain necessary to override Element Plus internal classes */
 :deep(.el-loading-spinner svg) {
   width: 120px;
   height: 120px;
@@ -648,15 +697,27 @@ defineExpose({
 }
 
 :deep(.el-loading-text) {
-  color: #000000ce;
-  font-size: 16px;
-  margin-top: 12px;
+  color: var(--el-text-color-primary);
+  font-size: var(--el-font-size-base);
+  margin-top: var(--el-spacing-small);
 }
 
-.form-header {
-  margin-bottom: 16px;       /* Add spacing before the first input field */
-  font-size: 13px;           /* Slightly smaller than label text */
-  color: var(--el-text-color-secondary); /* Use Element Plus muted text color */
-  text-align: right;         /* Aligns it to the right side (optional but recommended) */
+.is-loading-content {
+  opacity: 0.2; /* Decreases the visibility of the form fields */
+  pointer-events: none; /* Prevents users from clicking anything while loading */
+  filter: grayscale(40%); /* Optional: adds a slight "disabled" look */
+  transition: opacity var(--el-transition-duration), filter var(--el-transition-duration);
+}
+
+@keyframes breathe {
+
+  0%,
+  100% {
+    transform: scale(0.95);
+  }
+
+  50% {
+    transform: scale(1.05);
+  }
 }
 </style>
