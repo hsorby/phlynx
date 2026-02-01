@@ -25,7 +25,7 @@ const commitUrl = computed(() => `https://github.com/physiomelinks/phlynx/commit
     <div class="about-wrapper">
       <transition name="fade-slide" appear>
         <div class="image-container">
-          <img src="../../public/phlynxlogo.svg" alt="PhLynx Logo" class="centred-image" />
+          <img src="/phlynxlogo.svg" alt="PhLynx Logo" class="centred-image" />
         </div>
       </transition>
 
