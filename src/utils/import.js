@@ -198,8 +198,10 @@ function validateModuleFileAssociation(config, builderStore) {
 }
 
 /**
- * Groups module file issues by file for cleaner display
- * @param {Array} moduleFileIssues - Array of issue objects
+ * Groups module file issues by file AND issue type.
+ * This ensures different issues (e.g., 'missing_file' vs 'module_not_in_file')
+ * for the same file are reported separately.
+ * * @param {Array} moduleFileIssues - Array of issue objects
  * @returns {Array} Grouped issues with consolidated messages
  */
 export function groupModuleFileIssues(moduleFileIssues) {
@@ -207,20 +209,26 @@ export function groupModuleFileIssues(moduleFileIssues) {
     return []
   }
 
-  const issuesByFile = new Map()
+  // key: "filename:issueType"
+  const issuesGrouped = new Map()
   
   moduleFileIssues.forEach(issue => {
     const file = issue.expectedFile
-    if (!issuesByFile.has(file)) {
-      issuesByFile.set(file, {
+    // Create a composite key to separate different issues for the same file
+    const groupKey = `${file}:${issue.issue}`
+    
+    if (!issuesGrouped.has(groupKey)) {
+      issuesGrouped.set(groupKey, {
         file,
         issue: issue.issue,
         configs: [],
         moduleTypes: new Set(),
+        // Generate a unique ID for UI loops
+        uniqueKey: groupKey
       })
     }
     
-    const group = issuesByFile.get(file)
+    const group = issuesGrouped.get(groupKey)
     group.configs.push(issue.config)
     if (issue.moduleType) {
       group.moduleTypes.add(issue.moduleType)
@@ -228,7 +236,7 @@ export function groupModuleFileIssues(moduleFileIssues) {
   })
   
   // Convert to array and format messages
-  return Array.from(issuesByFile.values()).map(group => {
+  return Array.from(issuesGrouped.values()).map(group => {
     let message = ''
     
     switch (group.issue) {
@@ -256,6 +264,7 @@ export function groupModuleFileIssues(moduleFileIssues) {
       message,
       configs: group.configs,
       moduleTypes: [...group.moduleTypes],
+      uniqueKey: group.uniqueKey
     }
   })
 }

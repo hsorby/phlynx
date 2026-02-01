@@ -72,7 +72,7 @@
                   <strong>CellML Module File</strong>
                   <div v-if="validationStatus.missingResources?.moduleFileIssues?.length > 0" style="margin-top: 4px;">
                     <div v-for="moduleFileIssue in validationStatus.missingResources.moduleFileIssues"
-                      :key="moduleFileIssue.file" style="font-size: 0.9em; margin: 2px 0;">
+                      :key="moduleFileIssue.uniqueKey" style="font-size: 0.9em; margin: 2px 0;">
                       • {{ moduleFileIssue.message }}
                     </div>
                   </div>
@@ -365,8 +365,8 @@ const handleFileChange = async (uploadFile, field) => {
       isVesselReset.value = true
       resetForm()
       isVesselReset.value = false
-    } 
-  } 
+    }
+  }
   state.fileName = rawFile.name
   state.isValid = false
   state.payload = null
