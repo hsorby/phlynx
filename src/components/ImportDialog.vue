@@ -151,27 +151,27 @@ const isFieldValid = (fieldKey) => {
   if (!fieldState?.fileName) {
     return false // No file selected
   }
-  
+
   // For non-dynamic fields (like vessel CSV), use the basic isValid flag
   if (fieldKey === IMPORT_KEYS.VESSEL || fieldKey === IMPORT_KEYS.PARAMETER || fieldKey === IMPORT_KEYS.UNITS) {
     return fieldState.isValid
   }
-  
+
   // For dynamic fields, check against validation status
   if (!validationStatus.value) {
     return fieldState.isValid // Fallback to basic validation
   }
-  
+
   // CellML file is valid if needsModuleFile is false
   if (fieldKey === IMPORT_KEYS.CELLML_FILE) {
     return !validationStatus.value.needsModuleFile
   }
-  
+
   // Config file is valid if needsConfigFile is false
   if (fieldKey === IMPORT_KEYS.MODULE_CONFIG) {
     return !validationStatus.value.needsConfigFile
   }
-  
+
   // Default to basic validation
   return fieldState.isValid
 }
@@ -591,10 +591,12 @@ defineExpose({
 }
 
 @keyframes breathe {
+
   0%,
   100% {
     transform: scale(0.95);
   }
+
   50% {
     transform: scale(1.05);
   }
