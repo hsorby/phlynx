@@ -4581,6 +4581,7 @@ __metadata:
     papaparse: "npm:^5.5.3"
     pinia: "npm:^3.0.3"
     sass-embedded: "npm:^1.97.1"
+    semver: "npm:^7.7.3"
     unplugin-vue-markdown: "npm:^29.2.0"
     vite: "npm:^7.1.7"
     vite-plugin-electron: "npm:^0.29.0"
@@ -5240,7 +5241,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"semver@npm:^7.3.2, semver@npm:^7.3.5, semver@npm:^7.3.8, semver@npm:^7.5.3":
+"semver@npm:^7.3.2, semver@npm:^7.3.5, semver@npm:^7.3.8, semver@npm:^7.5.3, semver@npm:^7.7.3":
   version: 7.7.3
   resolution: "semver@npm:7.7.3"
   bin:
