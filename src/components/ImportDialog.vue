@@ -372,6 +372,28 @@ const handleFileChange = async (uploadFile, field) => {
   const rawFile = uploadFile.raw
   const state = formState[field.key]
 
+  if (field.processUpload === 'cellml') {
+    const vesselValidation = formState[IMPORT_KEYS.VESSEL]?.validation
+    if (vesselValidation?.missingResources?.moduleFileIssues) {
+      
+      // Get the list of filenames the Vessel Config is actually looking for
+      const expectedFilenames = Array.from(vesselValidation.missingResources.moduleFileIssues
+        .filter(issue => issue.file)
+        .map(issue => issue.file)
+      )
+
+      // If there are requirements and this file name isn't one of them, reject immediately
+      if (expectedFilenames.length > 0 && !expectedFilenames.includes(rawFile.name)) {
+        notify.error({
+          title: 'Incorrect File Provided',
+          message: `The configuration expects: "${expectedFilenames.join(', ')}". You provided "${rawFile.name}". This file will not be processed.`,
+          duration: 6000
+        })
+        return 
+      }
+    }
+  }
+
   if (field.key === IMPORT_KEYS.VESSEL) {
     const currentFileName = formState[IMPORT_KEYS.VESSEL]?.fileName
 
@@ -381,6 +403,7 @@ const handleFileChange = async (uploadFile, field) => {
       isVesselReset.value = false
     }
   }
+  
   state.fileName = rawFile.name
   state.isValid = false
   state.payload = null
@@ -475,9 +498,8 @@ async function stageFile(field, parsedData, fileName) {
   if (!field.processUpload) return
   const data = parsedData.data || parsedData
 
-  // Stage the file instead of adding directly to store
+  // Perform the staging logic
   if (field.processUpload === 'cellml') {
-    // Parse the module data to get the proper structure
     const result = processModuleData(data)
     if (result.type === 'success') {
       const augmentedData = result.data.map((item) => ({
@@ -500,19 +522,60 @@ async function stageFile(field, parsedData, fileName) {
     })
   }
 
-  // Re-validate the Vessel CSV with staged files
+  // Re-validate the Vessel CSV with staged files to see if requirements are met
   const vesselField = formState[IMPORT_KEYS.VESSEL]
   if (vesselField?.payload?.data) {
     const validationStore = createValidationStore()
     const newValidation = validateVesselData(vesselField.payload.data, validationStore)
+    
+    // Update state
     formState[IMPORT_KEYS.VESSEL].validation = newValidation
     updateVesselValidation(newValidation)
+
+    // Specific check for CellML failures
+    if (field.processUpload === 'cellml') {
+      const moduleIssues = newValidation.missingResources.moduleFileIssues
+      
+      // Look for issues related to the file we just uploaded
+      const relevantIssue = moduleIssues.find(issue => issue.file === fileName)
+
+      if (relevantIssue) {
+        // The file was uploaded, but it failed for a specific reason
+        let errorMsg = `File "${fileName}" was staged, but has issues: `
+        
+        if (relevantIssue.issue === 'module_not_in_file') {
+          errorMsg = `The file "${fileName}" does not contain the required modules: ${relevantIssue.moduleTypes.join(', ')}.`
+        } else if (relevantIssue.issue === 'filename_mismatch') {
+          errorMsg = `The modules were found, but the file name must be exactly "${relevantIssue.expectedFile}" as defined in your config.`
+        }
+
+        notify.error({
+          title: 'Import Requirement Not Met',
+          message: errorMsg,
+          duration: 6000
+        })
+      } else if (newValidation.needsModuleFile) {
+        // The file was fine, but we still need MORE files
+        notify.warning({
+          title: 'Partial Success',
+          message: `"${fileName}" is valid, but additional CellML files are still required.`
+        })
+      } else {
+        notify.success({ title: 'CellML Ready', message: `${fileName} staged successfully.` })
+      }
+    } 
+    // Simplified check for Config files
+    else if (field.processUpload === 'config') {
+      if (newValidation.needsConfigFile) {
+        notify.warning({
+          title: 'Config Staged',
+          message: `"${fileName}" added, but more configurations are still missing.`
+        })
+      } else {
+        notify.success({ title: 'Success', message: 'All configurations provided.' })
+      }
+    }
   }
-  notify.success({
-    title: field.processUpload === 'cellml' ? 'CellML File Staged' : 'Config Staged',
-    message: `${fileName} ready to import`,
-    duration: 3000,
-  })
 }
 
 const commitStagedFiles = () => {
