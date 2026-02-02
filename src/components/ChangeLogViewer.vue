@@ -1,13 +1,10 @@
 <template>
   <div class="changelog-content">
-    <div v-for="log in changelogList" :key="log.version" class="changelog-entry">
-    <div class="markdown-body" v-html="log.html"></div>
-    <div class="divider"></div></div>
+    <div class="markdown-body" v-html="html"></div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
 import MarkdownIt from 'markdown-it'
 
 const md = new MarkdownIt({html: true, typographer: true})
@@ -28,64 +25,13 @@ md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
   return defaultRender(tokens, idx, options, env, self);
 };
 
-const modules = import.meta.glob('../../changelogs/*.md', { 
+const changelog = import.meta.glob('../../docs/reference/change-log.md', { 
   query: '?raw', 
   eager: true,
   import: 'default' 
 })
 
-/**
- * Simple semantic version comparator.
- * 
- * @param a - Semantic version string
- * @param b - Semantic version string
- */
-const compareVersions = (a, b) => {
-  // Strip 'v' and split into [major, minor, patch]
-  const cleanA = a.replace(/^v/, '').split('.').map(Number)
-  const cleanB = b.replace(/^v/, '').split('.').map(Number)
-
-  for (let i = 0; i < Math.max(cleanA.length, cleanB.length); i++) {
-    const valA = cleanA[i] || 0
-    const valB = cleanB[i] || 0
-    if (valA > valB) return 1
-    if (valA < valB) return -1
-  }
-  return 0
-}
-
-const changelogList = computed(() => {
-  const entries = []
-  let latestEntry = null
-
-  // Iterate over the imported modules paths
-  for (const path in modules) {
-    const content = modules[path]
-    // Extract filename from path (e.g. "../../changelog/v0.1.0.md" -> "v0.1.0")
-    const fileName = path.split('/').pop().replace('.md', '')
-
-    const entry = {
-      version: fileName,
-      html: md.render(content)
-    }
-
-    if (fileName === 'latest') {
-      latestEntry = entry
-    } else {
-      entries.push(entry)
-    }
-  }
-
-  // Sort versions in Reverse order (Newest first)
-  entries.sort((a, b) => compareVersions(b.version, a.version))
-
-  // Prepend 'latest' if it exists
-  if (latestEntry) {
-    entries.unshift(latestEntry)
-  }
-
-  return entries
-})
+const html = md.render(changelog['../../docs/reference/change-log.md'])
 </script>
 
 <style scoped>
