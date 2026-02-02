@@ -1,25 +1,98 @@
 <template>
-  <div class="changelog-content" v-html="parsedChangelog"></div>
+  <div class="changelog-content">
+    <div v-for="log in changelogList" :key="log.version" class="changelog-entry">
+    <div class="markdown-body" v-html="log.html"></div>
+    <div class="divider"></div></div>
+  </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 import MarkdownIt from 'markdown-it'
 
-// Import the file as a raw string (Vite feature)
-// import changelogRaw from '../../CHANGELOG.md?raw' 
-const changelogRaw = `# Changelog
-`
+const md = new MarkdownIt({html: true, typographer: true})
 
-const md = new MarkdownIt()
+const defaultRender = md.renderer.rules.link_open || function(tokens, idx, options, env, self) {
+  return self.renderToken(tokens, idx, options);
+};
 
-const parsedChangelog = computed(() => {
-  return md.render(changelogRaw)
+// Override link_open renderer to add target="_blank" to all links.
+md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
+  // Add target="_blank"
+  tokens[idx].attrSet('target', '_blank');
+  
+  // Add rel="noopener noreferrer" for security
+  tokens[idx].attrSet('rel', 'noopener noreferrer');
+
+  // Pass token to default renderer.
+  return defaultRender(tokens, idx, options, env, self);
+};
+
+const modules = import.meta.glob('../../changelogs/*.md', { 
+  query: '?raw', 
+  eager: true,
+  import: 'default' 
+})
+
+/**
+ * Simple semantic version comparator.
+ * 
+ * @param a - Semantic version string
+ * @param b - Semantic version string
+ */
+const compareVersions = (a, b) => {
+  // Strip 'v' and split into [major, minor, patch]
+  const cleanA = a.replace(/^v/, '').split('.').map(Number)
+  const cleanB = b.replace(/^v/, '').split('.').map(Number)
+
+  for (let i = 0; i < Math.max(cleanA.length, cleanB.length); i++) {
+    const valA = cleanA[i] || 0
+    const valB = cleanB[i] || 0
+    if (valA > valB) return 1
+    if (valA < valB) return -1
+  }
+  return 0
+}
+
+const changelogList = computed(() => {
+  const entries = []
+  let latestEntry = null
+
+  // Iterate over the imported modules paths
+  for (const path in modules) {
+    const content = modules[path]
+    // Extract filename from path (e.g. "../../changelog/v0.1.0.md" -> "v0.1.0")
+    const fileName = path.split('/').pop().replace('.md', '')
+
+    console.log('Processing changelog file:', fileName)
+    console.log(md.render(content))
+
+    const entry = {
+      version: fileName,
+      html: md.render(content)
+    }
+
+    if (fileName === 'latest') {
+      latestEntry = entry
+    } else {
+      entries.push(entry)
+    }
+  }
+
+  // Sort versions in Reverse order (Newest first)
+  entries.sort((a, b) => compareVersions(b.version, a.version))
+
+  // Prepend 'latest' if it exists
+  if (latestEntry) {
+    entries.unshift(latestEntry)
+  }
+
+  return entries
 })
 </script>
 
 <style scoped>
-.changelog-content {
+.changelog-container {
   max-height: 400px;
   overflow-y: auto;
   padding: 10px;
@@ -28,9 +101,77 @@ const parsedChangelog = computed(() => {
   border-radius: 4px;
 }
 
-/* Style the markdown output */
-:deep(h1) { font-size: 1.5em; margin-bottom: 0.5em; }
-:deep(h2) { font-size: 1.2em; margin-top: 1em; border-bottom: 1px solid #ddd; }
-:deep(ul) { padding-left: 20px; }
-:deep(li) { margin-bottom: 4px; }
+.changelog-content {
+  max-height: 500px;
+  overflow-y: auto;
+  padding: 10px;
+  background: #fff;
+  border-radius: 4px;
+}
+
+.changelog-entry {
+  margin-bottom: 30px;
+}
+
+.divider {
+  margin-top: 30px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.version-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 0.8rem;
+  margin-bottom: 10px;
+}
+
+.version-badge.latest {
+  background-color: var(--el-color-warning-light-9);
+  color: var(--el-color-warning);
+  border: 1px solid var(--el-color-warning-light-5);
+}
+
+/* Scoped styling for Markdown content to look nice */
+:deep(.markdown-body h1) { font-size: 1.4rem; margin-bottom: 0.5rem; border-bottom: none; }
+:deep(.markdown-body h2) { font-size: 1.2rem; margin-top: 1rem; }
+:deep(.markdown-body ul) { padding-left: 20px; margin: 10px 0; }
+:deep(.markdown-body li) { margin-bottom: 4px; }
+
+:deep(kbd) {
+  display: inline-block;       /* Allows them to sit side-by-side */
+  vertical-align: top;         /* Aligns them nicely if names vary in length */
+  margin: 0 4px 4px 0;         /* Spacing between tiles */
+  padding: 8px;
+  border: 1px solid #d1d5da;   /* Light grey border */
+  border-radius: 6px;
+  background-color: #f6f8fa;   /* Very light grey background */
+  box-shadow: inset 0 -1px 0 #d1d5da; /* That subtle 3D "key" effect */
+  text-align: center;          /* Centers the image and text */
+  line-height: 0;              /* Removes extra space around image */
+}
+
+/* 2. Reset the link styles inside the kbd so they don't look like text links */
+:deep(kbd a) {
+  text-decoration: none;
+  color: var(--el-text-color-primary); /* Uses your Element Plus text color */
+  font-weight: bold;
+}
+
+/* 3. Style the username text */
+:deep(kbd sub) {
+  display: block;              /* Forces it to its own line (safer than relying on <br>) */
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+}
+
+/* 4. Ensure images are circular (optional, but looks polished) */
+:deep(kbd img) {
+  border-radius: 50%;
+  display: block;
+  margin: 0 auto;              /* Centers image horizontally */
+  background-color: #fff;      /* clean background behind transparent pngs */
+}
 </style>
