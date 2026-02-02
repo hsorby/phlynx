@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import fs from 'fs'
 import path from 'path'
 import Markdown from 'unplugin-vue-markdown/vite'
 import LinkAttributes from 'markdown-it-link-attributes'
@@ -8,28 +9,10 @@ import MarkdownItGitHubAlerts from 'markdown-it-github-alerts'
 import packageJson from './package.json'
 import { execSync } from 'child_process'
 
-const getVersionSuffix = () => {
-  let isTagged = false
+const latestChangelogPath = path.resolve(__dirname, 'changelogs/latest.md')
+const hasLatestChangelog = fs.existsSync(latestChangelogPath)
 
-  try {
-    // Check if the current HEAD is exactly at a tag that matches the version in package.json.
-    // If this throws an error, we are NOT at a tag. If the tag does not match, we are also NOT tagged.
-    const ans = execSync('git describe --exact-match --tags HEAD')
-    if (ans.toString().trim() === `v${packageJson.version}`) {
-      isTagged = true
-    }
-  } catch (e) {
-    // If any git describe fails, we are not tagged.
-    isTagged = false
-  }
-
-  // Add the asterisk if not tagged.
-  const suffix = isTagged ? '' : '*'
-
-  return suffix
-}
-
-const versionSuffix = getVersionSuffix()
+const versionSuffix = hasLatestChangelog ? '*' : ''
 
 // https://vite.dev/config/
 export default defineConfig({
