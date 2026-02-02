@@ -64,9 +64,6 @@ const changelogList = computed(() => {
     // Extract filename from path (e.g. "../../changelog/v0.1.0.md" -> "v0.1.0")
     const fileName = path.split('/').pop().replace('.md', '')
 
-    console.log('Processing changelog file:', fileName)
-    console.log(md.render(content))
-
     const entry = {
       version: fileName,
       html: md.render(content)
