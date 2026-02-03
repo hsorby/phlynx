@@ -294,6 +294,7 @@ import ModuleParameterMatchDialog from '../components/ModuleParameterMatchDialog
 import HelperLines from '../components/HelperLines.vue'
 import { useScreenshot } from '../services/useScreenshot'
 import { generateExportZip } from '../services/caExport'
+import { createCellMLDataFragment } from '../services/cellml'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
@@ -1127,19 +1128,26 @@ async function onExportConfirm(fileName, handle) {
       exportMessage = 'Circulatory Autogen export zip generated.'
     } else if (currentExportMode.value.key === EXPORT_KEYS.CELLML) {
       blob = generateFlattenedModel(nodes.value, edges.value, builderStore)
+
+      const dataUri = await createCellMLDataFragment(blob, fileName)
+
+      const openCorCommand = 'opencor://'
+      const openCorSpacer = 'xxxxxxxxxx' // A spacer to fix URL length issues in OpenCOR
+      const openCorUrl = `https://opencor.ws/appdev/#${openCorSpacer}openFile=${encodeURIComponent(dataUri)}`
+      console.log('OpenCOR URL:', openCorUrl.length)
+
       exportMessage = h('div', null, [
-        'Model exported to CellML. Drag and drop the file into ',
+        'Model exported to CellML. Open this model directly in ',
         h(
           'a',
           {
-            href: 'https://opencor.ws/app/',
+            href: openCorUrl,
             rel: 'noopener noreferrer',
             style: { color: 'var(--el-color-primary)', fontWeight: 'bold' },
             target: '_blank',
           },
           'OpenCOR'
         ),
-        ' and run a simulation.',
       ])
     }
 
