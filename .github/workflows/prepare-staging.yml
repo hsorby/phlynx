@@ -60,12 +60,6 @@ jobs:
             fi
           fi
 
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Create and Push Staging Branch
         id: create_branch
         run: |
@@ -76,7 +70,7 @@ jobs:
           git checkout -b "$BRANCH_NAME"
 
           # Commit any changes in changelogs if there are changes.
-          if [ "${{ steps.gen_changelog.outputs.has_changes }}" == "true" ]; then
+          if [ -n "$(git status --porcelain)" ]; then
             git add changelogs/
             git commit -m "ci: update changes to latest.md."
           fi
