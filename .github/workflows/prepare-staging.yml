@@ -38,6 +38,10 @@ jobs:
         env:
           GITHUB_AUTH: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Configure git identity
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
           git pull origin production --no-rebase
           if [ -f "changelogs/latest.md" ]; then
             git rm changelogs/latest.md
@@ -67,10 +71,6 @@ jobs:
         run: |
           SHORT_SHA=$(git rev-parse --short HEAD)
           BRANCH_NAME="staging-${SHORT_SHA}"
-
-          # Configure git identity
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
 
           # Create branch.
           git checkout -b "$BRANCH_NAME"
