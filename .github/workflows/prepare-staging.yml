@@ -38,7 +38,7 @@ jobs:
         env:
           GITHUB_AUTH: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git pull origin production
+          git pull origin production --no-rebase
           if [ -f "changelogs/latest.md" ]; then
             git rm changelogs/latest.md
             echo "Deleted changelogs/latest.md"
