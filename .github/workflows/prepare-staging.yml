@@ -60,6 +60,14 @@ jobs:
             fi
           fi
 
+          yarn update-docs-changelog
+
+          # Commit any changes in changelogs if there are changes.
+          if [ -n "$(git status --porcelain)" ]; then
+            git add changelogs/ docs/reference/change-log.md
+            git commit -m "ci: commit changes to changelogs."
+          fi
+
       - name: Create and Push Staging Branch
         id: create_branch
         run: |
@@ -68,12 +76,6 @@ jobs:
 
           # Create branch.
           git checkout -b "$BRANCH_NAME"
-
-          # Commit any changes in changelogs if there are changes.
-          if [ -n "$(git status --porcelain)" ]; then
-            git add changelogs/
-            git commit -m "ci: update changes to latest.md."
-          fi
 
           # Push branch
           git push origin "$BRANCH_NAME"
