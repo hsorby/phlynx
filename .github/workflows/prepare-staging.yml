@@ -35,6 +35,9 @@ jobs:
       - name: Generate Changelog
         id: gen_changelog
         run: |
+          ls
+          ls changelogs
+          yarn gen-changelog -q
           yarn gen-changelog -q >> changelogs/latest.md
 
           # Check if latest.md is empty or only whitespace.
