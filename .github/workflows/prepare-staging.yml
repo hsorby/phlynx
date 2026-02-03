@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   create-pr:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -34,6 +35,8 @@ jobs:
 
       - name: Generate Changelog
         id: gen_changelog
+        env: 
+          GITHUB_AUTH: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ls
           ls changelogs
