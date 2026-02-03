@@ -76,7 +76,7 @@ jobs:
       - name: Create Pull Request
         if: steps.gen_changelog.outputs.has_content == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_CREATE_PR }}
         run: |
           BRANCH_NAME=${{ steps.create_branch.outputs.branch_name }}
           LAST_TAG=$(git describe --tags --abbrev=0 origin/main 2>/dev/null || echo "")
