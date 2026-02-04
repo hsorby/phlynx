@@ -1,18 +1,18 @@
 <template>
-  <el-dialog :model-value="modelValue" title="Edit Parameters" width="600px" @closed="closeDialog" teleported>
+  <el-dialog :model-value="modelValue" title="Edit Parameters" width="780px" @closed="closeDialog" teleported>
     <div v-if="!variableList" class="error-state">
       <el-alert title="CellML component not found in available modules." type="error" :closable="false" show-icon />
     </div>
 
     <el-table v-else :data="parameterRows" style="width: 100%" max-height="400">
-      <el-table-column prop="name" label="Variable" />
+      <el-table-column prop="name" label="Variable" width="200"/>
       <el-table-column prop="value" label="Value">
         <template #default="scope">
           <el-input v-model="scope.row.value" placeholder="Enter value..." :disabled="scope.row.type === 'variable'" />
         </template>
       </el-table-column>
-      <el-table-column prop="units" label="Units" width="120" />
-      <el-table-column prop="type" label="Type" width="120">
+      <el-table-column prop="units" label="Units" width="200"/>
+      <el-table-column prop="type" label="Type" width="200">
         <template #default="scope">
           <el-select v-model="scope.row.type" @change="handleTypeChange(scope.row)">
             <el-option v-for="types in parameterTypeOptions" :key="types.value" :label="types.label"
