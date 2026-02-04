@@ -294,22 +294,11 @@ function saveEdit() {
   }
 
   const nameExists = nodes.value.some(
-    (n) => n.id !== props.id && n.data && n.data.name === sanitisedName
+    (node) => node.id !== props.id && node.data && node.data.name === sanitisedName
   )
-  if (nameExists) {
-    notify.error({ message: 'A module with this name already exists.' })
-    // keep editor open so user can fix it
-    nextTick(() => inputRef.value?.focus())
-    return
-  }
 
-  const nameExists = nodes.value.some(
-    (n) => n.id !== props.id && n.data && n.data.name === sanitisedName
-  )
   if (nameExists) {
     notify.error({ message: 'A module with this name already exists.' })
-    // keep editor open so user can fix it
-    nextTick(() => inputRef.value?.focus())
     return
   }
 
