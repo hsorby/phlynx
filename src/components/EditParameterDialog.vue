@@ -85,6 +85,10 @@ const parameterTypeOptions = [
     value: 'variable',
     label: 'variable',
   },
+  {
+    value: 'boundary_condition',
+    label: 'boundary_condition',
+  },
 ]
 
 /**
@@ -106,18 +110,25 @@ watch(
       return
     }
 
+    const module = builderStore.getModulesModule(props.sourceFile, props.componentName)
+    const variablesAndUnits = module.configs[0].variables_and_units
+    
+    const variableMap = new Map(
+      variablesAndUnits.map(arr => [arr[0], arr])
+    )
+
     parameterRows.value = (variables).map(variable => {
       const instanceVariableName = variable.name + '_' + props.instanceName
       const storedValue = builderStore.getParameterValueForInstanceVariable(instanceVariableName)
-      // TODO: Get type from store
-      const defaultType = 'variable'
+
+      const configData = variableMap.get(variable.name)
+      const parameterType = configData ? configData[3] : 'variable'
 
       return {
         name: variable.name,
         units: variable.units,
-        value: defaultType === 'variable' ? '-' : (storedValue || ''),
-        type: defaultType,
-        _previousType: defaultType, // Track previous type
+        value: parameterType === 'variable' ? '-' : (storedValue || ''),
+        type: parameterType,
       }
     }).sort((a, b) => a.type.localeCompare(b.type))
   },
@@ -131,8 +142,6 @@ function handleTypeChange(row) {
   if (row.type === 'variable') {
     row.value = '-'
   } else {
-    // If switching to 'constant' or 'global_constant'
-    // Fetch existing value from store if it exists, otherwise leave empty for user input
     const storedValue = builderStore.getParameterValueForInstanceVariable(instanceVariableName)
     row.value = storedValue || ''
   }

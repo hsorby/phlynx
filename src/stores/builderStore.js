@@ -119,12 +119,12 @@ export const useBuilderStore = defineStore('builder', () => {
   }
 
   function isValidNumber(value) {
-  const trimmed = String(value).trim();
-  if (trimmed === '') return false;
-  
-  const num = Number(trimmed);
-  return !isNaN(num) && isFinite(num);
-}
+    const trimmed = String(value).trim();
+    if (trimmed === '') return false;
+    
+    const num = Number(trimmed);
+    return !isNaN(num) && isFinite(num);
+  }
 
   function addOrUpdateFile(collection, payload) {
     const existingFile = collection.value.find((f) => f.filename === payload.filename)
