@@ -26,7 +26,7 @@ export const useBuilderStore = defineStore('builder', () => {
   const lastExportName = ref('phlynx-export')
 
   const instanceParameterAssignments = ref(new Map())
-  const availableParameters = ref([])
+  const availableParameters = ref(new Map())
   const availableVariableNameIdMap = ref(new Map())
 
   const parameterFiles = ref(new Map())
@@ -49,24 +49,40 @@ export const useBuilderStore = defineStore('builder', () => {
   }
 
   // --- ACTIONS ---
+  function createParameterKey(parameter) {
+    return `${parameter.variable_name.trim()}||${parameter.units.trim()}||${parameter.value.trim()}||${parameter.data_reference.trim()}`
+  }
 
   function addParameterFile(filename, data) {
     if (!data || !Array.isArray(data)) return false
 
     for (const param of data) {
+      const key = createParameterKey(param)
+      if (availableParameters.value.has(key)) {
+        availableParameters.value.get(key).count += 1
+        availableParameters.value.get(key).source.push(filename)
+        // console.log(`Parameter already exists, skipping: ${key}, count: ${availableParameters.value.get(key).count}`)
+        continue
+      }
+
+      const trimmedVariableName = param.variable_name.trim()
+      if (trimmedVariableName === '' || trimmedVariableName === '#') {
+        continue
+      }
       const newParameterSet = {
         data_reference: param.data_reference.trim(),
-        variable_name: param.variable_name.trim(),
+        variable_name: trimmedVariableName,
         units: param.units.trim(),
         value: param.value.trim(),
-        source: filename,
-        id: 'id_' + availableParameters.value.length,
+        source: [filename],
+        count: 1,
+        id: 'id_' + availableParameters.value.size,
       }
-      if (!availableVariableNameIdMap.value.has(newParameterSet.variable_name)) {
-        availableVariableNameIdMap.value.set(newParameterSet.variable_name, [])
+      availableParameters.value.set(key, newParameterSet)
+      if (!availableVariableNameIdMap.value.has(trimmedVariableName)) {
+        availableVariableNameIdMap.value.set(trimmedVariableName, [])
       }
-      availableVariableNameIdMap.value.get(newParameterSet.variable_name).push(newParameterSet.id)
-      availableParameters.value.push(newParameterSet)
+      availableVariableNameIdMap.value.get(trimmedVariableName).push(key)
     }
     return true
   }
@@ -94,6 +110,20 @@ export const useBuilderStore = defineStore('builder', () => {
 
   function getParameterFileNameForModule(moduleName) {
     return moduleParameterMap.value.get(moduleName) || null
+  }
+
+  function getParameterValuesForInstanceVariables(instanceVariables) {
+    let results = []
+    for (const variable of instanceVariables) {
+      const paramIds = availableVariableNameIdMap.value.get(variable)
+      if (paramIds) {
+        const params = paramIds.map((id) => availableParameters.value.find((p) => p.id === id))
+        results.push(params.value)
+      } else {
+        results.push('')
+      }
+    }
+    return results
   }
 
   function getParametersForModule(moduleName) {
@@ -218,6 +248,20 @@ export const useBuilderStore = defineStore('builder', () => {
 
   function addUnitsFile(payload) {
     addOrUpdateFile(availableUnits, payload)
+  }
+
+  function linkParametersToInstantiatedModules(fileName, data, vesselData) {
+    console.log('Do nothing')
+    if (!data || !Array.isArray(data)) return false
+    if (fileName === 'SN_PLACEHOLDER_') {
+      console.warn('Cannot link parameters to instantiated modules: placeholder filename')
+      return false
+    }
+    console.log(vesselData)
+
+    parameterFiles.value.set(fileName, data)
+    return true
+
   }
 
   function loadState(state) {
@@ -351,6 +395,7 @@ export const useBuilderStore = defineStore('builder', () => {
     addUnitsFile,
     applyParameterLinks, // Re-enabled
     applyFileParameterLinks, // Updated with syncing
+    linkParametersToInstantiatedModules,
     loadState,
     removeModuleFile,
     setLastExportName,
@@ -366,6 +411,7 @@ export const useBuilderStore = defineStore('builder', () => {
     getParameterFileNameForModule,
     getParametersForFile,
     getParametersForModule,
+    getParameterValuesForInstanceVariables,
     getSaveState,
     hasModuleFile,
 

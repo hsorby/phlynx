@@ -605,23 +605,7 @@ const handleConfirm = async () => {
     if (fileName && data && vesselData) {
       builderStore.addParameterFile(fileName, data)
 
-      const fileLinkMap = new Map(builderStore.fileParameterMap)
-      const fileTypeMap = new Map(builderStore.fileAssignmentTypeMap || [])
-
-      const involvedCellMLFiles = new Set()
-      vesselData.forEach((vessel) => {
-        const config = builderStore.getConfigForVessel(vessel.vessel_type, vessel.BC_type)
-        if (config?.filename) {
-          involvedCellMLFiles.add(config.filename)
-        }
-      })
-
-      involvedCellMLFiles.forEach((cellmlFile) => {
-        fileLinkMap.set(cellmlFile, fileName)
-        fileTypeMap.set(cellmlFile, 'imported')
-      })
-
-      builderStore.applyFileParameterLinks(fileLinkMap, fileTypeMap)
+      builderStore.linkParametersToInstantiatedModules(fileName, data, vesselData)
     }
   }
 
