@@ -25,6 +25,10 @@ export const useBuilderStore = defineStore('builder', () => {
   const lastSaveName = ref('phlynx-project')
   const lastExportName = ref('phlynx-export')
 
+  const instanceParameterAssignments = ref(new Map())
+  const availableParameters = ref([])
+  const availableVariableNameIdMap = ref(new Map())
+
   const parameterFiles = ref(new Map())
   const moduleParameterMap = ref(new Map())
   const moduleAssignmentTypeMap = ref(new Map())
@@ -48,11 +52,28 @@ export const useBuilderStore = defineStore('builder', () => {
 
   function addParameterFile(filename, data) {
     if (!data || !Array.isArray(data)) return false
-    parameterFiles.value.set(filename, data)
+
+    for (const param of data) {
+      const newParameterSet = {
+        data_reference: param.data_reference.trim(),
+        variable_name: param.variable_name.trim(),
+        units: param.units.trim(),
+        value: param.value.trim(),
+        source: filename,
+        id: 'id_' + availableParameters.value.length,
+      }
+      if (!availableVariableNameIdMap.value.has(newParameterSet.variable_name)) {
+        availableVariableNameIdMap.value.set(newParameterSet.variable_name, [])
+      }
+      availableVariableNameIdMap.value.get(newParameterSet.variable_name).push(newParameterSet.id)
+      availableParameters.value.push(newParameterSet)
+    }
     return true
   }
 
   function applyFileParameterLinks(linkMap, typeMap = null) {
+    console.log('Do nothing')
+    return
     fileParameterMap.value = linkMap
     moduleParameterMap.value = linkMap
 

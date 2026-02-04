@@ -303,7 +303,6 @@ import { getId as getNextNodeId, generateUniqueModuleName } from '../utils/nodes
 import { getId as getNextEdgeId } from '../utils/edges'
 import { getImportConfig, parseParametersFile } from '../utils/import'
 import { legacyDownload, saveFileHandle, writeFileHandle } from '../utils/save'
-import { generateParameterAssociations } from '../utils/parameters'
 import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 
 // import testModuleBGContent from '../assets/bg_modules.cellml?raw'
