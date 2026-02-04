@@ -17,6 +17,22 @@ export function generateUniqueModuleName(moduleData, existingNames) {
   return finalName
 }
 
+export function sanitiseModuleName(name) {
+  // Sanitize: replace spaces with underscores, remove invalid characters
+  // Valid CellML component names: alphanumeric, underscore, and must start with letter or underscore
+  let sanitised = name
+    .trim()
+    .replace(/\s+/g, '_') // Replace spaces (and multiple spaces) with underscore
+    .replace(/[^a-zA-Z0-9_]/g, '') // Remove all invalid characters
+
+  // Ensure it starts with a letter or underscore
+  if (sanitised && !/^[a-zA-Z_]/.test(sanitised)) {
+    sanitised = '_' + sanitised
+  }
+
+  return sanitised
+}
+
 /**
  * Generates a unique node ID for drag-and-drop nodes.
  *
