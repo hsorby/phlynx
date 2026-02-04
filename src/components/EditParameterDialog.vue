@@ -3,25 +3,31 @@
     <div v-if="!variableList" class="error-state">
       <el-alert title="CellML component not found in available modules." type="error" :closable="false" show-icon />
     </div>
-
-    <el-table v-else :data="parameterRows" style="width: 100%" max-height="400">
-      <el-table-column prop="name" label="Variable" width="200"/>
-      <el-table-column prop="value" label="Value">
-        <template #default="scope">
-          <el-input v-model="scope.row.value" placeholder="Enter value..." :disabled="scope.row.type === 'variable'" />
-        </template>
-      </el-table-column>
-      <el-table-column prop="units" label="Units" width="200"/>
-      <el-table-column prop="type" label="Type" width="200">
-        <template #default="scope">
-          <el-select v-model="scope.row.type" @change="handleTypeChange(scope.row)">
-            <el-option v-for="types in parameterTypeOptions" :key="types.value" :label="types.label"
-              :value="types.value" />
-          </el-select>
-        </template>
-      </el-table-column>
-    </el-table>
-
+    <template v-else>
+      <el-input 
+        v-model="searchQuery" 
+        placeholder="Search by variable name..." 
+        clearable 
+        style="margin-bottom: 12px"
+      />
+      <el-table :data="filteredParameterRows" style="width: 100%" max-height="400">
+        <el-table-column prop="name" label="Variable" width="200"/>
+        <el-table-column prop="value" label="Value">
+          <template #default="scope">
+            <el-input v-model="scope.row.value" placeholder="Enter value..." :disabled="scope.row.type === 'variable'" />
+          </template>
+        </el-table-column>
+        <el-table-column prop="units" label="Units" width="200"/>
+        <el-table-column prop="type" label="Type" width="200">
+          <template #default="scope">
+            <el-select v-model="scope.row.type" @change="handleTypeChange(scope.row)">
+              <el-option v-for="types in parameterTypeOptions" :key="types.value" :label="types.label"
+                :value="types.value" />
+            </el-select>
+          </template>
+        </el-table-column>
+      </el-table>
+    </template>
     <template #footer>
       <span class="dialog-footer">
         <el-button @click="closeDialog">Cancel</el-button>
@@ -70,6 +76,8 @@ const emit = defineEmits([
   'confirm',
 ])
 
+const searchQuery = ref('')
+
 const builderStore = useBuilderStore()
 
 const parameterTypeOptions = [
@@ -97,6 +105,17 @@ const parameterTypeOptions = [
 const variableList = computed(() => {
   const modelString = builderStore.getModuleContent(props.sourceFile)
   return Array.from(extractVariablesFromModule(modelString, props.componentName))
+})
+
+const filteredParameterRows = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return parameterRows.value
+  }
+  
+  const query = searchQuery.value.toLowerCase()
+  return parameterRows.value.filter(row => 
+    row.name.toLowerCase().includes(query)
+  )
 })
 
 const parameterRows = ref([])
