@@ -782,7 +782,6 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
     }
 
     for (const comp of componentTrashCan) {
-
       comp && comp.delete()
     }
 
@@ -872,10 +871,14 @@ export function extractVariablesFromModule(modelString, componentName, includeIn
         garbageCollector.add(variable)
         const units = variable.units()
         garbageCollector.add(units)
-        if ((!includeInitialisedVariables && variable.initialValue() !== '') || (variable.name() === 't' || variable.name() === 'time')) {
+        if (
+          (!includeInitialisedVariables && variable.initialValue() !== '') ||
+          variable.name() === 't' ||
+          variable.name() === 'time'
+        ) {
           continue
         }
-        variables.add({name: variable.name(), units: units.name()})
+        variables.add({ name: variable.name(), units: units.name() })
       }
     }
 
@@ -1068,15 +1071,20 @@ export function areModelsEquivalent(modelAString, modelBString) {
     return false
   }
 
-  const parser = new _libcellml.Parser(true)
-  const modelA = parser.parseModel(modelAString)
-  const modelB = parser.parseModel(modelBString)
+  const garbageCollector = new Set() // To track created objects for cleanup
+  try {
+    const parser = new _libcellml.Parser(true)
+    garbageCollector.add(parser)
+    const modelA = parser.parseModel(modelAString)
+    garbageCollector.add(modelA)
+    const modelB = parser.parseModel(modelBString)
+    garbageCollector.add(modelB)
+    const equal = modelA.equals(modelB)
 
-  const equal = modelA.equals(modelB)
-
-  modelA.delete()
-  modelB.delete()
-  parser.delete()
-
-  return equal
+    return equal
+  } finally {
+    for (const obj of garbageCollector) {
+      obj.delete()
+    }
+  }
 }
