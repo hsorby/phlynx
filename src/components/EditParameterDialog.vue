@@ -153,7 +153,8 @@ function closeDialog() {
 
 function handleConfirm() {
   parameterRows.value.forEach(row => {
-    if (row.type === 'constant') {
+    // boundary conditions appear to be equivalent to constants in terms of storage
+    if (row.type === 'constant' || row.type === 'boundary_condition') {
       const instanceVariableName = row.name + '_' + props.instanceName
       builderStore.setParameterValueForInstanceVariable(instanceVariableName, row.value)
     } else if (row.type === 'global_constant') {
