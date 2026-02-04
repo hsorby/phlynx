@@ -29,6 +29,7 @@ export const useBuilderStore = defineStore('builder', () => {
   const availableParameters = ref(new Map())
   const availableVariableNameIdMap = ref(new Map())
 
+  const parameterValues = ref(new Map())
   const parameterFiles = ref(new Map())
   const moduleParameterMap = ref(new Map())
   const moduleAssignmentTypeMap = ref(new Map())
@@ -108,6 +109,10 @@ export const useBuilderStore = defineStore('builder', () => {
     }
   }
 
+  function getParameterValueForInstanceVariable(instanceVariable) {
+    return parameterValues.value.get(instanceVariable) || 42
+  }
+
   function getParameterFileNameForModule(moduleName) {
     return moduleParameterMap.value.get(moduleName) || null
   }
@@ -154,6 +159,22 @@ export const useBuilderStore = defineStore('builder', () => {
 
   function setLastExportName(name) {
     lastExportName.value = name
+  }
+
+  function setParameterValueForInstanceVariable(instanceVariableName, value) {
+    if (isValidNumber(value)) {
+      parameterValues.value.set(instanceVariableName, Number(value))
+    } else {
+      console.error(`[builderStore] Invalid number value for ${instanceVariableName}:`, value)
+    }
+  }
+
+  function isValidNumber(value) {
+    const trimmed = String(value).trim();
+    if (trimmed === '') return false;
+    
+    const num = Number(trimmed);
+    return !isNaN(num) && isFinite(num);
   }
 
   function addOrUpdateFile(collection, payload) {
@@ -400,6 +421,7 @@ export const useBuilderStore = defineStore('builder', () => {
     removeModuleFile,
     setLastExportName,
     setLastSaveName,
+    setParameterValueForInstanceVariable,
 
     // Getters
     getAssignmentTypeForModule,
@@ -407,6 +429,7 @@ export const useBuilderStore = defineStore('builder', () => {
     getConfigForVessel,
     getModuleContent,
     getModulesModule,
+    getParameterValueForInstanceVariable,
     getParameterFileNameForFile,
     getParameterFileNameForModule,
     getParametersForFile,
