@@ -25,6 +25,7 @@ export const useBuilderStore = defineStore('builder', () => {
   const lastSaveName = ref('phlynx-project')
   const lastExportName = ref('phlynx-export')
 
+  const parameterValues = ref(new Map())
   const parameterFiles = ref(new Map())
   const moduleParameterMap = ref(new Map())
   const moduleAssignmentTypeMap = ref(new Map())
@@ -71,8 +72,8 @@ export const useBuilderStore = defineStore('builder', () => {
     }
   }
 
-  function getParameterValuesForInstanceVariables(instanceVariables) {
-    return 42
+  function getParameterValueForInstanceVariable(instanceVariable) {
+    return parameterValues.value.get(instanceVariable) || 42
   }
 
   function getParameterFileNameForModule(moduleName) {
@@ -108,6 +109,24 @@ export const useBuilderStore = defineStore('builder', () => {
   function setLastExportName(name) {
     lastExportName.value = name
   }
+
+  function setParameterValueForInstanceVariable(instanceVariableName, value) {
+    if (isValidNumber(value)) {
+      parameterValues.value.set(instanceVariableName, Number(value))
+    } else {
+      console.error(`[builderStore] Invalid number value for ${instanceVariableName}:`, value)
+    }
+  }
+
+  function isValidNumber(value) {
+  // Trim whitespace and check it's not empty
+  const trimmed = String(value).trim();
+  if (trimmed === '') return false;
+  
+  // Check if it converts to a valid number (not NaN) and is finite
+  const num = Number(trimmed);
+  return !isNaN(num) && isFinite(num);
+}
 
   function addOrUpdateFile(collection, payload) {
     const existingFile = collection.value.find((f) => f.filename === payload.filename)
@@ -338,6 +357,7 @@ export const useBuilderStore = defineStore('builder', () => {
     removeModuleFile,
     setLastExportName,
     setLastSaveName,
+    setParameterValueForInstanceVariable,
 
     // Getters
     getAssignmentTypeForModule,
@@ -345,7 +365,7 @@ export const useBuilderStore = defineStore('builder', () => {
     getConfigForVessel,
     getModuleContent,
     getModulesModule,
-    getParameterValuesForInstanceVariables,
+    getParameterValueForInstanceVariable,
     getParameterFileNameForFile,
     getParameterFileNameForModule,
     getParametersForFile,

@@ -1,11 +1,5 @@
 <template>
-  <el-dialog
-    :model-value="modelValue"
-    title="Edit Parameters"
-    width="600px"
-    @closed="closeDialog"
-    teleported
-  >
+  <el-dialog :model-value="modelValue" title="Edit Parameters" width="600px" @closed="closeDialog" teleported>
     <div v-if="!variableList" class="error-state">
       <el-alert title="CellML component not found in available modules." type="error" :closable="false" show-icon />
     </div>
@@ -14,15 +8,18 @@
       <el-table-column prop="name" label="Variable" />
       <el-table-column prop="value" label="Value">
         <template #default="scope">
-          <el-input v-model="scope.row.value" placeholder="Enter value..."/>
+          <el-input v-model="scope.row.value" placeholder="Enter value..." />
         </template>
       </el-table-column>
       <el-table-column prop="units" label="Units" width="120" />
       <el-table-column prop="type" label="Type" width="120">
-        <el-select v-model="test">
-          <el-option v-for="types in parameterTypeOptions" :key="types.value" :label="types.label" :value="types.value" />
-        </el-select>
-      </el-table-column>    
+        <template #default="scope">
+          <el-select v-model="scope.row.type">
+            <el-option v-for="types in parameterTypeOptions" :key="types.value" :label="types.label"
+              :value="types.value" />
+          </el-select>
+        </template>
+      </el-table-column>
     </el-table>
 
     <template #footer>
@@ -32,7 +29,7 @@
           Save Parameters
         </el-button>
       </span>
-    </template> 
+    </template>
   </el-dialog>
 </template>
 
@@ -42,17 +39,17 @@ import { useBuilderStore } from '../stores/builderStore'
 import { extractVariablesFromModule } from '../utils/cellml'
 
 const props = defineProps({
-  modelValue: { 
+  modelValue: {
     type: Boolean,
     default: false,
   },
   // Name of an instantiation of a CellML module
-  instanceName: { 
+  instanceName: {
     type: String,
     required: true,
   },
   // Internal name of the node associated with this module
-  nodeId: { 
+  nodeId: {
     type: String,
     required: true,
   },
@@ -106,18 +103,16 @@ watch(
       parameterRows.value = []
       return
     }
-    // Get current saved parameters for this specific module/file
-    // const savedParams = builderStore.getParametersForModule(props.sourceFile)
-    
-    // Build rows based on the module's variable port options 
-    // (Assuming portOptions contains the variable metadata from cellml.js)
+
     parameterRows.value = (variables).map(variable => {
-      const instanceVariableName = variable.name + '_' + props.instanceName // will need to do something else global 
+      // Get type of the variable from builderStore config 
+      // const variableType = builderStore.getParameterTypeForInstanceVariable?
+      const instanceVariableName = variable.name + '_' + props.instanceName // will need to do something else for global 
       return {
         name: variable.name,
         units: variable.units,
-        value: builderStore.getParameterValuesForInstanceVariables(instanceVariableName), 
-        // type: 'variable', // Default type; could be enhanced to load existing type
+        value: builderStore.getParameterValueForInstanceVariable(instanceVariableName),
+        type: 'variable', // Default type; could be enhanced to load existing type
       }
     })
   },
@@ -129,6 +124,7 @@ function closeDialog() {
 }
 
 function handleConfirm() {
+
   // Format data to match the expected parameter file structure in builderStore
   // const payload = parameterRows.value
   //   .filter(row => row.value.trim() !== '')
@@ -142,7 +138,7 @@ function handleConfirm() {
   // // We use the sourceFile as the key to link these parameters to the module
   // const paramFileName = `${props.sourceFile}.params.json`
   // builderStore.addParameterFile(paramFileName, payload)
-  
+
   // // Link this file to the module if not already linked
   // const linkMap = new Map(builderStore.moduleParameterMap)
   // linkMap.set(props.sourceFile, paramFileName)
@@ -156,6 +152,7 @@ function handleConfirm() {
 .error-state {
   padding: 20px 0;
 }
+
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
