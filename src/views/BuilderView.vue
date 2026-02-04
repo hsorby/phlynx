@@ -1131,10 +1131,8 @@ async function onExportConfirm(fileName, handle) {
 
       const dataUri = await createCellMLDataFragment(blob, fileName)
 
-      const openCorCommand = 'opencor://'
-      const openCorSpacer = 'xxxxxxxxxx' // A spacer to fix URL length issues in OpenCOR
-      const openCorUrl = `https://opencor.ws/appdev/#${openCorSpacer}openFile=${encodeURIComponent(dataUri)}`
-      console.log('OpenCOR URL:', openCorUrl.length)
+      const openCorProtocol = 'opencor://'
+      const openCorUrl = `https://opencor.ws/appdev/?${openCorProtocol}openFile/#${dataUri}`
 
       exportMessage = h('div', null, [
         'Model exported to CellML. Open this model directly in ',
