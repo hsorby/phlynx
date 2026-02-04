@@ -71,6 +71,10 @@ export const useBuilderStore = defineStore('builder', () => {
     }
   }
 
+  function getParameterValuesForInstanceVariables(instanceVariables) {
+    return 42
+  }
+
   function getParameterFileNameForModule(moduleName) {
     return moduleParameterMap.value.get(moduleName) || null
   }
@@ -341,6 +345,7 @@ export const useBuilderStore = defineStore('builder', () => {
     getConfigForVessel,
     getModuleContent,
     getModulesModule,
+    getParameterValuesForInstanceVariables,
     getParameterFileNameForFile,
     getParameterFileNameForModule,
     getParametersForFile,

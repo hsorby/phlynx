@@ -85,6 +85,14 @@
           class="module-button"
         >
           <el-icon><CellMLIcon /></el-icon>
+      </el-button>
+        <el-button
+          size="small"
+          circle
+          @click="openEditParameterDialog"
+          class="module-button"
+        >
+          <el-icon><Operation /></el-icon>
         </el-button>
       </div>
     </el-card>
@@ -144,6 +152,7 @@ import {
   Key,
   Place,
   WarningFilled,
+  Operation,
 } from '@element-plus/icons-vue'
 import CellMLIcon from './icons/CellMLIcon.vue'
 import { useBuilderStore } from '../stores/builderStore'
@@ -172,7 +181,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['open-cellml-editor-dialog', 'open-edit-dialog', 'open-replacement-dialog'])
+const emit = defineEmits(['open-cellml-editor-dialog', 'open-edit-dialog', 'open-replacement-dialog', 'open-parameter-editor-dialog'])
 
 const moduleNode = ref(null)
 
@@ -192,6 +201,15 @@ function openCellMLEditDialog() {
     name: props.data.name,
     sourceFile: props.data.sourceFile,
     componentName: props.data.componentName,
+  })
+}
+
+function openEditParameterDialog() {
+  emit('open-parameter-editor-dialog', {
+    nodeId: props.id,
+    instanceName: props.data.name,
+    componentName: props.data.componentName,
+    sourceFile: props.data.sourceFile,
   })
 }
 

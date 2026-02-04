@@ -854,27 +854,31 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
 /**
  * Extracts unique variable names from a CellML model/component
  */
-export function extractVariablesFromModule(module) {
-  const names = new Set()
-  if (module.model) {
+export function extractVariablesFromModule(modelString, componentName, includeInitialisedVariables = false) {
+  const variables = new Set()
+  if (modelString) {
     const parser = new _libcellml.Parser(false)
-    const model = parser.parseModel(module.model)
+    const model = parser.parseModel(modelString)
     // Iterate all components in the model,
     // assumes flat model hierarchy.
-    for (let c = 0; c < model.componentCount(); c++) {
-      const comp = model.componentByIndex(c)
-      for (let v = 0; v < comp.variableCount(); v++) {
-        const variable = comp.variableByIndex(v)
-        names.add(variable.name())
-        variable.delete()
+    const comp = model.componentByName(componentName, true)
+    for (let v = 0; v < comp.variableCount(); v++) {
+      const variable = comp.variableByIndex(v)
+      const units = variable.units()
+      if ((!includeInitialisedVariables && variable.initialValue() !== '') || (variable.name() === 't' || variable.name() === 'time')) {
+        continue
       }
-      comp.delete()
+      variables.add({name: variable.name(), units: units.name()})
+
+      units.delete()
+      variable.delete()
     }
+    comp.delete()
     model.delete()
     parser.delete()
   }
 
-  return names
+  return variables
 }
 
 function removeComments(node) {

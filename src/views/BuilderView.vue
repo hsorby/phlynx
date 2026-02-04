@@ -185,6 +185,7 @@
                 :selected="props.selected"
                 @open-edit-dialog="onOpenEditDialog"
                 @open-cellml-editor-dialog="onOpenCellMLEditorDialog"
+                @open-parameter-editor-dialog="onOpenParameterEditorDialog"
                 @open-replacement-dialog="onOpenReplacementDialog"
                 :ref="(el) => (nodeRefs[props.id] = el)"
               />
@@ -213,6 +214,15 @@
     :nodeData="currentEditingNode"
     @save-update="onCellMLUpdateSave"
     @save-fork="onCellMLForkSave"
+  />
+
+  <EditParameterDialog
+    v-model="editParameterDialogVisible"
+    :instance-name="currentEditingNode?.name || ''"
+    :node-id="currentEditingNode?.nodeId || ''"
+    :source-file="currentEditingNode?.sourceFile || ''"
+    :component-name="currentEditingNode?.componentName || ''"
+    @confirm="onEditParameterConfirm"
   />
 
   <SaveDialog v-model="saveDialogVisible" @confirm="onSaveConfirm" :default-name="builderStore.lastSaveName" />
@@ -305,6 +315,7 @@ import { getImportConfig, parseParametersFile } from '../utils/import'
 import { legacyDownload, saveFileHandle, writeFileHandle } from '../utils/save'
 import { generateParameterAssociations } from '../utils/parameters'
 import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
+import EditParameterDialog from '../components/EditParameterDialog.vue'
 
 // import testModuleBGContent from '../assets/bg_modules.cellml?raw'
 // import testModuleColonContent from '../assets/colon_FTU_modules.cellml?raw'
@@ -376,6 +387,7 @@ const builderStore = useBuilderStore()
 const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
 const configDialogVisible = ref(false)
+const editParameterDialogVisible = ref(false)
 const editDialogVisible = ref(false)
 const cellMLEditorDialogVisible = ref(false)
 const saveDialogVisible = ref(false)
@@ -972,6 +984,13 @@ function onOpenCellMLEditorDialog(eventPayload) {
   cellMLEditorDialogVisible.value = true
 }
 
+function onOpenParameterEditorDialog(eventPayload) {
+  currentEditingNode.value = {
+    ...eventPayload,
+  }
+  editParameterDialogVisible.value = true
+}
+
 async function propogateCellMLModuleUpdates(updatedData, changeText) {
   await loadCellMLModuleData(updatedData.code, updatedData.sourceFile, false)
   const updatedModule = builderStore.getModulesModule(updatedData.sourceFile, updatedData.componentName)
@@ -1034,6 +1053,30 @@ async function onEditConfirm(updatedData) {
   const { updateNodeData } = useVueFlow(targetInstance)
 
   updateNodeData(nodeId, updatedData)
+}
+
+function onEditParameterConfirm(payload) {
+  const { moduleName, parameters } = payload;
+  
+  // 1. Identify which parameter file is linked to this module
+  const fileName = builderStore.getParameterFileNameForModule(moduleName);
+  
+  if (fileName) {
+    // 2. Update the central store with the new values
+    // This allows the changes to be tracked globally and exported later
+    builderStore.parameterFiles.set(fileName, parameters);
+    
+    notify.success({ 
+      message: `Parameters for ${moduleName} updated successfully.` 
+    });
+  } else {
+    // Fallback if no file is linked: You might want to create a virtual association
+    notify.warning({ 
+      message: `No parameter file associated with ${moduleName}.` 
+    });
+  }
+
+  isEditParameterDialogOpen.value = false;
 }
 
 const nodeRefs = ref({})
