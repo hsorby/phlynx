@@ -78,6 +78,10 @@ const parameterTypeOptions = [
     label: 'constant',
   },
   {
+    value: 'global_constant',
+    label: 'global_constant',
+  },
+  {
     value: 'variable',
     label: 'variable',
   },
@@ -114,6 +118,9 @@ watch(
         value: builderStore.getParameterValueForInstanceVariable(instanceVariableName),
         type: 'variable', // Default type; could be enhanced to load existing type
       }
+    }).sort((a, b) => {
+      // Sort by type 
+      return a.type.localeCompare(b.type)
     })
   },
   { immediate: true }
@@ -124,7 +131,6 @@ function closeDialog() {
 }
 
 function handleConfirm() {
-
   // Format data to match the expected parameter file structure in builderStore
   // const payload = parameterRows.value
   //   .filter(row => row.value.trim() !== '')
