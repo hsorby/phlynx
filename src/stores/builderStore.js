@@ -110,23 +110,41 @@ export const useBuilderStore = defineStore('builder', () => {
   }
 
   function getParameterValueForInstanceVariable(instanceVariable) {
-    return parameterValues.value.get(instanceVariable) || 42
+    let value = Math.NaN
+    if (availableVariableNameIdMap.value.get(instanceVariable)?.length > 1) {
+      console.warn(
+        `[builderStore] Multiple parameters found for variable ${instanceVariable}. This should not happen.`,
+        availableVariableNameIdMap.value.get(instanceVariable)
+      )
+    }
+    availableVariableNameIdMap.value.get(instanceVariable)?.forEach((paramKey) => {
+      const param = availableParameters.value.get(paramKey)
+      if (param) {
+        const paramValue = param.value
+        if (isValidNumber(paramValue)) {
+          value = Number(paramValue)
+        } else {
+          console.warn(
+            `[builderStore] Invalid number for variable ${instanceVariable} from parameter file:`,
+            paramValue
+          )
+        }
+      }
+    })
+    return value
   }
 
   function getParameterFileNameForModule(moduleName) {
     return moduleParameterMap.value.get(moduleName) || null
   }
 
-  function getParameterValuesForInstanceVariables(instanceVariables) {
+  function getParameterValuesForInstanceVariable(instanceVariable) {
     let results = []
-    for (const variable of instanceVariables) {
-      const paramIds = availableVariableNameIdMap.value.get(variable)
-      if (paramIds) {
-        const params = paramIds.map((id) => availableParameters.value.find((p) => p.id === id))
-        results.push(params.value)
-      } else {
-        results.push('')
-      }
+    const paramKeys = availableVariableNameIdMap.value.get(instanceVariable)
+    if (paramKeys) {
+      results = paramKeys.map((key) => availableParameters.value.get(key))
+    } else {
+      results.push(undefined)
     }
     return results
   }
@@ -170,11 +188,11 @@ export const useBuilderStore = defineStore('builder', () => {
   }
 
   function isValidNumber(value) {
-    const trimmed = String(value).trim();
-    if (trimmed === '') return false;
-    
-    const num = Number(trimmed);
-    return !isNaN(num) && isFinite(num);
+    const trimmed = String(value).trim()
+    if (trimmed === '') return false
+
+    const num = Number(trimmed)
+    return !isNaN(num) && isFinite(num)
   }
 
   function addOrUpdateFile(collection, payload) {
@@ -282,7 +300,6 @@ export const useBuilderStore = defineStore('builder', () => {
 
     parameterFiles.value.set(fileName, data)
     return true
-
   }
 
   function loadState(state) {
@@ -429,12 +446,11 @@ export const useBuilderStore = defineStore('builder', () => {
     getConfigForVessel,
     getModuleContent,
     getModulesModule,
-    getParameterValueForInstanceVariable,
     getParameterFileNameForFile,
     getParameterFileNameForModule,
     getParametersForFile,
     getParametersForModule,
-    getParameterValuesForInstanceVariables,
+    getParameterValuesForInstanceVariable,
     getSaveState,
     hasModuleFile,
 

@@ -218,7 +218,7 @@
 
   <EditParameterDialog
     v-model="editParameterDialogVisible"
-    :instance-name="currentEditingNode?.name || ''"
+    :instance-name="currentEditingNode?.instanceName || ''"
     :node-id="currentEditingNode?.nodeId || ''"
     :source-file="currentEditingNode?.sourceFile || ''"
     :component-name="currentEditingNode?.componentName || ''"
