@@ -1,22 +1,14 @@
 <template>
-  <div
-    class="module-node"
-    :id="id"
-    ref="moduleNode"
-    :class="{ selected: selected }"
-    @contextmenu.stop.prevent="openContextMenu"
-    @mousedown.capture="StopDrag"
-  >
+  <div class="module-node" :id="id" ref="moduleNode" :class="{ selected: selected }"
+    @contextmenu.stop.prevent="openContextMenu" @mousedown.capture="StopDrag">
     <NodeResizer min-width="180" min-height="105" :is-visible="selected" />
 
     <el-card :class="[domainTypeClass, 'module-card']" shadow="hover">
       <div v-if="isMissingParameters" class="status-indicator">
-        <el-tooltip
-          content="No parameter file assigned"
-          placement="top"
-          effect="light"
-        >
-          <el-icon class="warning-icon"><WarningFilled /></el-icon>
+        <el-tooltip content="No parameter file assigned" placement="top" effect="light">
+          <el-icon class="warning-icon">
+            <WarningFilled />
+          </el-icon>
         </el-tooltip>
       </div>
 
@@ -24,40 +16,33 @@
         <span v-if="!isEditing">
           {{ data.name }}
         </span>
-        <el-input
-          v-else
-          ref="inputRef"
-          v-model="editingName"
-          size="small"
-          @blur="saveEdit"
-          @keyup.enter="saveEdit"
-        />
+        <el-input v-else ref="inputRef" v-model="editingName" size="small" @blur="saveEdit" @keyup.enter="saveEdit" />
       </div>
       <!-- non-editable label showing CellML component and source file (no white box) -->
       <div v-if="data.label" class="module-label">{{ data.label }}</div>
       <div class="button-group">
         <el-dropdown trigger="click" @command="handleSetDomainType">
           <el-button size="small" circle class="module-button">
-            <el-icon><Key /></el-icon>
+            <el-icon>
+              <Key />
+            </el-icon>
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="membrane">Membrane</el-dropdown-item>
               <el-dropdown-item command="process">Process</el-dropdown-item>
-              <el-dropdown-item command="compartment"
-                >Compartment</el-dropdown-item
-              >
+              <el-dropdown-item command="compartment">Compartment</el-dropdown-item>
               <el-dropdown-item command="protein">Protein</el-dropdown-item>
-              <el-dropdown-item command="undefined" divided
-                >Reset to Default</el-dropdown-item
-              >
+              <el-dropdown-item command="undefined" divided>Reset to Default</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
 
         <el-dropdown trigger="click" @command="addPort({ side: $event })">
           <el-button size="small" circle class="module-button">
-            <el-icon><Place /></el-icon>
+            <el-icon>
+              <Place />
+            </el-icon>
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
@@ -69,63 +54,34 @@
           </template>
         </el-dropdown>
 
-        <el-button
-          size="small"
-          circle
-          @click="openEditDialog"
-          class="module-button"
-        >
-          <el-icon><Edit /></el-icon>
+        <el-button size="small" circle @click="openEditDialog" class="module-button">
+          <el-icon>
+            <Edit />
+          </el-icon>
         </el-button>
 
-        <el-button
-          size="small"
-          circle
-          @click="openCellMLEditDialog"
-          class="module-button"
-        >
-          <el-icon><CellMLIcon /></el-icon>
+        <el-button size="small" circle @click="openCellMLEditDialog" class="module-button">
+          <el-icon>
+            <CellMLIcon />
+          </el-icon>
         </el-button>
       </div>
     </el-card>
 
     <template v-for="port in data.ports" :key="port.uid" class="port">
-      <el-tooltip
-        class="box-item"
-        effect="dark"
-        :content="port.name"
-        placement="bottom"
-        :show-after="1000"
-      >
-        <Handle
-          :id="getHandleId(port)"
-          :ref="'handle_' + port.side + '_' + port.uid"
-          :position="portPosition(port.side)"
-          :style="getHandleStyle(port, data.ports)"
-          class="port-handle"
-        />
+      <el-tooltip class="box-item" effect="dark" :content="port.name" placement="bottom" :show-after="1000">
+        <Handle :id="getHandleId(port)" :ref="'handle_' + port.side + '_' + port.uid"
+          :position="portPosition(port.side)" :style="getHandleStyle(port, data.ports)" class="port-handle" />
         <template #content>
-          <el-button
-            class="delete-port-btn"
-            type="danger"
-            :icon="Delete"
-            circle
-            plain
-            size="small"
-            @click.stop="removePort(port.uid)"
-          />
+          <el-button class="delete-port-btn" type="danger" :icon="Delete" circle plain size="small"
+            @click.stop="removePort(port.uid)" />
         </template>
       </el-tooltip>
     </template>
     <!-- context menu -->
     <teleport to="body">
-      <div
-        v-if="contextMenuVisible"
-        ref="contextMenu"
-        class="context-menu"
-        :style="{ top: contextMenuY + 'px', left: contextMenuX + 'px' }"
-        @click.stop
-      >
+      <div v-if="contextMenuVisible" ref="contextMenu" class="context-menu"
+        :style="{ top: contextMenuY + 'px', left: contextMenuX + 'px' }" @click.stop>
         <ul class="context-menu-list">
           <li @click="openReplacementDialog('replace')">Replace module</li>
         </ul>
@@ -149,10 +105,10 @@ import CellMLIcon from './icons/CellMLIcon.vue'
 import { useBuilderStore } from '../stores/builderStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { getHandleId, getHandleStyle, portPosition } from '../utils/ports'
-
+import { notify } from '../utils/notify'
 import '../assets/vueflownode.css'
 
-const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals } =
+const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } =
   useVueFlow()
 const historyStore = useFlowHistoryStore()
 const builderStore = useBuilderStore()
@@ -201,13 +157,13 @@ const domainTypeClass = computed(() => {
     : 'domain-type-default'
 })
 
-const isMissingParameters = computed(() => { 
+const isMissingParameters = computed(() => {
   const source = props.data?.sourceFile
   if (!source) return true // If there's no source file, it's "missing" parameters
-  
+
   // This call establishes a reactive dependency on the store's Map
   const link = builderStore.getParameterFileNameForFile(source)
-  
+
   return !link
 })
 
@@ -329,6 +285,16 @@ function saveEdit() {
     return
   }
 
+  const nameExists = nodes.value.some(
+    (n) => n.id !== props.id && n.data && n.data.name === editingName.value.trim()
+  )
+  if (nameExists) {
+    notify.error({ message: 'A module with this name already exists.' })
+    // keep editor open so user can fix it
+    nextTick(() => inputRef.value?.focus())
+    return
+  }
+
   // Update the node's data in the store
   updateNodeData(props.id, { name: editingName.value })
   isEditing.value = false
@@ -441,7 +407,8 @@ function handleDocumentContextmenu(e) {
   position: absolute;
   top: 0px;
   right: 0px;
-  z-index: 10; /* Ensure it sits above other card content */
+  z-index: 10;
+  /* Ensure it sits above other card content */
 
   /* Optional: Add a white background circle so the icon pops 
      if it overlaps a border or busy background */
@@ -456,7 +423,8 @@ function handleDocumentContextmenu(e) {
 }
 
 .warning-icon {
-  color: var(--el-color-warning); /* Standard Element Plus Orange */
+  color: var(--el-color-warning);
+  /* Standard Element Plus Orange */
   font-size: 18px;
   cursor: help;
 
@@ -468,5 +436,4 @@ function handleDocumentContextmenu(e) {
 .module-button {
   margin: 0;
 }
-
 </style>
