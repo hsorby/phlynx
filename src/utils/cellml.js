@@ -855,30 +855,36 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
  * Extracts unique variable names from a CellML model/component
  */
 export function extractVariablesFromModule(modelString, componentName, includeInitialisedVariables = false) {
-  const variables = new Set()
-  if (modelString) {
-    const parser = new _libcellml.Parser(false)
-    const model = parser.parseModel(modelString)
-    // Iterate all components in the model,
-    // assumes flat model hierarchy.
-    const comp = model.componentByName(componentName, true)
-    for (let v = 0; v < comp.variableCount(); v++) {
-      const variable = comp.variableByIndex(v)
-      const units = variable.units()
-      if ((!includeInitialisedVariables && variable.initialValue() !== '') || (variable.name() === 't' || variable.name() === 'time')) {
-        continue
+  const garbageCollector = new Set() // To track created objects for cleanup
+  try {
+    const variables = new Set()
+    if (modelString) {
+      const parser = new _libcellml.Parser(false)
+      garbageCollector.add(parser)
+      const model = parser.parseModel(modelString)
+      garbageCollector.add(model)
+      // Iterate all components in the model,
+      // assumes flat model hierarchy.
+      const comp = model.componentByName(componentName, true)
+      garbageCollector.add(comp)
+      for (let v = 0; v < comp.variableCount(); v++) {
+        const variable = comp.variableByIndex(v)
+        garbageCollector.add(variable)
+        const units = variable.units()
+        garbageCollector.add(units)
+        if ((!includeInitialisedVariables && variable.initialValue() !== '') || (variable.name() === 't' || variable.name() === 'time')) {
+          continue
+        }
+        variables.add({name: variable.name(), units: units.name()})
       }
-      variables.add({name: variable.name(), units: units.name()})
-
-      units.delete()
-      variable.delete()
     }
-    comp.delete()
-    model.delete()
-    parser.delete()
-  }
 
-  return variables
+    return variables
+  } finally {
+    for (const obj of garbageCollector) {
+      obj.delete()
+    }
+  }
 }
 
 function removeComments(node) {
