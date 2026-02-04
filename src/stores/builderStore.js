@@ -119,11 +119,9 @@ export const useBuilderStore = defineStore('builder', () => {
   }
 
   function isValidNumber(value) {
-  // Trim whitespace and check it's not empty
   const trimmed = String(value).trim();
   if (trimmed === '') return false;
   
-  // Check if it converts to a valid number (not NaN) and is finite
   const num = Number(trimmed);
   return !isNaN(num) && isFinite(num);
 }

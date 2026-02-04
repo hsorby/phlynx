@@ -8,13 +8,13 @@
       <el-table-column prop="name" label="Variable" />
       <el-table-column prop="value" label="Value">
         <template #default="scope">
-          <el-input v-model="scope.row.value" placeholder="Enter value..." :disabled="scope.row.type === 'variable'"/>
+          <el-input v-model="scope.row.value" placeholder="Enter value..." :disabled="scope.row.type === 'variable'" />
         </template>
       </el-table-column>
       <el-table-column prop="units" label="Units" width="120" />
       <el-table-column prop="type" label="Type" width="120">
         <template #default="scope">
-          <el-select v-model="scope.row.type">
+          <el-select v-model="scope.row.type" @change="handleTypeChange(scope.row)">
             <el-option v-for="types in parameterTypeOptions" :key="types.value" :label="types.label"
               :value="types.value" />
           </el-select>
@@ -97,9 +97,7 @@ const variableList = computed(() => {
 
 const parameterRows = ref([])
 
-/**
- * Initialize rows when dialog opens
- */
+// Initialize rows when dialog opens
 watch(
   () => [props.modelValue, variableList.value],
   ([isVisible, variables]) => {
@@ -109,61 +107,51 @@ watch(
     }
 
     parameterRows.value = (variables).map(variable => {
-      // Get type of the variable from builderStore config 
-      // const variableType = builderStore.getParameterTypeForInstanceVariable?
-      const instanceVariableName = variable.name + '_' + props.instanceName // will need to do something else for global 
+      const instanceVariableName = variable.name + '_' + props.instanceName
+      const storedValue = builderStore.getParameterValueForInstanceVariable(instanceVariableName)
+      // TODO: Get type from store
+      const defaultType = 'variable'
+
       return {
         name: variable.name,
         units: variable.units,
-        value: builderStore.getParameterValueForInstanceVariable(instanceVariableName),
-        type: 'variable', // Default type; could be enhanced to load existing type
+        value: defaultType === 'variable' ? '-' : (storedValue || ''),
+        type: defaultType,
+        _previousType: defaultType, // Track previous type
       }
-    }).sort((a, b) => {
-      // Sort by type 
-      return a.type.localeCompare(b.type)
-    })
+    }).sort((a, b) => a.type.localeCompare(b.type))
   },
   { immediate: true }
 )
 
-watch(
-  parameterRows,
-  (rows) => {
-    rows.forEach(row => {
-      if (row.type === 'variable' && row.value) {
-        row.value = '-'
-      } else {
-        const instanceVariableName = row.name + '_' + props.instanceName
-        row.value = builderStore.getParameterValueForInstanceVariable(instanceVariableName)
-      }
-    })
-  },
-  { deep: true }
-)
+// Handle type change
+function handleTypeChange(row) {
+  const instanceVariableName = row.name + '_' + props.instanceName
+
+  if (row.type === 'variable') {
+    row.value = '-'
+  } else {
+    // If switching to 'constant' or 'global_constant'
+    // Fetch existing value from store if it exists, otherwise leave empty for user input
+    const storedValue = builderStore.getParameterValueForInstanceVariable(instanceVariableName)
+    row.value = storedValue || ''
+  }
+}
 
 function closeDialog() {
   emit('update:modelValue', false)
 }
 
 function handleConfirm() {
-  // Format data to match the expected parameter file structure in builderStore
-  // const payload = parameterRows.value
-  //   .filter(row => row.value.trim() !== '')
-  //   .map(row => ({
-  //     variable_name: row.name,
-  //     value: row.value,
-  //     units: row.units
-  //   }))
-
-  // // Note: builderStore.addParameterFile handles the Map storage
-  // // We use the sourceFile as the key to link these parameters to the module
-  // const paramFileName = `${props.sourceFile}.params.json`
-  // builderStore.addParameterFile(paramFileName, payload)
-
-  // // Link this file to the module if not already linked
-  // const linkMap = new Map(builderStore.moduleParameterMap)
-  // linkMap.set(props.sourceFile, paramFileName)
-  // builderStore.applyParameterLinks(linkMap)
+  parameterRows.value.forEach(row => {
+    if (row.type === 'constant') {
+      const instanceVariableName = row.name + '_' + props.instanceName
+      builderStore.setParameterValueForInstanceVariable(instanceVariableName, row.value)
+    } else if (row.type === 'global_constant') {
+      const instanceVariableName = row.name
+      builderStore.setParameterValueForInstanceVariable(instanceVariableName, row.value)
+    }
+  })
 
   closeDialog()
 }
