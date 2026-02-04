@@ -406,7 +406,19 @@ function handleDocumentContextmenu(e) {
 <style lang="scss" scoped>
 @import '../assets/vueflowhandle.css';
 
+.module-node {
+  display: block;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.module-node > .el-card,
 .module-card {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  box-sizing: border-box;
   position: relative;
 }
 
