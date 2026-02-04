@@ -8,7 +8,7 @@
       <el-table-column prop="name" label="Variable" />
       <el-table-column prop="value" label="Value">
         <template #default="scope">
-          <el-input v-model="scope.row.value" placeholder="Enter value..." />
+          <el-input v-model="scope.row.value" placeholder="Enter value..." :disabled="scope.row.type === 'variable'"/>
         </template>
       </el-table-column>
       <el-table-column prop="units" label="Units" width="120" />
@@ -124,6 +124,21 @@ watch(
     })
   },
   { immediate: true }
+)
+
+watch(
+  parameterRows,
+  (rows) => {
+    rows.forEach(row => {
+      if (row.type === 'variable' && row.value) {
+        row.value = '-'
+      } else {
+        const instanceVariableName = row.name + '_' + props.instanceName
+        row.value = builderStore.getParameterValueForInstanceVariable(instanceVariableName)
+      }
+    })
+  },
+  { deep: true }
 )
 
 function closeDialog() {
