@@ -149,6 +149,7 @@ import CellMLIcon from './icons/CellMLIcon.vue'
 import { useBuilderStore } from '../stores/builderStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { getHandleId, getHandleStyle, portPosition } from '../utils/ports'
+import { sanitiseModuleName } from '../utils/nodes'
 
 import '../assets/vueflownode.css'
 
@@ -325,12 +326,19 @@ function StopDrag(event) {
 // This is triggered by pressing Enter or clicking away
 function saveEdit() {
   if (!editingName.value || editingName.value.trim() === '') {
-    isEditing.value = false // Cancel edit if name is empty
+    isEditing.value = false 
+    return
+  }
+
+  const sanitisedName = sanitiseModuleName(editingName.value)
+
+  if (!sanitisedName) {
+    isEditing.value = false 
     return
   }
 
   // Update the node's data in the store
-  updateNodeData(props.id, { name: editingName.value })
+  updateNodeData(props.id, { name: sanitisedName })
   isEditing.value = false
 }
 
