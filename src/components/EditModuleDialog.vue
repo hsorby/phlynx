@@ -54,6 +54,7 @@ import { ElDialog, ElForm, ElFormItem, ElInput, ElButton } from 'element-plus'
 import { Delete, Plus } from '@element-plus/icons-vue'
 import { useGtm } from '../composables/useGtm'
 import { notify } from '../utils/notify'
+import { sanitiseModuleName } from '../utils/nodes'
 
 const props = defineProps({
   // v-model for visibility
@@ -122,9 +123,17 @@ function handleConfirm() {
     return
   }
 
+  const sanitisedName = sanitiseModuleName(editableData.name)
+  if (!sanitisedName) {
+    notify.error({ message: 'Module name is not valid.' })
+    return
+  }
+  editableData.name = sanitisedName
+
   const nameExists = props.existingNames.some(
     (name) => name === editableData.name && name !== props.initialName
   )
+  
   if (nameExists) {
     notify.error({ message: 'A module with this name already exists.' })
     return

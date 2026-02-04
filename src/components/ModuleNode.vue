@@ -105,6 +105,7 @@ import CellMLIcon from './icons/CellMLIcon.vue'
 import { useBuilderStore } from '../stores/builderStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { getHandleId, getHandleStyle, portPosition } from '../utils/ports'
+import { sanitiseModuleName } from '../utils/nodes'
 import { notify } from '../utils/notify'
 import '../assets/vueflownode.css'
 
@@ -281,12 +282,29 @@ function StopDrag(event) {
 // This is triggered by pressing Enter or clicking away
 function saveEdit() {
   if (!editingName.value || editingName.value.trim() === '') {
-    isEditing.value = false // Cancel edit if name is empty
+    isEditing.value = false 
+    return
+  }
+
+  const sanitisedName = sanitiseModuleName(editingName.value)
+
+  if (!sanitisedName) {
+    isEditing.value = false 
     return
   }
 
   const nameExists = nodes.value.some(
-    (n) => n.id !== props.id && n.data && n.data.name === editingName.value.trim()
+    (n) => n.id !== props.id && n.data && n.data.name === sanitisedName
+  )
+  if (nameExists) {
+    notify.error({ message: 'A module with this name already exists.' })
+    // keep editor open so user can fix it
+    nextTick(() => inputRef.value?.focus())
+    return
+  }
+
+  const nameExists = nodes.value.some(
+    (n) => n.id !== props.id && n.data && n.data.name === sanitisedName
   )
   if (nameExists) {
     notify.error({ message: 'A module with this name already exists.' })
@@ -296,7 +314,7 @@ function saveEdit() {
   }
 
   // Update the node's data in the store
-  updateNodeData(props.id, { name: editingName.value })
+  updateNodeData(props.id, { name: sanitisedName })
   isEditing.value = false
 }
 
