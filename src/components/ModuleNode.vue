@@ -180,13 +180,11 @@ const domainTypeClass = computed(() => {
 })
 
 const isMissingParameters = computed(() => {
-  const source = props.data?.sourceFile
-  if (!source) return true // If there's no source file, it's "missing" parameters
-
-  // This call establishes a reactive dependency on the store's Map
-  const link = builderStore.getParameterFileNameForFile(source)
-
-  return !link
+  const name = props.data?.name
+  if (!name) return true // If there's no source file, it's "missing" parameters
+  
+  const checker = builderStore.hasAllParameterValuesAssignedForInstance(name, props.data.sourceFile, props.data.componentName)
+  return !checker
 })
 
 function handleSetDomainType(typeCommand) {

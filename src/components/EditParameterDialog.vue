@@ -82,7 +82,7 @@ const props = defineProps({
   componentName: { type: String, required: true },
 })
 
-const emit = defineEmits(['update:modelValue', 'confirm'])
+const emit = defineEmits(['update:modelValue'])
 
 const searchColumn = ref('name')
 const searchQuery = ref('')
@@ -134,6 +134,10 @@ function resolveValue(name, type, units) {
   // Determine lookup key based on type
   const lookupName = name + (type === 'global_constant' ? '' : '_' + props.instanceName)
 
+  const assignedValue = builderStore.getAssignedParameterValueForInstanceVariable(lookupName)
+  if (assignedValue) {
+    return { value: assignedValue.value, isAmbiguous: false, options: [] }
+  }
   // Get all raw matches from store
   const allMatches = builderStore.getParameterValuesForInstanceVariable(lookupName) || []
 
@@ -213,7 +217,7 @@ function sortByAmbiguity(a, b) {
   if (a.isAmbiguous && !b.isAmbiguous) return -1
   if (!a.isAmbiguous && b.isAmbiguous) return 1
 
-  // If both are same status, sort alphabetically by value
+  // If both are same status, sort alphabetically by name
   const valA = a.name || ''
   const valB = b.name || ''
   return valA.localeCompare(valB)
@@ -231,7 +235,7 @@ function handleConfirm() {
       const storageName = row.name + (isGlobal ? '' : '_' + props.instanceName)
 
       // We pass the units too, ensuring the store saves it correctly for future filtering
-      builderStore.setParameterValueForInstanceVariable(storageName, row.value, row.units, isGlobal)
+      builderStore.assignInstanceVariableParameterValue(storageName, row.value, row.units, isGlobal)
     }
   })
 

@@ -1,6 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
+import { extractVariablesFromModule } from '../utils/cellml'
+import { assign } from 'markdown-it/lib/common/utils.mjs'
+
 function mergeIntoStore(newModules, target) {
   const moduleMap = new Map(target.map((mod) => [mod.filename, mod]))
 
@@ -88,6 +91,15 @@ export const useBuilderStore = defineStore('builder', () => {
     return true
   }
 
+  function assignInstanceVariableParameterValue(instanceVariableName, value, units, isGlobal = false) {
+    instanceParameterAssignments.value.set(instanceVariableName, {
+      variableName: instanceVariableName,
+      value: value,
+      units: units,
+      isGlobal: isGlobal,
+    })
+  }
+
   function applyFileParameterLinks(linkMap, typeMap = null) {
     console.log('Do nothing')
     return
@@ -109,33 +121,12 @@ export const useBuilderStore = defineStore('builder', () => {
     }
   }
 
-  function getParameterValueForInstanceVariable(instanceVariable) {
-    let value = Math.NaN
-    if (availableVariableNameIdMap.value.get(instanceVariable)?.length > 1) {
-      console.warn(
-        `[builderStore] Multiple parameters found for variable ${instanceVariable}. This should not happen.`,
-        availableVariableNameIdMap.value.get(instanceVariable)
-      )
-    }
-    availableVariableNameIdMap.value.get(instanceVariable)?.forEach((paramKey) => {
-      const param = availableParameters.value.get(paramKey)
-      if (param) {
-        const paramValue = param.value
-        if (isValidNumber(paramValue)) {
-          value = Number(paramValue)
-        } else {
-          console.warn(
-            `[builderStore] Invalid number for variable ${instanceVariable} from parameter file:`,
-            paramValue
-          )
-        }
-      }
-    })
-    return value
-  }
-
   function getParameterFileNameForModule(moduleName) {
     return moduleParameterMap.value.get(moduleName) || null
+  }
+
+  function getAssignedParameterValueForInstanceVariable(instanceVariableName) {
+    return instanceParameterAssignments.value.get(instanceVariableName)
   }
 
   function getParameterValuesForInstanceVariable(instanceVariable) {
@@ -167,6 +158,67 @@ export const useBuilderStore = defineStore('builder', () => {
 
   function getParameterFileNameForFile(filename) {
     return fileParameterMap.value.get(filename) || null
+  }
+
+  function assignAllParameterValuesForInstance(instanceName, sourceFile, componentName) {
+    const module = getModulesModule(sourceFile, componentName)
+    if (!module) return false
+
+    const variablesAndUnits = module?.configs[0].variables_and_units ?? []
+    if (variablesAndUnits.length === 0) {
+      return false
+    }
+    const configMap = new Map(variablesAndUnits.map((arr) => [arr[0], arr]))
+
+    const modelString = getModuleContent(sourceFile)
+    const variables = Array.from(extractVariablesFromModule(modelString, componentName))
+
+    for (const variable of variables) {
+      const configEntry = configMap.get(variable.name)
+      // Default to 'variable' if not found in config
+      const initialType = configEntry ? configEntry[3] : 'variable'
+      if (initialType !== 'variable' && initialType !== 'boundary_condition') {
+        const lookupName = variable.name + (initialType === 'global_constant' ? '' : '_' + instanceName)
+        const assignedValue = getParameterValuesForInstanceVariable(lookupName)
+        if (assignedValue.length === 1) {
+          assignInstanceVariableParameterValue(lookupName, assignedValue[0].value, assignedValue[0].units, initialType === 'global_constant')
+        }
+      }
+    }
+
+    return true
+  }
+
+  function hasAllParameterValuesAssignedForInstance(instanceName, sourceFile, componentName) {
+    // Implement the logic to check if parameter values are assigned for the given instance
+    // This is a placeholder implementation and should be replaced with actual logic
+    const module = getModulesModule(sourceFile, componentName)
+    if (!module) return false
+
+    const variablesAndUnits = module?.configs[0].variables_and_units ?? []
+    if (variablesAndUnits.length === 0) {
+      return false
+    }
+    const configMap = new Map(variablesAndUnits.map((arr) => [arr[0], arr]))
+
+    const modelString = getModuleContent(sourceFile)
+    const variables = Array.from(extractVariablesFromModule(modelString, componentName))
+
+    for (const variable of variables) {
+      const configEntry = configMap.get(variable.name)
+      // Default to 'variable' if not found in config
+      const initialType = configEntry ? configEntry[3] : 'variable'
+      if (initialType !== 'variable' && initialType !== 'boundary_condition') {
+        const lookupName = variable.name + (initialType === 'global_constant' ? '' : '_' + instanceName)
+
+        const assignedValue = getAssignedParameterValueForInstanceVariable(lookupName)
+        if (!assignedValue) {
+          return false
+        }
+      }
+    }
+
+    return true
   }
 
   // --- SETTERS ---
@@ -289,19 +341,6 @@ export const useBuilderStore = defineStore('builder', () => {
     addOrUpdateFile(availableUnits, payload)
   }
 
-  function linkParametersToInstantiatedModules(fileName, data, vesselData) {
-    console.log('Do nothing')
-    if (!data || !Array.isArray(data)) return false
-    if (fileName === 'SN_PLACEHOLDER_') {
-      console.warn('Cannot link parameters to instantiated modules: placeholder filename')
-      return false
-    }
-    console.log(vesselData)
-
-    parameterFiles.value.set(fileName, data)
-    return true
-  }
-
   function loadState(state) {
     mergeIntoStore(state.availableModules, availableModules.value)
     mergeIntoStore(state.availableUnits, availableUnits.value)
@@ -330,15 +369,15 @@ export const useBuilderStore = defineStore('builder', () => {
   }
 
   function getModuleContent(filename) {
-    const index = this.availableModules.findIndex((f) => f.filename === filename)
+    const index = availableModules.value.findIndex((f) => f.filename === filename)
     if (index !== -1) {
-      return this.availableModules[index].model
+      return availableModules.value[index].model
     }
     return ''
   }
 
   function getModulesModule(filename, moduleName) {
-    const file = this.availableModules.find((f) => f.filename === filename)
+    const file = availableModules.value.find((f) => f.filename === filename)
     if (!file) return null
 
     const module = file.modules.find((m) => m.name === moduleName)
@@ -365,7 +404,7 @@ export const useBuilderStore = defineStore('builder', () => {
    * @returns {boolean} - True if the file is loaded, false otherwise.
    */
   function hasModuleFile(filename) {
-    return this.availableModules.some((f) => f.filename === filename)
+    return availableModules.value.some((f) => f.filename === filename)
   }
 
   function getConfigForVessel(vesselType, bcType) {
@@ -433,7 +472,8 @@ export const useBuilderStore = defineStore('builder', () => {
     addUnitsFile,
     applyParameterLinks, // Re-enabled
     applyFileParameterLinks, // Updated with syncing
-    linkParametersToInstantiatedModules,
+    assignAllParameterValuesForInstance,
+    assignInstanceVariableParameterValue,
     loadState,
     removeModuleFile,
     setLastExportName,
@@ -441,6 +481,7 @@ export const useBuilderStore = defineStore('builder', () => {
     setParameterValueForInstanceVariable,
 
     // Getters
+    getAssignedParameterValueForInstanceVariable,
     getAssignmentTypeForModule,
     getConfig,
     getConfigForVessel,
@@ -452,6 +493,7 @@ export const useBuilderStore = defineStore('builder', () => {
     getParametersForModule,
     getParameterValuesForInstanceVariable,
     getSaveState,
+    hasAllParameterValuesAssignedForInstance,
     hasModuleFile,
 
     // Debug

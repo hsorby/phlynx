@@ -222,7 +222,6 @@
     :node-id="currentEditingNode?.nodeId || ''"
     :source-file="currentEditingNode?.sourceFile || ''"
     :component-name="currentEditingNode?.componentName || ''"
-    @confirm="onEditParameterConfirm"
   />
 
   <SaveDialog v-model="saveDialogVisible" @confirm="onSaveConfirm" :default-name="builderStore.lastSaveName" />
@@ -419,7 +418,7 @@ const exportTooltip = useAutoClosingTooltip(1500)
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 
-const somethingAvailable = computed(() => nodes.value.length > 0 && builderStore.parameterFiles.size > 0)
+const somethingAvailable = computed(() => nodes.value.length > 0)
 
 const importOptions = computed(() => [
   {
@@ -1058,30 +1057,6 @@ async function onEditConfirm(updatedData) {
   const { updateNodeData } = useVueFlow(targetInstance)
 
   updateNodeData(nodeId, updatedData)
-}
-
-function onEditParameterConfirm(payload) {
-  const { moduleName, parameters } = payload;
-  
-  // 1. Identify which parameter file is linked to this module
-  const fileName = builderStore.getParameterFileNameForModule(moduleName);
-  
-  if (fileName) {
-    // 2. Update the central store with the new values
-    // This allows the changes to be tracked globally and exported later
-    builderStore.parameterFiles.set(fileName, parameters);
-    
-    notify.success({ 
-      message: `Parameters for ${moduleName} updated successfully.` 
-    });
-  } else {
-    // Fallback if no file is linked: You might want to create a virtual association
-    notify.warning({ 
-      message: `No parameter file associated with ${moduleName}.` 
-    });
-  }
-
-  isEditParameterDialogOpen.value = false;
 }
 
 const nodeRefs = ref({})
