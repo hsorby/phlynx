@@ -22,6 +22,16 @@
             Save Workspace
           </el-button>
 
+          <el-button
+            type="danger"
+            plain
+            @click="handleClearWorkspace"
+            style="margin-left: 10px"
+            :disabled="!somethingAvailable"
+          >
+            Clear Workspace
+          </el-button>
+
           <el-divider direction="vertical" style="margin: 0 15px" />
 
           <el-button type="info" @click="handleUndo" :disabled="!historyStore.canUndo"> Undo </el-button>
@@ -297,6 +307,7 @@ import { generateExportZip } from '../services/caExport'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
+import { useClearWorkspace } from '../utils/workspace'
 import { generateFlattenedModel, initLibCellML, processModuleData, processUnitsData } from '../utils/cellml'
 import { edgeLineOptions, FLOW_IDS, IMPORT_KEYS, EXPORT_KEYS, JSON_FILE_TYPES } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueModuleName } from '../utils/nodes'
@@ -494,6 +505,11 @@ function selectAllNodes() {
   nodes.value.forEach((node) => {
     node.selected = true
   })
+}
+
+function handleClearWorkspace() {
+  const { clearWorkspace } = useClearWorkspace()
+  clearWorkspace()
 }
 
 function updateHelperLines(changes, nodes) {
