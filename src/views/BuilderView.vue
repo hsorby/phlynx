@@ -1241,6 +1241,7 @@ function onSaveConfirm(fileName) {
  */
 function handleLoadWorkspace(file) {
   const reader = new FileReader()
+  const { clearWorkspace } = useClearWorkspace()
 
   reader.onload = async (e) => {
     try {
@@ -1252,13 +1253,7 @@ function handleLoadWorkspace(file) {
       }
 
       // Clear the current Vue Flow state.
-      historyStore.clear()
-      nodes.value = []
-      edges.value = []
-      setViewport({ x: 0, y: 0, zoom: 1 }) // Reset viewport.
-      // Clear the current parameter data.
-
-      await nextTick()
+      clearWorkspace()
 
       // Restore Vue Flow state.
       // We use `setViewport` to apply zoom/pan.

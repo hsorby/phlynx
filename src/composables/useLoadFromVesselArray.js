@@ -11,6 +11,7 @@ import { runPortGranularLayout } from '../services/layouts/dagre'
 import { runRescaleLayout } from '../services/layouts/rescale'
 import { notify} from '../utils/notify'
 import { useGtm } from './useGtm'
+import { useClearWorkspace } from '../utils/workspace' 
 
 export function useLoadFromVesselArray() {
   const {
@@ -26,7 +27,8 @@ export function useLoadFromVesselArray() {
   const store = useBuilderStore()
   const historyStore = useFlowHistoryStore()
   const { trackEvent } = useGtm()
-
+  const { clearWorkspace } = useClearWorkspace()
+  
   const layoutPending = ref(false)
   let pendingEdges = []
   let pendingNodeDataMap = new Map()
@@ -36,12 +38,7 @@ export function useLoadFromVesselArray() {
 
   const loadFromVesselArray = async (configData, progressCallback = null) => {
     try {
-      historyStore.clear()
-      nodes.value = []
-      edges.value = []
-      setViewport({ x: 0, y: 0, zoom: 1 })
-
-      await nextTick()
+      clearWorkspace()
 
       pendingProgressCallback = progressCallback
 
