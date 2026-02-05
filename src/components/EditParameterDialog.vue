@@ -1,78 +1,96 @@
 <template>
-  <el-dialog :model-value="modelValue" title="Edit Parameters" width="850px" @closed="closeDialog" teleported>
-    <div v-if="!variableList" class="error-state">
-      <el-alert title="CellML component not found in available modules." type="error" :closable="false" show-icon />
-    </div>
-    <template v-else>
-      <el-input
-        v-model="searchQuery"
-        :placeholder="`Search by variable ${searchColumn} ...`"
-        clearable
-        style="margin-bottom: 12px"
-        ><template #append>
-          <el-select v-model="searchColumn" style="width: 100px">
-            <el-option label="Name" value="name" />
-            <el-option label="Units" value="units" />
-            <el-option label="Type" value="type" /> </el-select></template
-      ></el-input>
-      <el-table :data="filteredParameterRows" style="width: 100%" max-height="400">
-        <el-table-column prop="name" label="Variable" width="180" sortable :sort-method="sortByAmbiguity" />
+  <el-dialog
+    :model-value="modelValue"
+    title="Edit Parameters"
+    width="850px"
+    @closed="closeDialog"
+    teleported
+    :close-on-click-modal="!isLoading"
+    :close-on-press-escape="!isLoading"
+    :show-close="!isLoading"
+  >
+    <div
+      v-loading="isLoading"
+      :element-loading-text="loadingText"
+      :element-loading-svg="phlynxspinner"
+      element-loading-svg-view-box="0, 0, 100, 100"
+      element-loading-background="var(--el-mask-color-extra-light)"
+    >
+      <template v-if="hasVariables">
+        <el-input
+          v-model="searchQuery"
+          :placeholder="`Search by variable ${searchColumn} ...`"
+          clearable
+          style="margin-bottom: 12px"
+          ><template #append>
+            <el-select v-model="searchColumn" style="width: 100px">
+              <el-option label="Name" value="name" />
+              <el-option label="Units" value="units" />
+              <el-option label="Type" value="type" /> </el-select></template
+        ></el-input>
+        <el-table :data="filteredParameterRows" style="width: 100%" max-height="400">
+          <el-table-column prop="name" label="Variable" width="180" sortable :sort-method="sortByAmbiguity" />
 
-        <el-table-column label="Value" min-width="250" sortable>
-          <template #default="scope">
-            <el-input v-if="scope.row.type === 'variable'" v-model="scope.row.value" disabled placeholder="-" />
+          <el-table-column label="Value" min-width="250" sortable>
+            <template #default="scope">
+              <el-input v-if="scope.row.type === 'variable'" v-model="scope.row.value" disabled placeholder="-" />
 
-            <div v-else-if="scope.row.isAmbiguous" class="ambiguous-container">
-              <el-select
-                v-model="scope.row.value"
-                placeholder="Select value..."
-                class="ambiguous-select"
-                filterable
-                allow-create
-                default-first-option
-                @change="handleAmbiguitySelection(scope.row)"
-              >
-                <el-option v-for="opt in scope.row.valueOptions" :key="opt" :label="opt" :value="opt" />
+              <div v-else-if="scope.row.isAmbiguous" class="ambiguous-container">
+                <el-select
+                  v-model="scope.row.value"
+                  placeholder="Select value..."
+                  class="ambiguous-select"
+                  filterable
+                  allow-create
+                  default-first-option
+                  @change="handleAmbiguitySelection(scope.row)"
+                >
+                  <el-option v-for="opt in scope.row.valueOptions" :key="opt" :label="opt" :value="opt" />
+                </el-select>
+                <el-tooltip content="Multiple values found for this variable name and unit. Please select one.">
+                  <el-icon class="warning-icon"><Warning /></el-icon>
+                </el-tooltip>
+              </div>
+
+              <el-input v-else v-model="scope.row.value" placeholder="Enter value..." />
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="units" label="Units" width="150" sortable />
+
+          <el-table-column prop="type" label="Type" width="200" sortable>
+            <template #default="scope">
+              <el-select v-model="scope.row.type" @change="handleTypeChange(scope.row)">
+                <el-option
+                  v-for="types in parameterTypeOptions"
+                  :key="types.value"
+                  :label="types.label"
+                  :value="types.value"
+                />
               </el-select>
-              <el-tooltip content="Multiple values found for this variable name and unit. Please select one.">
-                <el-icon class="warning-icon"><Warning /></el-icon>
-              </el-tooltip>
-            </div>
-
-            <el-input v-else v-model="scope.row.value" placeholder="Enter value..." />
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="units" label="Units" width="150" sortable />
-
-        <el-table-column prop="type" label="Type" width="200" sortable>
-          <template #default="scope">
-            <el-select v-model="scope.row.type" @change="handleTypeChange(scope.row)">
-              <el-option
-                v-for="types in parameterTypeOptions"
-                :key="types.value"
-                :label="types.label"
-                :value="types.value"
-              />
-            </el-select>
-          </template>
-        </el-table-column>
-      </el-table>
-    </template>
+            </template>
+          </el-table-column>
+        </el-table>
+      </template>
+      <div v-else class="error-state">
+        <el-alert title="CellML component not found in available modules." type="error" :closable="false" show-icon />
+      </div>
+    </div>
     <template #footer>
       <span class="dialog-footer">
         <el-button @click="closeDialog">Cancel</el-button>
-        <el-button type="primary" @click="handleConfirm" :disabled="!variableList"> Save Parameters </el-button>
+        <el-button type="primary" @click="handleConfirm" :disabled="!hasVariables"> Save Parameters </el-button>
       </span>
     </template>
   </el-dialog>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, h } from 'vue'
 import { Warning } from '@element-plus/icons-vue'
 import { useBuilderStore } from '../stores/builderStore'
 import { extractVariablesFromModule } from '../utils/cellml'
+import phlynxspinner from '/src/assets/phlynxspinner.svg?raw'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -88,6 +106,9 @@ const searchColumn = ref('name')
 const searchQuery = ref('')
 const builderStore = useBuilderStore()
 const parameterRows = ref([])
+const isLoading = ref(false)
+const loadingText = ref('Loading parameters...')
+const hasVariables = ref(false)
 
 const parameterTypeOptions = [
   { value: 'constant', label: 'constant' },
@@ -95,14 +116,6 @@ const parameterTypeOptions = [
   { value: 'variable', label: 'variable' },
   { value: 'boundary_condition', label: 'boundary_condition' },
 ]
-
-/**
- * Locate the module definition using the builderStore
- */
-const variableList = computed(() => {
-  const modelString = builderStore.getModuleContent(props.sourceFile)
-  return Array.from(extractVariablesFromModule(modelString, props.componentName))
-})
 
 const filteredParameterRows = computed(() => {
   if (!searchQuery.value.trim()) {
@@ -120,10 +133,6 @@ const filteredParameterRows = computed(() => {
     return targetValue.includes(query)
   })
 })
-
-function handleAmbiguitySelection(row) {
-  row.isAmbiguous = false
-}
 
 // Helper to look up values and detect ambiguity
 function resolveValue(name, type, units) {
@@ -165,43 +174,66 @@ function resolveValue(name, type, units) {
   return { value: '', isAmbiguous: false, options: [] }
 }
 
+function loadData() {
+  const modelString = builderStore.getModuleContent(props.sourceFile)
+
+  // This is the heavy line:
+  const variables = Array.from(extractVariablesFromModule(modelString, props.componentName))
+
+  if (!variables || variables.length === 0) {
+    hasVariables.value = false
+    return
+  }
+  const module = builderStore.getModulesModule(props.sourceFile, props.componentName)
+
+  // Create a map for fast config lookup
+  // Structure of configs: [name, units, accessability, type]
+  const variablesAndUnits = module.configs[0].variables_and_units
+  const configMap = new Map(variablesAndUnits.map((arr) => [arr[0], arr]))
+
+  console.log('Extracted variables for parameter editing:', variables)
+  parameterRows.value = variables
+    .map((variable) => {
+      const configData = configMap.get(variable.name)
+      // Default to 'variable' if not found in config
+      const initialType = configData ? configData[3] : 'variable'
+
+      const result = resolveValue(variable.name, initialType, variable.units)
+
+      return {
+        name: variable.name,
+        units: variable.units,
+        type: initialType,
+        value: result.value,
+        isAmbiguous: result.isAmbiguous,
+        valueOptions: result.options,
+      }
+    })
+    .sort((a, b) => a.type.localeCompare(b.type))
+}
 // Initialize rows when dialog opens
 watch(
-  () => [props.modelValue, variableList.value],
-  ([isVisible, variables]) => {
-    if (!isVisible) {
-      parameterRows.value = []
-      return
+  () => props.modelValue,
+  async (isOpen) => {
+    parameterRows.value = []
+    if (isOpen) {
+      isLoading.value = true
+      hasVariables.value = true
+
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      try {
+        loadData()
+      } finally {
+        isLoading.value = false
+      }
     }
-
-    const module = builderStore.getModulesModule(props.sourceFile, props.componentName)
-
-    // Create a map for fast config lookup
-    // Structure of configs: [name, units, accessability, type]
-    const variablesAndUnits = module.configs[0].variables_and_units
-    const configMap = new Map(variablesAndUnits.map((arr) => [arr[0], arr]))
-
-    parameterRows.value = variables
-      .map((variable) => {
-        const configData = configMap.get(variable.name)
-        // Default to 'variable' if not found in config
-        const initialType = configData ? configData[3] : 'variable'
-
-        const result = resolveValue(variable.name, initialType, variable.units)
-
-        return {
-          name: variable.name,
-          units: variable.units,
-          type: initialType,
-          value: result.value,
-          isAmbiguous: result.isAmbiguous,
-          valueOptions: result.options,
-        }
-      })
-      .sort((a, b) => a.type.localeCompare(b.type))
-  },
-  { immediate: true }
+  }
 )
+
+function handleAmbiguitySelection(row) {
+  row.isAmbiguous = false
+}
 
 // Handle type change re-triggers lookup
 function handleTypeChange(row) {
