@@ -36,10 +36,22 @@
       <!-- non-editable label showing CellML component and source file (no white box) -->
       <div v-if="data.label" class="module-label">{{ data.label }}</div>
       <div class="button-group">
-        <el-dropdown trigger="click" @command="handleSetDomainType">
-          <el-button size="small" circle class="module-button">
-            <el-icon><Key /></el-icon>
-          </el-button>
+        <el-dropdown trigger="click" @command="handleSetDomainType" @visible-change="(val) => isDropdownOpen = val">
+          <el-tooltip
+            :enterable="true"
+            class="box-item"
+            effect="dark"
+            content="Set key (colour)"
+            placement="left"
+            :auto-close="1000"
+            :show-after="300"
+          >
+            <span>
+              <el-button size="small" circle class="module-button">
+                <el-icon><Key /></el-icon>
+              </el-button>
+            </span>
+          </el-tooltip>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="membrane">Membrane</el-dropdown-item>
@@ -56,9 +68,16 @@
         </el-dropdown>
 
         <el-dropdown trigger="click" @command="addPort({ side: $event })">
-          <el-button size="small" circle class="module-button">
-            <el-icon><Place /></el-icon>
-          </el-button>
+          <el-tooltip
+            class="box-item"
+            effect="dark"
+            content="Add port node"
+            placement="bottom"
+          >
+            <el-button size="small" circle class="module-button">
+              <el-icon><Place /></el-icon>
+            </el-button>
+          </el-tooltip>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="left">Left</el-dropdown-item>
@@ -68,24 +87,36 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-
-        <el-button
-          size="small"
-          circle
-          @click="openEditDialog"
-          class="module-button"
+        <el-tooltip
+            class="box-item"
+            effect="dark"
+            content="Edit port labels"
+            placement="bottom"
         >
-          <el-icon><Edit /></el-icon>
-        </el-button>
-
-        <el-button
-          size="small"
-          circle
-          @click="openCellMLEditDialog"
-          class="module-button"
+          <el-button
+            size="small"
+            circle
+            @click="openEditDialog"
+            class="module-button"
+          >
+            <el-icon><Edit /></el-icon>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip
+            class="box-item"
+            effect="dark"
+            content="Edit CellML Text"
+            placement="bottom"
         >
-          <el-icon><CellMLIcon /></el-icon>
-        </el-button>
+          <el-button
+            size="small"
+            circle
+            @click="openCellMLEditDialog"
+            class="module-button"
+          >
+            <el-icon><CellMLIcon /></el-icon>
+          </el-button>
+        </el-tooltip>
       </div>
     </el-card>
 
