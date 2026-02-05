@@ -53,8 +53,19 @@ export const useBuilderStore = defineStore('builder', () => {
   }
 
   // --- ACTIONS ---
+  function normalizeValue(val) {
+    if (!val || val === '-') return val // Ignore placeholders
+
+    const num = parseFloat(val)
+
+    // If it's not a number, return original string (e.g. text values)
+    if (isNaN(num)) return val
+
+    return String(num)
+  }
+
   function createParameterKey(parameter) {
-    return `${parameter.variable_name.trim()}||${parameter.units.trim()}||${parameter.value.trim()}||${parameter.data_reference.trim()}`
+    return `${parameter.variable_name.trim()}||${parameter.units.trim()}||${normalizeValue(parameter.value.trim())}||${parameter.data_reference.trim()}`
   }
 
   function addParameterFile(filename, data) {
@@ -77,7 +88,7 @@ export const useBuilderStore = defineStore('builder', () => {
         data_reference: param.data_reference.trim(),
         variable_name: trimmedVariableName,
         units: param.units.trim(),
-        value: param.value.trim(),
+        value: normalizeValue(param.value.trim()),
         source: [filename],
         count: 1,
         id: 'id_' + availableParameters.value.size,
@@ -181,7 +192,12 @@ export const useBuilderStore = defineStore('builder', () => {
         const lookupName = variable.name + (initialType === 'global_constant' ? '' : '_' + instanceName)
         const assignedValue = getParameterValuesForInstanceVariable(lookupName)
         if (assignedValue.length === 1) {
-          assignInstanceVariableParameterValue(lookupName, assignedValue[0].value, assignedValue[0].units, initialType === 'global_constant')
+          assignInstanceVariableParameterValue(
+            lookupName,
+            assignedValue[0].value,
+            assignedValue[0].units,
+            initialType === 'global_constant'
+          )
         }
       }
     }
