@@ -457,9 +457,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@hsorby/changelog@npm:^3.0.1":
-  version: 3.0.1
-  resolution: "@hsorby/changelog@npm:3.0.1"
+"@hsorby/changelog@npm:^3.0.2":
+  version: 3.0.2
+  resolution: "@hsorby/changelog@npm:3.0.2"
   dependencies:
     chalk: "npm:^5.6.2"
     cli-highlight: "npm:^2.1.11"
@@ -471,7 +471,7 @@ __metadata:
     yargs: "npm:^18.0.0"
   bin:
     gen-changelog: bin/cli.js
-  checksum: 10c0/f999b82bf0441a661c0a1a9071e9bbcecacfae7951429d07e6516f10b1db2fbce4476f79c72b30ee2bf56fc92353903f4ef9a191c84a6d7aeeab5389c78e6b9b
+  checksum: 10c0/522b96a86c2fc76ea694561b711d3039de9c5fc09b0899296e3c15a9dba3048bf34878262ceb4c1fcec57c4782cf40cea0133151f8221eeb3eb13e2678f4eea6
   languageName: node
   linkType: hard
 
@@ -4556,7 +4556,7 @@ __metadata:
   resolution: "phlynx@workspace:."
   dependencies:
     "@dagrejs/dagre": "npm:^1.1.8"
-    "@hsorby/changelog": "npm:^3.0.1"
+    "@hsorby/changelog": "npm:^3.0.2"
     "@vitejs/plugin-vue": "npm:^6.0.1"
     "@vue-flow/background": "npm:^1.3.2"
     "@vue-flow/controls": "npm:^1.1.3"

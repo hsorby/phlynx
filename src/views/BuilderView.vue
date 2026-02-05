@@ -490,6 +490,12 @@ const createSelectCommand = (changes, findFn) => {
   }
 }
 
+function selectAllNodes() {
+  nodes.value.forEach((node) => {
+    node.selected = true
+  })
+}
+
 function updateHelperLines(changes, nodes) {
   helperLineHorizontal.value = undefined
   helperLineVertical.value = undefined
@@ -1423,6 +1429,11 @@ const handleKeyDown = (event) => {
     event.preventDefault() // Stop browser bookmark dialog
     copySelection()
     pasteSelection()
+  }
+
+  if (isCtrl && event.key.toLowerCase() === 'a') {
+    event.preventDefault()
+    selectAllNodes()
   }
 
   if (isCtrl && !isShift && event.key === 'z' && historyStore.canUndo) {

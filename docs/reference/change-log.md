@@ -1,34 +1,23 @@
 # Changelog
 
 
-## Unofficial Release
-###### Includes changes up to 2026-01-31
+## v0.2.2
+###### Released on 2026-02-02
 
 #### Fixed Bugs
+* Ensure circulatory autogen import checks cellml module source file by [@jmdowrick](https://github.com/jmdowrick) in [#167](https://github.com/physiomelinks/phlynx/pull/167)
 * Upgrade cellml-text-editor. by [@hsorby](https://github.com/hsorby) in [#164](https://github.com/physiomelinks/phlynx/pull/164)
+* Fix header trimming in import vessel array by [@jmdowrick](https://github.com/jmdowrick) in [#161](https://github.com/physiomelinks/phlynx/pull/161)
 
 
-#### Contributors
-
-<kbd>
-  <a href="https://github.com/hsorby">
-    <img src="https://avatars.githubusercontent.com/u/778048?u=31d6ee5b17c95630c61a61e7cfe0c008b138b769&v=4&s=100" width="50" height="50"><br>
-    <sub>@hsorby</sub>
-  </a>
-</kbd>
+#### Documentation Updates
+* Add script to combine version specific changelogs. by [@hsorby](https://github.com/hsorby) in [#184](https://github.com/physiomelinks/phlynx/pull/184)
 
 
----
-
-## v0.10.0
-###### Released on 2025-10-30
-
-#### Not Specified
-* Increase workspace size and zoom out limit by [@jmdowrick](https://github.com/jmdowrick) in [#20](https://github.com/physiomelinks/phlynx/pull/20)
-* Consider all connected nodes to determine if a port is a multi port. by [@hsorby](https://github.com/hsorby) in [#19](https://github.com/physiomelinks/phlynx/pull/19)
-* Improve global constant, and constant detection. by [@hsorby](https://github.com/hsorby) in [#16](https://github.com/physiomelinks/phlynx/pull/16)
-* Add extra clarification around what it means to be a constant variable. by [@hsorby](https://github.com/hsorby) in [#14](https://github.com/physiomelinks/phlynx/pull/14)
-* Fix export of variables in general ports. by [@hsorby](https://github.com/hsorby) in [#13](https://github.com/physiomelinks/phlynx/pull/13)
+#### Maintenance Work
+* Add visual indicator to version number by [@hsorby](https://github.com/hsorby) in [#178](https://github.com/physiomelinks/phlynx/pull/178)
+* Add changelogs to the website by [@hsorby](https://github.com/hsorby) in [#174](https://github.com/physiomelinks/phlynx/pull/174)
+* Add build details to footer of About page. by [@hsorby](https://github.com/hsorby) in [#172](https://github.com/physiomelinks/phlynx/pull/172)
 
 
 #### Contributors
@@ -44,6 +33,7 @@
     <sub>@hsorby</sub>
   </a>
 </kbd>
+
 
 
 ---

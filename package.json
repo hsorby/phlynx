@@ -18,7 +18,7 @@
     }
   ],
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "main": "src/electron/main.js",
   "scripts": {
@@ -68,7 +68,7 @@
     "vue3-libcellml.js": "^0.5.1"
   },
   "devDependencies": {
-    "@hsorby/changelog": "^3.0.1",
+    "@hsorby/changelog": "^3.0.2",
     "@vitejs/plugin-vue": "^6.0.1",
     "electron": "^39.0.0",
     "electron-builder": "^26.0.12",
