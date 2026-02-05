@@ -36,48 +36,46 @@
       <!-- non-editable label showing CellML component and source file (no white box) -->
       <div v-if="data.label" class="module-label">{{ data.label }}</div>
       <div class="button-group">
-        <el-dropdown trigger="click" @command="handleSetDomainType" @visible-change="(val) => isDropdownOpen = val">
-          <el-tooltip
-            :enterable="true"
-            class="box-item"
-            effect="dark"
-            content="Set key (colour)"
-            placement="left"
-            :auto-close="1000"
-            :show-after="300"
-          >
-            <span>
-              <el-button size="small" circle class="module-button">
-                <el-icon><Key /></el-icon>
-              </el-button>
-            </span>
-          </el-tooltip>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="membrane">Membrane</el-dropdown-item>
-              <el-dropdown-item command="process">Process</el-dropdown-item>
-              <el-dropdown-item command="compartment"
-                >Compartment</el-dropdown-item
-              >
-              <el-dropdown-item command="protein">Protein</el-dropdown-item>
-              <el-dropdown-item command="undefined" divided
-                >Reset to Default</el-dropdown-item
-              >
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-
-        <el-dropdown trigger="click" @command="addPort({ side: $event })">
-          <el-tooltip
+        <el-tooltip
+          effect="dark"
+          content="Set key (colour)"
+          placement="bottom"
+          :show-after="300"
+          :auto-close="1200"
+        >
+          <el-dropdown trigger="click" @command="handleSetDomainType" @visible-change="(val) => isDropdownOpen = val">
+            <el-button size="small" circle class="module-button">
+              <el-icon><Key /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="membrane">Membrane</el-dropdown-item>
+                <el-dropdown-item command="process">Process</el-dropdown-item>
+                <el-dropdown-item command="compartment"
+                  >Compartment</el-dropdown-item
+                >
+                <el-dropdown-item command="protein">Protein</el-dropdown-item>
+                <el-dropdown-item command="undefined" divided
+                  >Reset to Default</el-dropdown-item
+                >
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </el-tooltip>
+        <el-tooltip
             class="box-item"
             effect="dark"
             content="Add port node"
             placement="bottom"
+            :show-after="300"
+            :auto-close="1200"
           >
+        <el-dropdown trigger="click" @command="addPort({ side: $event })">
+          
             <el-button size="small" circle class="module-button">
               <el-icon><Place /></el-icon>
             </el-button>
-          </el-tooltip>
+          
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="left">Left</el-dropdown-item>
@@ -87,11 +85,14 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
+        </el-tooltip>
         <el-tooltip
             class="box-item"
             effect="dark"
             content="Edit port labels"
             placement="bottom"
+            :show-after="300"
+            :auto-close="1200"
         >
           <el-button
             size="small"
@@ -107,12 +108,16 @@
             effect="dark"
             content="Edit CellML Text"
             placement="bottom"
+            :show-after="300"
+            :auto-close="1200"
         >
           <el-button
             size="small"
             circle
             @click="openCellMLEditDialog"
             class="module-button"
+            :show-after="300"
+            :auto-close="1200"
           >
             <el-icon><CellMLIcon /></el-icon>
           </el-button>
@@ -126,7 +131,7 @@
         effect="dark"
         :content="port.name"
         placement="bottom"
-        :show-after="1000"
+        :show-after="600"
       >
         <Handle
           :id="getHandleId(port)"
