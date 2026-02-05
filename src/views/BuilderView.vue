@@ -34,15 +34,6 @@
 
           <el-button type="primary" @click="onOpenMacroBuilderDialog"> Macro Build </el-button>
 
-          <el-button
-            type="primary"
-            style="margin-left: 10px"
-            @click="moduleParameterMatchDialogVisible = true"
-            :disabled="builderStore.parameterFiles.length === 0"
-          >
-            Match Parameters
-          </el-button>
-
           <el-divider direction="vertical" style="margin: 0 15px" />
 
           <el-dropdown
@@ -249,8 +240,6 @@
     @edit-node="onOpenEditDialog"
   />
 
-  <ModuleParameterMatchDialog v-model="moduleParameterMatchDialogVisible" :activeFiles="activeWorkspaceFiles" />
-
   <ImportDialog
     ref="importDialogRef"
     v-model="importDialogVisible"
@@ -299,7 +288,6 @@ import ImportDialog from '../components/ImportDialog.vue'
 import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
 import SaveDialog from '../components/SaveDialog.vue'
 import MacroBuilderDialog from '../components/MacroBuilderDialog.vue'
-import ModuleParameterMatchDialog from '../components/ModuleParameterMatchDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
 import { useScreenshot } from '../services/useScreenshot'
 import { generateExportZip } from '../services/caExport'
@@ -393,7 +381,6 @@ const importDialogVisible = ref(false)
 const exportDialogVisible = ref(false)
 const replacementDialogVisible = ref(false)
 const macroBuilderDialogVisible = ref(false)
-const moduleParameterMatchDialogVisible = ref(false)
 const currentEditingNode = ref({
   nodeId: '',
   instanceId: '',
@@ -755,16 +742,6 @@ const onEdgeChange = (changes) => {
 }
 
 const screenshotDisabled = computed(() => nodes.value.length === 0 && vueFlowRef.value !== null)
-
-const activeWorkspaceFiles = computed(() => {
-  const fileSet = new Set()
-  nodes.value.forEach((node) => {
-    if (node.data?.sourceFile) {
-      fileSet.add(node.data.sourceFile)
-    }
-  })
-  return Array.from(fileSet)
-})
 
 const loadCellMLModuleData = (content, filename, broadcastNotifications = true) => {
   return new Promise((resolve) => {

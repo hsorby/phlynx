@@ -32,12 +32,8 @@ export const useBuilderStore = defineStore('builder', () => {
   const availableParameters = ref(new Map())
   const availableVariableNameIdMap = ref(new Map())
 
-  const parameterValues = ref(new Map())
-  const parameterFiles = ref(new Map())
   const moduleParameterMap = ref(new Map())
   const moduleAssignmentTypeMap = ref(new Map())
-  const fileParameterMap = ref(new Map())
-  const fileAssignmentTypeMap = ref(new Map())
 
   // --- DEBUG ---
 
@@ -111,31 +107,6 @@ export const useBuilderStore = defineStore('builder', () => {
     })
   }
 
-  function applyFileParameterLinks(linkMap, typeMap = null) {
-    console.log('Do nothing')
-    return
-    fileParameterMap.value = linkMap
-    moduleParameterMap.value = linkMap
-
-    if (typeMap) {
-      fileAssignmentTypeMap.value = typeMap
-      moduleAssignmentTypeMap.value = typeMap
-    }
-  }
-
-  function applyParameterLinks(linkMap, typeMap = null) {
-    moduleParameterMap.value = linkMap
-    fileParameterMap.value = linkMap
-    if (typeMap) {
-      moduleAssignmentTypeMap.value = typeMap
-      fileAssignmentTypeMap.value = typeMap
-    }
-  }
-
-  function getParameterFileNameForModule(moduleName) {
-    return moduleParameterMap.value.get(moduleName) || null
-  }
-
   function getAssignedParameterValueForInstanceVariable(instanceVariableName) {
     return instanceParameterAssignments.value.get(instanceVariableName)
   }
@@ -151,24 +122,8 @@ export const useBuilderStore = defineStore('builder', () => {
     return results
   }
 
-  function getParametersForModule(moduleName) {
-    const paramFileName = moduleParameterMap.value.get(moduleName)
-    if (!paramFileName) return []
-    return parameterFiles.value.get(paramFileName) || []
-  }
-
   function getAssignmentTypeForModule(moduleName) {
     return moduleAssignmentTypeMap.value.get(moduleName) || null
-  }
-
-  function getParametersForFile(filename) {
-    const paramFileName = fileParameterMap.value.get(filename)
-    if (!paramFileName) return []
-    return parameterFiles.value.get(paramFileName) || []
-  }
-
-  function getParameterFileNameForFile(filename) {
-    return fileParameterMap.value.get(filename) || null
   }
 
   function assignAllParameterValuesForInstance(instanceName, sourceFile, componentName) {
@@ -245,22 +200,6 @@ export const useBuilderStore = defineStore('builder', () => {
 
   function setLastExportName(name) {
     lastExportName.value = name
-  }
-
-  function setParameterValueForInstanceVariable(instanceVariableName, value) {
-    if (isValidNumber(value)) {
-      parameterValues.value.set(instanceVariableName, Number(value))
-    } else {
-      console.error(`[builderStore] Invalid number value for ${instanceVariableName}:`, value)
-    }
-  }
-
-  function isValidNumber(value) {
-    const trimmed = String(value).trim()
-    if (trimmed === '') return false
-
-    const num = Number(trimmed)
-    return !isNaN(num) && isFinite(num)
   }
 
   function addOrUpdateFile(collection, payload) {
@@ -475,26 +414,18 @@ export const useBuilderStore = defineStore('builder', () => {
     availableUnits,
     lastExportName,
     lastSaveName,
-    moduleParameterMap,
-    moduleAssignmentTypeMap,
-    fileParameterMap,
-    fileAssignmentTypeMap,
-    parameterFiles,
 
     // Actions
     addConfigFile,
     addModuleFile,
     addParameterFile,
     addUnitsFile,
-    applyParameterLinks, // Re-enabled
-    applyFileParameterLinks, // Updated with syncing
     assignAllParameterValuesForInstance,
     assignInstanceVariableParameterValue,
     loadState,
     removeModuleFile,
     setLastExportName,
     setLastSaveName,
-    setParameterValueForInstanceVariable,
 
     // Getters
     getAssignedParameterValueForInstanceVariable,
@@ -503,10 +434,6 @@ export const useBuilderStore = defineStore('builder', () => {
     getConfigForVessel,
     getModuleContent,
     getModulesModule,
-    getParameterFileNameForFile,
-    getParameterFileNameForModule,
-    getParametersForFile,
-    getParametersForModule,
     getParameterValuesForInstanceVariable,
     getSaveState,
     hasAllParameterValuesAssignedForInstance,
