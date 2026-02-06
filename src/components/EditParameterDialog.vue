@@ -35,12 +35,13 @@
           max-height="400"
           :default-sort="{ prop: 'value', order: 'ascending' }"
           @sort-change="handleSortChange"
+          @change="handleEntryChange"
         >
           <el-table-column prop="name" label="Variable" width="180" sortable="custom" />
 
           <el-table-column prop="value" label="Value" min-width="250" sortable="custom">
             <template #default="scope">
-              <el-input v-if="scope.row.type === 'variable'" v-model="scope.row.value" disabled placeholder="-" />
+              <el-input v-if="!isEditableType(scope.row.type)" v-model="scope.row.value" disabled placeholder="-" />
 
               <div v-else-if="scope.row.isAmbiguous" class="ambiguous-container">
                 <el-select
@@ -86,7 +87,7 @@
     <template #footer>
       <span class="dialog-footer">
         <el-button @click="closeDialog">Cancel</el-button>
-        <el-button type="primary" @click="handleConfirm" :disabled="!hasVariables"> Save Parameters </el-button>
+        <el-button type="primary" @click="handleConfirm" :disabled="!hasVariables || !somethingChanged"> Save Parameters </el-button>
       </span>
     </template>
   </el-dialog>
@@ -117,6 +118,7 @@ const isLoading = ref(false)
 const loadingText = ref('Loading parameters...')
 const hasVariables = ref(false)
 const parametersTable = ref(null)
+const somethingChanged = ref(false)
 
 const parameterTypeOptions = [
   { value: 'constant', label: 'constant' },
@@ -142,9 +144,14 @@ const filteredParameterRows = computed(() => {
   })
 })
 
+
+function isEditableType(type) {
+  return type !== 'variable' && type !== 'boundary_condition'
+}
+
 // Helper to look up values and detect ambiguity
 function resolveValue(name, type, units) {
-  if (type === 'variable' || type === 'boundary_condition') {
+  if (!isEditableType(type)) {
     return { value: '-', isAmbiguous: false, options: [] }
   }
 
@@ -229,6 +236,7 @@ watch(
     if (isOpen) {
       isLoading.value = true
       hasVariables.value = true
+      somethingChanged.value = false
 
       await new Promise((resolve) => setTimeout(resolve, 50))
 
@@ -243,6 +251,7 @@ watch(
 
 function handleAmbiguitySelection(row) {
   row.isAmbiguous = false
+  handleEntryChange() // Mark as changed when user resolves ambiguity
 }
 
 // Handle type change re-triggers lookup
@@ -252,6 +261,11 @@ function handleTypeChange(row) {
   row.value = result.value
   row.isAmbiguous = result.isAmbiguous
   row.valueOptions = result.options
+  handleEntryChange() // Mark as changed when user changes type
+}
+
+function handleEntryChange() {
+  somethingChanged.value = true
 }
 
 /**
@@ -325,11 +339,11 @@ function closeDialog() {
 function handleConfirm() {
   parameterRows.value.forEach((row) => {
     // Only save if it's a parameter type and has a value
-    if (row.type !== 'variable' && row.type !== 'boundary_condition' && row.value) {
+    if (isEditableType(row.type) && row.value) {
       const isGlobal = row.type === 'global_constant'
       const storageName = row.name + (isGlobal ? '' : '_' + props.instanceName)
 
-      // We pass the units too, ensuring the store saves it correctly for future filtering
+      // We pass the units too, ensuring the store saves it correctly for future filtering.
       builderStore.assignInstanceVariableParameterValue(storageName, row.value, row.units, isGlobal)
     }
   })
