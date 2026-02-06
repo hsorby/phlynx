@@ -411,6 +411,7 @@ function handleDocumentContextmenu(e) {
   width: 100%;
   height: 100%;
   box-sizing: border-box;
+  border-radius: 10px;
 }
 
 .module-node > .el-card,
@@ -418,8 +419,10 @@ function handleDocumentContextmenu(e) {
   width: 100%;
   height: 100%;
   margin: 0;
+  border-radius: 10px;
   box-sizing: border-box;
   position: relative;
+  border: 3px solid rgba(0,0,0,0.04);
 }
 
 .status-indicator {
