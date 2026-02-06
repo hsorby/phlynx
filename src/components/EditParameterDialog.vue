@@ -28,10 +28,17 @@
               <el-option label="Units" value="units" />
               <el-option label="Type" value="type" /> </el-select></template
         ></el-input>
-        <el-table :data="filteredParameterRows" style="width: 100%" max-height="400">
-          <el-table-column prop="name" label="Variable" width="180" sortable :sort-method="sortByAmbiguity" />
+        <el-table
+          ref="parametersTable"
+          :data="filteredParameterRows"
+          style="width: 100%"
+          max-height="400"
+          :default-sort="{ prop: 'value', order: 'ascending' }"
+          @sort-change="handleSortChange"
+        >
+          <el-table-column prop="name" label="Variable" width="180" sortable="custom" />
 
-          <el-table-column label="Value" min-width="250" sortable>
+          <el-table-column prop="value" label="Value" min-width="250" sortable="custom">
             <template #default="scope">
               <el-input v-if="scope.row.type === 'variable'" v-model="scope.row.value" disabled placeholder="-" />
 
@@ -56,9 +63,9 @@
             </template>
           </el-table-column>
 
-          <el-table-column prop="units" label="Units" width="150" sortable />
+          <el-table-column prop="units" label="Units" width="150" sortable="custom" />
 
-          <el-table-column prop="type" label="Type" width="200" sortable>
+          <el-table-column prop="type" label="Type" width="200" sortable="custom">
             <template #default="scope">
               <el-select v-model="scope.row.type" @change="handleTypeChange(scope.row)">
                 <el-option
@@ -109,6 +116,7 @@ const parameterRows = ref([])
 const isLoading = ref(false)
 const loadingText = ref('Loading parameters...')
 const hasVariables = ref(false)
+const parametersTable = ref(null)
 
 const parameterTypeOptions = [
   { value: 'constant', label: 'constant' },
@@ -175,6 +183,8 @@ function resolveValue(name, type, units) {
 }
 
 function loadData() {
+  parametersTable.value.clearSort() // Clear any existing sort state
+
   const modelString = builderStore.getModuleContent(props.sourceFile)
 
   // This is the heavy line:
@@ -191,26 +201,26 @@ function loadData() {
   const variablesAndUnits = module.configs[0].variables_and_units
   const configMap = new Map(variablesAndUnits.map((arr) => [arr[0], arr]))
 
-  console.log('Extracted variables for parameter editing:', variables)
-  parameterRows.value = variables
-    .map((variable) => {
-      const configData = configMap.get(variable.name)
-      // Default to 'variable' if not found in config
-      const initialType = configData ? configData[3] : 'variable'
+  parameterRows.value = variables.map((variable) => {
+    const configData = configMap.get(variable.name)
+    // Default to 'variable' if not found in config
+    const initialType = configData ? configData[3] : 'variable'
 
-      const result = resolveValue(variable.name, initialType, variable.units)
+    const result = resolveValue(variable.name, initialType, variable.units)
 
-      return {
-        name: variable.name,
-        units: variable.units,
-        type: initialType,
-        value: result.value,
-        isAmbiguous: result.isAmbiguous,
-        valueOptions: result.options,
-      }
-    })
-    .sort((a, b) => a.type.localeCompare(b.type))
+    return {
+      name: variable.name,
+      units: variable.units,
+      type: initialType,
+      value: result.value,
+      isAmbiguous: result.isAmbiguous,
+      valueOptions: result.options,
+    }
+  })
+
+  handleSortChange({ prop: 'type', order: 'ascending' }, true) // Initial sort with ambiguity check
 }
+
 // Initialize rows when dialog opens
 watch(
   () => props.modelValue,
@@ -244,15 +254,68 @@ function handleTypeChange(row) {
   row.valueOptions = result.options
 }
 
-function sortByAmbiguity(a, b) {
-  // If A is ambiguous and B is not, A comes first
-  if (a.isAmbiguous && !b.isAmbiguous) return -1
-  if (!a.isAmbiguous && b.isAmbiguous) return 1
+/**
+ * Handle manual sorting.
+ */
+function handleSortChange({ prop, order }, ambiguityCheck = false) {
+  if (!order) {
+    prop = 'type' // Default sort by Type when user cancels sorting
+    order = 'ascending'
+    ambiguityCheck = true // Always check ambiguity for default sort to group them at the top
+  }
 
-  // If both are same status, sort alphabetically by name
-  const valA = a.name || ''
-  const valB = b.name || ''
-  return valA.localeCompare(valB)
+  ambiguityCheck = ambiguityCheck || prop === 'value'
+
+  parameterRows.value.sort((a, b) => {
+    let result = 0
+
+    // Property values comparison.
+    if (ambiguityCheck) {
+      // Special Logic for ambiguity checking.
+      if (a.isAmbiguous && !b.isAmbiguous) result = -1
+      else if (!a.isAmbiguous && b.isAmbiguous) result = 1
+      else {
+        // Compare actual values string.
+        if (prop === 'value') {
+          // For value column, we want to sort numbers numerically if possible
+          const numA = parseFloat(a.value)
+          const numB = parseFloat(b.value)
+
+          if (!isNaN(numA) && !isNaN(numB)) {
+            result = numA - numB
+          } else if (!isNaN(numA) && isNaN(numB)) {
+            result = -1 // Numbers come before non-numbers
+          } else if (isNaN(numA) && !isNaN(numB)) {
+            result = 1 // Non-numbers come after numbers
+          } else {
+            // Fallback to string comparison if not both are numbers
+            const valA = String(a.value || '').toLowerCase()
+            const valB = String(b.value || '').toLowerCase()
+            result = valA.localeCompare(valB)
+          }
+        } else {
+          const valA = String(a[prop] || '').toLowerCase()
+          const valB = String(b[prop] || '').toLowerCase()
+          result = valA.localeCompare(valB)
+        }
+      }
+    } else {
+      // Standard compare logic.
+      const valA = String(a[prop] || '').toLowerCase()
+      const valB = String(b[prop] || '').toLowerCase()
+      result = valA.localeCompare(valB)
+    }
+
+    // If the primary values are DIFFERENT, respect the user's sort direction (Asc/Desc)
+    if (result !== 0) {
+      return order === 'ascending' ? result : -result
+    }
+
+    // If primary values are SAME (e.g. both are 'Constant'), sort by Name.
+    // We force this to be Ascending (A-Z) for readability,
+    // regardless of the primary column's sort direction.
+    return a.name.localeCompare(b.name)
+  })
 }
 
 function closeDialog() {
