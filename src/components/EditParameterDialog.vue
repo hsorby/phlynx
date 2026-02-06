@@ -163,7 +163,7 @@ function resolveValue(name, type, units) {
     return { value: assignedValue.value, isAmbiguous: false, options: [] }
   }
   // Get all raw matches from store
-  const allMatches = builderStore.getParameterValuesForInstanceVariable(lookupName) || []
+  const allMatches = builderStore.getParameterValuesForInstanceVariable(lookupName)
 
   // We only care about values that were stored with the same units as the current variable
   const relevantMatches = allMatches.filter((match) => match?.units === units)

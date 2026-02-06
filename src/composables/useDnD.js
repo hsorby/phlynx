@@ -3,6 +3,7 @@ import { ref, shallowRef, watch } from 'vue'
 
 import { GHOST_MODULE_FILENAME, GHOST_NODE_TYPE } from '../utils/constants'
 import { getId, generateUniqueModuleName } from '../utils/nodes'
+import { useBuilderStore } from '../stores/builderStore'
 
 /**
  * In a real world scenario you'd want to avoid creating refs in a global scope like this as they might not be cleaned up properly.
@@ -20,13 +21,8 @@ const state = {
 export default function useDragAndDrop(pendingHistoryNodes) {
   const { draggedType, isDragOver, isDragging } = state
 
-  const {
-    addNodes,
-    getNodes,
-    onNodesInitialized,
-    screenToFlowCoordinate,
-    updateNode,
-  } = useVueFlow()
+  const { addNodes, getNodes, onNodesInitialized, screenToFlowCoordinate, updateNode } = useVueFlow()
+  const store = useBuilderStore()
 
   const isGhostSetupOpen = ref(false)
   const pendingGhostNodeId = ref(null)
@@ -99,10 +95,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
 
     // Build a non-editable label that reflects the component and CellML source file.
     const compLabel = moduleData.componentName
-    const nodeType =
-      moduleData.sourceFile === GHOST_MODULE_FILENAME
-        ? GHOST_NODE_TYPE
-        : 'moduleNode'
+    const nodeType = moduleData.sourceFile === GHOST_MODULE_FILENAME ? GHOST_NODE_TYPE : 'moduleNode'
     const filePart = moduleData.sourceFile
     const label = filePart ? `${compLabel} — ${filePart}` : compLabel
     pendingHistoryNodes.add(nodeId)
@@ -117,6 +110,8 @@ export default function useDragAndDrop(pendingHistoryNodes) {
         label,
       },
     }
+
+    store.assignAllParameterValuesForInstance(newNode.data.name, newNode.data.sourceFile, newNode.data.componentName)
 
     /**
      * Align node position after drop, so it's centered to the mouse

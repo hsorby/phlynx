@@ -2,7 +2,6 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 import { extractVariablesFromModule } from '../utils/cellml'
-import { assign } from 'markdown-it/lib/common/utils.mjs'
 
 function mergeIntoStore(newModules, target) {
   const moduleMap = new Map(target.map((mod) => [mod.filename, mod]))
@@ -116,9 +115,8 @@ export const useBuilderStore = defineStore('builder', () => {
     const paramKeys = availableVariableNameIdMap.value.get(instanceVariable)
     if (paramKeys) {
       results = paramKeys.map((key) => availableParameters.value.get(key))
-    } else {
-      results.push(undefined)
     }
+
     return results
   }
 

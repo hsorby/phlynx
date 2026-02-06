@@ -5,7 +5,7 @@
 
     <el-card :class="[domainTypeClass, 'module-card']" shadow="hover">
       <div v-if="isMissingParameters" class="status-indicator">
-        <el-tooltip content="No parameter file assigned" placement="top" effect="light">
+        <el-tooltip content="At least one parameter has not been assigned a value" placement="top" effect="light">
           <el-icon class="warning-icon">
             <WarningFilled />
           </el-icon>
@@ -324,6 +324,9 @@ function saveEdit() {
   // Update the node's data in the store
   updateNodeData(props.id, { name: sanitisedName })
   isEditing.value = false
+  setTimeout(() => {
+    builderStore.assignAllParameterValuesForInstance(sanitisedName, props.data.sourceFile, props.data.componentName)
+  }, 100) // Delay to ensure the DOM has updated
 }
 
 const contextMenuVisible = ref(false)
