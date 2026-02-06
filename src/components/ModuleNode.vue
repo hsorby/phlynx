@@ -1,6 +1,12 @@
 <template>
-  <div class="module-node" :id="id" ref="moduleNode" :class="{ selected: selected }"
-    @contextmenu.stop.prevent="openContextMenu" @mousedown.capture="StopDrag">
+  <div
+    class="module-node"
+    :id="id"
+    ref="moduleNode"
+    :class="{ selected: selected }"
+    @contextmenu.stop.prevent="openContextMenu"
+    @mousedown.capture="StopDrag"
+  >
     <NodeResizer min-width="180" min-height="105" :is-visible="selected" />
 
     <el-card :class="[domainTypeClass, 'module-card']" shadow="hover">
@@ -60,20 +66,10 @@
           </el-icon>
         </el-button>
 
-        <el-button
-          size="small"
-          circle
-          @click="openCellMLEditDialog"
-          class="module-button"
-        >
+        <el-button size="small" circle @click="openCellMLEditDialog" class="module-button">
           <el-icon><CellMLIcon /></el-icon>
-      </el-button>
-        <el-button
-          size="small"
-          circle
-          @click="openEditParameterDialog"
-          class="module-button"
-        >
+        </el-button>
+        <el-button size="small" circle @click="openEditParameterDialog" class="module-button">
           <el-icon><Operation /></el-icon>
         </el-button>
       </div>
@@ -81,18 +77,35 @@
 
     <template v-for="port in data.ports" :key="port.uid" class="port">
       <el-tooltip class="box-item" effect="dark" :content="port.name" placement="bottom" :show-after="1000">
-        <Handle :id="getHandleId(port)" :ref="'handle_' + port.side + '_' + port.uid"
-          :position="portPosition(port.side)" :style="getHandleStyle(port, data.ports)" class="port-handle" />
+        <Handle
+          :id="getHandleId(port)"
+          :ref="'handle_' + port.side + '_' + port.uid"
+          :position="portPosition(port.side)"
+          :style="getHandleStyle(port, data.ports)"
+          class="port-handle"
+        />
         <template #content>
-          <el-button class="delete-port-btn" type="danger" :icon="Delete" circle plain size="small"
-            @click.stop="removePort(port.uid)" />
+          <el-button
+            class="delete-port-btn"
+            type="danger"
+            :icon="Delete"
+            circle
+            plain
+            size="small"
+            @click.stop="removePort(port.uid)"
+          />
         </template>
       </el-tooltip>
     </template>
     <!-- context menu -->
     <teleport to="body">
-      <div v-if="contextMenuVisible" ref="contextMenu" class="context-menu"
-        :style="{ top: contextMenuY + 'px', left: contextMenuX + 'px' }" @click.stop>
+      <div
+        v-if="contextMenuVisible"
+        ref="contextMenu"
+        class="context-menu"
+        :style="{ top: contextMenuY + 'px', left: contextMenuX + 'px' }"
+        @click.stop
+      >
         <ul class="context-menu-list">
           <li @click="openReplacementDialog('replace')">Replace module</li>
         </ul>
@@ -105,14 +118,7 @@
 import { computed, nextTick, onMounted, onBeforeUnmount, ref } from 'vue'
 import { Handle, useVueFlow } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
-import {
-  Delete,
-  Edit,
-  Key,
-  Place,
-  WarningFilled,
-  Operation,
-} from '@element-plus/icons-vue'
+import { Delete, Edit, Key, Place, WarningFilled, Operation } from '@element-plus/icons-vue'
 import CellMLIcon from './icons/CellMLIcon.vue'
 import { useBuilderStore } from '../stores/builderStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
@@ -121,8 +127,7 @@ import { sanitiseModuleName } from '../utils/nodes'
 import { notify } from '../utils/notify'
 import '../assets/vueflownode.css'
 
-const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } =
-  useVueFlow()
+const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } = useVueFlow()
 const historyStore = useFlowHistoryStore()
 const builderStore = useBuilderStore()
 
@@ -141,7 +146,12 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['open-cellml-editor-dialog', 'open-edit-dialog', 'open-replacement-dialog', 'open-parameter-editor-dialog'])
+const emit = defineEmits([
+  'open-cellml-editor-dialog',
+  'open-edit-dialog',
+  'open-replacement-dialog',
+  'open-parameter-editor-dialog',
+])
 
 const moduleNode = ref(null)
 
@@ -174,16 +184,18 @@ function openEditParameterDialog() {
 }
 
 const domainTypeClass = computed(() => {
-  return props.data.domainType
-    ? `domain-type-${props.data.domainType}`
-    : 'domain-type-default'
+  return props.data.domainType ? `domain-type-${props.data.domainType}` : 'domain-type-default'
 })
 
 const isMissingParameters = computed(() => {
   const name = props.data?.name
   if (!name) return true // If there's no source file, it's "missing" parameters
-  
-  const checker = builderStore.hasAllParameterValuesAssignedForInstance(name, props.data.sourceFile, props.data.componentName)
+
+  const checker = builderStore.hasAllParameterValuesAssignedForInstance(
+    name,
+    props.data.sourceFile,
+    props.data.componentName
+  )
   return !checker
 })
 
@@ -216,9 +228,7 @@ async function removePort(portIdToRemove) {
       (edge.target === props.id && edge.targetHandle === handleId)
   )
 
-  const edgesSnapshot = connectedEdges.map((edge) =>
-    JSON.parse(JSON.stringify(edge))
-  )
+  const edgesSnapshot = connectedEdges.map((edge) => JSON.parse(JSON.stringify(edge)))
 
   // Define New Ports (for Redo)
   const newPorts = props.data.ports.filter((p) => p.uid !== portIdToRemove)
@@ -301,20 +311,18 @@ function StopDrag(event) {
 // This is triggered by pressing Enter or clicking away
 function saveEdit() {
   if (!editingName.value || editingName.value.trim() === '') {
-    isEditing.value = false 
+    isEditing.value = false
     return
   }
 
   const sanitisedName = sanitiseModuleName(editingName.value)
 
   if (!sanitisedName) {
-    isEditing.value = false 
+    isEditing.value = false
     return
   }
 
-  const nameExists = nodes.value.some(
-    (node) => node.id !== props.id && node.data && node.data.name === sanitisedName
-  )
+  const nameExists = nodes.value.some((node) => node.id !== props.id && node.data && node.data.name === sanitisedName)
 
   if (nameExists) {
     notify.error({ message: 'A module with this name already exists.' })

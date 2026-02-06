@@ -993,7 +993,7 @@ async function propogateCellMLModuleUpdates(updatedData, changeText) {
 
       // Create the new data object
       const newData = {
-        ...node.data,
+        ...JSON.parse(JSON.stringify(node.data)), // Deep copy to avoid mutating existing data
         componentName: updatedModule.componentName,
         sourceFile: updatedModule.sourceFile, // Essential for the target node
         label: `${updatedModule.componentName} — ${updatedModule.sourceFile}`,

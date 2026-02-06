@@ -4,6 +4,7 @@ import { ref, shallowRef, watch } from 'vue'
 import { GHOST_MODULE_FILENAME, GHOST_NODE_TYPE } from '../utils/constants'
 import { getId, generateUniqueModuleName } from '../utils/nodes'
 import { useBuilderStore } from '../stores/builderStore'
+import { buildPortLabels } from '../services/import/buildPorts'
 
 /**
  * In a real world scenario you'd want to avoid creating refs in a global scope like this as they might not be cleaned up properly.
@@ -22,7 +23,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
   const { draggedType, isDragOver, isDragging } = state
 
   const { addNodes, getNodes, onNodesInitialized, screenToFlowCoordinate, updateNode } = useVueFlow()
-  const store = useBuilderStore()
+  const builderStore = useBuilderStore()
 
   const isGhostSetupOpen = ref(false)
   const pendingGhostNodeId = ref(null)
@@ -100,6 +101,12 @@ export default function useDragAndDrop(pendingHistoryNodes) {
     const label = filePart ? `${compLabel} — ${filePart}` : compLabel
     pendingHistoryNodes.add(nodeId)
 
+    let portLabels = []
+    if (moduleData.configs?.length > 0) {
+      console.log('Building port labels for module:', moduleData.name, 'with configs:', moduleData.configs.length)
+      portLabels = buildPortLabels(moduleData.configs[0])
+    }
+
     const newNode = {
       id: nodeId,
       type: nodeType,
@@ -108,10 +115,15 @@ export default function useDragAndDrop(pendingHistoryNodes) {
         ...JSON.parse(JSON.stringify(moduleData)), // Keep deep copy
         name: finalName, // Use the new unique name
         label,
+        portLabels,
       },
     }
 
-    store.assignAllParameterValuesForInstance(newNode.data.name, newNode.data.sourceFile, newNode.data.componentName)
+    builderStore.assignAllParameterValuesForInstance(
+      newNode.data.name,
+      newNode.data.sourceFile,
+      newNode.data.componentName
+    )
 
     /**
      * Align node position after drop, so it's centered to the mouse

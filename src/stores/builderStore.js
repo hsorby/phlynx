@@ -60,7 +60,9 @@ export const useBuilderStore = defineStore('builder', () => {
   }
 
   function createParameterKey(parameter) {
-    return `${parameter.variable_name.trim()}||${parameter.units.trim()}||${normalizeValue(parameter.value.trim())}||${parameter.data_reference.trim()}`
+    return `${parameter.variable_name.trim()}||${parameter.units.trim()}||${normalizeValue(
+      parameter.value.trim()
+    )}||${parameter.data_reference.trim()}`
   }
 
   function addParameterFile(filename, data) {
@@ -126,12 +128,13 @@ export const useBuilderStore = defineStore('builder', () => {
 
   function assignAllParameterValuesForInstance(instanceName, sourceFile, componentName) {
     const module = getModulesModule(sourceFile, componentName)
-    if (!module) return false
+    if (!module?.configs || module.configs.length === 0) return false
 
-    const variablesAndUnits = module?.configs[0].variables_and_units ?? []
+    const variablesAndUnits = module.configs[0].variables_and_units ?? []
     if (variablesAndUnits.length === 0) {
       return false
     }
+
     const configMap = new Map(variablesAndUnits.map((arr) => [arr[0], arr]))
 
     const modelString = getModuleContent(sourceFile)
@@ -162,9 +165,11 @@ export const useBuilderStore = defineStore('builder', () => {
     // Implement the logic to check if parameter values are assigned for the given instance
     // This is a placeholder implementation and should be replaced with actual logic
     const module = getModulesModule(sourceFile, componentName)
-    if (!module) return false
+    if (!module?.configs || module.configs.length === 0) return false
 
-    const variablesAndUnits = module?.configs[0].variables_and_units ?? []
+    // TODO: This currently only checks the first config, why are we only looking at the first config only?
+    // We need to figure this out (or remember) and leave a comment about it.
+    const variablesAndUnits = module.configs[0].variables_and_units ?? []
     if (variablesAndUnits.length === 0) {
       return false
     }
@@ -218,6 +223,10 @@ export const useBuilderStore = defineStore('builder', () => {
   function addConfigFile(payload, filename) {
     const configs = payload
     const configFilename = filename
+    if (!configs || !Array.isArray(configs)) {
+      console.warn('[builderStore] Invalid config file payload:', payload)
+      return
+    }
 
     configs.forEach((config) => {
       if (!config.module_file || typeof config.module_file !== 'string') {

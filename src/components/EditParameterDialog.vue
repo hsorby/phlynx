@@ -87,7 +87,9 @@
     <template #footer>
       <span class="dialog-footer">
         <el-button @click="closeDialog">Cancel</el-button>
-        <el-button type="primary" @click="handleConfirm" :disabled="!hasVariables || !somethingChanged"> Save Parameters </el-button>
+        <el-button type="primary" @click="handleConfirm" :disabled="!hasVariables || !somethingChanged">
+          Save Parameters
+        </el-button>
       </span>
     </template>
   </el-dialog>
@@ -99,6 +101,7 @@ import { Warning } from '@element-plus/icons-vue'
 import { useBuilderStore } from '../stores/builderStore'
 import { extractVariablesFromModule } from '../utils/cellml'
 import phlynxspinner from '/src/assets/phlynxspinner.svg?raw'
+import { notify } from '../utils/notify'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -143,7 +146,6 @@ const filteredParameterRows = computed(() => {
     return targetValue.includes(query)
   })
 })
-
 
 function isEditableType(type) {
   return type !== 'variable' && type !== 'boundary_condition'
@@ -205,7 +207,16 @@ function loadData() {
 
   // Create a map for fast config lookup
   // Structure of configs: [name, units, accessability, type]
-  const variablesAndUnits = module.configs[0].variables_and_units
+  const variablesAndUnits = module?.configs ? module.configs[0].variables_and_units ?? [] : []
+  if (variablesAndUnits.length === 0) {
+    // If no config is found, we can still show the variables but they will all default to 'variable' type
+    console.warn(
+      `No variable/unit configuration found for ${props.componentName} in ${props.sourceFile}. Defaulting all to 'variable' type.`
+    )
+    notify.warning({
+      message: `No variable/unit configuration found for ${props.componentName} in ${props.sourceFile}. All parameters will default to 'variable' type.`,
+    })
+  }
   const configMap = new Map(variablesAndUnits.map((arr) => [arr[0], arr]))
 
   parameterRows.value = variables.map((variable) => {
