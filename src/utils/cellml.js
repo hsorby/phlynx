@@ -55,7 +55,9 @@ export function processModuleData(cellmlString) {
     let options = []
     for (let j = 0; j < comp.variableCount(); j++) {
       let varr = comp.variableByIndex(j)
-      if (varr.hasInterfaceType(_libcellml.Variable.InterfaceType.PUBLIC)) {
+      
+      if (varr.hasInterfaceType(_libcellml.Variable.InterfaceType.PUBLIC) ||
+    varr.hasInterfaceType(_libcellml.Variable.InterfaceType.PUBLIC_AND_PRIVATE)) {
         let units = varr.units()
         options.push({
           name: varr.name(),
