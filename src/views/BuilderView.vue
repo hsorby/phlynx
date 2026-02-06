@@ -144,6 +144,11 @@
           </el-dropdown>
         </div>
       </div>
+      <div>
+        <el-link type="primary" href="https://github.com/physiomelinks/phlynx/issues/new" target="_blank">
+          Report Issue
+        </el-link>
+      </div>
     </el-header>
 
     <el-container style="flex-grow: 1; min-height: 0">
