@@ -3,6 +3,8 @@ let _libcellml = null
 // Define the Namespaces.
 const CELLML_NS = 'http://www.cellml.org/cellml/2.0#'
 const MATHML_NS = 'http://www.w3.org/1998/Math/MathML'
+const GLOBAL_PARAMETERS = 'parameters_global'
+const MODEL_PARAMETERS = 'parameters'
 
 export function initLibCellML(instance) {
   _libcellml = instance
@@ -344,46 +346,6 @@ function handleLoggerErrors(logger, headerMessage, dontThrow = false) {
   }
 }
 
-function separateGlobalParameters(model) {
-  // Get the source component
-  const paramComp = model.componentByName('Model_Parameters', true)
-  if (!paramComp) {
-    paramComp.delete()
-    return // Nothing to do if parameters aren't loaded
-  }
-
-  // Create the destination component for globals
-  const globalComp = new _libcellml.Component()
-  globalComp.setName('Global_Parameters')
-  model.addComponent(globalComp)
-
-  // Iterate BACKWARDS through the variables
-  // We loop backwards because we are removing items from the list we are iterating over.
-  for (let i = paramComp.variableCount() - 1; i >= 0; i--) {
-    const variable = paramComp.variableByIndex(i)
-
-    // Check how many connections this variable has.
-    // > 1 means it is connected to multiple modules (e.g. Temperature T)
-    // 1 means it is connected to a specific module (e.g. g_Na_soma)
-    if (variable.equivalentVariableCount() > 1) {
-      // Detach from the old component (Model_Parameters)
-      // Note: This does NOT delete the variable or break its equivalences,
-      // it just un-registers it from this component.
-      paramComp.removeVariableByVariable(variable)
-
-      // Attach to the new component (Global_Parameters)
-      globalComp.addVariable(variable)
-    } else if (variable.equivalentVariableCount() === 0) {
-      paramComp.removeVariableByVariable(variable)
-    }
-
-    variable.delete()
-  }
-
-  globalComp.delete()
-  paramComp.delete()
-}
-
 function addEnvironmentComponent(model) {
   const environmentComp = new _libcellml.Component()
   environmentComp.setName('environment')
@@ -453,34 +415,57 @@ function prioritizeEnvironmentComponent(xmlString) {
   return serializer.serializeToString(doc)
 }
 
-/**
- * Applies parameter data to the model variables with strict unit and value validation.
- */
-function applyParameterMappings(model, parameterData) {
-  const paramMap = new Map()
-  for (const params of parameterData.values()) {
-    // Only iterate if params is actually an array of parameter objects
-    if (Array.isArray(params)) {
-      params.forEach((param) => {
-        if (param.variable_name && !paramMap.has(param.variable_name)) {
-          paramMap.set(param.variable_name, param)
-        }
-      })
+function addVariableToParameterComponent(model, variable, parameterComponent, parameterData) {
+
+  let sourceVar = parameterComponent.variableByName(parameterData.variableName)
+
+  if (!sourceVar) {
+    sourceVar = new _libcellml.Variable()
+    sourceVar.setName(parameterData.variableName)
+    // Ensure the initial value is explicitly set to define variable type as 'constant'.
+    sourceVar.setInitialValueByString(parameterData.value)
+
+    const matchUnits = model.unitsByName(parameterData.units)
+    if (matchUnits) {
+      sourceVar.setUnitsByUnits(matchUnits)
+      matchUnits.delete()
+    } else {
+      sourceVar.setUnitsByName(parameterData.units)
     }
+
+    sourceVar.setInterfaceTypeByString('public')
+    parameterComponent.addVariable(sourceVar)
   }
 
-  let paramComponent = model.componentByName('Model_Parameters', true)
+  // Connect the constant parameter to the module variable.
+  _libcellml.Variable.addEquivalence(sourceVar, variable)
+
+  sourceVar.delete()
+}
+
+/**
+ * Applies parameter data to the model variables with strict unit validation.
+ */
+function applyParameterMappings(model, builderStore) {
+  let paramComponent = model.componentByName(MODEL_PARAMETERS, true)
   if (!paramComponent) {
     paramComponent = new _libcellml.Component()
-    paramComponent.setName('Model_Parameters')
+    paramComponent.setName(MODEL_PARAMETERS)
     model.addComponent(paramComponent)
+  }
+
+  let globalComponent = model.componentByName(GLOBAL_PARAMETERS, true)
+  if (!globalComponent) {
+    globalComponent = new _libcellml.Component()
+    globalComponent.setName(GLOBAL_PARAMETERS)
+    model.addComponent(globalComponent)
   }
 
   for (let i = 0; i < model.componentCount(); i++) {
     const component = model.componentByIndex(i)
     const compName = component.name()
 
-    if (compName === 'Model_Parameters' || compName === 'environment') {
+    if (compName === MODEL_PARAMETERS || compName === 'environment' || compName === GLOBAL_PARAMETERS) {
       component.delete()
       continue
     }
@@ -491,50 +476,27 @@ function applyParameterMappings(model, parameterData) {
 
       // Priority: 1. Specific Match (var_comp) 2. Global Match (var)
       const specificName = `${varName}_${compName}`
-      const match = paramMap.get(specificName) || paramMap.get(varName)
+      const match = builderStore.getAssignedParameterValueForInstanceVariable(specificName)
+      const matchGlobal = builderStore.getAssignedParameterValueForInstanceVariable(varName)
 
-      // Skip if no parameter data found or if the variable is already computed (has math)
-      if (!match || !match.value || match.value.trim() === '') {
-        variable.delete()
-        continue
+      if (match && match.value && match.value.trim() !== '') {
+        // Add variable to parameter component and connect it to the model variable.
+        addVariableToParameterComponent(model, variable, paramComponent, match)
+      } else if (matchGlobal && matchGlobal.value && matchGlobal.value.trim() !== '' && matchGlobal.isGlobal) {
+        // Add variable to global component and connect it to the model variable.
+        addVariableToParameterComponent(model, variable, globalComponent, matchGlobal)
       }
 
-      const matchUnitsTrimmed = match.units ? match.units.trim() : 'dimensionless'
-
-      let sourceVar = paramComponent.variableByName(match.variable_name)
-
-      if (!sourceVar) {
-        sourceVar = new _libcellml.Variable()
-        sourceVar.setName(match.variable_name)
-
-        // Ensure the initial value is explicitly set to define variable type as 'constant'.
-        sourceVar.setInitialValueByString(match.value.trim())
-
-        const matchUnits = model.unitsByName(matchUnitsTrimmed)
-        if (matchUnits) {
-          sourceVar.setUnitsByUnits(matchUnits)
-          matchUnits.delete()
-        } else {
-          sourceVar.setUnitsByName(matchUnitsTrimmed)
-        }
-
-        sourceVar.setInterfaceTypeByString('public')
-        paramComponent.addVariable(sourceVar)
-      }
-
-      // Connect the constant parameter to the module variable.
-      _libcellml.Variable.addEquivalence(sourceVar, variable)
-
-      sourceVar.delete()
       variable.delete()
     }
     component.delete()
   }
+  globalComponent.delete()
   paramComponent.delete()
 }
 
 export function generateFlattenedModel(nodes, edges, builderStore) {
-  const appVersion = __APP_VERSION__ || '1.0.0'
+  const appVersion = __APP_VERSION__ || '0.0.0'
 
   // Initialize core objects
   const model = new _libcellml.Model()
@@ -620,20 +582,11 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
     // ---------------------------------
     // Process Nodes (Create Components)
     // ---------------------------------
-    const parameterData = new Map()
-    const seenParameterFiles = new Set()
     for (const node of nodes) {
       const fileName = node.data?.sourceFile
       const componentName = node.data?.componentName
-      const parameterFileName = builderStore.getParameterFileNameForModule(fileName)
-      if (parameterFileName && !seenParameterFiles.has(parameterFileName)) {
-        const parameters = builderStore.getParametersForModule(fileName)
-        seenParameterFiles.add(parameterFileName)
-        parameterData.set(parameterFileName, parameters)
-      }
-      parameterData.set(componentName, parameterFileName)
 
-      // ... (Load and Cache Source Model Logic - Unchanged) ...
+      // Load and cache source model if not already done.
       if (!modelCache.has(fileName)) {
         if (!builderStore.hasModuleFile(fileName)) throw new Error(`Missing file: ${fileName}`)
         const parsedModel = parser.parseModel(builderStore.getModuleContent(fileName))
@@ -787,9 +740,7 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
 
     model.linkUnits()
 
-    applyParameterMappings(model, parameterData)
-
-    separateGlobalParameters(model)
+    applyParameterMappings(model, builderStore)
 
     addEnvironmentComponent(model)
 
