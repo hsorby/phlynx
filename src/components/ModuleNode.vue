@@ -125,6 +125,7 @@ import { useFlowHistoryStore } from '../stores/historyStore'
 import { getHandleId, getHandleStyle, portPosition } from '../utils/ports'
 import { sanitiseModuleName } from '../utils/nodes'
 import { notify } from '../utils/notify'
+import { isEditableVariableType } from '../utils/variables'
 import '../assets/vueflownode.css'
 
 const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } = useVueFlow()
@@ -191,12 +192,17 @@ const isMissingParameters = computed(() => {
   const name = props.data?.name
   if (!name) return true // If there's no source file, it's "missing" parameters
 
-  const checker = builderStore.hasAllParameterValuesAssignedForInstance(
-    name,
-    props.data.sourceFile,
-    props.data.componentName
-  )
-  return !checker
+  for (const variable of props.data.variables || []) {
+    // console.log('Checking variable for missing value:', variable) // Debug log to inspect variable
+    if (isEditableVariableType(variable.type)) {
+      if (!variable.value) {
+        // console.log('Missing value for variable:', variable.name)
+        return true
+      }
+    }
+  }
+
+  return false
 })
 
 function handleSetDomainType(typeCommand) {
@@ -333,7 +339,14 @@ function saveEdit() {
   updateNodeData(props.id, { name: sanitisedName })
   isEditing.value = false
   setTimeout(() => {
-    builderStore.assignAllParameterValuesForInstance(sanitisedName, props.data.sourceFile, props.data.componentName)
+    builderStore.setVariableParameterValuesForInstance(
+      sanitisedName,
+      props.data.variables,
+      props.data.sourceFile,
+      props.data.componentName,
+      props.data.configIndex
+    )
+    updateNodeData(props.id, { variables: props.data.variables })
   }, 100) // Delay to ensure the DOM has updated
 }
 

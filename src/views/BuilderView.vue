@@ -209,10 +209,8 @@
 
   <EditParameterDialog
     v-model="editParameterDialogVisible"
-    :instance-name="currentEditingNode?.instanceName || ''"
-    :node-id="currentEditingNode?.nodeId || ''"
-    :source-file="currentEditingNode?.sourceFile || ''"
-    :component-name="currentEditingNode?.componentName || ''"
+    :nodeData="currentEditingNode"
+
   />
 
   <SaveDialog v-model="saveDialogVisible" @confirm="onSaveConfirm" :default-name="builderStore.lastSaveName" />

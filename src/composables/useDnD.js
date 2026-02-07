@@ -5,6 +5,7 @@ import { GHOST_MODULE_FILENAME, GHOST_NODE_TYPE } from '../utils/constants'
 import { getId, generateUniqueModuleName } from '../utils/nodes'
 import { useBuilderStore } from '../stores/builderStore'
 import { buildPortLabels } from '../services/import/buildPorts'
+import { extractVariablesFromModule } from '../utils/cellml'
 
 /**
  * In a real world scenario you'd want to avoid creating refs in a global scope like this as they might not be cleaned up properly.
@@ -101,29 +102,39 @@ export default function useDragAndDrop(pendingHistoryNodes) {
     const label = filePart ? `${compLabel} — ${filePart}` : compLabel
     pendingHistoryNodes.add(nodeId)
 
+    const config = moduleData.configs ? moduleData.configs[moduleData.configIndex || 0] : null
     let portLabels = []
-    if (moduleData.configs?.length > 0) {
-      console.log('Building port labels for module:', moduleData.name, 'with configs:', moduleData.configs.length)
-      portLabels = buildPortLabels(moduleData.configs[0])
+    if (config) {
+      portLabels = buildPortLabels(config)
     }
+
+    const modelString = builderStore.getModuleContent(filePart)
+    const variables = Array.from(extractVariablesFromModule(modelString, compLabel))
+    builderStore.setVariableParameterValuesForInstance(
+      finalName,
+      variables,
+      filePart,
+      compLabel,
+      moduleData.configIndex
+    )
+    console.log('Assigned parameter values for instance:', finalName, variables)
 
     const newNode = {
       id: nodeId,
       type: nodeType,
       position,
       data: {
-        ...JSON.parse(JSON.stringify(moduleData)), // Keep deep copy
-        name: finalName, // Use the new unique name
+        componentName: moduleData.componentName,
+        configIndex: moduleData.configIndex,
         label,
+        name: finalName, // Use the new unique name
         portLabels,
+        portOptions: moduleData.portOptions || {},
+        ports: moduleData.ports || [],
+        sourceFile: moduleData.sourceFile,
+        variables,
       },
     }
-
-    builderStore.assignAllParameterValuesForInstance(
-      newNode.data.name,
-      newNode.data.sourceFile,
-      newNode.data.componentName
-    )
 
     /**
      * Align node position after drop, so it's centered to the mouse

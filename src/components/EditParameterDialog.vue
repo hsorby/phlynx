@@ -41,7 +41,12 @@
 
           <el-table-column prop="value" label="Value" min-width="250" sortable="custom">
             <template #default="scope">
-              <el-input v-if="!isEditableType(scope.row.type)" v-model="scope.row.value" disabled placeholder="-" />
+              <el-input
+                v-if="!isEditableVariableType(scope.row.type)"
+                v-model="scope.row.value"
+                disabled
+                placeholder="-"
+              />
 
               <div v-else-if="scope.row.isAmbiguous" class="ambiguous-container">
                 <el-select
@@ -97,18 +102,27 @@
 
 <script setup>
 import { ref, computed, watch, h } from 'vue'
+import {
+  ElDialog,
+  ElInput,
+  ElTable,
+  ElTableColumn,
+  ElSelect,
+  ElOption,
+  ElButton,
+  ElAlert,
+  ElTooltip,
+} from 'element-plus'
 import { Warning } from '@element-plus/icons-vue'
+import { useVueFlow } from '@vue-flow/core'
+
 import { useBuilderStore } from '../stores/builderStore'
-import { extractVariablesFromModule } from '../utils/cellml'
+import { isEditableVariableType } from '../utils/variables'
 import phlynxspinner from '/src/assets/phlynxspinner.svg?raw'
-import { notify } from '../utils/notify'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
-  instanceName: { type: String, required: true },
-  nodeId: { type: String, required: true },
-  sourceFile: { type: String, required: true },
-  componentName: { type: String, required: true },
+  nodeData: { type: Object, required: true },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -122,6 +136,9 @@ const loadingText = ref('Loading parameters...')
 const hasVariables = ref(false)
 const parametersTable = ref(null)
 const somethingChanged = ref(false)
+let variables = []
+
+const { getNodes, updateNodeData } = useVueFlow()
 
 const parameterTypeOptions = [
   { value: 'constant', label: 'constant' },
@@ -147,23 +164,18 @@ const filteredParameterRows = computed(() => {
   })
 })
 
-function isEditableType(type) {
-  return type !== 'variable' && type !== 'boundary_condition'
-}
-
 // Helper to look up values and detect ambiguity
-function resolveValue(name, type, units) {
-  if (!isEditableType(type)) {
+function resolveValue(name, type, units, value) {
+  if (!isEditableVariableType(type)) {
     return { value: '-', isAmbiguous: false, options: [] }
+  }
+
+  if (value) {
+    return { value, isAmbiguous: false, options: [] }
   }
 
   // Determine lookup key based on type
   const lookupName = name + (type === 'global_constant' ? '' : '_' + props.instanceName)
-
-  const assignedValue = builderStore.getAssignedParameterValueForInstanceVariable(lookupName)
-  if (assignedValue) {
-    return { value: assignedValue.value, isAmbiguous: false, options: [] }
-  }
   // Get all raw matches from store
   const allMatches = builderStore.getParameterValuesForInstanceVariable(lookupName)
 
@@ -192,44 +204,19 @@ function resolveValue(name, type, units) {
 }
 
 function loadData() {
+  variables = []
   parametersTable.value.clearSort() // Clear any existing sort state
-
-  const modelString = builderStore.getModuleContent(props.sourceFile)
-
-  // This is the heavy line:
-  const variables = Array.from(extractVariablesFromModule(modelString, props.componentName))
-
-  if (!variables || variables.length === 0) {
-    hasVariables.value = false
-    return
-  }
-  const module = builderStore.getModulesModule(props.sourceFile, props.componentName)
-
-  // Create a map for fast config lookup
-  // Structure of configs: [name, units, accessability, type]
-  const variablesAndUnits = module?.configs ? module.configs[0].variables_and_units ?? [] : []
-  if (variablesAndUnits.length === 0) {
-    // If no config is found, we can still show the variables but they will all default to 'variable' type
-    console.warn(
-      `No variable/unit configuration found for ${props.componentName} in ${props.sourceFile}. Defaulting all to 'variable' type.`
-    )
-    notify.warning({
-      message: `No variable/unit configuration found for ${props.componentName} in ${props.sourceFile}. All parameters will default to 'variable' type.`,
-    })
-  }
-  const configMap = new Map(variablesAndUnits.map((arr) => [arr[0], arr]))
-
+  const node = getNodes.value.find((n) => n.id === props.nodeData.nodeId)
+  console.log('Loading parameters for node:', node.data) // Debug log to inspect node data
+  variables = node.data.variables || []
+  console.log('Extracted variables:', variables) // Debug log to inspect extracted variables
   parameterRows.value = variables.map((variable) => {
-    const configData = configMap.get(variable.name)
-    // Default to 'variable' if not found in config
-    const initialType = configData ? configData[3] : 'variable'
-
-    const result = resolveValue(variable.name, initialType, variable.units)
+    const result = resolveValue(variable.name, variable.type, variable.units, variable.value)
 
     return {
       name: variable.name,
       units: variable.units,
-      type: initialType,
+      type: variable.type,
       value: result.value,
       isAmbiguous: result.isAmbiguous,
       valueOptions: result.options,
@@ -350,15 +337,12 @@ function closeDialog() {
 function handleConfirm() {
   parameterRows.value.forEach((row) => {
     // Only save if it's a parameter type and has a value
-    if (isEditableType(row.type) && row.value) {
-      const isGlobal = row.type === 'global_constant'
-      const storageName = row.name + (isGlobal ? '' : '_' + props.instanceName)
-
-      // We pass the units too, ensuring the store saves it correctly for future filtering.
-      builderStore.assignInstanceVariableParameterValue(storageName, row.value, row.units, isGlobal)
+    if (isEditableVariableType(row.type)) {
+      variables.find((v) => v.name === row.name).value = row.value // Update the node's variable value
     }
   })
 
+  updateNodeData(props.nodeData.nodeId, { variables }) // Persist changes to the store
   closeDialog()
 }
 </script>

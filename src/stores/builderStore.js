@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 import { extractVariablesFromModule } from '../utils/cellml'
+import { isEditableVariableType } from '../utils/variables'
 
 function mergeIntoStore(newModules, target) {
   const moduleMap = new Map(target.map((mod) => [mod.filename, mod]))
@@ -126,6 +127,25 @@ export const useBuilderStore = defineStore('builder', () => {
     return moduleAssignmentTypeMap.value.get(moduleName) || null
   }
 
+  function setVariableParameterValuesForInstance(instanceName, variables, sourceFile, componentName, configIndex) {
+    const module = getModulesModule(sourceFile, componentName)
+    const variablesAndUnits = module.configs[configIndex].variables_and_units ?? []
+    const configMap = new Map(variablesAndUnits.map((arr) => [arr[0], arr]))
+    for (const variable of variables) {
+      const configEntry = configMap.get(variable.name)
+      // Default to 'variable' if not found in config
+      const variableType = configEntry ? configEntry[3] : 'variable'
+      variable.type = variableType
+      if (isEditableVariableType(variableType)) {
+        const lookupName = variable.name + (variableType === 'global_constant' ? '' : '_' + instanceName)
+        const parameterValues = getParameterValuesForInstanceVariable(lookupName)
+        if (parameterValues.length === 1 && parameterValues[0].units === variable.units) {
+          variable.value = parameterValues[0].value
+        }
+      }
+    }
+  }
+
   function assignAllParameterValuesForInstance(instanceName, sourceFile, componentName) {
     const module = getModulesModule(sourceFile, componentName)
     if (!module?.configs || module.configs.length === 0) return false
@@ -154,40 +174,6 @@ export const useBuilderStore = defineStore('builder', () => {
             assignedValue[0].units,
             initialType === 'global_constant'
           )
-        }
-      }
-    }
-
-    return true
-  }
-
-  function hasAllParameterValuesAssignedForInstance(instanceName, sourceFile, componentName) {
-    // Implement the logic to check if parameter values are assigned for the given instance
-    // This is a placeholder implementation and should be replaced with actual logic
-    const module = getModulesModule(sourceFile, componentName)
-    if (!module?.configs || module.configs.length === 0) return false
-
-    // TODO: This currently only checks the first config, why are we only looking at the first config only?
-    // We need to figure this out (or remember) and leave a comment about it.
-    const variablesAndUnits = module.configs[0].variables_and_units ?? []
-    if (variablesAndUnits.length === 0) {
-      return false
-    }
-    const configMap = new Map(variablesAndUnits.map((arr) => [arr[0], arr]))
-
-    const modelString = getModuleContent(sourceFile)
-    const variables = Array.from(extractVariablesFromModule(modelString, componentName))
-
-    for (const variable of variables) {
-      const configEntry = configMap.get(variable.name)
-      // Default to 'variable' if not found in config
-      const initialType = configEntry ? configEntry[3] : 'variable'
-      if (initialType !== 'variable' && initialType !== 'boundary_condition') {
-        const lookupName = variable.name + (initialType === 'global_constant' ? '' : '_' + instanceName)
-
-        const assignedValue = getAssignedParameterValueForInstanceVariable(lookupName)
-        if (!assignedValue) {
-          return false
         }
       }
     }
@@ -373,26 +359,15 @@ export const useBuilderStore = defineStore('builder', () => {
     for (const file of availableModules.value) {
       for (const module of file.modules) {
         if (module.configs) {
-          const config = module.configs.find((c) => c.vessel_type === vesselType && c.BC_type === bcType)
-          if (config) {
+          const configIndex = module.configs.findIndex((c) => c.vessel_type === vesselType && c.BC_type === bcType)
+          if (configIndex !== -1) {
             return {
-              config: config,
+              config: module.configs[configIndex],
+              configIndex: configIndex,
               module: module,
               filename: file.filename,
             }
           }
-        }
-      }
-    }
-    return null
-  }
-
-  function getConfig(moduleType, bcType) {
-    for (const file of availableModules.value) {
-      for (const module of file.modules) {
-        if (module.name === moduleType || module.type === moduleType) {
-          const config = module.configs?.find((c) => c.BC_type === bcType)
-          if (config) return config
         }
       }
     }
@@ -433,17 +408,16 @@ export const useBuilderStore = defineStore('builder', () => {
     removeModuleFile,
     setLastExportName,
     setLastSaveName,
+    setVariableParameterValuesForInstance,
 
     // Getters
     getAssignedParameterValueForInstanceVariable,
     getAssignmentTypeForModule,
-    getConfig,
     getConfigForVessel,
     getModuleContent,
     getModulesModule,
     getParameterValuesForInstanceVariable,
     getSaveState,
-    hasAllParameterValuesAssignedForInstance,
     hasModuleFile,
 
     // Debug
