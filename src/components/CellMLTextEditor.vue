@@ -10,13 +10,16 @@
 
       <div class="panel">
         <h3>CellML Text</h3>
-        <textarea
+        <codemirror
           v-model="cellmlText"
-          class="code-view"
-          @click="onCursorMove"
-          @keyup="onCursorMove"
-          spellcheck="false"
-        ></textarea>
+          :style="{ height: '400px' }"
+          :autofocus="true"
+          :indent-with-tab="true"
+          :tab-size="2"
+          :extensions="extensions"
+          @update="handleStateUpdate"
+        >
+        </codemirror>
       </div>
     </div>
   </div>
@@ -24,12 +27,15 @@
 
 <script setup>
 import { nextTick, ref, watch } from 'vue'
+import { Codemirror } from 'vue-codemirror'
+import { basicSetup } from 'codemirror'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 
 import { CellMLTextGenerator } from 'cellml-text-editor'
 import { CellMLTextParser } from 'cellml-text-editor'
 import { CellMLLatexGenerator } from 'cellml-text-editor'
+import { cellml } from 'cellml-text-editor'
 
 const props = defineProps({
   modelValue: {
@@ -58,6 +64,8 @@ let currentDoc = null
 const cursorLine = ref(1)
 const latexPreview = ref('')
 
+const extensions = [basicSetup, cellml()]
+
 const onCursorMove = (e) => {
   const textarea = e.target
   // Calculate line number from selectionStart.
@@ -65,6 +73,18 @@ const onCursorMove = (e) => {
   cursorLine.value = textUpToCursor.split('\n').length
 
   updatePreview()
+}
+
+const handleStateUpdate = (viewUpdate) => {
+  if (viewUpdate.selectionSet || viewUpdate.docChanged) {
+    const state = viewUpdate.state
+    const pos = state.selection.main.head
+    const line = state.doc.lineAt(pos)
+
+    // Update cursorLine for your LaTeX preview logic
+    cursorLine.value = line.number
+    updatePreview()
+  }
 }
 
 const updatePreview = () => {
@@ -108,6 +128,24 @@ const updatePreview = () => {
     latexPreview.value = latex
     if (latexContainer.value) {
       katex.render(latex, latexContainer.value, { throwOnError: false, displayMode: true })
+      nextTick(() => {
+        const container = latexContainer.value
+        const content = container.querySelector('.katex-html')
+
+        if (content) {
+          const containerWidth = container.clientWidth - 30 // width minus padding
+          const contentWidth = content.scrollWidth
+
+          // Calculate scale to fit width
+          if (contentWidth > containerWidth) {
+            const scale = containerWidth / contentWidth
+            content.style.transform = `scale(${scale * 0.95})` // 95% for margin
+            content.style.transformOrigin = 'center center'
+          } else {
+            content.style.transform = 'none'
+          }
+        }
+      })
     }
   } else {
     latexPreview.value = ''
@@ -148,60 +186,104 @@ watch(
 </script>
 
 <style scoped>
+/* Main layout container */
 .container {
   display: flex;
+  flex-direction: column;
   height: 100%;
-  gap: 20px;
   padding: 20px;
   font-family: sans-serif;
-  box-sizing: border-box; 
+  box-sizing: border-box;
+  position: relative;
 }
+
+/* Fixed preview at the top */
+.fixed-preview {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: white;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Panel structure for Editor */
 .panel {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  /* Prevents panels from expanding beyond container */
 }
-textarea,
-.code-view {
+
+.editor-panel {
   flex: 1;
-  background: #f4f4f4;
-  border: 1px solid #ccc;
-  padding: 10px;
-  font-family: monospace;
+  overflow: hidden;
+}
+
+:deep(.cm-editor) {
+  flex: 1;
+  border-radius: 4px;
   font-size: 14px;
-  white-space: pre;
-  overflow: auto;
-  outline: none;
-  resize: none;
+  overflow: hidden;
+  /* Ensure border-radius is applied to scrolling content */
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
-.code-view {
-  background: #1e1e1e;
-  color: #d4d4d4;
+
+:deep(.cm-scroller) {
+  border-radius: 4px;
 }
+
+/* Preserve indentation spacing */
+:deep(.cm-content) {
+  tab-size: 4;
+}
+
+.cm-line {
+  white-space: pre-wrap !important;
+}
+
+/* Formatting for the LaTeX Preview area */
 .preview-pane {
-  height: 100px;
+  height: 120px;
+  padding: 15px;
   background: white;
-  border-bottom: 2px solid #ddd;
+  border: 1px solid #ddd;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.5em;
+  overflow: hidden;
 }
+
+.preview-pane :deep(.katex-display) {
+  margin: 0;
+}
+
+.preview-pane :deep(.katex-html) {
+  display: inline-block;
+}
+
 .placeholder {
   color: #ccc;
   font-style: italic;
   font-size: 0.8em;
 }
+
+/* Error banner styling */
 .error-banner {
   background-color: #ffebee;
   color: #c62828;
   padding: 10px 15px;
-  border-bottom: 2px solid #ef9a9a;
+  border: 1px solid #ef9a9a;
+  border-radius: 4px;
   font-family: monospace;
   font-size: 0.9em;
-  min-height: 40px; /* Prevent jumpiness */
+  height: 120px;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  overflow-y: auto;
 }
 </style>
