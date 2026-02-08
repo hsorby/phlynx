@@ -181,10 +181,10 @@ function isOptionDisabled(optionName, currentSelection) {
   // Disable if:
   // 1. It's in the usedOptions Set
   // 2. And it's NOT an option this row already has selected
-  return (
-    usedOptions.value.has(optionName) &&
-    currentSelection.includes(optionName) === false
-  )
+
+  // FIXME: Disabling for now as circ auto configs have multiple ports with same variable options, and this logic would prevent that. We can revisit if we want to enforce unique variable options across ports in the future.
+  // return (usedOptions.value.has(optionName) && currentSelection.includes(optionName) === false)
+  return false
 }
 
 function addPortLabel() {
