@@ -288,7 +288,13 @@ import { generateExportZip } from '../services/caExport'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
-import { generateFlattenedModel, initLibCellML, processModuleData, processUnitsData } from '../utils/cellml'
+import {
+  extractVariablesFromModule,
+  generateFlattenedModel,
+  initLibCellML,
+  processModuleData,
+  processUnitsData,
+} from '../utils/cellml'
 import { edgeLineOptions, FLOW_IDS, IMPORT_KEYS, EXPORT_KEYS, JSON_FILE_TYPES } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueModuleName } from '../utils/nodes'
 import { getId as getNextEdgeId } from '../utils/edges'
@@ -296,6 +302,7 @@ import { getImportConfig, parseParametersFile } from '../utils/import'
 import { legacyDownload, saveFileHandle, writeFileHandle } from '../utils/save'
 import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import EditParameterDialog from '../components/EditParameterDialog.vue'
+import { clean } from 'semver'
 
 // import testModuleBGContent from '../assets/bg_modules.cellml?raw'
 // import testModuleColonContent from '../assets/colon_FTU_modules.cellml?raw'
@@ -970,6 +977,7 @@ async function propogateCellMLModuleUpdates(updatedData, changeText) {
   await loadCellMLModuleData(updatedData.code, updatedData.sourceFile, false)
   const updatedModule = builderStore.getModulesModule(updatedData.sourceFile, updatedData.componentName)
   const validPortNames = new Set(updatedModule.portOptions.map((p) => p.name))
+  
 
   let updatedCount = 0
   nodes.value.forEach((node) => {
@@ -984,15 +992,20 @@ async function propogateCellMLModuleUpdates(updatedData, changeText) {
           option: labelObj.option.filter((opt) => validPortNames.has(opt)),
         }
       })
+      const existingVariableNames = new Set(node.data.variables.map(item => item.name))
+      const cleanVariables = (node.data.variables || []).filter((v) => validPortNames.has(v.name))
+      const newItems = updatedModule.variables.filter(item => !existingVariableNames.has(item.name))
+      cleanVariables.push(...newItems)
 
       // Create the new data object
       const newData = {
         ...JSON.parse(JSON.stringify(node.data)), // Deep copy to avoid mutating existing data
-        componentName: updatedModule.componentName,
-        sourceFile: updatedModule.sourceFile, // Essential for the target node
-        label: `${updatedModule.componentName} — ${updatedModule.sourceFile}`,
+        componentName: updatedData.componentName,
+        sourceFile: updatedData.sourceFile, // Essential for the target node
+        label: `${updatedData.componentName} — ${updatedData.sourceFile}`,
         portLabels: cleanLabels, // Cleaned port labels.
         portOptions: updatedModule.portOptions, // Updates the ports/handles
+        variables: cleanVariables, // Cleaned variables list.
       }
 
       updatedCount++
@@ -1006,14 +1019,49 @@ async function propogateCellMLModuleUpdates(updatedData, changeText) {
       updatedData.sourceFile
     }.`,
   })
+  return validPortNames
+}
+
+function filterConfig(config, validNamesSet) {
+  // Clean the Ports (Nested arrays).
+  const portFields = ['entrance_ports', 'exit_ports', 'general_ports']
+
+  portFields.forEach((field) => {
+    if (config[field]) {
+      config[field] = config[field].map((port) => ({
+        ...port,
+        // Filter the variables list inside this specific port.
+        variables: (port.variables || []).filter((name) => validNamesSet.has(name)),
+      }))
+    }
+  })
+
+  // Clean the Definitions (Array of arrays).
+  if (config.variables_and_units) {
+    config.variables_and_units = config.variables_and_units.filter((entry) => validNamesSet.has(entry[0]))
+  }
 }
 
 async function onCellMLUpdateSave(updatedData) {
-  propogateCellMLModuleUpdates(updatedData, 'Updated')
+  const validPortNames = await propogateCellMLModuleUpdates(updatedData, 'Updated')
+  const targetModule = builderStore.getModulesModule(updatedData.sourceFile, updatedData.componentName)
+  // Strip new config port settings down to only those that are valid for the new module.
+  filterConfig(targetModule.configs[updatedData.configIndex], validPortNames)
 }
 
 async function onCellMLForkSave(saveData) {
-  propogateCellMLModuleUpdates(saveData, 'Forked')
+  const originalModule = builderStore.getModulesModule(saveData.originalSourceFile, saveData.originalComponentName)
+  const newConfig = JSON.parse(JSON.stringify(originalModule.configs[saveData.originalConfigIndex]))
+  newConfig.module_file = saveData.sourceFile
+  newConfig.module_type = saveData.componentName
+  const validPortNames = await propogateCellMLModuleUpdates(saveData, 'Forked')
+  // Strip new config port settings down to only those that are valid for the new module.
+  filterConfig(newConfig, validPortNames)
+  const targetModule = builderStore.getModulesModule(saveData.sourceFile, saveData.componentName)
+  const configs = targetModule.configs || []
+  targetModule.configIndex = configs.length
+  configs.push(newConfig)
+  targetModule.configs = configs
 }
 
 function onOpenMacroBuilderDialog() {

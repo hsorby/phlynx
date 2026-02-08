@@ -57,6 +57,7 @@ export function processModuleData(cellmlString) {
   for (i = 0; i < model.componentCount(); i++) {
     let comp = model.componentByIndex(i)
     let options = []
+    let variables = []
     for (let j = 0; j < comp.variableCount(); j++) {
       let varr = comp.variableByIndex(j)
       if (varr.hasInterfaceType(_libcellml.Variable.InterfaceType.PUBLIC)) {
@@ -65,6 +66,12 @@ export function processModuleData(cellmlString) {
           name: varr.name(),
           units: units.name(),
         })
+        if (isPossibleParameter(varr)) {
+          variables.push({
+            name: varr.name(),
+            units: units.name(),
+          })
+        }
         units.delete()
       }
       varr.delete()
@@ -74,6 +81,7 @@ export function processModuleData(cellmlString) {
       portOptions: options,
       ports: [],
       componentName: comp.name(),
+      variables
     })
     comp.delete()
   }
@@ -793,6 +801,13 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
   }
 }
 
+function isPossibleParameter(variable) {
+  // A variable is possibly a parameter if it does not have an initial value (i.e. it's set externally)
+  // and it's not the time variable.
+  const varName = variable.name()
+  return variable.initialValue() === '' && varName !== 't' && varName !== 'time'
+}
+
 /**
  * Extracts unique variable names from a CellML model/component
  */
@@ -814,18 +829,14 @@ export function extractVariablesFromModule(modelString, componentName, includeIn
         garbageCollector.add(variable)
         const units = variable.units()
         garbageCollector.add(units)
-        if (
-          (!includeInitialisedVariables && variable.initialValue() !== '') ||
-          variable.name() === 't' ||
-          variable.name() === 'time'
-        ) {
-          continue
+        if (isPossibleParameter(variable)) {
+           variables.add({ name: variable.name(), units: units.name() })
         }
-        variables.add({ name: variable.name(), units: units.name() })
+       
       }
     }
 
-    return variables
+    return Array.from(variables)
   } finally {
     for (const obj of garbageCollector) {
       obj.delete()
@@ -1030,4 +1041,20 @@ export function areModelsEquivalent(modelAString, modelBString) {
       obj.delete()
     }
   }
+}
+
+export function getModelComponentNames(modelString) {
+  const componentNames = []
+  if (modelString) {
+    const parser = new _libcellml.Parser(false)
+    const model = parser.parseModel(modelString)
+    for (let i = 0; i < model.componentCount(); i++) {
+      const component = model.componentByIndex(i)
+      componentNames.push(component.name())
+      component.delete()
+    }
+    model.delete()
+    parser.delete()
+  }
+  return componentNames
 }

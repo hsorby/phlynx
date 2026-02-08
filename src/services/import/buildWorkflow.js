@@ -37,7 +37,7 @@ function buildNodes(builderStore, vessels, progressCallback = null) {
     const { config, configIndex, module, filename } = configData
 
     const modelString = builderStore.getModuleContent(filename)
-    const variables = Array.from(extractVariablesFromModule(modelString, module.componentName))
+    const variables = extractVariablesFromModule(modelString, module.componentName)
     builderStore.setVariableParameterValuesForInstance(
       vessel.name,
       variables,

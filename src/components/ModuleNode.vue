@@ -66,11 +66,12 @@
           </el-icon>
         </el-button>
 
-        <el-button size="small" circle @click="openCellMLEditDialog" class="module-button">
-          <el-icon><CellMLIcon /></el-icon>
-        </el-button>
         <el-button size="small" circle @click="openEditParameterDialog" class="module-button">
           <el-icon><Operation /></el-icon>
+        </el-button>
+
+        <el-button size="small" circle @click="openCellMLEditDialog" class="module-button">
+          <el-icon><CellMLIcon /></el-icon>
         </el-button>
       </div>
     </el-card>
@@ -172,6 +173,7 @@ function openCellMLEditDialog() {
     name: props.data.name,
     sourceFile: props.data.sourceFile,
     componentName: props.data.componentName,
+    configIndex: props.data.configIndex,
   })
 }
 

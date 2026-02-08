@@ -96,10 +96,10 @@ export default function useDragAndDrop(pendingHistoryNodes) {
     const finalName = generateUniqueModuleName(moduleData, existingNames)
 
     // Build a non-editable label that reflects the component and CellML source file.
-    const compLabel = moduleData.componentName
+    const componentName = moduleData.componentName
     const nodeType = moduleData.sourceFile === GHOST_MODULE_FILENAME ? GHOST_NODE_TYPE : 'moduleNode'
-    const filePart = moduleData.sourceFile
-    const label = filePart ? `${compLabel} — ${filePart}` : compLabel
+    const sourceFile = moduleData.sourceFile
+    const label = sourceFile ? `${componentName} — ${sourceFile}` : componentName
     pendingHistoryNodes.add(nodeId)
 
     const config = moduleData.configs ? moduleData.configs[moduleData.configIndex || 0] : null
@@ -108,16 +108,15 @@ export default function useDragAndDrop(pendingHistoryNodes) {
       portLabels = buildPortLabels(config)
     }
 
-    const modelString = builderStore.getModuleContent(filePart)
-    const variables = Array.from(extractVariablesFromModule(modelString, compLabel))
+    const modelString = builderStore.getModuleContent(sourceFile)
+    const variables = extractVariablesFromModule(modelString, componentName)
     builderStore.setVariableParameterValuesForInstance(
       finalName,
       variables,
-      filePart,
-      compLabel,
+      sourceFile,
+      componentName,
       moduleData.configIndex
     )
-    console.log('Assigned parameter values for instance:', finalName, variables)
 
     const newNode = {
       id: nodeId,
