@@ -9,21 +9,13 @@ import { runElkLayout } from '../services/layouts/elk'
 import { runFcoseLayout } from '../services/layouts/cytoscape'
 import { runPortGranularLayout } from '../services/layouts/dagre'
 import { runRescaleLayout } from '../services/layouts/rescale'
-import { notify} from '../utils/notify'
+import { notify } from '../utils/notify'
 import { useGtm } from './useGtm'
 import { useClearWorkspace } from '../utils/workspace' 
 
 export function useLoadFromVesselArray() {
-  const {
-    nodes,
-    edges,
-    addNodes,
-    addEdges,
-    setViewport,
-    onNodesInitialized,
-    fitView,
-    updateNodeInternals,
-  } = useVueFlow()
+  const { nodes, edges, addNodes, addEdges, setViewport, onNodesInitialized, fitView, updateNodeInternals } =
+    useVueFlow()
   const store = useBuilderStore()
   const historyStore = useFlowHistoryStore()
   const { trackEvent } = useGtm()
@@ -50,14 +42,19 @@ export function useLoadFromVesselArray() {
 
       pendingEdges = result.edges
       pendingNodeDataMap.clear()
-      result.nodes.forEach((n) => pendingNodeDataMap.set(n.id, n.data))
+      result.nodes.forEach((n) => {
+        store.setVariableParameterValuesForInstance(
+          n.data.name,
+          n.data.variables,
+          n.data.sourceFile,
+          n.data.componentName,
+          n.data.configIndex
+        )
+        pendingNodeDataMap.set(n.id, n.data)
+      })
 
       if (progressCallback) {
-        progressCallback(
-          configData.vessels.length, 
-          configData.vessels.length, 
-          'Graph built, calculating layout...'
-        )
+        progressCallback(configData.vessels.length, configData.vessels.length, 'Graph built, calculating layout...')
       }
 
       // Create a promise that will resolve when layout is complete
@@ -76,17 +73,16 @@ export function useLoadFromVesselArray() {
         category: 'Workflow',
         action: 'load_from_vessel_array',
         label: `Vessels: ${configData.vessels.length}`,
-        file_type: 'vessel_array'
+        file_type: 'vessel_array',
       })
-      
     } catch (error) {
       trackEvent('workflow_load_action', {
         category: 'Workflow',
         action: 'load_from_vessel_array',
         label: `Error: ${error.message}`,
-        file_type: 'vessel_array'
+        file_type: 'vessel_array',
       })
-      notify.error({message: `Failed to load workflow: ${error.message}`})
+      notify.error({ message: `Failed to load workflow: ${error.message}` })
       layoutPending.value = false
       pendingProgressCallback = null
       layoutCompleteResolve = null
@@ -103,15 +99,11 @@ export function useLoadFromVesselArray() {
     const rejectFunc = layoutCompleteReject
 
     try {
-      // If position is not declared in vessel array file, 
+      // If position is not declared in vessel array file,
       // Run Layout (Calculates positions & sorts port arrays).
       // Could make this choice configurable later.
       if (callback) {
-        callback(
-          initializedNodes.length,
-          initializedNodes.length,
-          'Organizing layout...'
-        )
+        callback(initializedNodes.length, initializedNodes.length, 'Organizing layout...')
       }
 
       // Run layout algorithm
@@ -123,18 +115,14 @@ export function useLoadFromVesselArray() {
         // recalculate declared positions to ensure compatibility with workspace dimensions
         runRescaleLayout(initializedNodes)
       }
-      
+
       await nextTick()
 
       // Handles may have moved from initial positions. Update node data from pending map.
       updateNodeInternals(initializedNodes.map((n) => n.id))
 
       if (callback) {
-        callback(
-          initializedNodes.length,
-          initializedNodes.length,
-          'Connecting nodes...'
-        )
+        callback(initializedNodes.length, initializedNodes.length, 'Connecting nodes...')
       }
 
       // Add the finalized edges
@@ -145,23 +133,15 @@ export function useLoadFromVesselArray() {
 
       // Report finalizing
       if (callback) {
-        callback(
-          initializedNodes.length,
-          initializedNodes.length,
-          'Finalizing view...'
-        )
+        callback(initializedNodes.length, initializedNodes.length, 'Finalizing view...')
       }
 
       fitView({ padding: 0.2, duration: 800 })
 
-      await new Promise(resolve => setTimeout(resolve, 800))
+      await new Promise((resolve) => setTimeout(resolve, 800))
 
       if (callback) {
-        callback(
-          initializedNodes.length,
-          initializedNodes.length,
-          'Complete.'
-        )
+        callback(initializedNodes.length, initializedNodes.length, 'Complete.')
       }
 
       if (resolveFunc) {
@@ -169,7 +149,7 @@ export function useLoadFromVesselArray() {
       }
     } catch (error) {
       historyStore.clear()
-      notify.error({message: 'Error organizing graph layout'})
+      notify.error({ message: 'Error organizing graph layout' })
       if (rejectFunc) {
         rejectFunc(error)
       }
