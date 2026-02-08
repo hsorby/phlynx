@@ -55,12 +55,8 @@
           >
             <el-tooltip :disabled="!currentImportMode.disabled" placement="bottom">
               <div>
-                <el-tooltip placement="bottom" :visible="importTooltip.visible.value" trigger="manual">
-                  <span
-                    class="import-button-content"
-                    @mouseenter="importTooltip.onMouseEnter"
-                    @mouseleave="importTooltip.onMouseLeave"
-                  >
+                <el-tooltip placement="bottom" :auto-close="1200">
+                  <span class="import-button-content">
                     Import
                     <el-icon class="el-icon--right">
                       <component :is="currentImportMode.icon" />
@@ -103,14 +99,18 @@
             @command="handleExportCommand"
             :disabled="!somethingAvailable"
           >
-            <el-tooltip :disabled="!currentExportMode.disabled" placement="bottom">
+            <el-tooltip
+              :disabled="!currentExportMode.disabled && somethingAvailable"
+              placement="bottom"
+              :auto-close="2400"
+            >
               <div>
-                <el-tooltip placement="bottom" :visible="exportTooltip.visible.value">
-                  <span
-                    class="export-button-content"
-                    @mouseenter="exportTooltip.onMouseEnter"
-                    @mouseleave="exportTooltip.onMouseLeave"
-                  >
+                <el-tooltip
+                  placement="bottom"
+                  :disabled="currentExportMode.disabled || !somethingAvailable"
+                  :auto-close="1200"
+                >
+                  <span class="export-button-content">
                     Export
                     <el-icon class="el-icon--right">
                       <component :is="currentExportMode.icon" />
@@ -123,8 +123,7 @@
                 <p>
                   The
                   <strong>{{ currentExportMode.label }}</strong>
-                  import option is disabled because the CellML library is not ready yet. Please wait a moment and try
-                  again.
+                  export option is disabled because {{ cellMlExportTooltip }}
                 </p>
               </template>
             </el-tooltip>
@@ -287,7 +286,6 @@ import { useFlowHistoryStore } from '../stores/historyStore'
 import useDragAndDrop from '../composables/useDnD'
 import { useLoadFromVesselArray } from '../composables/useLoadFromVesselArray'
 import { useResizableAside } from '../composables/useResizableAside'
-import { useAutoClosingTooltip } from '../composables/useAutoClosingTooltip'
 import { useGtm } from '../composables/useGtm'
 import ModuleList from '../components/ModuleList.vue'
 import Workbench from '../components/WorkbenchArea.vue'
@@ -305,13 +303,7 @@ import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
 import { useClearWorkspace } from '../utils/workspace'
-import {
-  extractVariablesFromModule,
-  generateFlattenedModel,
-  initLibCellML,
-  processModuleData,
-  processUnitsData,
-} from '../utils/cellml'
+import { generateFlattenedModel, initLibCellML, processModuleData, processUnitsData } from '../utils/cellml'
 import { edgeLineOptions, FLOW_IDS, IMPORT_KEYS, EXPORT_KEYS, JSON_FILE_TYPES } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueModuleName } from '../utils/nodes'
 import { getId as getNextEdgeId } from '../utils/edges'
@@ -390,7 +382,6 @@ const builderStore = useBuilderStore()
 
 const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
-const configDialogVisible = ref(false)
 const editParameterDialogVisible = ref(false)
 const editDialogVisible = ref(false)
 const cellMLEditorDialogVisible = ref(false)
@@ -417,9 +408,6 @@ const undoRedoSelection = false
 
 const clipboard = ref({ nodes: [], edges: [] })
 const mousePosition = ref({ x: 0, y: 0 })
-
-const importTooltip = useAutoClosingTooltip(1500)
-const exportTooltip = useAutoClosingTooltip(1500)
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 
@@ -475,6 +463,16 @@ const exportOptions = computed(() => [
     suffix: '.zip',
   },
 ])
+const cellMlExportTooltip = computed(() => {
+  if (libcellml.status !== 'ready') {
+    return 'The CellML library is not ready yet. Please wait a moment and try again.'
+  }
+  if (!somethingAvailable.value) {
+    return 'There is nothing to export. Please add some modules to the workspace first.'
+  }
+  return ''
+})
+
 currentExportMode.value = exportOptions.value[0]
 
 onConnect((connection) => {
@@ -999,7 +997,6 @@ async function propogateCellMLModuleUpdates(updatedData, changeText) {
   await loadCellMLModuleData(updatedData.code, updatedData.sourceFile, false)
   const updatedModule = builderStore.getModulesModule(updatedData.sourceFile, updatedData.componentName)
   const validPortNames = new Set(updatedModule.portOptions.map((p) => p.name))
-  
 
   let updatedCount = 0
   nodes.value.forEach((node) => {
@@ -1014,9 +1011,9 @@ async function propogateCellMLModuleUpdates(updatedData, changeText) {
           option: labelObj.option.filter((opt) => validPortNames.has(opt)),
         }
       })
-      const existingVariableNames = new Set(node.data.variables.map(item => item.name))
+      const existingVariableNames = new Set(node.data.variables.map((item) => item.name))
       const cleanVariables = (node.data.variables || []).filter((v) => validPortNames.has(v.name))
-      const newItems = updatedModule.variables.filter(item => !existingVariableNames.has(item.name))
+      const newItems = updatedModule.variables.filter((item) => !existingVariableNames.has(item.name))
       cleanVariables.push(...newItems)
 
       // Create the new data object
@@ -1505,10 +1502,9 @@ const handleKeyDown = (event) => {
 onMounted(async () => {
   document.addEventListener('keydown', handleKeyDown)
   document.addEventListener('mousemove', onMouseMove)
-  libcellmlReadyPromise.then((instance) => {
-    initLibCellML(instance)
-  })
-  await libcellmlReadyPromise
+
+  const instance = await libcellmlReadyPromise
+  initLibCellML(instance)
 
   const promises = []
   for (const [path, content] of Object.entries(cellmlModules)) {
