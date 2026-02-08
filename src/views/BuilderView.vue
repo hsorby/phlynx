@@ -22,6 +22,16 @@
             Save Workspace
           </el-button>
 
+          <el-button
+            type="danger"
+            plain
+            @click="handleClearWorkspace"
+            style="margin-left: 10px"
+            :disabled="!somethingAvailable"
+          >
+            Clear Workspace
+          </el-button>
+
           <el-divider direction="vertical" style="margin: 0 15px" />
 
           <el-button type="info" @click="handleUndo" :disabled="!historyStore.canUndo"> Undo </el-button>
@@ -289,6 +299,7 @@ import { createCellMLDataFragment } from '../services/cellml'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
+import { useClearWorkspace } from '../utils/workspace'
 import {
   extractVariablesFromModule,
   generateFlattenedModel,
@@ -493,6 +504,11 @@ function selectAllNodes() {
   nodes.value.forEach((node) => {
     node.selected = true
   })
+}
+
+function handleClearWorkspace() {
+  const { clearWorkspace } = useClearWorkspace()
+  clearWorkspace()
 }
 
 function updateHelperLines(changes, nodes) {
@@ -1267,6 +1283,7 @@ function onSaveConfirm(fileName) {
  */
 function handleLoadWorkspace(file) {
   const reader = new FileReader()
+  const { clearWorkspace } = useClearWorkspace()
 
   reader.onload = async (e) => {
     try {
@@ -1278,13 +1295,7 @@ function handleLoadWorkspace(file) {
       }
 
       // Clear the current Vue Flow state.
-      historyStore.clear()
-      nodes.value = []
-      edges.value = []
-      setViewport({ x: 0, y: 0, zoom: 1 }) // Reset viewport.
-      // Clear the current parameter data.
-
-      await nextTick()
+      clearWorkspace()
 
       // Restore Vue Flow state.
       // We use `setViewport` to apply zoom/pan.
