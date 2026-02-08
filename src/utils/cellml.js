@@ -737,11 +737,11 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
     addEnvironmentComponent(model)
 
     if (globalParameterComponent.variableCount() === 0) {
-      model.removeComponentByName(GLOBAL_PARAMETERS)
+      model.removeComponentByName(GLOBAL_PARAMETERS, true)
     }
 
     if (parameterComponent.variableCount() === 0) {
-      model.removeComponentByName(MODEL_PARAMETERS)
+      model.removeComponentByName(MODEL_PARAMETERS, true)
     }
 
     // ------------------

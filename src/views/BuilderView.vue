@@ -99,17 +99,9 @@
             @command="handleExportCommand"
             :disabled="!somethingAvailable"
           >
-            <el-tooltip
-              :disabled="!currentExportMode.disabled && somethingAvailable"
-              placement="bottom"
-              :auto-close="2400"
-            >
+            <el-tooltip :disabled="!currentExportMode.disabled" placement="bottom" :auto-close="2400">
               <div>
-                <el-tooltip
-                  placement="bottom"
-                  :disabled="currentExportMode.disabled || !somethingAvailable"
-                  :auto-close="1200"
-                >
+                <el-tooltip placement="bottom" :disabled="currentExportMode.disabled" :auto-close="1200">
                   <span class="export-button-content">
                     Export
                     <el-icon class="el-icon--right">
@@ -397,7 +389,7 @@ const importDialogRef = ref(null)
 const currentImportMode = ref(null)
 const currentImportConfig = ref({})
 
-const currentExportMode = ref(null)
+const currentExportKey = ref(EXPORT_KEYS.CELLML)
 
 const activeInteractionBuffer = new Map()
 const undoRedoSelection = false
@@ -449,13 +441,13 @@ const exportOptions = computed(() => [
     label: 'CellML',
     icon: markRaw(CellMLIcon),
     suffix: '.cellml',
-    disabled: cellMlExportTooltip.value === '',
+    disabled: libcellml.status !== 'ready' || !somethingAvailable.value,
   },
   {
     key: EXPORT_KEYS.CA,
     label: 'Circulatory Autogen',
     icon: markRaw(IconVessel),
-    disabled: false,
+    disabled: !somethingAvailable.value,
     suffix: '.zip',
   },
 ])
@@ -467,10 +459,15 @@ const cellMlExportTooltip = computed(() => {
   if (!somethingAvailable.value) {
     return prefix + 'there is nothing to export. Please add some modules to the workspace first.'
   }
-  return ''
+  return 'This should not be shown when CellML export is enabled.'
 })
 
-currentExportMode.value = exportOptions.value[0]
+const currentExportMode = computed(() => {
+  // Find the selected option in the current list
+  const found = exportOptions.value.find((opt) => opt.key === currentExportKey.value)
+  // Fallback to the first option if nothing is found
+  return found || exportOptions.value[0]
+})
 
 onConnect((connection) => {
   // Match what we specify in connectionLineOptions.
@@ -965,7 +962,7 @@ const triggerCurrentExport = () => {
 }
 
 const handleExportCommand = (option) => {
-  currentExportMode.value = option
+  currentExportKey.value = option.key
   performExport(option)
 }
 
@@ -1166,7 +1163,7 @@ async function handleSaveWorkspace() {
 }
 
 /**
- * Collects all state and processes it into a the current export format.
+ * Collects all state and processes it into the current export format.
  */
 async function onExportConfirm(fileName, handle) {
   const caExport = currentExportMode.value.key === EXPORT_KEYS.CA
