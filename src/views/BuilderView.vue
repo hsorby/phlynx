@@ -120,11 +120,7 @@
                 </el-tooltip>
               </div>
               <template #content>
-                <p>
-                  The
-                  <strong>{{ currentExportMode.label }}</strong>
-                  export option is disabled because {{ cellMlExportTooltip }}
-                </p>
+                {{ cellMlExportTooltip }}
               </template>
             </el-tooltip>
 
@@ -452,8 +448,8 @@ const exportOptions = computed(() => [
     key: EXPORT_KEYS.CELLML,
     label: 'CellML',
     icon: markRaw(CellMLIcon),
-    disabled: libcellml.status !== 'ready',
     suffix: '.cellml',
+    disabled: cellMlExportTooltip.value === '',
   },
   {
     key: EXPORT_KEYS.CA,
@@ -464,11 +460,12 @@ const exportOptions = computed(() => [
   },
 ])
 const cellMlExportTooltip = computed(() => {
+  const prefix = 'The CellML export option is disabled because '
   if (libcellml.status !== 'ready') {
-    return 'The CellML library is not ready yet. Please wait a moment and try again.'
+    return prefix + 'the CellML library is not ready yet. Please wait a moment and try again.'
   }
   if (!somethingAvailable.value) {
-    return 'There is nothing to export. Please add some modules to the workspace first.'
+    return prefix + 'there is nothing to export. Please add some modules to the workspace first.'
   }
   return ''
 })
