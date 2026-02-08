@@ -22,6 +22,16 @@
             Save Workspace
           </el-button>
 
+          <el-button
+            type="danger"
+            plain
+            @click="handleClearWorkspace"
+            style="margin-left: 10px"
+            :disabled="!somethingAvailable"
+          >
+            Clear Workspace
+          </el-button>
+
           <el-divider direction="vertical" style="margin: 0 15px" />
 
           <el-button type="info" @click="handleUndo" :disabled="!historyStore.canUndo"> Undo </el-button>
@@ -33,15 +43,6 @@
           <el-divider direction="vertical" style="margin: 0 15px" />
 
           <el-button type="primary" @click="onOpenMacroBuilderDialog"> Macro Build </el-button>
-
-          <el-button
-            type="primary"
-            style="margin-left: 10px"
-            @click="moduleParameterMatchDialogVisible = true"
-            :disabled="builderStore.parameterFiles.length === 0"
-          >
-            Match Parameters
-          </el-button>
 
           <el-divider direction="vertical" style="margin: 0 15px" />
 
@@ -185,6 +186,7 @@
                 :selected="props.selected"
                 @open-edit-dialog="onOpenEditDialog"
                 @open-cellml-editor-dialog="onOpenCellMLEditorDialog"
+                @open-parameter-editor-dialog="onOpenParameterEditorDialog"
                 @open-replacement-dialog="onOpenReplacementDialog"
                 :ref="(el) => (nodeRefs[props.id] = el)"
               />
@@ -215,6 +217,8 @@
     @save-fork="onCellMLForkSave"
   />
 
+  <EditParameterDialog v-model="editParameterDialogVisible" :nodeData="currentEditingNode" />
+
   <SaveDialog v-model="saveDialogVisible" @confirm="onSaveConfirm" :default-name="builderStore.lastSaveName" />
 
   <SaveDialog
@@ -239,8 +243,6 @@
     @generate="onMacroBuilderGenerate"
     @edit-node="onOpenEditDialog"
   />
-
-  <ModuleParameterMatchDialog v-model="moduleParameterMatchDialogVisible" :activeFiles="activeWorkspaceFiles" />
 
   <ImportDialog
     ref="importDialogRef"
@@ -290,21 +292,29 @@ import ImportDialog from '../components/ImportDialog.vue'
 import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
 import SaveDialog from '../components/SaveDialog.vue'
 import MacroBuilderDialog from '../components/MacroBuilderDialog.vue'
-import ModuleParameterMatchDialog from '../components/ModuleParameterMatchDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
 import { useScreenshot } from '../services/useScreenshot'
 import { generateExportZip } from '../services/caExport'
+import { createCellMLDataFragment } from '../services/cellml'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
-import { generateFlattenedModel, initLibCellML, processModuleData, processUnitsData } from '../utils/cellml'
+import { useClearWorkspace } from '../utils/workspace'
+import {
+  extractVariablesFromModule,
+  generateFlattenedModel,
+  initLibCellML,
+  processModuleData,
+  processUnitsData,
+} from '../utils/cellml'
 import { edgeLineOptions, FLOW_IDS, IMPORT_KEYS, EXPORT_KEYS, JSON_FILE_TYPES } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueModuleName } from '../utils/nodes'
 import { getId as getNextEdgeId } from '../utils/edges'
 import { getImportConfig, parseParametersFile } from '../utils/import'
 import { legacyDownload, saveFileHandle, writeFileHandle } from '../utils/save'
-import { generateParameterAssociations } from '../utils/parameters'
 import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
+import EditParameterDialog from '../components/EditParameterDialog.vue'
+import { clean } from 'semver'
 
 // import testModuleBGContent from '../assets/bg_modules.cellml?raw'
 // import testModuleColonContent from '../assets/colon_FTU_modules.cellml?raw'
@@ -376,6 +386,7 @@ const builderStore = useBuilderStore()
 const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
 const configDialogVisible = ref(false)
+const editParameterDialogVisible = ref(false)
 const editDialogVisible = ref(false)
 const cellMLEditorDialogVisible = ref(false)
 const saveDialogVisible = ref(false)
@@ -383,7 +394,6 @@ const importDialogVisible = ref(false)
 const exportDialogVisible = ref(false)
 const replacementDialogVisible = ref(false)
 const macroBuilderDialogVisible = ref(false)
-const moduleParameterMatchDialogVisible = ref(false)
 const currentEditingNode = ref({
   nodeId: '',
   instanceId: '',
@@ -408,7 +418,7 @@ const exportTooltip = useAutoClosingTooltip(1500)
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 
-const somethingAvailable = computed(() => nodes.value.length > 0 && builderStore.parameterFiles.size > 0)
+const somethingAvailable = computed(() => nodes.value.length > 0)
 
 const importOptions = computed(() => [
   {
@@ -494,6 +504,11 @@ function selectAllNodes() {
   nodes.value.forEach((node) => {
     node.selected = true
   })
+}
+
+function handleClearWorkspace() {
+  const { clearWorkspace } = useClearWorkspace()
+  clearWorkspace()
 }
 
 function updateHelperLines(changes, nodes) {
@@ -746,16 +761,6 @@ const onEdgeChange = (changes) => {
 
 const screenshotDisabled = computed(() => nodes.value.length === 0 && vueFlowRef.value !== null)
 
-const activeWorkspaceFiles = computed(() => {
-  const fileSet = new Set()
-  nodes.value.forEach((node) => {
-    if (node.data?.sourceFile) {
-      fileSet.add(node.data.sourceFile)
-    }
-  })
-  return Array.from(fileSet)
-})
-
 const loadCellMLModuleData = (content, filename, broadcastNotifications = true) => {
   return new Promise((resolve) => {
     const result = processModuleData(content)
@@ -937,7 +942,7 @@ async function onImportConfirm(importPayload, updateProgress) {
     const unitsPayload = importPayload[IMPORT_KEYS.UNITS]
     loadCellMLUnitsData(unitsPayload?.data, unitsPayload?.fileName)
   } else {
-    console.log('Handle this import:', currentImportMode.value.key)
+    console.log("Cannot get here this shouldn't be an import:", currentImportMode.value.key)
   }
   if (importDialogRef.value) {
     importDialogRef.value.finishLoading()
@@ -978,10 +983,18 @@ function onOpenCellMLEditorDialog(eventPayload) {
   cellMLEditorDialogVisible.value = true
 }
 
+function onOpenParameterEditorDialog(eventPayload) {
+  currentEditingNode.value = {
+    ...eventPayload,
+  }
+  editParameterDialogVisible.value = true
+}
+
 async function propogateCellMLModuleUpdates(updatedData, changeText) {
   await loadCellMLModuleData(updatedData.code, updatedData.sourceFile, false)
   const updatedModule = builderStore.getModulesModule(updatedData.sourceFile, updatedData.componentName)
   const validPortNames = new Set(updatedModule.portOptions.map((p) => p.name))
+  
 
   let updatedCount = 0
   nodes.value.forEach((node) => {
@@ -996,15 +1009,20 @@ async function propogateCellMLModuleUpdates(updatedData, changeText) {
           option: labelObj.option.filter((opt) => validPortNames.has(opt)),
         }
       })
+      const existingVariableNames = new Set(node.data.variables.map(item => item.name))
+      const cleanVariables = (node.data.variables || []).filter((v) => validPortNames.has(v.name))
+      const newItems = updatedModule.variables.filter(item => !existingVariableNames.has(item.name))
+      cleanVariables.push(...newItems)
 
       // Create the new data object
       const newData = {
-        ...node.data,
-        componentName: updatedModule.componentName,
-        sourceFile: updatedModule.sourceFile, // Essential for the target node
-        label: `${updatedModule.componentName} — ${updatedModule.sourceFile}`,
+        ...JSON.parse(JSON.stringify(node.data)), // Deep copy to avoid mutating existing data
+        componentName: updatedData.componentName,
+        sourceFile: updatedData.sourceFile, // Essential for the target node
+        label: `${updatedData.componentName} — ${updatedData.sourceFile}`,
         portLabels: cleanLabels, // Cleaned port labels.
         portOptions: updatedModule.portOptions, // Updates the ports/handles
+        variables: cleanVariables, // Cleaned variables list.
       }
 
       updatedCount++
@@ -1018,14 +1036,49 @@ async function propogateCellMLModuleUpdates(updatedData, changeText) {
       updatedData.sourceFile
     }.`,
   })
+  return validPortNames
+}
+
+function filterConfig(config, validNamesSet) {
+  // Clean the Ports (Nested arrays).
+  const portFields = ['entrance_ports', 'exit_ports', 'general_ports']
+
+  portFields.forEach((field) => {
+    if (config[field]) {
+      config[field] = config[field].map((port) => ({
+        ...port,
+        // Filter the variables list inside this specific port.
+        variables: (port.variables || []).filter((name) => validNamesSet.has(name)),
+      }))
+    }
+  })
+
+  // Clean the Definitions (Array of arrays).
+  if (config.variables_and_units) {
+    config.variables_and_units = config.variables_and_units.filter((entry) => validNamesSet.has(entry[0]))
+  }
 }
 
 async function onCellMLUpdateSave(updatedData) {
-  propogateCellMLModuleUpdates(updatedData, 'Updated')
+  const validPortNames = await propogateCellMLModuleUpdates(updatedData, 'Updated')
+  const targetModule = builderStore.getModulesModule(updatedData.sourceFile, updatedData.componentName)
+  // Strip new config port settings down to only those that are valid for the new module.
+  filterConfig(targetModule.configs[updatedData.configIndex], validPortNames)
 }
 
 async function onCellMLForkSave(saveData) {
-  propogateCellMLModuleUpdates(saveData, 'Forked')
+  const originalModule = builderStore.getModulesModule(saveData.originalSourceFile, saveData.originalComponentName)
+  const newConfig = JSON.parse(JSON.stringify(originalModule.configs[saveData.originalConfigIndex]))
+  newConfig.module_file = saveData.sourceFile
+  newConfig.module_type = saveData.componentName
+  const validPortNames = await propogateCellMLModuleUpdates(saveData, 'Forked')
+  // Strip new config port settings down to only those that are valid for the new module.
+  filterConfig(newConfig, validPortNames)
+  const targetModule = builderStore.getModulesModule(saveData.sourceFile, saveData.componentName)
+  const configs = targetModule.configs || []
+  targetModule.configIndex = configs.length
+  configs.push(newConfig)
+  targetModule.configs = configs
 }
 
 function onOpenMacroBuilderDialog() {
@@ -1133,19 +1186,24 @@ async function onExportConfirm(fileName, handle) {
       exportMessage = 'Circulatory Autogen export zip generated.'
     } else if (currentExportMode.value.key === EXPORT_KEYS.CELLML) {
       blob = generateFlattenedModel(nodes.value, edges.value, builderStore)
+
+      const dataUri = await createCellMLDataFragment(blob, fileName)
+
+      const openCorProtocol = 'opencor://'
+      const openCorUrl = `https://opencor.ws/app/?${openCorProtocol}openFile/#${dataUri}`
+
       exportMessage = h('div', null, [
-        'Model exported to CellML. Drag and drop the file into ',
+        'Model exported to CellML. Open this model directly in ',
         h(
           'a',
           {
-            href: 'https://opencor.ws/app/',
+            href: openCorUrl,
             rel: 'noopener noreferrer',
             style: { color: 'var(--el-color-primary)', fontWeight: 'bold' },
             target: '_blank',
           },
           'OpenCOR'
         ),
-        ' and run a simulation.',
       ])
     }
 
@@ -1198,7 +1256,7 @@ async function onExportConfirm(fileName, handle) {
 function createSaveBlob() {
   const saveState = {
     flow: toObject(),
-    store: builderStore.getSaveState(),
+    store: builderStore.getState(),
   }
 
   const jsonString = JSON.stringify(saveState, null, 2)
@@ -1225,6 +1283,7 @@ function onSaveConfirm(fileName) {
  */
 function handleLoadWorkspace(file) {
   const reader = new FileReader()
+  const { clearWorkspace } = useClearWorkspace()
 
   reader.onload = async (e) => {
     try {
@@ -1236,13 +1295,7 @@ function handleLoadWorkspace(file) {
       }
 
       // Clear the current Vue Flow state.
-      historyStore.clear()
-      nodes.value = []
-      edges.value = []
-      setViewport({ x: 0, y: 0, zoom: 1 }) // Reset viewport.
-      // Clear the current parameter data.
-
-      await nextTick()
+      clearWorkspace()
 
       // Restore Vue Flow state.
       // We use `setViewport` to apply zoom/pan.
