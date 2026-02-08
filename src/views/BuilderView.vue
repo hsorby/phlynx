@@ -1132,7 +1132,7 @@ async function onExportConfirm(fileName, handle) {
       const dataUri = await createCellMLDataFragment(blob, fileName)
 
       const openCorProtocol = 'opencor://'
-      const openCorUrl = `https://opencor.ws/appdev/?${openCorProtocol}openFile/#${dataUri}`
+      const openCorUrl = `https://opencor.ws/app/?${openCorProtocol}openFile/#${dataUri}`
 
       exportMessage = h('div', null, [
         'Model exported to CellML. Open this model directly in ',
