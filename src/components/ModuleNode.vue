@@ -27,52 +27,107 @@
       <!-- non-editable label showing CellML component and source file (no white box) -->
       <div v-if="data.label" class="module-label">{{ data.label }}</div>
       <div class="button-group">
-        <el-dropdown trigger="click" @command="handleSetDomainType">
-          <el-button size="small" circle class="module-button">
-            <el-icon>
-              <Key />
-            </el-icon>
+        <el-tooltip
+          effect="dark"
+          content="Set key (colour)"
+          placement="bottom"
+          :show-after="300"
+          :auto-close="1200"
+        >
+          <el-dropdown trigger="click" @command="handleSetDomainType" @visible-change="(val) => isDropdownOpen = val">
+            <el-button size="small" circle class="module-button">
+              <el-icon><Key /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="membrane">Membrane</el-dropdown-item>
+                <el-dropdown-item command="process">Process</el-dropdown-item>
+                <el-dropdown-item command="compartment"
+                  >Compartment</el-dropdown-item
+                >
+                <el-dropdown-item command="protein">Protein</el-dropdown-item>
+                <el-dropdown-item command="undefined" divided
+                  >Reset to Default</el-dropdown-item
+                >
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </el-tooltip>
+
+        <el-tooltip
+            class="box-item"
+            effect="dark"
+            content="Add port node"
+            placement="bottom"
+            :show-after="300"
+            :auto-close="1200"
+        >
+          <el-dropdown trigger="click" @command="addPort({ side: $event })">
+          
+            <el-button size="small" circle class="module-button">
+              <el-icon><Place /></el-icon>
+            </el-button>
+          
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="left">Left</el-dropdown-item>
+                <el-dropdown-item command="right">Right</el-dropdown-item>
+                <el-dropdown-item command="top">Top</el-dropdown-item>
+                <el-dropdown-item command="bottom">Bottom</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </el-tooltip>
+        <el-tooltip
+            class="box-item"
+            effect="dark"
+            content="Edit port labels"
+            placement="bottom"
+            :show-after="300"
+            :auto-close="1200"
+        >
+          <el-button
+            size="small"
+            circle
+            @click="openEditDialog"
+            class="module-button"
+          >
+            <el-icon><Edit /></el-icon>
           </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="membrane">Membrane</el-dropdown-item>
-              <el-dropdown-item command="process">Process</el-dropdown-item>
-              <el-dropdown-item command="compartment">Compartment</el-dropdown-item>
-              <el-dropdown-item command="protein">Protein</el-dropdown-item>
-              <el-dropdown-item command="undefined" divided>Reset to Default</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        </el-tooltip>
 
-        <el-dropdown trigger="click" @command="addPort({ side: $event })">
-          <el-button size="small" circle class="module-button">
-            <el-icon>
-              <Place />
-            </el-icon>
+        <el-tooltip
+            class="box-item"
+            effect="dark"
+            content="Edit parameters"
+            placement="bottom"
+            :show-after="300"
+            :auto-close="1200"
+        >
+          <el-button size="small" circle @click="openEditParameterDialog" class="module-button">
+            <el-icon><Operation /></el-icon>
           </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="left">Left</el-dropdown-item>
-              <el-dropdown-item command="right">Right</el-dropdown-item>
-              <el-dropdown-item command="top">Top</el-dropdown-item>
-              <el-dropdown-item command="bottom">Bottom</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        </el-tooltip>
 
-        <el-button size="small" circle @click="openEditDialog" class="module-button">
-          <el-icon>
-            <Edit />
-          </el-icon>
-        </el-button>
-
-        <el-button size="small" circle @click="openEditParameterDialog" class="module-button">
-          <el-icon><Operation /></el-icon>
-        </el-button>
-
-        <el-button size="small" circle @click="openCellMLEditDialog" class="module-button">
-          <el-icon><CellMLIcon /></el-icon>
-        </el-button>
+        <el-tooltip
+            class="box-item"
+            effect="dark"
+            content="Edit CellML Text"
+            placement="bottom"
+            :show-after="300"
+            :auto-close="1200"
+        >
+          <el-button
+            size="small"
+            circle
+            @click="openCellMLEditDialog"
+            class="module-button"
+            :show-after="300"
+            :auto-close="1200"
+          >
+            <el-icon><CellMLIcon /></el-icon>
+          </el-button>
+        </el-tooltip>
       </div>
     </el-card>
 
