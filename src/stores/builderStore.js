@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-import { extractVariablesFromModule } from '../utils/cellml'
 import { isEditableVariableType } from '../utils/variables'
 
 function mergeIntoStore(newModules, target) {
@@ -20,6 +19,12 @@ function mergeIntoStore(newModules, target) {
   target.push(...moduleMap.values())
 }
 
+function mergeIn(sourceMap, targetMap) {
+  for (const [key, value] of sourceMap) {
+    targetMap.set(key, value)
+  }
+}
+
 // 'builder' is the store's ID
 export const useBuilderStore = defineStore('builder', () => {
   // --- STATE ---
@@ -28,12 +33,9 @@ export const useBuilderStore = defineStore('builder', () => {
   const lastSaveName = ref('phlynx-project')
   const lastExportName = ref('phlynx-export')
 
-  const instanceParameterAssignments = ref(new Map())
   const availableParameters = ref(new Map())
   const availableVariableNameIdMap = ref(new Map())
-
-  const moduleParameterMap = ref(new Map())
-  const moduleAssignmentTypeMap = ref(new Map())
+  const globalConstants = ref(new Map())
 
   // --- DEBUG ---
 
@@ -100,17 +102,16 @@ export const useBuilderStore = defineStore('builder', () => {
     return true
   }
 
-  function assignInstanceVariableParameterValue(instanceVariableName, value, units, isGlobal = false) {
-    instanceParameterAssignments.value.set(instanceVariableName, {
-      variableName: instanceVariableName,
-      value: value,
-      units: units,
-      isGlobal: isGlobal,
-    })
+  function clearGlobalConstants() {
+    globalConstants.value.clear()
   }
 
-  function getAssignedParameterValueForInstanceVariable(instanceVariableName) {
-    return instanceParameterAssignments.value.get(instanceVariableName)
+  function assignGlobalConstant(variableName, value, units) {
+    globalConstants.value.set(variableName, { value, units })
+  }
+
+  function getGlobalConstant(variableName) {
+    return globalConstants.value.get(variableName)
   }
 
   function getParameterValuesForInstanceVariable(instanceVariable) {
@@ -121,10 +122,6 @@ export const useBuilderStore = defineStore('builder', () => {
     }
 
     return results
-  }
-
-  function getAssignmentTypeForModule(moduleName) {
-    return moduleAssignmentTypeMap.value.get(moduleName) || null
   }
 
   function setVariableParameterValuesForInstance(instanceName, variables, sourceFile, componentName, configIndex) {
@@ -140,45 +137,14 @@ export const useBuilderStore = defineStore('builder', () => {
         const lookupName = variable.name + (variableType === 'global_constant' ? '' : '_' + instanceName)
         const parameterValues = getParameterValuesForInstanceVariable(lookupName)
         if (parameterValues.length === 1 && parameterValues[0].units === variable.units) {
-          variable.value = parameterValues[0].value
+          if (variableType === 'global_constant') {
+            assignGlobalConstant(variable.name, parameterValues[0].value, parameterValues[0].units)
+          } else {
+            variable.value = parameterValues[0].value
+          }
         }
       }
     }
-  }
-
-  function assignAllParameterValuesForInstance(instanceName, sourceFile, componentName) {
-    const module = getModulesModule(sourceFile, componentName)
-    if (!module?.configs || module.configs.length === 0) return false
-
-    const variablesAndUnits = module.configs[0].variables_and_units ?? []
-    if (variablesAndUnits.length === 0) {
-      return false
-    }
-
-    const configMap = new Map(variablesAndUnits.map((arr) => [arr[0], arr]))
-
-    const modelString = getModuleContent(sourceFile)
-    const variables = Array.from(extractVariablesFromModule(modelString, componentName))
-
-    for (const variable of variables) {
-      const configEntry = configMap.get(variable.name)
-      // Default to 'variable' if not found in config
-      const initialType = configEntry ? configEntry[3] : 'variable'
-      if (initialType !== 'variable' && initialType !== 'boundary_condition') {
-        const lookupName = variable.name + (initialType === 'global_constant' ? '' : '_' + instanceName)
-        const assignedValue = getParameterValuesForInstanceVariable(lookupName)
-        if (assignedValue.length === 1) {
-          assignInstanceVariableParameterValue(
-            lookupName,
-            assignedValue[0].value,
-            assignedValue[0].units,
-            initialType === 'global_constant'
-          )
-        }
-      }
-    }
-
-    return true
   }
 
   // --- SETTERS ---
@@ -292,13 +258,17 @@ export const useBuilderStore = defineStore('builder', () => {
   function loadState(state) {
     mergeIntoStore(state.availableModules, availableModules.value)
     mergeIntoStore(state.availableUnits, availableUnits.value)
-    fileAssignmentTypeMap.value = new Map(state.fileAssignmentTypeMap || [])
-    fileParameterMap.value = new Map(state.fileParameterMap || [])
+    if (state.availableParameters) {
+      mergeIn(new Map(state.availableParameters), availableParameters.value)
+    }
+    if (state.availableVariableNameIdMap) {
+      mergeIn(new Map(state.availableVariableNameIdMap), availableVariableNameIdMap.value)
+    }
+    if (state.globalConstants) {
+      mergeIn(new Map(state.globalConstants), globalConstants.value)
+    }
     lastSaveName.value = state.lastSaveName || 'phlynx-project'
     lastExportName.value = state.lastExportName || 'phlynx-export'
-    moduleAssignmentTypeMap.value = new Map(state.moduleAssignmentTypeMap || [])
-    moduleParameterMap.value = new Map(state.moduleParameterMap || [])
-    parameterFiles.value = new Map(state.parameterFiles || [])
   }
 
   function removeFile(collection, filename) {
@@ -374,21 +344,21 @@ export const useBuilderStore = defineStore('builder', () => {
     return null
   }
 
-  function getSaveState() {
+  function getState() {
     return {
       availableModules: availableModules.value,
+      availableParameters: Array.from(availableParameters.value.entries()),
       availableUnits: availableUnits.value,
+      availableVariableNameIdMap: Array.from(availableVariableNameIdMap.value.entries()),
+      globalConstants: Array.from(globalConstants.value.entries()),
       lastExportName: lastExportName.value,
       lastSaveName: lastSaveName.value,
-      moduleParameterMap: Array.from(moduleParameterMap.value.entries()),
-      moduleAssignmentTypeMap: Array.from(moduleAssignmentTypeMap.value.entries()),
-      fileParameterMap: Array.from(fileParameterMap.value.entries()),
-      fileAssignmentTypeMap: Array.from(fileAssignmentTypeMap.value.entries()),
-      parameterFiles: Array.from(parameterFiles.value.entries()),
     }
   }
 
-  // --- GETTERS (computed) ---
+  function getGlobalVariables() {
+    return globalConstants.value
+  }
 
   return {
     // State
@@ -402,8 +372,8 @@ export const useBuilderStore = defineStore('builder', () => {
     addModuleFile,
     addParameterFile,
     addUnitsFile,
-    assignAllParameterValuesForInstance,
-    assignInstanceVariableParameterValue,
+    assignGlobalConstant,
+    clearGlobalConstants,
     loadState,
     removeModuleFile,
     setLastExportName,
@@ -411,13 +381,13 @@ export const useBuilderStore = defineStore('builder', () => {
     setVariableParameterValuesForInstance,
 
     // Getters
-    getAssignedParameterValueForInstanceVariable,
-    getAssignmentTypeForModule,
     getConfigForVessel,
+    getGlobalConstant,
+    getGlobalVariables,
     getModuleContent,
     getModulesModule,
     getParameterValuesForInstanceVariable,
-    getSaveState,
+    getState,
     hasModuleFile,
 
     // Debug

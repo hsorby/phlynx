@@ -207,11 +207,11 @@ function loadData() {
   variables = []
   parametersTable.value.clearSort() // Clear any existing sort state
   const node = getNodes.value.find((n) => n.id === props.nodeData.nodeId)
-  console.log('Loading parameters for node:', node.data) // Debug log to inspect node data
   variables = node.data.variables || []
-  console.log('Extracted variables:', variables) // Debug log to inspect extracted variables
   parameterRows.value = variables.map((variable) => {
-    const result = resolveValue(variable.name, variable.type, variable.units, variable.value)
+    const displayValue =
+      variable.type === 'global_constant' ? builderStore.getGlobalConstant(variable.name)?.value : variable.value
+    const result = resolveValue(variable.name, variable.type, variable.units, displayValue)
 
     return {
       name: variable.name,
@@ -338,7 +338,15 @@ function handleConfirm() {
   parameterRows.value.forEach((row) => {
     // Only save if it's a parameter type and has a value
     if (isEditableVariableType(row.type)) {
-      variables.find((v) => v.name === row.name).value = row.value // Update the node's variable value
+      const variable = variables.find((v) => v.name === row.name)
+      if (row.type === 'global_constant') {
+        builderStore.assignGlobalConstant(row.name, row.value, row.units)
+        variable.type = row.type // Update the node's variable type
+        variable.value = undefined // Clear the value for global constants
+      } else {
+        variable.type = row.type // Update the node's variable type
+        variable.value = row.value // Update the node's variable value
+      }
     }
   })
 

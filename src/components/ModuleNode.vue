@@ -125,7 +125,7 @@ import { useFlowHistoryStore } from '../stores/historyStore'
 import { getHandleId, getHandleStyle, portPosition } from '../utils/ports'
 import { sanitiseModuleName } from '../utils/nodes'
 import { notify } from '../utils/notify'
-import { isEditableVariableType } from '../utils/variables'
+import { isEditableVariableType, isEmpty } from '../utils/variables'
 import '../assets/vueflownode.css'
 
 const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } = useVueFlow()
@@ -193,10 +193,13 @@ const isMissingParameters = computed(() => {
   if (!name) return true // If there's no source file, it's "missing" parameters
 
   for (const variable of props.data.variables || []) {
-    // console.log('Checking variable for missing value:', variable) // Debug log to inspect variable
     if (isEditableVariableType(variable.type)) {
-      if (!variable.value) {
-        // console.log('Missing value for variable:', variable.name)
+      if (variable.type === 'global_constant') {
+        const globalConstant = builderStore.getGlobalConstant(variable.name)
+        if (isEmpty(globalConstant?.value)) {
+          return true
+        }
+      } else if (isEmpty(variable.value)) {
         return true
       }
     }

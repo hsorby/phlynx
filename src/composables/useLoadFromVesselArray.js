@@ -46,7 +46,6 @@ export function useLoadFromVesselArray() {
       pendingEdges = result.edges
       pendingNodeDataMap.clear()
       result.nodes.forEach((n) => {
-        console.log('Preparing node data for instance:', n.data) // Debug log
         store.setVariableParameterValuesForInstance(
           n.data.name,
           n.data.variables,
@@ -54,8 +53,6 @@ export function useLoadFromVesselArray() {
           n.data.componentName,
           n.data.configIndex
         )
-        console.log('Assigned parameter values for instance:', n.data.name, n.data.variables) // Debug log
-        store.assignAllParameterValuesForInstance(n.data.name, n.data.sourceFile, n.data.componentName)
         pendingNodeDataMap.set(n.id, n.data)
       })
 

@@ -207,11 +207,7 @@
     @save-fork="onCellMLForkSave"
   />
 
-  <EditParameterDialog
-    v-model="editParameterDialogVisible"
-    :nodeData="currentEditingNode"
-
-  />
+  <EditParameterDialog v-model="editParameterDialogVisible" :nodeData="currentEditingNode" />
 
   <SaveDialog v-model="saveDialogVisible" @confirm="onSaveConfirm" :default-name="builderStore.lastSaveName" />
 
@@ -922,7 +918,7 @@ async function onImportConfirm(importPayload, updateProgress) {
     const unitsPayload = importPayload[IMPORT_KEYS.UNITS]
     loadCellMLUnitsData(unitsPayload?.data, unitsPayload?.fileName)
   } else {
-    console.log('Handle this import:', currentImportMode.value.key)
+    console.log("Cannot get here this shouldn't be an import:", currentImportMode.value.key)
   }
   if (importDialogRef.value) {
     importDialogRef.value.finishLoading()
@@ -1190,7 +1186,7 @@ async function onExportConfirm(fileName, handle) {
 function createSaveBlob() {
   const saveState = {
     flow: toObject(),
-    store: builderStore.getSaveState(),
+    store: builderStore.getState(),
   }
 
   const jsonString = JSON.stringify(saveState, null, 2)
