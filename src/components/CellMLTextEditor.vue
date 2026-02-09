@@ -29,6 +29,7 @@
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Codemirror } from 'vue-codemirror'
 import { basicSetup } from 'codemirror'
+import { keymap } from '@codemirror/view'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 
@@ -64,8 +65,6 @@ let currentDoc = null
 const cursorLine = ref(1)
 const latexPreview = ref('')
 
-const extensions = [basicSetup, cellml()]
-
 const handleStateUpdate = (viewUpdate) => {
   if (viewUpdate.selectionSet || viewUpdate.docChanged) {
     const state = viewUpdate.state
@@ -77,6 +76,17 @@ const handleStateUpdate = (viewUpdate) => {
     updatePreview()
   }
 }
+
+const shiftSpaceKeymap = keymap.of([
+  {
+    key: 'Shift-Space',
+    run: (view) => {
+      view.dispatch(view.state.replaceSelection(' '))
+    },
+  },
+])
+
+const extensions = [basicSetup, cellml(), shiftSpaceKeymap]
 
 const updatePreview = () => {
   if (!currentDoc) return
@@ -154,7 +164,6 @@ const handleKeyDown = (event) => {
 const handleSave = () => {
   emit('save')
 }
-
 
 watch(cellmlText, (newText) => {
   if (debouncer) clearTimeout(debouncer)
