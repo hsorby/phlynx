@@ -224,12 +224,12 @@ export async function generateExportZip(fileName, nodes, edges, builderStore) {
         type: variable.type || '',
       }))
     }
-    const dedupedParameters = Array.from(allParameters).map((paramStr) => JSON.parse(paramStr))
+    const consolidatedParameters = Array.from(allParameters).map((paramStr) => JSON.parse(paramStr))
 
     // --- 3. FINALIZING AND COMPRESSING ZIP ---
     zip.file(`${fileName}_module_config.json`, JSON.stringify(module_config, null, 2))
     zip.file(`${fileName}_vessel_array.csv`, Papa.unparse(vessel_array))
-    zip.file(`${fileName}_parameters.csv`, Papa.unparse(dedupedParameters))
+    zip.file(`${fileName}_parameters.csv`, Papa.unparse(consolidatedParameters))
 
     const zipBlob = await zip.generateAsync({
       type: 'blob',

@@ -30,7 +30,7 @@ export function useLoadFromVesselArray() {
 
   const loadFromVesselArray = async (configData, progressCallback = null) => {
     try {
-      clearWorkspace()
+      await clearWorkspace()
 
       pendingProgressCallback = progressCallback
 
@@ -107,7 +107,7 @@ export function useLoadFromVesselArray() {
       }
 
       // Run layout algorithm
-      if (initializedNodes[0].data.x === undefined || initializedNodes[0].data.y === undefined) {
+      if (initializedNodes[0].position.x === undefined || initializedNodes[0].position.y === undefined) {
         // runPortGranularLayout(initializedNodes, pendingEdges)
         // runElkLayout(initializedNodes, pendingEdges)
         runFcoseLayout(initializedNodes, pendingEdges)

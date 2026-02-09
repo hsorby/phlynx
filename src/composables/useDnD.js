@@ -2,7 +2,7 @@ import { useVueFlow } from '@vue-flow/core'
 import { ref, shallowRef, watch } from 'vue'
 
 import { GHOST_MODULE_FILENAME, GHOST_NODE_TYPE } from '../utils/constants'
-import { getId, generateUniqueModuleName } from '../utils/nodes'
+import { getId, generateUniqueModuleName, attachNewNodeToFrame, findAnyNode } from '../utils/nodes'
 import { useBuilderStore } from '../stores/builderStore'
 import { buildPortLabels } from '../services/import/buildPorts'
 import { extractVariablesFromModule } from '../utils/cellml'
@@ -126,7 +126,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
         componentName: moduleData.componentName,
         configIndex: moduleData.configIndex,
         label,
-        name: finalName, // Use the new unique name
+        name: finalName,
         portLabels,
         portOptions: moduleData.portOptions || [],
         ports: moduleData.ports || [],
@@ -141,12 +141,22 @@ export default function useDragAndDrop(pendingHistoryNodes) {
      * We can hook into events even in a callback, and we can remove the event listener after it's been called.
      */
     const { off } = onNodesInitialized(() => {
-      updateNode(nodeId, (node) => ({
-        position: {
+      updateNode(nodeId, (node) => {
+        const centredPosition = {
           x: node.position.x - node.dimensions.width / 2,
           y: node.position.y - node.dimensions.height / 2,
-        },
-      }))
+        }
+
+        const existingNode = findAnyNode()
+        const frameData = existingNode
+          ? attachNewNodeToFrame(centredPosition, existingNode.data)
+          : null
+
+        return {
+          position: centredPosition,
+          data: frameData ? { ...node.data, ...frameData } : node.data,
+        }
+      })
 
       off()
     })

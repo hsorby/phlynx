@@ -32,6 +32,16 @@
             >
               {{ module.configs.length }} configs
             </el-tag>
+            <el-tooltip
+              v-if="module.configs && module.configs.length === 1"
+              content="Preview Configuration"
+              placement="top"
+              :auto-close="TOOLTIP_AUTO_CLOSE"
+            >
+              <el-button size="small" circle @click.stop="openPreview(module, file.filename)">
+                <el-icon><View /></el-icon>
+              </el-button>
+            </el-tooltip>
           </div>
 
           <div v-if="!selectable && module.configs && module.configs.length > 1" class="config-controls">
@@ -49,12 +59,10 @@
                 :value="index"
               />
             </el-select>
-
-            <el-tooltip content="Preview Configuration" placement="top">
-              <el-button size="small" circle @click.stop="openPreview(module, file.filename)"
-                ><el-icon>
-                  <View /> </el-icon
-              ></el-button>
+            <el-tooltip content="Preview Configuration" placement="top" :auto-close="TOOLTIP_AUTO_CLOSE">
+              <el-button size="small" circle @click.stop="openPreview(module, file.filename)">
+                <el-icon><View /></el-icon>
+              </el-button>
             </el-tooltip>
           </div>
         </el-card>
@@ -73,6 +81,7 @@ import { View } from '@element-plus/icons-vue'
 import { useBuilderStore } from '../stores/builderStore'
 import useDragAndDrop from '../composables/useDnD'
 import ModulePreviewDialog from './ModulePreviewDialog.vue'
+import { TOOLTIP_AUTO_CLOSE } from '../utils/constants'
 
 const props = defineProps({
   selectable: { type: Boolean, default: false },
@@ -117,6 +126,12 @@ watch(
         }
       })
     })
+
+    if (filterText.value === '') {
+      activeCollapseNames.value = []
+    } else {
+      activeCollapseNames.value = files.map((f) => f.filename)
+    }
   },
   { immediate: true, deep: true }
 )
@@ -131,7 +146,7 @@ function handleDragStart(event, module) {
   // so the Builder knows which version to instantiate
   onDragStart(event, {
     ...module,
-    configIndex
+    configIndex,
   })
 }
 

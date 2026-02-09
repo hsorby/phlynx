@@ -26,9 +26,10 @@
 </template>
 
 <script setup>
-import { nextTick, ref, watch } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Codemirror } from 'vue-codemirror'
 import { basicSetup } from 'codemirror'
+import { keymap } from '@codemirror/view'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 
@@ -48,7 +49,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'save'])
 
 const cellmlText = ref('')
 
@@ -64,17 +65,6 @@ let currentDoc = null
 const cursorLine = ref(1)
 const latexPreview = ref('')
 
-const extensions = [basicSetup, cellml()]
-
-const onCursorMove = (e) => {
-  const textarea = e.target
-  // Calculate line number from selectionStart.
-  const textUpToCursor = textarea.value.substr(0, textarea.selectionStart)
-  cursorLine.value = textUpToCursor.split('\n').length
-
-  updatePreview()
-}
-
 const handleStateUpdate = (viewUpdate) => {
   if (viewUpdate.selectionSet || viewUpdate.docChanged) {
     const state = viewUpdate.state
@@ -86,6 +76,17 @@ const handleStateUpdate = (viewUpdate) => {
     updatePreview()
   }
 }
+
+const shiftSpaceKeymap = keymap.of([
+  {
+    key: 'Shift-Space',
+    run: (view) => {
+      view.dispatch(view.state.replaceSelection(' '))
+    },
+  },
+])
+
+const extensions = [basicSetup, cellml(), shiftSpaceKeymap]
 
 const updatePreview = () => {
   if (!currentDoc) return
@@ -153,6 +154,17 @@ const updatePreview = () => {
   }
 }
 
+const handleKeyDown = (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+    event.preventDefault()
+    handleSave()
+  }
+}
+
+const handleSave = () => {
+  emit('save')
+}
+
 watch(cellmlText, (newText) => {
   if (debouncer) clearTimeout(debouncer)
   debouncer = setTimeout(async () => {
@@ -183,6 +195,14 @@ watch(
   },
   { immediate: true }
 )
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown)
+})
 </script>
 
 <style scoped>

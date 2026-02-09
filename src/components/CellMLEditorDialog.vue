@@ -12,7 +12,7 @@
       <div v-if="loading" class="loading">Loading CellML source...</div>
 
       <div v-else class="editor-wrapper">
-        <CellMLTextEditor v-model="currentCode" :regenerate-on-change="modelValue" />
+        <CellMLTextEditor v-model="currentCode" :regenerate-on-change="modelValue" @save="handleSave" />
       </div>
 
       <div class="status-bar">
@@ -38,7 +38,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElButton, ElDialog, ElMessageBox } from 'element-plus'
 import CellMLTextEditor from './CellMLTextEditor.vue'
 import { useBuilderStore } from '../stores/builderStore'
@@ -130,6 +130,18 @@ const checkDirtyAndProceed = (confirmAction) => {
   } else {
     // Not dirty, proceed immediately
     confirmAction()
+  }
+}
+
+const handleSave = () => {
+  if (isInternalModule.value) {
+    if (isDirty.value) {
+      handleForkSave()
+    }
+  } else {
+    if (isDirty.value) {
+      handleDirectSave()
+    }
   }
 }
 
