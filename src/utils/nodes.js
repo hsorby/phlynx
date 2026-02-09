@@ -1,3 +1,8 @@
+import { useVueFlow } from "@vue-flow/core"
+import { FLOW_IDS } from "./constants"
+
+const { getNodes } = useVueFlow(FLOW_IDS.MAIN)
+
 /**
  * Generates a unique module name based on the module data and existing names.
  *
@@ -52,4 +57,25 @@ export function getId(nodeIds, prefix = 'dndnode_') {
 
   // Return the next ID in the sequence
   return `${prefix}${maxId + 1}`
+}
+
+export function findAnyNode() {
+  return getNodes.value.find(n => n.data?.layoutFrame)
+}
+
+/**
+ * Puts new modules in the same reference frame if user imported using vessel array
+ * containing x and y (z ignored for now).
+ */
+export function attachNewNodeToFrame(position, existingNodeData) {
+  const frame = existingNodeData?.layoutFrame
+  if (!frame) return null
+
+  const refX = position.x / frame.xScale + frame.xCentre
+  const refY = position.y / frame.yScale + frame.yCentre
+
+  return {
+    layoutFrame: frame,
+    layoutRef: { refX, refY }
+  }
 }

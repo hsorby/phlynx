@@ -16,16 +16,38 @@ export async function runRescaleLayout(nodes, aspectRatio = RESCALE_ASPECT_RATIO
         })
 
         // Scale x and y independently due to typical wide aspect ratio
-        const xRange = xMax - xMin
-        const yRange = yMax - yMin
+        const xCentre = (xMax + xMin) / 2
+        const yCentre = (yMax - yMin) / 2
+
+        const xRange = xMax - xMin || 1
+        const yRange = yMax - yMin || 1
 
         const xScale = (targetSpacing * aspectRatio) / xRange
         const yScale = targetSpacing / yRange
 
         nodes.forEach(node => {
+            const refX = node.position.x
+            const refY = node.position.y
+
             node.position = {
-                x: (node.position.x - xRange / 2) * xScale,
-                y: (node.position.y - yRange / 2) * yScale
+                x: (refX - xCentre) * xScale,
+                y: (refY - yCentre) * yScale
+            }
+
+            node.data = {
+                ...node.data,
+                layoutFrame: {
+                    xCentre,
+                    yCentre,
+                    xScale,
+                    yScale,
+                    aspectRatio,
+                    targetSpacing,
+                },
+                layoutRef: {
+                    refX,
+                    refY,
+                }
             }
         })
         return true
@@ -34,4 +56,16 @@ export async function runRescaleLayout(nodes, aspectRatio = RESCALE_ASPECT_RATIO
         return false
     }
 }
+
+export function invertRescaleLayout(nodes) {
+    nodes.forEach(node => {
+        const frame = node.data?.layoutFrame
+        const ref = node.data?.layoutRef
+        if (!frame || !ref) return
+
+        node.position = {
+            x: ref.refX,
+            y: ref.refY
+        }
+    })
 }

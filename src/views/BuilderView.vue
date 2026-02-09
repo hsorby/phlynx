@@ -32,6 +32,16 @@
             Clear Workspace
           </el-button>
 
+          <el-button
+            type="warning"
+            plain
+            @click="handleRescale"
+            style="margin-left: 10px"
+            :disabled="!somethingAvailable"
+          >
+            Undo Rescale
+          </el-button>
+
           <el-divider direction="vertical" style="margin: 0 15px" />
 
           <el-button type="info" @click="handleUndo" :disabled="!historyStore.canUndo"> Undo </el-button>
@@ -287,6 +297,7 @@ import HelperLines from '../components/HelperLines.vue'
 import { useScreenshot } from '../services/useScreenshot'
 import { generateExportZip } from '../services/caExport'
 import { createCellMLDataFragment } from '../services/cellml'
+import { invertRescaleLayout } from '../services/layouts/rescale'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
@@ -506,6 +517,10 @@ function selectAllNodes() {
 function handleClearWorkspace() {
   const { clearWorkspace } = useClearWorkspace()
   clearWorkspace()
+}
+
+function handleRescale() {
+  invertRescaleLayout(nodes.value)
 }
 
 function updateHelperLines(changes, nodes) {
