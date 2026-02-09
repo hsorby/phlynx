@@ -52,7 +52,6 @@ function buildNodes(builderStore, vessels, progressCallback = null) {
       progressCallback(vessels.length, vessels.length, 'Building connections...')
     }
 
-    console.log('Config options:', configData)
     return {
       id: vessel.name,
       type: 'moduleNode',

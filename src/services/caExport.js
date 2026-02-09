@@ -173,11 +173,7 @@ export async function generateExportZip(fileName, nodes, edges, builderStore) {
 
       // --- PARAMETER CLASSIFICATION FOR THIS NODE ---
       let variablesAndUnits = []
-      console.log('Classifying variables for node:', node.data.name)
-      console.log('Node data:', node.data)
-      console.log('Node port options:', node.data.portOptions)
       for (const variable of node.data.portOptions || []) {
-        console.log('Classifying variable:', variable.name, 'from module:', node.data.name, 'with type:', node.data.variables?.find(v => v.name === variable.name)?.type || 'undefined')
         variablesAndUnits.push([
           variable.name,
           variable.units || 'missing',
