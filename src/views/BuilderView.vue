@@ -900,7 +900,6 @@ async function onImportConfirm(importPayload, updateProgress) {
     }
 
     try {
-      console.log('Starting vessel array import with', vessels, 'vessels')
       await loadFromVesselArray({ vessels }, (current, total, statusMessage) => {
         if (updateProgress) {
           updateProgress(`${statusMessage || 'Loading vessel array...'} (${current}/${total})`)
@@ -1529,7 +1528,7 @@ onMounted(async () => {
 
   initLibCellML(instance)
 
-  console.log(getPurgedUrlForResource())
+  // console.log(getPurgedUrlForResource())
 
   const promises = []
   if (manifest?.modules) {
@@ -1540,7 +1539,6 @@ onMounted(async () => {
 
   if (manifest?.units) {
     for (const entry of manifest.units) {
-      console.log('Adding units from manifest:', entry)
       promises.push(fetchAndLoadResource(entry, 'cellml units'))
     }
   }
