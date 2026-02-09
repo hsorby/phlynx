@@ -347,6 +347,10 @@ function handleConfirm() {
         variable.type = row.type // Update the node's variable type
         variable.value = row.value // Update the node's variable value
       }
+    } else {
+      // For non-editable types, we still want to update the type in case the user changed it
+      const variable = variables.find((v) => v.name === row.name)
+      variable.type = row.type
     }
   })
 
