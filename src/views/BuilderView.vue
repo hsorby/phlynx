@@ -1532,6 +1532,20 @@ async function fetchAndLoadResource(entry, resourceType) {
   }
 }
 
+
+const cellmlModules = import.meta.glob('../assets/modules/*.cellml', {
+  query: 'raw',
+  eager: true,
+})
+const cellmlUnits = import.meta.glob('../assets/units/*.cellml', {
+  query: 'raw',
+  eager: true,
+})
+const moduleConfigs = import.meta.glob('../assets/module_configs/*.json', {
+  eager: true,
+})
+
+
 onMounted(async () => {
   document.addEventListener('keydown', handleKeyDown)
   document.addEventListener('mousemove', onMouseMove)
@@ -1541,47 +1555,55 @@ onMounted(async () => {
 
   initLibCellML(instance)
 
-  const printPurgeUrl = false
-  if (printPurgeUrl) {
-    console.log(getPurgedUrlForResource())
-  }
+  // const printPurgeUrl = false
+  // if (printPurgeUrl) {
+  //   console.log(getPurgedUrlForResource())
+  // }
 
   const promises = []
-  if (manifest?.modules) {
-    for (const entry of manifest.modules) {
-      if (printPurgeUrl) {
-        console.log(getPurgedUrlForResource(entry.path))
-      }
-      promises.push(fetchAndLoadResource(entry, 'cellml module'))
-    }
+  for (const [path, content] of Object.entries(cellmlModules)) {
+    promises.push(loadCellMLModuleData(content.default, path.split('/').pop(), false))
   }
 
-  if (manifest?.units) {
-    for (const entry of manifest.units) {
-      if (printPurgeUrl) {
-        console.log(getPurgedUrlForResource(entry.path))
-      }
-      promises.push(fetchAndLoadResource(entry, 'cellml units'))
-    }
+  for (const [path, content] of Object.entries(cellmlUnits)) {
+    promises.push(loadCellMLUnitsData(content.default, path.split('/').pop(), false))
   }
 
-  if (manifest?.parameters) {
-    for (const entry of manifest.parameters) {
-      if (printPurgeUrl) {
-        console.log(getPurgedUrlForResource(entry.path))
-      }
-      promises.push(fetchAndLoadResource(entry, 'parameter file'))
-    }
-  }
+  // if (manifest?.modules) {
+  //   for (const entry of manifest.modules) {
+  //     if (printPurgeUrl) {
+  //       console.log(getPurgedUrlForResource(entry.path))
+  //     }
+  //     promises.push(fetchAndLoadResource(entry, 'cellml module'))
+  //   }
+  // }
 
-  if (manifest?.configs) {
-    for (const entry of manifest.configs) {
-      if (printPurgeUrl) {
-        console.log(getPurgedUrlForResource(entry.path))
-      }
-      promises.push(fetchAndLoadResource(entry, 'module config'))
-    }
-  }
+  // if (manifest?.units) {
+  //   for (const entry of manifest.units) {
+  //     if (printPurgeUrl) {
+  //       console.log(getPurgedUrlForResource(entry.path))
+  //     }
+  //     promises.push(fetchAndLoadResource(entry, 'cellml units'))
+  //   }
+  // }
+
+  // if (manifest?.parameters) {
+  //   for (const entry of manifest.parameters) {
+  //     if (printPurgeUrl) {
+  //       console.log(getPurgedUrlForResource(entry.path))
+  //     }
+  //     promises.push(fetchAndLoadResource(entry, 'parameter file'))
+  //   }
+  // }
+
+  // if (manifest?.configs) {
+  //   for (const entry of manifest.configs) {
+  //     if (printPurgeUrl) {
+  //       console.log(getPurgedUrlForResource(entry.path))
+  //     }
+  //     promises.push(fetchAndLoadResource(entry, 'module config'))
+  //   }
+  // }
 
   const results = await Promise.all(promises)
   const successCount = results.filter((result) => result === true).length
@@ -1600,6 +1622,10 @@ onMounted(async () => {
       title: 'Resource Loading',
       message: `${failCount} file${failCount > 1 ? 's' : ''} failed to load.`,
     })
+  }
+
+  for (const [path, content] of Object.entries(moduleConfigs)) {
+    builderStore.addConfigFile(content.default, path.split('/').pop())
   }
 })
 
