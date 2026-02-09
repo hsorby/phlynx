@@ -306,7 +306,14 @@ import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../uti
 import { useClearWorkspace } from '../utils/workspace'
 import { relayoutNodes } from '../services/layouts/physics'
 import { generateFlattenedModel, initLibCellML, processModuleData, processUnitsData } from '../utils/cellml'
-import { edgeLineOptions, CELLML_FILE_TYPES, FLOW_IDS, IMPORT_KEYS, EXPORT_KEYS, JSON_FILE_TYPES } from '../utils/constants'
+import {
+  edgeLineOptions,
+  CELLML_FILE_TYPES,
+  FLOW_IDS,
+  IMPORT_KEYS,
+  EXPORT_KEYS,
+  JSON_FILE_TYPES,
+} from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueModuleName } from '../utils/nodes'
 import { getId as getNextEdgeId } from '../utils/edges'
 import { getImportConfig, parseParametersFile } from '../utils/import'
@@ -940,7 +947,10 @@ async function onImportConfirm(importPayload, updateProgress) {
 
 const performExport = async () => {
   currentExportKey.value = currentExportMode.value.key
-  const result = await saveFileHandle(builderStore.lastExportName, currentExportKey.value === EXPORT_KEYS.CELLML ? CELLML_FILE_TYPES : JSON_FILE_TYPES)
+  const result = await saveFileHandle(
+    builderStore.lastExportName,
+    currentExportKey.value === EXPORT_KEYS.CELLML ? CELLML_FILE_TYPES : JSON_FILE_TYPES
+  )
   if (result.status) {
     if (result.handle) {
       onExportConfirm(undefined, result.handle)
@@ -1057,7 +1067,9 @@ async function onCellMLUpdateSave(updatedData) {
 
 async function onCellMLForkSave(saveData) {
   const originalModule = builderStore.getModulesModule(saveData.originalSourceFile, saveData.originalComponentName)
-  const newConfig = JSON.parse(JSON.stringify(originalModule.configs? originalModule.configs[saveData.originalConfigIndex] : {}))
+  const newConfig = JSON.parse(
+    JSON.stringify(originalModule.configs ? originalModule.configs[saveData.originalConfigIndex] : {})
+  )
   newConfig.module_file = saveData.sourceFile
   newConfig.module_type = saveData.componentName
   const validPortNames = await propogateCellMLModuleUpdates(saveData, 'Forked')
@@ -1506,6 +1518,8 @@ async function fetchAndLoadResource(entry, resourceType) {
       await loadCellMLModuleData(content, entry.file, false)
     } else if (resourceType === 'module config') {
       const jsonContent = JSON.parse(content)
+      console.log('0000000', entry.file)
+      console.log('Loaded config JSON:', jsonContent)
       builderStore.addConfigFile(jsonContent, entry.name, false)
     } else if (resourceType === 'parameter file') {
       const parsed = await parseParametersFile(content)
