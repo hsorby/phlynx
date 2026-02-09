@@ -1056,7 +1056,7 @@ async function onCellMLUpdateSave(updatedData) {
 
 async function onCellMLForkSave(saveData) {
   const originalModule = builderStore.getModulesModule(saveData.originalSourceFile, saveData.originalComponentName)
-  const newConfig = JSON.parse(JSON.stringify(originalModule.configs[saveData.originalConfigIndex]))
+  const newConfig = JSON.parse(JSON.stringify(originalModule.configs? originalModule.configs[saveData.originalConfigIndex] : {}))
   newConfig.module_file = saveData.sourceFile
   newConfig.module_type = saveData.componentName
   const validPortNames = await propogateCellMLModuleUpdates(saveData, 'Forked')
@@ -1528,29 +1528,44 @@ onMounted(async () => {
 
   initLibCellML(instance)
 
-  // console.log(getPurgedUrlForResource())
+  const printPurgeUrl = false
+  if (printPurgeUrl) {
+    console.log(getPurgedUrlForResource())
+  }
 
   const promises = []
   if (manifest?.modules) {
     for (const entry of manifest.modules) {
+      if (printPurgeUrl) {
+        console.log(getPurgedUrlForResource(entry.path))
+      }
       promises.push(fetchAndLoadResource(entry, 'cellml module'))
     }
   }
 
   if (manifest?.units) {
     for (const entry of manifest.units) {
+      if (printPurgeUrl) {
+        console.log(getPurgedUrlForResource(entry.path))
+      }
       promises.push(fetchAndLoadResource(entry, 'cellml units'))
     }
   }
 
   if (manifest?.parameters) {
     for (const entry of manifest.parameters) {
+      if (printPurgeUrl) {
+        console.log(getPurgedUrlForResource(entry.path))
+      }
       promises.push(fetchAndLoadResource(entry, 'parameter file'))
     }
   }
 
   if (manifest?.configs) {
     for (const entry of manifest.configs) {
+      if (printPurgeUrl) {
+        console.log(getPurgedUrlForResource(entry.path))
+      }
       promises.push(fetchAndLoadResource(entry, 'module config'))
     }
   }
