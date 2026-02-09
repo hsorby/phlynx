@@ -1,11 +1,11 @@
 // Example Frontend Logic
-const GITHUB_USER = 'physiomelinks'
+const GITHUB_ORG = 'physiomelinks'
 const REPO = 'circulatory-autogen-modules'
 const BRANCH = 'main'
-const BASE_URL = `https://cdn.jsdelivr.net/gh/${GITHUB_USER}/${REPO}@${BRANCH}/`
-
+const CURRENT_MANIFEST_PATH = `manifests/vitalworkshop.json`
+const BASE_URL = `https://cdn.jsdelivr.net/gh/${GITHUB_ORG}/${REPO}@${BRANCH}/`
 async function loadManifest() {
-  const response = await fetch(BASE_URL + 'manifests/index.json')
+  const response = await fetch(BASE_URL + CURRENT_MANIFEST_PATH)
   const manifest = await response.json()
   
   return manifest.collections
@@ -15,4 +15,8 @@ function getUrlForResource(path) {
   return BASE_URL + path
 }
 
-export { loadManifest, getUrlForResource }
+function getPurgedUrlForResource() {
+  return `${BASE_URL.replace('cdn', 'purge')}${CURRENT_MANIFEST_PATH}`
+}
+
+export { loadManifest, getUrlForResource, getPurgedUrlForResource }
