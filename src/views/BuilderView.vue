@@ -302,6 +302,7 @@ import { createCellMLDataFragment } from '../services/cellml'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
+import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
 import { relayoutNodes } from '../services/layouts/physics'
 import { generateFlattenedModel, initLibCellML, processModuleData, processUnitsData } from '../utils/cellml'
@@ -312,7 +313,6 @@ import { getImportConfig, parseParametersFile } from '../utils/import'
 import { legacyDownload, saveFileHandle, writeFileHandle } from '../utils/save'
 import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import EditParameterDialog from '../components/EditParameterDialog.vue'
-import { clean } from 'semver'
 
 // import testModuleBGContent from '../assets/bg_modules.cellml?raw'
 // import testModuleColonContent from '../assets/colon_FTU_modules.cellml?raw'
@@ -353,31 +353,10 @@ const { capture } = useScreenshot()
 const { trackEvent } = useGtm()
 const { width: asideWidth, startResize } = useResizableAside(200, 150, 400)
 
-const cellmlModules = import.meta.glob('../assets/cellml/*.cellml', {
-  query: 'raw',
-  eager: true,
-})
-const cellmlUnits = import.meta.glob('../assets/units/*.cellml', {
-  query: 'raw',
-  eager: true,
-})
-const parameterFiles = import.meta.glob('../assets/parameters/*.csv', {
-  query: 'raw',
-  eager: true,
-})
-const moduleConfigs = import.meta.glob('../assets/moduleconfig/*.json', {
-  eager: true,
-})
-
 const helperLineHorizontal = ref(null)
 const helperLineVertical = ref(null)
 const alignment = ref('edge')
 const importDropdownRef = ref(null)
-
-// const testData = {
-//   filename: 'CB_network_modules.cellml',
-//   content: testModuleContent,
-// }
 
 const builderStore = useBuilderStore()
 
@@ -921,6 +900,7 @@ async function onImportConfirm(importPayload, updateProgress) {
     }
 
     try {
+      console.log('Starting vessel array import with', vessels, 'vessels')
       await loadFromVesselArray({ vessels }, (current, total, statusMessage) => {
         if (updateProgress) {
           updateProgress(`${statusMessage || 'Loading vessel array...'} (${current}/${total})`)
@@ -1510,27 +1490,71 @@ const handleKeyDown = (event) => {
   }
 }
 
+async function fetchAndLoadResource(entry, resourceType) {
+  try {
+    const url = getUrlForResource(entry.path)
+
+    // Fetch resource content
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`Failed to fetch ${entry.name}`)
+
+    // Process the response
+    const content = await response.text()
+
+    // Load the content
+    if (resourceType === 'cellml module') {
+      await loadCellMLModuleData(content, entry.file, false)
+    } else if (resourceType === 'module config') {
+      const jsonContent = JSON.parse(content)
+      builderStore.addConfigFile(jsonContent, entry.name, false)
+    } else if (resourceType === 'parameter file') {
+      const parsed = await parseParametersFile(content)
+      await loadParametersData(parsed, entry.name, false)
+    } else if (resourceType === 'cellml units') {
+      await loadCellMLUnitsData(content, entry.name, false)
+    }
+
+    return true
+  } catch (err) {
+    return false
+  }
+}
+
 onMounted(async () => {
   document.addEventListener('keydown', handleKeyDown)
   document.addEventListener('mousemove', onMouseMove)
 
-  const instance = await libcellmlReadyPromise
+  // Load the manifest and the libCellML WebAssembly module.
+  const [manifest, instance] = await Promise.all([loadManifest(), libcellmlReadyPromise])
+
   initLibCellML(instance)
 
+  console.log(getPurgedUrlForResource())
+
   const promises = []
-  for (const [path, content] of Object.entries(cellmlModules)) {
-    promises.push(loadCellMLModuleData(content.default, path.split('/').pop(), false))
+  if (manifest?.modules) {
+    for (const entry of manifest.modules) {
+      promises.push(fetchAndLoadResource(entry, 'cellml module'))
+    }
   }
 
-  for (const [path, content] of Object.entries(cellmlUnits)) {
-    promises.push(loadCellMLUnitsData(content.default, path.split('/').pop(), false))
+  if (manifest?.units) {
+    for (const entry of manifest.units) {
+      console.log('Adding units from manifest:', entry)
+      promises.push(fetchAndLoadResource(entry, 'cellml units'))
+    }
   }
 
-  for (const [path, content] of Object.entries(parameterFiles)) {
-    const parsePromise = parseParametersFile(content.default).then((parsed) =>
-      loadParametersData(parsed, path.split('/').pop(), false)
-    )
-    promises.push(parsePromise)
+  if (manifest?.parameters) {
+    for (const entry of manifest.parameters) {
+      promises.push(fetchAndLoadResource(entry, 'parameter file'))
+    }
+  }
+
+  if (manifest?.configs) {
+    for (const entry of manifest.configs) {
+      promises.push(fetchAndLoadResource(entry, 'module config'))
+    }
   }
 
   const results = await Promise.all(promises)
@@ -1539,7 +1563,7 @@ onMounted(async () => {
 
   if (successCount > 0) {
     notify.success({
-      title: 'Internal Resource Loading',
+      title: 'Resource Loading',
       message: `Successfully loaded ${successCount} file${successCount > 1 ? 's' : ''}.`,
     })
   }
@@ -1547,13 +1571,9 @@ onMounted(async () => {
   if (failCount > 0) {
     if (successCount > 0) await nextTick()
     notify.warning({
-      title: 'Internal Resource Loading',
+      title: 'Resource Loading',
       message: `${failCount} file${failCount > 1 ? 's' : ''} failed to load.`,
     })
-  }
-
-  for (const [path, content] of Object.entries(moduleConfigs)) {
-    builderStore.addConfigFile(content.default, path.split('/').pop())
   }
 })
 
