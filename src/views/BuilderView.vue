@@ -306,7 +306,7 @@ import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../uti
 import { useClearWorkspace } from '../utils/workspace'
 import { relayoutNodes } from '../services/layouts/physics'
 import { generateFlattenedModel, initLibCellML, processModuleData, processUnitsData } from '../utils/cellml'
-import { edgeLineOptions, FLOW_IDS, IMPORT_KEYS, EXPORT_KEYS, JSON_FILE_TYPES } from '../utils/constants'
+import { edgeLineOptions, CELLML_FILE_TYPES, FLOW_IDS, IMPORT_KEYS, EXPORT_KEYS, JSON_FILE_TYPES } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueModuleName } from '../utils/nodes'
 import { getId as getNextEdgeId } from '../utils/edges'
 import { getImportConfig, parseParametersFile } from '../utils/import'
@@ -939,7 +939,8 @@ async function onImportConfirm(importPayload, updateProgress) {
 }
 
 const performExport = async () => {
-  const result = await saveFileHandle(builderStore.lastSaveName, JSON_FILE_TYPES)
+  currentExportKey.value = currentExportMode.value.key
+  const result = await saveFileHandle(builderStore.lastExportName, currentExportKey.value === EXPORT_KEYS.CELLML ? CELLML_FILE_TYPES : JSON_FILE_TYPES)
   if (result.status) {
     if (result.handle) {
       onExportConfirm(undefined, result.handle)
