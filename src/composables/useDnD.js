@@ -126,7 +126,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
         componentName: moduleData.componentName,
         configIndex: moduleData.configIndex,
         label,
-        name: finalName, // Use the new unique name
+        name: finalName,
         portLabels,
         portOptions: moduleData.portOptions || [],
         ports: moduleData.ports || [],

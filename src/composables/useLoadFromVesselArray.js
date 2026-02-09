@@ -30,7 +30,7 @@ export function useLoadFromVesselArray() {
 
   const loadFromVesselArray = async (configData, progressCallback = null) => {
     try {
-      clearWorkspace()
+      await clearWorkspace()
 
       pendingProgressCallback = progressCallback
 
