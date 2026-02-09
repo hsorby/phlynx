@@ -52,6 +52,7 @@ function buildNodes(builderStore, vessels, progressCallback = null) {
       progressCallback(vessels.length, vessels.length, 'Building connections...')
     }
 
+    console.log('Config options:', configData)
     return {
       id: vessel.name,
       type: 'moduleNode',
@@ -70,7 +71,7 @@ function buildNodes(builderStore, vessels, progressCallback = null) {
         label: `${module.componentName || module.name} — ${filename}`,
         name: vessel.name,
         portLabels: buildPortLabels(config),
-        portOptions: config.portOptions || [],
+        portOptions: module.portOptions || [],
         ports: buildPorts(vessel, config),
         sourceFile: filename,
         variables,
