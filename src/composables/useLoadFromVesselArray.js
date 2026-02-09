@@ -107,13 +107,13 @@ export function useLoadFromVesselArray() {
       }
 
       // Run layout algorithm
-      if (initializedNodes[0].position.x === undefined || initializedNodes[0].position.y === undefined) {
+      if (initializedNodes[0].data.hasPrescribedPosition) {
+        // recalculate declared positions to ensure compatibility with workspace dimensions
+        runRescaleLayout(initializedNodes)
+      } else {
         // runPortGranularLayout(initializedNodes, pendingEdges)
         // runElkLayout(initializedNodes, pendingEdges)
         runFcoseLayout(initializedNodes, pendingEdges)
-      } else {
-        // recalculate declared positions to ensure compatibility with workspace dimensions
-        runRescaleLayout(initializedNodes)
       }
 
       await nextTick()
