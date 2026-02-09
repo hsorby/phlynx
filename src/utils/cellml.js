@@ -841,7 +841,7 @@ export function extractVariablesFromModule(modelString, componentName, includeIn
     return Array.from(variables)
   } finally {
     for (const obj of garbageCollector) {
-      obj.delete()
+      obj && obj.delete()
     }
   }
 }
@@ -1040,7 +1040,7 @@ export function areModelsEquivalent(modelAString, modelBString) {
     return equal
   } finally {
     for (const obj of garbageCollector) {
-      obj.delete()
+      obj &&obj.delete()
     }
   }
 }
