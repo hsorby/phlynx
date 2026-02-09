@@ -23,6 +23,16 @@
           </el-button>
 
           <el-button
+            type="warning"
+            plain
+            @click="handleAutoLayout"
+            style="margin-left: 10px"
+            :disabled="!somethingAvailable"
+          >
+            Auto Layout
+          </el-button>
+
+          <el-button
             type="danger"
             plain
             @click="handleClearWorkspace"
@@ -291,6 +301,7 @@ import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
 import { useClearWorkspace } from '../utils/workspace'
+import { relayoutNodes } from '../services/layouts/physics'
 import { generateFlattenedModel, initLibCellML, processModuleData, processUnitsData } from '../utils/cellml'
 import { edgeLineOptions, FLOW_IDS, IMPORT_KEYS, EXPORT_KEYS, JSON_FILE_TYPES } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueModuleName } from '../utils/nodes'
@@ -1129,6 +1140,10 @@ async function onReplaceConfirm(updatedData) {
   replacementDialogVisible.value = false
 }
 
+function handleAutoLayout() {
+  relayoutNodes(nodes.value, edges.value)
+}
+
 async function handleSaveWorkspace() {
   const result = await saveFileHandle(builderStore.lastSaveName, JSON_FILE_TYPES)
   if (result.status) {
@@ -1291,7 +1306,7 @@ function handleLoadWorkspace(file) {
       }
 
       // Clear the current Vue Flow state.
-      clearWorkspace()
+      await clearWorkspace()
 
       // Restore Vue Flow state.
       // We use `setViewport` to apply zoom/pan.
