@@ -1518,8 +1518,6 @@ async function fetchAndLoadResource(entry, resourceType) {
       await loadCellMLModuleData(content, entry.file, false)
     } else if (resourceType === 'module config') {
       const jsonContent = JSON.parse(content)
-      console.log('0000000', entry.file)
-      console.log('Loaded config JSON:', jsonContent)
       builderStore.addConfigFile(jsonContent, entry.name, false)
     } else if (resourceType === 'parameter file') {
       const parsed = await parseParametersFile(content)
