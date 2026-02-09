@@ -23,6 +23,16 @@
           </el-button>
 
           <el-button
+            type="warning"
+            plain
+            @click="handleAutoLayout"
+            style="margin-left: 10px"
+            :disabled="!somethingAvailable"
+          >
+            Auto Layout
+          </el-button>
+
+          <el-button
             type="danger"
             plain
             @click="handleClearWorkspace"
@@ -99,17 +109,9 @@
             @command="handleExportCommand"
             :disabled="!somethingAvailable"
           >
-            <el-tooltip
-              :disabled="!currentExportMode.disabled && somethingAvailable"
-              placement="bottom"
-              :auto-close="2400"
-            >
+            <el-tooltip :disabled="!currentExportMode.disabled" placement="bottom" :auto-close="2400">
               <div>
-                <el-tooltip
-                  placement="bottom"
-                  :disabled="currentExportMode.disabled || !somethingAvailable"
-                  :auto-close="1200"
-                >
+                <el-tooltip placement="bottom" :disabled="currentExportMode.disabled" :auto-close="1200">
                   <span class="export-button-content">
                     Export
                     <el-icon class="el-icon--right">
@@ -120,11 +122,7 @@
                 </el-tooltip>
               </div>
               <template #content>
-                <p>
-                  The
-                  <strong>{{ currentExportMode.label }}</strong>
-                  export option is disabled because {{ cellMlExportTooltip }}
-                </p>
+                {{ cellMlExportTooltip }}
               </template>
             </el-tooltip>
 
@@ -303,6 +301,7 @@ import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
 import { useClearWorkspace } from '../utils/workspace'
+import { relayoutNodes } from '../services/layouts/physics'
 import { generateFlattenedModel, initLibCellML, processModuleData, processUnitsData } from '../utils/cellml'
 import { edgeLineOptions, FLOW_IDS, IMPORT_KEYS, EXPORT_KEYS, JSON_FILE_TYPES } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueModuleName } from '../utils/nodes'
@@ -401,7 +400,7 @@ const importDialogRef = ref(null)
 const currentImportMode = ref(null)
 const currentImportConfig = ref({})
 
-const currentExportMode = ref(null)
+const currentExportKey = ref(EXPORT_KEYS.CELLML)
 
 const activeInteractionBuffer = new Map()
 const undoRedoSelection = false
@@ -452,28 +451,34 @@ const exportOptions = computed(() => [
     key: EXPORT_KEYS.CELLML,
     label: 'CellML',
     icon: markRaw(CellMLIcon),
-    disabled: libcellml.status !== 'ready',
     suffix: '.cellml',
+    disabled: libcellml.status !== 'ready' || !somethingAvailable.value,
   },
   {
     key: EXPORT_KEYS.CA,
     label: 'Circulatory Autogen',
     icon: markRaw(IconVessel),
-    disabled: false,
+    disabled: !somethingAvailable.value,
     suffix: '.zip',
   },
 ])
 const cellMlExportTooltip = computed(() => {
+  const prefix = 'The CellML export option is disabled because '
   if (libcellml.status !== 'ready') {
-    return 'The CellML library is not ready yet. Please wait a moment and try again.'
+    return prefix + 'the CellML library is not ready yet. Please wait a moment and try again.'
   }
   if (!somethingAvailable.value) {
-    return 'There is nothing to export. Please add some modules to the workspace first.'
+    return prefix + 'there is nothing to export. Please add some modules to the workspace first.'
   }
-  return ''
+  return 'This should not be shown when CellML export is enabled.'
 })
 
-currentExportMode.value = exportOptions.value[0]
+const currentExportMode = computed(() => {
+  // Find the selected option in the current list
+  const found = exportOptions.value.find((opt) => opt.key === currentExportKey.value)
+  // Fallback to the first option if nothing is found
+  return found || exportOptions.value[0]
+})
 
 onConnect((connection) => {
   // Match what we specify in connectionLineOptions.
@@ -968,7 +973,7 @@ const triggerCurrentExport = () => {
 }
 
 const handleExportCommand = (option) => {
-  currentExportMode.value = option
+  currentExportKey.value = option.key
   performExport(option)
 }
 
@@ -1135,6 +1140,10 @@ async function onReplaceConfirm(updatedData) {
   replacementDialogVisible.value = false
 }
 
+function handleAutoLayout() {
+  relayoutNodes(nodes.value, edges.value)
+}
+
 async function handleSaveWorkspace() {
   const result = await saveFileHandle(builderStore.lastSaveName, JSON_FILE_TYPES)
   if (result.status) {
@@ -1169,7 +1178,7 @@ async function handleSaveWorkspace() {
 }
 
 /**
- * Collects all state and processes it into a the current export format.
+ * Collects all state and processes it into the current export format.
  */
 async function onExportConfirm(fileName, handle) {
   const caExport = currentExportMode.value.key === EXPORT_KEYS.CA
@@ -1297,7 +1306,7 @@ function handleLoadWorkspace(file) {
       }
 
       // Clear the current Vue Flow state.
-      clearWorkspace()
+      await clearWorkspace()
 
       // Restore Vue Flow state.
       // We use `setViewport` to apply zoom/pan.

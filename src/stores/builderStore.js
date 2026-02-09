@@ -126,7 +126,10 @@ export const useBuilderStore = defineStore('builder', () => {
 
   function setVariableParameterValuesForInstance(instanceName, variables, sourceFile, componentName, configIndex) {
     const module = getModulesModule(sourceFile, componentName)
-    const variablesAndUnits = module.configs[configIndex].variables_and_units ?? []
+    let variablesAndUnits = []
+    if (module?.configs && configIndex !== undefined && module.configs[configIndex]) {
+      variablesAndUnits = module.configs[configIndex]?.variables_and_units ?? []
+    }
     const configMap = new Map(variablesAndUnits.map((arr) => [arr[0], arr]))
     for (const variable of variables) {
       const configEntry = configMap.get(variable.name)
