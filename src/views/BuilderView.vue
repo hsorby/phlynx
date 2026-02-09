@@ -22,11 +22,13 @@
             Save Workspace
           </el-button>
 
+          <el-divider direction="vertical" style="margin: 10 15px" />
+
           <el-button
             type="warning"
             plain
             @click="handleAutoLayout"
-            style="margin-left: 10px"
+            style="margin-left: 0px"
             :disabled="!somethingAvailable"
           >
             Auto Layout
@@ -39,7 +41,7 @@
             style="margin-left: 10px"
             :disabled="!somethingAvailable"
           >
-            Clear Workspace
+            Clear
           </el-button>
 
           <el-divider direction="vertical" style="margin: 0 15px" />
