@@ -290,6 +290,7 @@ import { createCellMLDataFragment } from '../services/cellml'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
+import { getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
 import { generateFlattenedModel, initLibCellML, processModuleData, processUnitsData } from '../utils/cellml'
 import { edgeLineOptions, FLOW_IDS, IMPORT_KEYS, EXPORT_KEYS, JSON_FILE_TYPES } from '../utils/constants'
@@ -299,7 +300,6 @@ import { getImportConfig, parseParametersFile } from '../utils/import'
 import { legacyDownload, saveFileHandle, writeFileHandle } from '../utils/save'
 import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import EditParameterDialog from '../components/EditParameterDialog.vue'
-import { clean } from 'semver'
 
 // import testModuleBGContent from '../assets/bg_modules.cellml?raw'
 // import testModuleColonContent from '../assets/colon_FTU_modules.cellml?raw'
@@ -908,6 +908,7 @@ async function onImportConfirm(importPayload, updateProgress) {
     }
 
     try {
+      console.log('Starting vessel array import with', vessels, 'vessels')
       await loadFromVesselArray({ vessels }, (current, total, statusMessage) => {
         if (updateProgress) {
           updateProgress(`${statusMessage || 'Loading vessel array...'} (${current}/${total})`)
@@ -1497,8 +1498,13 @@ onMounted(async () => {
   document.addEventListener('keydown', handleKeyDown)
   document.addEventListener('mousemove', onMouseMove)
 
+  const manifest =await loadManifest()
+
   const instance = await libcellmlReadyPromise
   initLibCellML(instance)
+
+  console.log('Manifest loaded:', manifest)
+
 
   const promises = []
   for (const [path, content] of Object.entries(cellmlModules)) {
