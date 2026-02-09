@@ -72,6 +72,7 @@ function buildNodes(builderStore, vessels, progressCallback = null) {
         portLabels: buildPortLabels(config),
         portOptions: module.portOptions || [],
         ports: buildPorts(vessel, config),
+        hasPrescribedPosition: hasPosition,
         sourceFile: filename,
         variables,
       },
