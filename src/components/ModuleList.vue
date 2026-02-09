@@ -32,7 +32,12 @@
             >
               {{ module.configs.length }} configs
             </el-tag>
-            <el-tooltip v-if="module.configs && module.configs.length === 1" content="Preview Configuration" placement="top" :auto-close="TOOLTIP_AUTO_CLOSE">
+            <el-tooltip
+              v-if="module.configs && module.configs.length === 1"
+              content="Preview Configuration"
+              placement="top"
+              :auto-close="TOOLTIP_AUTO_CLOSE"
+            >
               <el-button size="small" circle @click.stop="openPreview(module, file.filename)">
                 <el-icon><View /></el-icon>
               </el-button>
@@ -121,6 +126,12 @@ watch(
         }
       })
     })
+
+    if (filterText.value === '') {
+      activeCollapseNames.value = []
+    } else {
+      activeCollapseNames.value = files.map((f) => f.filename)
+    }
   },
   { immediate: true, deep: true }
 )
