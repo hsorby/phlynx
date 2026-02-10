@@ -1639,7 +1639,7 @@ const handleKeyDown = (event) => {
     selectAllNodes()
   }
 
-  if (isCtrl && event.key.toLowerCase() === 's') {
+  if (isCtrl && event.key.toLowerCase() === 's' && !somethingAvailable) {
     event.preventDefault()
     handleSaveWorkspace()
   }
@@ -1664,9 +1664,14 @@ const handleKeyDown = (event) => {
 
   if (isCtrl && event.key.toLowerCase() === 'i' && !currentImportMode.disabled) {
     event.preventDefault() 
-    triggerCurrentExport()
+    triggerCurrentImport()
   }
-  
+
+  if (isCtrl && event.key.toLowerCase() === 'l') {
+    event.preventDefault() 
+    handleLoadWorkspace()
+  }
+
   // Search shortcuts
   if ((isCtrl && event.key === 'f')||(event.key === '/')){
     event.preventDefault()
