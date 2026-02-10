@@ -39,7 +39,9 @@ jobs:
           cache-dependency-path: 'source/yarn.lock'
 
       - name: Install Dependencies
-        run: yarn
+        run: |
+          cd source
+          yarn
 
       - name: Generate Changelog
         id: gen_changelog
