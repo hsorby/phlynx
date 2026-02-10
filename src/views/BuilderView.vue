@@ -1667,11 +1667,6 @@ const handleKeyDown = (event) => {
     triggerCurrentImport()
   }
 
-  if (isCtrl && event.key.toLowerCase() === 'l') {
-    event.preventDefault() 
-    handleLoadWorkspace()
-  }
-
   // Search shortcuts
   if ((isCtrl && event.key === 'f')||(event.key === '/')){
     event.preventDefault()
