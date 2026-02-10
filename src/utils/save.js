@@ -1,5 +1,3 @@
-import { JSON_FILE_TYPES } from "./constants"
-
 export const legacyDownload = (filename, blob) => {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
