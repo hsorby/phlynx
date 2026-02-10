@@ -1675,16 +1675,18 @@ const handleKeyDown = (event) => {
   const isCtrl = event.ctrlKey || event.metaKey // metaKey for Mac Cmd
   const isShift = event.shiftKey
 
-  if (isCtrl && event.key === 'c') {
+  if (isCtrl && event.key.toLowerCase() === 'c') {
+    event.preventDefault() 
     copySelection()
   }
 
-  if (isCtrl && event.key === 'v') {
+  if (isCtrl && event.key.toLowerCase() === 'v') {
+    event.preventDefault() 
     pasteSelection(true)
   }
 
-  if (isCtrl && event.key === 'd') {
-    event.preventDefault() // Stop browser bookmark dialog
+  if (isCtrl && event.key.toLowerCase() === 'd') {
+    event.preventDefault() 
     copySelection()
     pasteSelection()
   }
@@ -1694,15 +1696,36 @@ const handleKeyDown = (event) => {
     selectAllNodes()
   }
 
+  if (isCtrl && event.key.toLowerCase() === 's' && !somethingAvailable) {
+    event.preventDefault()
+    handleSaveWorkspace()
+  }
+
   if (isCtrl && !isShift && event.key === 'z' && historyStore.canUndo) {
+    event.preventDefault() 
     handleUndo()
   }
   if (isCtrl && isShift && event.key === 'z' && historyStore.canRedo) {
+    event.preventDefault() 
     handleRedo()
   }
-  
+  if (isCtrl && event.key.toLowerCase() === 'y' && historyStore.canRedo) {
+    event.preventDefault() 
+    handleRedo()
+  }
+
+  if (isCtrl && event.key.toLowerCase() === 'e' && !currentExportMode.disabled) {
+    event.preventDefault() 
+    triggerCurrentExport()
+  }
+
+  if (isCtrl && event.key.toLowerCase() === 'i' && !currentImportMode.disabled) {
+    event.preventDefault() 
+    triggerCurrentImport()
+  }
+
   // Search shortcuts
-  if (isCtrl && event.key === 'f') {
+  if ((isCtrl && event.key === 'f')||(event.key === '/')){
     event.preventDefault()
     document.querySelector('.workspace-search-input input')?.focus()
   }
