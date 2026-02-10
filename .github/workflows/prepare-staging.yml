@@ -41,6 +41,7 @@ jobs:
       - name: Install Dependencies
         run: |
           cd source
+          
           yarn
 
       - name: Generate Changelog
@@ -112,6 +113,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PAT_CREATE_PR }}
         run: |
+          cd source
+
           BRANCH_NAME=${{ steps.create_branch.outputs.branch_name }}
           LAST_TAG=${{ steps.gen_changelog.outputs.last_tag }}
           TITLE="Staging for release: $LAST_TAG"
