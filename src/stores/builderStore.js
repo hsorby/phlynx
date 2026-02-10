@@ -349,9 +349,7 @@ export const useBuilderStore = defineStore('builder', () => {
 
   function getModuleConfigFromConfigIndex(filename, moduleName, configIndex) {
     const module = getModulesModule(filename, moduleName)
-    return {
-      config: module.configs[configIndex],
-    }
+    return module.configs[configIndex]
   }
 
   function getState() {
