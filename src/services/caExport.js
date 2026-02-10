@@ -182,6 +182,12 @@ export async function generateExportZip(fileName, nodes, edges, builderStore) {
         ])
       }
 
+      const config = builderStore.getModuleConfigFromConfigIndex(
+        node.data.sourceFile, 
+        node.data.componentName, 
+        node.data.configIndex
+      )
+
       // Build Config and Vessel arrays
       module_config.push({
         vessel_type: node.data.name,
@@ -197,8 +203,8 @@ export async function generateExportZip(fileName, nodes, edges, builderStore) {
 
       vessel_array.push({
         name: node.data.name,
-        BC_type: BC_type,
-        vessel_type: node.data.name,
+        BC_type: config.BC_type,
+        vessel_type: config.vessel_type,
         inp_vessels: inp_vessels.join(' '),
         out_vessels: out_vessels.join(' '),
       })
