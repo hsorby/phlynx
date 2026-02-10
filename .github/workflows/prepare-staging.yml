@@ -41,7 +41,7 @@ jobs:
       - name: Install Dependencies
         run: |
           cd source
-          
+
           yarn
 
       - name: Generate Changelog
@@ -52,6 +52,7 @@ jobs:
           cd source
 
           LAST_TAG=$(git describe --tags --abbrev=0 origin/main 2>/dev/null || echo "")
+          COUNT=`git rev-list --count $(git describe --tags --match "v*" --abbrev=0)..HEAD`
 
           yarn gen-changelog -q > changelogs/latest.md
 
@@ -68,6 +69,7 @@ jobs:
           yarn update:docs:changelog
 
           echo "last_tag=$LAST_TAG" >> $GITHUB_OUTPUT
+          echo "commit_count=$COUNT" >> $GITHUB_OUTPUT
 
       - name: Mess about with branches
         run: |
@@ -115,13 +117,14 @@ jobs:
         run: |
           cd source
 
+          COMMIT_COUNT=${{ steps.gen_changelog.outputs.commit_count }}
           BRANCH_NAME=${{ steps.create_branch.outputs.branch_name }}
           LAST_TAG=${{ steps.gen_changelog.outputs.last_tag }}
           TITLE="Staging for release: $LAST_TAG"
 
-          if [ -f "source/changelogs/latest.md" ]; then
+          if [ "$COMMIT_COUNT" -gt 0 ]; then
             # Read the file content into a variable for the PR body
-            BODY_CONTENT=$(cat source/changelogs/latest.md)
+            BODY_CONTENT=$(cat changelogs/latest.md)
             TITLE+=" + Unreleased Changes"
           else
             BODY_CONTENT="Release $LAST_TAG of PhLynx."
