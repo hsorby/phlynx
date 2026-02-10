@@ -1637,6 +1637,11 @@ const handleKeyDown = (event) => {
     selectAllNodes()
   }
 
+  if (isCtrl && event.key.toLowerCase() === 's') {
+    event.preventDefault()
+    handleSaveWorkspace()
+  }
+
   if (isCtrl && !isShift && event.key === 'z' && historyStore.canUndo) {
     handleUndo()
   }
