@@ -752,6 +752,21 @@ const onEdgeChange = (changes) => {
 
 const screenshotDisabled = computed(() => nodes.value.length === 0 && vueFlowRef.value !== null)
 
+function updateNodesWithNewParameters() {
+  nodes.value.forEach((node) => {
+    if (node.type === 'moduleNode') {
+      builderStore.setVariableParameterValuesForInstance(
+        node.data.name,
+        node.data.variables,
+        node.data.sourceFile,
+        node.data.componentName,
+        node.data.configIndex
+      )
+      updateNodeData(node.id, { variables: node.data.variables })
+    }
+  })
+}
+
 const loadCellMLModuleData = (content, filename, broadcastNotifications = true) => {
   return new Promise((resolve) => {
     const result = processModuleData(content)
@@ -929,6 +944,7 @@ async function onImportConfirm(importPayload, updateProgress) {
   } else if (currentImportMode.value.key === IMPORT_KEYS.PARAMETER) {
     const paramPayload = importPayload[IMPORT_KEYS.PARAMETER]
     loadParametersData(paramPayload?.data, paramPayload?.fileName)
+    updateNodesWithNewParameters()
   } else if (currentImportMode.value.key === IMPORT_KEYS.UNITS) {
     const unitsPayload = importPayload[IMPORT_KEYS.UNITS]
     loadCellMLUnitsData(unitsPayload?.data, unitsPayload?.fileName)
