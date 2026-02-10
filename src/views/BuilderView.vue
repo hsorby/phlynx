@@ -1645,7 +1645,7 @@ const handleKeyDown = (event) => {
   }
   
   // Search shortcuts
-  if (isCtrl && event.key === 'f') {
+  if ((isCtrl && event.key === 'f')||(event.key === '/')){
     event.preventDefault()
     document.querySelector('.workspace-search-input input')?.focus()
   }
