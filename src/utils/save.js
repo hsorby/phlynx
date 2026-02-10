@@ -21,7 +21,7 @@ export const saveFileHandle = async (defaultName, types) => {
     try {
       const handle = await window.showSaveFilePicker({
         suggestedName: defaultName,
-        types: JSON_FILE_TYPES,
+        types,
       })
       return { status: true, handle: handle }
     } catch (err) {
