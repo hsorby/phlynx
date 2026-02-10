@@ -173,8 +173,29 @@
             @focus="searchBarFocused = true"
             @blur="searchBarFocused = false"
           >
-            <template #suffix v-if="searchQuery && matchCount !== null">
-              <span class="search-match-count">{{ matchCount }} match{{ matchCount !== 1 ? 'es' : '' }}</span>
+            <template #suffix>
+              <div class="search-suffix-content">
+                <span v-if="searchQuery && matchCount !== null" class="search-match-count">
+                  {{ matchCount }} match{{ matchCount !== 1 ? 'es' : '' }}
+                </span>
+                <div v-if="searchQuery && matchCount >= 1" class="search-nav-buttons">
+                  <el-button 
+                    v-if="matchCount > 1"
+                    :icon="ArrowUp" 
+                    size="small" 
+                    text 
+                    @click="cycleToPreviousMatch"
+                    title="Previous match (Shift+Enter)"
+                  />
+                  <el-button 
+                    :icon="ArrowDown" 
+                    size="small" 
+                    text 
+                    @click="cycleToNextMatch"
+                    :title="matchCount === 1 ? 'Zoom to match (Enter)' : 'Next match (Enter)'"
+                  />
+                </div>
+              </div>
             </template>
           </el-input>
         </div>
@@ -290,6 +311,8 @@ import {
   DCaret,
   CameraFilled,
   Search,
+  ArrowUp,
+  ArrowDown,
   Menu as IconVessel,
   Operation as IconParameters,
   Setting as IconModuleConfig,
@@ -420,6 +443,7 @@ const searchQuery = ref('')
 const matchCount = ref(null)
 const matchingNodeIds = ref(new Set())
 const searchBarFocused = ref(false)
+const currentMatchIndex = ref(0)
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 
@@ -532,6 +556,7 @@ const handleSearchInput = () => {
   if (!searchQuery.value.trim()) {
     matchingNodeIds.value.clear()
     matchCount.value = null
+    currentMatchIndex.value = 0
     return
   }
 
@@ -539,18 +564,64 @@ const handleSearchInput = () => {
   const matches = new Set()
 
   nodes.value.forEach((node) => {
-    // Search in component name, config name (label), and module name (sourceFile)
+    // Search in all relevant name fields
     const componentName = node.data?.componentName?.toLowerCase() || ''
-    const configName = node.data?.label?.toLowerCase() || ''
-    const moduleName = node.data?.sourceFile?.toLowerCase() || ''
+    const name = node.data?.name?.toLowerCase() || ''
+    const label = node.data?.label?.toLowerCase() || ''
+    const sourceFile = node.data?.sourceFile?.toLowerCase() || ''
     
-    if (componentName.includes(query) || configName.includes(query) || moduleName.includes(query)) {
+    if (componentName.includes(query) || 
+        name.includes(query) || 
+        label.includes(query) || 
+        sourceFile.includes(query)) {
       matches.add(node.id)
     }
   })
 
   matchingNodeIds.value = matches
   matchCount.value = matches.size
+  currentMatchIndex.value = 0
+}
+
+// Cycle to next matching node
+const cycleToNextMatch = () => {
+  if (matchCount.value === 0) return
+  
+  const matchArray = Array.from(matchingNodeIds.value)
+  
+  if (matchCount.value === 1) {
+    // If only one match, just zoom to it
+    zoomToNode(matchArray[0])
+  } else {
+    // Multiple matches, cycle through them
+    currentMatchIndex.value = (currentMatchIndex.value + 1) % matchArray.length
+    zoomToNode(matchArray[currentMatchIndex.value])
+  }
+}
+
+// Cycle to previous matching node
+const cycleToPreviousMatch = () => {
+  if (matchCount.value <= 1) return
+  
+  const matchArray = Array.from(matchingNodeIds.value)
+  currentMatchIndex.value = (currentMatchIndex.value - 1 + matchArray.length) % matchArray.length
+  zoomToNode(matchArray[currentMatchIndex.value])
+}
+
+// Zoom and center on a specific node
+const zoomToNode = (nodeId) => {
+  const node = findNode(nodeId)
+  if (!node) return
+  
+  const x = node.position.x + (node.dimensions?.width || 0) / 2
+  const y = node.position.y + (node.dimensions?.height || 0) / 2
+  const zoom = 1.2
+  
+  setViewport({
+    x: dimensions.value.width / 2 - x * zoom,
+    y: dimensions.value.height / 2 - y * zoom,
+    zoom: zoom,
+  }, { duration: 300 })
 }
 
 // Helper function to determine node class based on search
@@ -1529,7 +1600,20 @@ const pasteSelection = (atMouse = false) => {
 
 const handleKeyDown = (event) => {
   // Check if user is typing in an input field (don't trigger copy/paste then)
-  if (['INPUT', 'TEXTAREA'].includes(event.target.tagName)) return
+  if (['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
+    // Allow Enter/Shift+Enter in search input for navigation
+    if (event.target.closest('.workspace-search-input')) {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        if (event.shiftKey) {
+          cycleToPreviousMatch()
+        } else {
+          cycleToNextMatch()
+        }
+      }
+    }
+    return
+  }
 
   const isCtrl = event.ctrlKey || event.metaKey // metaKey for Mac Cmd
   const isShift = event.shiftKey
@@ -1806,10 +1890,31 @@ watch(nodes, () => {
   padding-right: 8px;
 }
 
+.search-suffix-content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 8px;
+}
+
+.search-nav-buttons {
+  display: flex;
+  gap: 2px;
+}
+
+.search-nav-buttons .el-button {
+  padding: 4px;
+  min-height: unset;
+}
+
 /* Node filtering styles */
 .node-search-match {
   opacity: 1 !important;
   transition: opacity 0.2s ease;
+  outline: 3px solid #409eff;
+  outline-offset: 2px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.2);
 }
 
 .node-search-dimmed {
