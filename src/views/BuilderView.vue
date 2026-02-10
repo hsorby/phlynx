@@ -214,12 +214,7 @@
     @confirm="onEditConfirm"
   />
 
-  <CellMLEditorDialog
-    v-model="cellMLEditorDialogVisible"
-    :nodeData="currentEditingNode"
-    @save-update="onCellMLUpdateSave"
-    @save-fork="onCellMLForkSave"
-  />
+  <CellMLEditorDialog v-model="cellMLEditorDialogVisible" :nodeData="currentEditingNode" @save="handleCellMLSave" />
 
   <EditParameterDialog v-model="editParameterDialogVisible" :nodeData="currentEditingNode" />
 
@@ -990,54 +985,6 @@ function onOpenParameterEditorDialog(eventPayload) {
   editParameterDialogVisible.value = true
 }
 
-async function propogateCellMLModuleUpdates(updatedData, changeText) {
-  await loadCellMLModuleData(updatedData.code, updatedData.sourceFile, false)
-  const updatedModule = builderStore.getModulesModule(updatedData.sourceFile, updatedData.componentName)
-  const validPortNames = new Set(updatedModule.portOptions.map((p) => p.name))
-
-  let updatedCount = 0
-  nodes.value.forEach((node) => {
-    const isTargetNode = node.id === updatedData.nodeId
-    const isMatchingModule =
-      node.data.sourceFile === updatedData.sourceFile && node.data.componentName === updatedData.componentName
-    if (isTargetNode || isMatchingModule) {
-      const cleanLabels = (node.data.portLabels || []).map((labelObj) => {
-        return {
-          ...labelObj,
-          // Filter the internal array: Keep 'opt' only if it exists in validPortNames.
-          option: labelObj.option.filter((opt) => validPortNames.has(opt)),
-        }
-      })
-      const existingVariableNames = new Set(node.data.variables.map((item) => item.name))
-      const cleanVariables = (node.data.variables || []).filter((v) => validPortNames.has(v.name))
-      const newItems = updatedModule.variables.filter((item) => !existingVariableNames.has(item.name))
-      cleanVariables.push(...newItems)
-
-      // Create the new data object
-      const newData = {
-        ...JSON.parse(JSON.stringify(node.data)), // Deep copy to avoid mutating existing data
-        componentName: updatedData.componentName,
-        sourceFile: updatedData.sourceFile, // Essential for the target node
-        label: `${updatedData.componentName} — ${updatedData.sourceFile}`,
-        portLabels: cleanLabels, // Cleaned port labels.
-        portOptions: updatedModule.portOptions, // Updates the ports/handles
-        variables: cleanVariables, // Cleaned variables list.
-      }
-
-      updatedCount++
-      updateNodeData(node.id, newData)
-    }
-  })
-
-  notify.success({
-    title: 'CellML Module ' + changeText,
-    message: `Updated ${updatedCount} node${updatedCount !== 1 ? 's' : ''} to use ${updatedData.componentName} from ${
-      updatedData.sourceFile
-    }.`,
-  })
-  return validPortNames
-}
-
 function filterConfig(config, validNamesSet) {
   // Clean the Ports (Nested arrays).
   const portFields = ['entrance_ports', 'exit_ports', 'general_ports']
@@ -1057,29 +1004,123 @@ function filterConfig(config, validNamesSet) {
     config.variables_and_units = config.variables_and_units.filter((entry) => validNamesSet.has(entry[0]))
   }
 }
+/**
+ * Handler for both Saving (Updating) and Forking CellML modules.
+ * Handles:
+ * 1. Loading the new/updated CellML data.
+ * 2. Migrating configs if the name changed.
+ * 3. updating graph nodes to match new ports.
+ */
+async function handleCellMLSave(saveData) {
+  const { sourceFile, componentName, originalSourceFile, originalComponentName, originalConfigIndex, code } = saveData
 
-async function onCellMLUpdateSave(updatedData) {
-  const validPortNames = await propogateCellMLModuleUpdates(updatedData, 'Updated')
-  const targetModule = builderStore.getModulesModule(updatedData.sourceFile, updatedData.componentName)
-  // Strip new config port settings down to only those that are valid for the new module.
-  filterConfig(targetModule.configs[updatedData.configIndex], validPortNames)
+  const isRename = originalComponentName !== componentName
+  const isNewFile = originalSourceFile !== sourceFile
+  const isForkOrRename = isRename || isNewFile
+
+  // Get the original configuration to migrate (if it exists).
+  const originalModule = builderStore.getModulesModule(originalSourceFile, originalComponentName)
+
+  // Safety check: If we can't find the original, create a blank config
+  let configToMigrate = {}
+  if (originalModule && originalModule.configs && originalModule.configs[originalConfigIndex]) {
+    // Deep copy to break reactivity
+    configToMigrate = JSON.parse(JSON.stringify(originalModule.configs[originalConfigIndex]))
+  }
+
+  // Load the New Data into the Store
+  // This registers the module under the name found in 'code'.
+  await loadCellMLModuleData(code, sourceFile, false)
+
+  // Retrieve the "Target" Module (The one we just loaded)
+  let targetModule = builderStore.getModulesModule(sourceFile, componentName)
+
+  if (!targetModule) {
+    console.warn(`Mismatch: Requested ${componentName}, but store didn't register it. Check component name extraction.`)
+    return
+  }
+
+  // Update the configuration.
+  if (!targetModule.configs) {
+    targetModule.configs = []
+  }
+
+  if (isForkOrRename) {
+    // CASE A: Fork or Rename -> We add a NEW config entry.
+
+    // Update metadata to match new home.
+    configToMigrate.module_file = sourceFile
+    configToMigrate.module_type = componentName
+
+    // Push as a new config.
+    targetModule.configs.push(configToMigrate)
+    targetModule.configIndex = targetModule.configs.length - 1
+  } else {
+    // CASE B: Simple Update -> We update the EXISTING config in place.
+    // We don't push a new one, we just ensure the current one is up to date.
+    targetModule.configs[originalConfigIndex] = configToMigrate
+  }
+
+  // Propagate Changes (Update Nodes and Filter Configs).
+  const validPortNames = updateGraphNodesAndPorts(saveData, targetModule)
+
+  // Clean the Config (Remove ports that no longer exist).
+  // Now that we have the valid ports from the new CellML, clean the config.
+  const activeConfig = targetModule.configs[targetModule.configIndex]
+  filterConfig(activeConfig, validPortNames)
 }
 
-async function onCellMLForkSave(saveData) {
-  const originalModule = builderStore.getModulesModule(saveData.originalSourceFile, saveData.originalComponentName)
-  const newConfig = JSON.parse(
-    JSON.stringify(originalModule.configs ? originalModule.configs[saveData.originalConfigIndex] : {})
-  )
-  newConfig.module_file = saveData.sourceFile
-  newConfig.module_type = saveData.componentName
-  const validPortNames = await propogateCellMLModuleUpdates(saveData, 'Forked')
-  // Strip new config port settings down to only those that are valid for the new module.
-  filterConfig(newConfig, validPortNames)
-  const targetModule = builderStore.getModulesModule(saveData.sourceFile, saveData.componentName)
-  const configs = targetModule.configs || []
-  targetModule.configIndex = configs.length
-  configs.push(newConfig)
-  targetModule.configs = configs
+/**
+ * Helper: Updates the visual nodes on the graph.
+ * Separated from data fetching for clarity.
+ */
+function updateGraphNodesAndPorts(updatedData, updatedModule) {
+  const validPortNames = new Set(updatedModule?.portOptions?.map((p) => p.name) || [])
+  let updatedCount = 0
+
+  nodes.value.forEach((node) => {
+    // Check if node is the specific target OR if it uses the same module (for reusability).
+    const isTargetNode = node.id === updatedData.nodeId
+    const isMatchingModule =
+      node.data.sourceFile === updatedData.originalSourceFile &&
+      node.data.componentName === updatedData.originalComponentName
+
+    if (isTargetNode || isMatchingModule) {
+      // Logic to clean existing variables/ports on the node.
+      const cleanLabels = (node.data.portLabels || []).map((labelObj) => ({
+        ...labelObj,
+        option: labelObj.option.filter((opt) => validPortNames.has(opt)),
+      }))
+
+      const existingVariableNames = new Set(node.data.variables.map((item) => item.name))
+      const cleanVariables = (node.data.variables || []).filter((v) => validPortNames.has(v.name))
+
+      // Add new variables found in the CellML.
+      const newItems = (updatedModule.variables || []).filter((item) => !existingVariableNames.has(item.name))
+      cleanVariables.push(...newItems)
+
+      // Construct new node data.
+      const newData = {
+        ...JSON.parse(JSON.stringify(node.data)),
+        componentName: updatedData.componentName, // Update to NEW name
+        sourceFile: updatedData.sourceFile, // Update to NEW file
+        label: `${updatedData.componentName} — ${updatedData.sourceFile}`,
+        portLabels: cleanLabels,
+        portOptions: updatedModule.portOptions || [],
+        variables: cleanVariables,
+      }
+
+      updatedCount++
+      updateNodeData(node.id, newData)
+    }
+  })
+
+  notify.success({
+    title: 'Module Updated',
+    message: `Updated ${updatedCount} node${updatedCount !== 1 ? 's' : ''} to ${updatedData.componentName}.`,
+  })
+
+  return validPortNames
 }
 
 function onOpenMacroBuilderDialog() {
@@ -1532,7 +1573,6 @@ async function fetchAndLoadResource(entry, resourceType) {
   }
 }
 
-
 const cellmlModules = import.meta.glob('../assets/modules/*.cellml', {
   query: 'raw',
   eager: true,
@@ -1544,7 +1584,6 @@ const cellmlUnits = import.meta.glob('../assets/units/*.cellml', {
 const moduleConfigs = import.meta.glob('../assets/module_configs/*.json', {
   eager: true,
 })
-
 
 onMounted(async () => {
   document.addEventListener('keydown', handleKeyDown)
