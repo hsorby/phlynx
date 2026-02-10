@@ -1648,6 +1648,9 @@ const handleKeyDown = (event) => {
   if (isCtrl && isShift && event.key === 'z' && historyStore.canRedo) {
     handleRedo()
   }
+  if (isCtrl && event.key === 'y' && historyStore.canRedo) {
+    handleRedo()
+  }
   
   // Search shortcuts
   if ((isCtrl && event.key === 'f')||(event.key === '/')){
