@@ -1618,15 +1618,15 @@ const handleKeyDown = (event) => {
   const isCtrl = event.ctrlKey || event.metaKey // metaKey for Mac Cmd
   const isShift = event.shiftKey
 
-  if (isCtrl && event.key === 'c') {
+  if (isCtrl && event.key.toLowerCase() === 'c') {
     copySelection()
   }
 
-  if (isCtrl && event.key === 'v') {
+  if (isCtrl && event.key.toLowerCase() === 'v') {
     pasteSelection(true)
   }
 
-  if (isCtrl && event.key === 'd') {
+  if (isCtrl && event.key.toLowerCase() === 'd') {
     event.preventDefault() // Stop browser bookmark dialog
     copySelection()
     pasteSelection()
