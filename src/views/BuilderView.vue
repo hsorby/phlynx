@@ -1619,15 +1619,17 @@ const handleKeyDown = (event) => {
   const isShift = event.shiftKey
 
   if (isCtrl && event.key.toLowerCase() === 'c') {
+    event.preventDefault() 
     copySelection()
   }
 
   if (isCtrl && event.key.toLowerCase() === 'v') {
+    event.preventDefault() 
     pasteSelection(true)
   }
 
   if (isCtrl && event.key.toLowerCase() === 'd') {
-    event.preventDefault() // Stop browser bookmark dialog
+    event.preventDefault() 
     copySelection()
     pasteSelection()
   }
@@ -1643,13 +1645,26 @@ const handleKeyDown = (event) => {
   }
 
   if (isCtrl && !isShift && event.key === 'z' && historyStore.canUndo) {
+    event.preventDefault() 
     handleUndo()
   }
   if (isCtrl && isShift && event.key === 'z' && historyStore.canRedo) {
+    event.preventDefault() 
     handleRedo()
   }
-  if (isCtrl && event.key === 'y' && historyStore.canRedo) {
+  if (isCtrl && event.key.toLowerCase() === 'y' && historyStore.canRedo) {
+    event.preventDefault() 
     handleRedo()
+  }
+
+  if (isCtrl && event.key.toLowerCase() === 'e' && !currentExportMode.disabled) {
+    event.preventDefault() 
+    triggerCurrentExport()
+  }
+
+  if (isCtrl && event.key.toLowerCase() === 'i' && !currentImportMode.disabled) {
+    event.preventDefault() 
+    triggerCurrentExport()
   }
   
   // Search shortcuts
