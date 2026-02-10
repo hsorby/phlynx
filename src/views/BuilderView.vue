@@ -162,6 +162,23 @@
       </div>
 
       <el-main class="workbench-main">
+        <div class="workspace-search-container" :class="{ 'search-inactive': !searchBarFocused && !searchQuery }">
+          <el-input
+            v-model="searchQuery"
+            placeholder="Search modules..."
+            :prefix-icon="Search"
+            clearable
+            class="workspace-search-input"
+            @input="handleSearchInput"
+            @focus="searchBarFocused = true"
+            @blur="searchBarFocused = false"
+          >
+            <template #suffix v-if="searchQuery && matchCount !== null">
+              <span class="search-match-count">{{ matchCount }} match{{ matchCount !== 1 ? 'es' : '' }}</span>
+            </template>
+          </el-input>
+        </div>
+
         <div class="dnd-flow" @drop="onDrop">
           <VueFlow
             :id="FLOW_IDS.MAIN"
@@ -188,6 +205,7 @@
                 :id="props.id"
                 :data="props.data"
                 :selected="props.selected"
+                :class="getNodeClass(props)"
                 @open-edit-dialog="onOpenEditDialog"
                 @open-cellml-editor-dialog="onOpenCellMLEditorDialog"
                 @open-parameter-editor-dialog="onOpenParameterEditorDialog"
@@ -266,11 +284,12 @@ export default {
 </script>
 
 <script setup>
-import { computed, h, inject, markRaw, nextTick, onMounted, onUnmounted, ref, watchPostEffect } from 'vue'
+import { computed, h, inject, markRaw, nextTick, onMounted, onUnmounted, ref, watch, watchPostEffect } from 'vue'
 import { useVueFlow, VueFlow } from '@vue-flow/core'
 import {
   DCaret,
   CameraFilled,
+  Search,
   Menu as IconVessel,
   Operation as IconParameters,
   Setting as IconModuleConfig,
@@ -396,6 +415,12 @@ const undoRedoSelection = false
 const clipboard = ref({ nodes: [], edges: [] })
 const mousePosition = ref({ x: 0, y: 0 })
 
+// Search functionality
+const searchQuery = ref('')
+const matchCount = ref(null)
+const matchingNodeIds = ref(new Set())
+const searchBarFocused = ref(false)
+
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 
 const somethingAvailable = computed(() => nodes.value.length > 0)
@@ -500,6 +525,40 @@ function selectAllNodes() {
   nodes.value.forEach((node) => {
     node.selected = true
   })
+}
+
+// Search filter logic
+const handleSearchInput = () => {
+  if (!searchQuery.value.trim()) {
+    matchingNodeIds.value.clear()
+    matchCount.value = null
+    return
+  }
+
+  const query = searchQuery.value.toLowerCase()
+  const matches = new Set()
+
+  nodes.value.forEach((node) => {
+    // Search in component name, config name (label), and module name (sourceFile)
+    const componentName = node.data?.componentName?.toLowerCase() || ''
+    const configName = node.data?.label?.toLowerCase() || ''
+    const moduleName = node.data?.sourceFile?.toLowerCase() || ''
+    
+    if (componentName.includes(query) || configName.includes(query) || moduleName.includes(query)) {
+      matches.add(node.id)
+    }
+  })
+
+  matchingNodeIds.value = matches
+  matchCount.value = matches.size
+}
+
+// Helper function to determine node class based on search
+const getNodeClass = (props) => {
+  if (!searchQuery.value.trim()) {
+    return ''
+  }
+  return matchingNodeIds.value.has(props.id) ? 'node-search-match' : 'node-search-dimmed'
 }
 
 function handleClearWorkspace() {
@@ -1500,6 +1559,16 @@ const handleKeyDown = (event) => {
   if (isCtrl && isShift && event.key === 'z' && historyStore.canRedo) {
     handleRedo()
   }
+  
+  // Search shortcuts
+  if (isCtrl && event.key === 'f') {
+    event.preventDefault()
+    document.querySelector('.workspace-search-input input')?.focus()
+  }
+  
+  if (event.key === 'Escape' && searchQuery.value && !['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
+    searchQuery.value = ''
+  }
 }
 
 async function fetchAndLoadResource(entry, resourceType) {
@@ -1657,6 +1726,13 @@ watchPostEffect(() => {
     actionBtn.removeAttribute('disabled')
   }
 })
+
+// Watch for node changes to re-apply search filter
+watch(nodes, () => {
+  if (searchQuery.value.trim()) {
+    handleSearchInput()
+  }
+}, { deep: true })
 </script>
 
 <style>
@@ -1698,5 +1774,46 @@ watchPostEffect(() => {
 .import-button-content {
   display: flex;
   align-items: center;
+}
+
+/* Search bar styles */
+.workspace-search-container {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  width: 300px;
+  transition: opacity 0.3s ease;
+}
+
+.workspace-search-container.search-inactive {
+  opacity: 0.4;
+}
+
+.workspace-search-container:hover {
+  opacity: 1;
+}
+
+.workspace-search-input {
+  background: white;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+.search-match-count {
+  font-size: 12px;
+  color: #909399;
+  padding-right: 8px;
+}
+
+/* Node filtering styles */
+.node-search-match {
+  opacity: 1 !important;
+  transition: opacity 0.2s ease;
+}
+
+.node-search-dimmed {
+  opacity: 0.25 !important;
+  transition: opacity 0.2s ease;
 }
 </style>
