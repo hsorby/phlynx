@@ -36,6 +36,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           cache: 'yarn'
+          cache-dependency-path: 'source/yarn.lock'
 
       - name: Install Dependencies
         run: yarn
