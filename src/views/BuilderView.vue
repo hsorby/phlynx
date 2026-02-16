@@ -435,6 +435,7 @@ const currentImportMode = ref(null)
 const currentImportConfig = ref({})
 
 const currentExportKey = ref(EXPORT_KEYS.CELLML)
+const activeExportNotification = ref(null)
 
 const activeInteractionBuffer = new Map()
 const undoRedoSelection = false
@@ -1375,6 +1376,11 @@ async function handleSaveWorkspace() {
  * Collects all state and processes it into the current export format.
  */
 async function onExportConfirm(fileName, handle) {
+  if (activeExportNotification.value) {
+    activeExportNotification.value.close()
+    activeExportNotification.value = null
+  }
+
   const caExport = currentExportMode.value.key === EXPORT_KEYS.CA
   const message = caExport ? 'Generating and zipping CA files.' : 'Generating flattened CellML model.'
   const notification = notify.info({
@@ -1428,7 +1434,7 @@ async function onExportConfirm(fileName, handle) {
       file_type: currentExportMode.value.key,
     })
 
-    notify.success({
+    activeExportNotification.value = notify.success({
       title: 'Export successful!',
       message: exportMessage,
       duration: 0,
