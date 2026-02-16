@@ -34,7 +34,7 @@ export const saveFileHandle = async (defaultName, fileTypes) => {
           : 'phlynx-export'
       const handle = await window.showSaveFilePicker({
         suggestedName: safeName,
-        fileTypes,
+        types: fileTypes,
       })
       return { status: true, handle }
     } catch (err) {
@@ -53,7 +53,7 @@ export const writeFileHandle = async (handle, blob) => {
     await writable.close()
   } catch (err) {
     if (err.name === 'AbortError') return true
-    throw new Error(`Error writing file to disk: ${err.message}`) 
+    throw new Error(`Error writing file to disk: ${err.message}`)
   }
 }
 
@@ -80,8 +80,8 @@ export const getFileHandle = async (baseName, fileTypes, suffix) => {
 export const saveWithDialog = async (blob, handle, baseName, suffix) => {
   if (handle) {
     await writeFileHandle(handle, blob)
-    return { 
-      success: true, 
+    return {
+      success: true,
       savedName: stripExtension(handle.name),
       method: 'system'
     }
