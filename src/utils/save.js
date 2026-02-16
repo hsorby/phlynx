@@ -61,10 +61,10 @@ export const getFileHandle = async (baseName, fileTypes, suffix) => {
   if ('showSaveFilePicker' in window) {
     const suggestedName = `${baseName}${suffix}`
     const result = await saveFileHandle(suggestedName, fileTypes)
-    
+
     if (result.status && result.handle) {
-      return { 
-        success: true, 
+      return {
+        success: true,
         handle: result.handle,
         cleanName: stripExtension(result.handle.name),
         method: 'system'
@@ -73,7 +73,7 @@ export const getFileHandle = async (baseName, fileTypes, suffix) => {
       return { success: false, cancelled: true }
     }
   }
-  
+
   return { success: false, needsLegacyDialog: true, method: 'legacy' }
 }
 
