@@ -1,3 +1,23 @@
+export const stripExtension = (filename) => {
+  const lastDot = filename.lastIndexOf('.')
+  return lastDot > 0 ? filename.substring(0, lastDot) : filename
+}
+
+export const ensureExtension = (filename, extension) => {
+  // should confirm that extension provided is valid
+  const ext = extension.startsWith('.') ? extension : `${extension}`
+  return filename.endsWith(ext) ? filename : `${stripExtension(filename)}${ext}`
+}
+
+export const sanitiseFileName = (filename) => {
+  if (!filename) return 'phlynx-export'
+  const baseName = stripExtension(filename)
+  return baseName
+    .trim()
+    .replace(/\s+/g, '_')   // Replace spaces with underscores
+    .replace(/[^a-zA-Z0-9\-_]/g, '') // Remove special chars (keep alphanumeric, -, _)
+}
+
 export const legacyDownload = (filename, blob) => {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -14,63 +34,68 @@ export const legacyDownload = (filename, blob) => {
   }, 100)
 }
 
-export const saveFileHandle = async (defaultName, types) => {
+export const saveFileHandle = async (defaultName, fileTypes) => {
   if ('showSaveFilePicker' in window) {
     try {
+      const safeName =
+        defaultName && defaultName.trim().length > 0
+          ? defaultName
+          : 'phlynx-export'
       const handle = await window.showSaveFilePicker({
-        suggestedName: defaultName,
-        types,
+        suggestedName: safeName,
+        fileTypes,
       })
-      return { status: true, handle: handle }
+      return { status: true, handle }
     } catch (err) {
-      if (err.name === 'AbortError') return { status: true, handle: null }
-      new Error(`Error saving file: ${err.message}`)
+      if (err.name === 'AbortError')
+        return { status: true, handle: null }
+      throw new Error(`Error saving file: ${err.message}`)
     }
   }
-
   return { status: false, handle: null }
 }
 
-export const writeFileHandle = async (handle, dataBlob) => {
+export const writeFileHandle = async (handle, blob) => {
   try {
-    // Create a writable stream to the file
     const writable = await handle.createWritable()
-    await writable.write(dataBlob)
+    await writable.write(blob)
     await writable.close()
   } catch (err) {
     if (err.name === 'AbortError') return true
-    new Error(`Error writing file to disk: ${err.message}`)
+    throw new Error(`Error writing file to disk: ${err.message}`) 
   }
 }
 
-export const saveFileWithDialog = async (dataBlob, defaultName, types) => {
-  // Check if the API is supported (Chrome/Edge)
+export const getFileHandle = async (baseName, fileTypes, suffix) => {
   if ('showSaveFilePicker' in window) {
-    try {
-      const handle = await window.showSaveFilePicker({
-        suggestedName: defaultName,
-        types: [
-          {
-            description: 'CellML File',
-            accept: { 'application/xml': ['.cellml', '.xml'] },
-          },
-        ],
-      })
-
-      // Create a writable stream to the file
-      const writable = await handle.createWritable()
-      await writable.write(dataBlob)
-      await writable.close()
-    } catch (err) {
-      if (err.name === 'AbortError') return true
-      new Error(`Error saving file: ${err.message}`)
+    const suggestedName = `${baseName}${suffix}`
+    const result = await saveFileHandle(suggestedName, fileTypes)
+    
+    if (result.status && result.handle) {
+      return { 
+        success: true, 
+        handle: result.handle,
+        cleanName: sanitiseFileName(stripExtension(result.handle.name)),
+        method: 'system'
+      }
+    } else if (result.status && !result.handle) {
+      return { success: false, cancelled: true }
     }
-    return true
   }
-
-  return false
+  
+  return { success: false, needsLegacyDialog: true, method: 'legacy' }
 }
 
-export const save = (dataBlob, defaultName, types) => {
-  saveFileWithDialog(dataBlob, defaultName, types)
+export const saveWithDialog = async (blob, handle, baseName, suffix) => {
+  if (handle) {
+    await writeFileHandle(handle, blob)
+    return { 
+      success: true, 
+      savedName: stripExtension(handle.name),
+      method: 'system'
+    }
+  } 
+  const downloadName = ensureExtension(baseName, suffix)
+  legacyDownload(downloadName, blob)
+  return { success: true, savedName: baseName, method: 'legacy' }
 }
