@@ -362,8 +362,7 @@ import {
   getFileHandle,
   writeFileHandle,
   ensureExtension,
-  legacyDownload,
-  sanitiseFileName
+  legacyDownload
 } from '../utils/save'
 import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import EditParameterDialog from '../components/EditParameterDialog.vue'
@@ -1385,7 +1384,7 @@ async function onExportConfirm(fileName, handle) {
   })
 
   try {
-    const finalName = sanitiseFileName(fileName) || builderStore.lastExportName || DEFAULT_FILE_NAME
+    const finalName = fileName || builderStore.lastExportName || DEFAULT_FILE_NAME
     
     const blob = caExport
       ? await generateExportZip(finalName, nodes.value, edges.value, builderStore)
@@ -1464,7 +1463,7 @@ function createSaveBlob() {
  * Collects all state and downloads it as a JSON file.
  */
 const onSaveConfirm = async (fileName) => {
-  const baseName = sanitiseFileName(fileName) || builderStore.lastSaveName || DEFAULT_FILE_NAME
+  const baseName = fileName || builderStore.lastSaveName || DEFAULT_FILE_NAME
   const finalName = ensureExtension(baseName, '.json')
   const blob = createSaveBlob()
 

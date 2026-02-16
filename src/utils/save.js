@@ -9,15 +9,6 @@ export const ensureExtension = (filename, extension) => {
   return filename.endsWith(ext) ? filename : `${stripExtension(filename)}${ext}`
 }
 
-export const sanitiseFileName = (filename) => {
-  if (!filename) return 'phlynx-export'
-  const baseName = stripExtension(filename)
-  return baseName
-    .trim()
-    .replace(/\s+/g, '_')   // Replace spaces with underscores
-    .replace(/[^a-zA-Z0-9\-_]/g, '') // Remove special chars (keep alphanumeric, -, _)
-}
-
 export const legacyDownload = (filename, blob) => {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -75,7 +66,7 @@ export const getFileHandle = async (baseName, fileTypes, suffix) => {
       return { 
         success: true, 
         handle: result.handle,
-        cleanName: sanitiseFileName(stripExtension(result.handle.name)),
+        cleanName: stripExtension(result.handle.name),
         method: 'system'
       }
     } else if (result.status && !result.handle) {
@@ -94,7 +85,7 @@ export const saveWithDialog = async (blob, handle, baseName, suffix) => {
       savedName: stripExtension(handle.name),
       method: 'system'
     }
-  } 
+  }
   const downloadName = ensureExtension(baseName, suffix)
   legacyDownload(downloadName, blob)
   return { success: true, savedName: baseName, method: 'legacy' }
