@@ -449,6 +449,7 @@ const configs = {
         key: IMPORT_KEYS.VESSEL,
         label: 'Select Vessel Array (.csv)',
         accept: '.csv',
+        limit: 1,
         required: true,
         parser: parseVesselCsv,
         requiresStore: true,

@@ -25,19 +25,14 @@
             <div class="upload-row">
               <el-upload
                 action="#"
+                multiple
+                :limit="field?.limit"
                 :auto-upload="false"
-                :show-file-list="false"
+                :on-exceed="() => handleExceed(field)"
                 :accept="field.accept"
                 :on-change="(file) => handleFileChange(file, field)"
               >
-                <el-input
-                  :model-value="formState[field.key]?.fileName"
-                  :placeholder="field.placeholder || 'Select file...'"
-                  class="file-input"
-                  readonly
-                >
-                </el-input>
-                <el-button type="success">Browse</el-button>
+                <el-button type="success">Select file(s)</el-button>
               </el-upload>
 
               <el-icon v-if="isFieldValid(field.key)" color="var(--el-color-success)" size="20">
@@ -181,6 +176,15 @@ const isFieldValid = (fieldKey) => {
   // Default to basic validation
   return fieldState.isValid
 }
+
+function handleExceed(field) {
+  nextTick(() => {
+    notify.warning({
+      title: 'Too Many Files',
+      message: `The limit is ${field.limit}.`
+    })
+  })
+} 
 
 function resetFormState() {
   dynamicFields.value = []
