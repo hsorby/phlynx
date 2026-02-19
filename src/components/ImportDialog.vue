@@ -23,48 +23,55 @@
         <div v-for="field in displayFields" :key="field.key" class="field-container">
           <el-form-item :label="field.label" :required="field?.required ?? true">
             <div class="upload-row">
-              
-              <div class="file-tags-box">
-                <span v-if="!formState[field.key]?.files || formState[field.key]?.files.size === 0" class="empty-text">
-                  No file(s) selected
-                </span>
-                <transition-group v-else name="list">
-                  <el-tag
-                    v-for="[filename, fileData] in formState[field.key].files"
-                    :key="filename"
-                    :type="fileData.isValid ? 'success' : 'warning'"
-                    closable
-                    @close="removeFile(field.key, filename)"
-                    size="large"
-                    effect="light"
-                    class="file-tag"
-                  >
-                    <span class="tag-content">
-                      <el-icon v-if="fileData.isValid" class="tag-icon"><Check /></el-icon>
-                      <el-icon v-else class="tag-icon"><Warning /></el-icon>
-                      {{ filename }}
-                    </span>
-                  </el-tag>
-                </transition-group>
-              </div>
+  <el-upload
+    ref="uploadRefs"
+    action="#"
+    multiple
+    :limit="field?.limit"
+    :show-file-list="false"
+    :auto-upload="false"
+    :on-exceed="() => handleExceed(field)"
+    :accept="field.accept"
+    :on-change="(file) => handleFileChange(file, field)"
+    class="upload-trigger"
+  >
+    <div class="file-drop-zone" :class="{ 'is-valid': isFieldValid(field.key), 'has-files': formState[field.key]?.files?.size > 0 }">
+      <div class="drop-zone-left">
+        <el-icon class="drop-zone-icon">
+          <Check v-if="isFieldValid(field.key)" />
+          <Upload v-else />
+        </el-icon>
+        <span class="drop-zone-label">
+          {{ isFieldValid(field.key) ? 'Ready' : 'Select file(s)' }}
+        </span>
+      </div>
 
-              <el-upload
-                ref="uploadRefs"
-                action="#"
-                multiple
-                :limit="field?.limit"
-                :show-file-list="false"
-                :auto-upload="false"
-                :on-exceed="() => handleExceed(field)"
-                :accept="field.accept"
-                :on-change="(file) => handleFileChange(file, field)"
-              >
-                <el-button :type="isFieldValid(field.key) ? 'success' : 'primary'">
-                  <el-icon v-if="isFieldValid(field.key)" class="el-icon--left"><Check /></el-icon>
-                  {{ isFieldValid(field.key) ? 'Selected' : 'Select file(s)' }}
-                </el-button>
-              </el-upload>
-            </div>
+      <div class="file-tags-area">
+        <span v-if="!formState[field.key]?.files || formState[field.key]?.files.size === 0" class="empty-text">
+          No file(s) selected
+        </span>
+        <transition-group v-else name="list">
+          <el-tag
+            v-for="[filename, fileData] in formState[field.key].files"
+            :key="filename"
+            :type="fileData.isValid ? 'success' : 'warning'"
+            closable
+            @close.stop="removeFile(field.key, filename)"
+            size="small"
+            effect="light"
+            class="file-tag"
+          >
+            <span class="tag-content">
+              <el-icon v-if="fileData.isValid" class="tag-icon"><Check /></el-icon>
+              <el-icon v-else class="tag-icon"><Warning /></el-icon>
+              <span>{{ filename }}</span>
+            </span>
+          </el-tag>
+        </transition-group>
+      </div>
+    </div>
+  </el-upload>
+</div>
           </el-form-item>
         </div>
 
@@ -137,7 +144,7 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElDialog, ElForm, ElFormItem, ElButton, ElUpload, ElAlert, ElIcon, ElTag } from 'element-plus'
-import { Check, Warning } from '@element-plus/icons-vue'
+import { Check, Warning, Upload } from '@element-plus/icons-vue'
 
 import { useBuilderStore } from '../stores/builderStore'
 import { useGtm } from '../composables/useGtm'
@@ -683,30 +690,110 @@ defineExpose({
 }
 
 .upload-row {
-  display: flex;
-  align-items: stretch; 
-  gap: var(--el-spacing-small);
   width: 100%;
 }
 
-.file-tags-box {
-  flex: 1;
-  min-height: 32px; /* Matches default button height */
-  border: 1px dashed var(--el-border-color);
+.upload-trigger {
+  width: 100%;
+}
+
+.upload-trigger :deep(.el-upload) {
+  width: 100%;
+}
+
+.file-drop-zone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 42px;
+  border: 1.5px solid var(--el-border-color);
   border-radius: var(--el-border-radius-base);
-  background-color: var(--el-fill-color-light);
-  padding: 6px 8px;
+  background-color: var(--el-fill-color-blank);
+  padding: 6px 6px 6px 0;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+}
+
+.file-drop-zone:hover {
+  border-color: var(--el-color-primary);
+  box-shadow: 0 0 0 1px var(--el-color-primary-light-7);
+}
+
+.file-drop-zone.is-valid {
+  border-color: var(--el-color-success);
+  background-color: var(--el-color-success-light-9);
+}
+
+.file-drop-zone.is-valid:hover {
+  border-color: var(--el-color-success);
+  box-shadow: 0 0 0 1px var(--el-color-success-light-5);
+}
+
+.drop-zone-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 64px;
+  padding: 4px 12px;
+  border-right: 1.5px solid var(--el-border-color-light);
+  align-self: stretch;
+  flex-shrink: 0;
+}
+
+.is-valid .drop-zone-left {
+  border-right-color: var(--el-color-success-light-5);
+  color: var(--el-color-success);
+}
+
+.drop-zone-icon {
+  font-size: 16px;
+  color: var(--el-text-color-secondary);
+  transition: color 0.2s ease;
+}
+
+.is-valid .drop-zone-icon {
+  color: var(--el-color-success);
+}
+
+.file-drop-zone:hover .drop-zone-icon {
+  color: var(--el-color-primary);
+}
+
+.is-valid:hover .drop-zone-icon {
+  color: var(--el-color-success);
+}
+
+.drop-zone-label {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+  transition: color 0.2s ease;
+}
+
+.is-valid .drop-zone-label {
+  color: var(--el-color-success);
+}
+
+.file-drop-zone:hover .drop-zone-label {
+  color: var(--el-color-primary);
+}
+
+.file-tags-area {
+  flex: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  transition: all 0.3s ease;
+  gap: 5px;
+  padding: 2px 8px 2px 0;
 }
 
 .empty-text {
   color: var(--el-text-color-placeholder);
   font-size: var(--el-font-size-small);
-  padding-left: 4px;
 }
 
 .file-tag {
@@ -717,6 +804,9 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tag-icon {
