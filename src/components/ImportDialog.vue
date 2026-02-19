@@ -24,6 +24,7 @@
           <el-form-item :label="field.label" :required="field?.required ?? true">
             <div class="upload-row">
               <el-upload
+                ref="uploadRefs"
                 action="#"
                 multiple
                 :limit="field?.limit"
@@ -35,14 +36,14 @@
                 <el-button type="success">Select file(s)</el-button>
               </el-upload>
 
-              <!-- <el-icon v-if="isFieldValid(field.key)" color="var(--el-color-success)" size="20">
+              <el-icon v-if="isFieldValid(field.key)" color="var(--el-color-success)" size="20">
                 <Check />
-              </el-icon> -->
+              </el-icon>
             </div>
           </el-form-item>
         </div>
 
-        <div v-if="completionStatusRef && isFormValid" class="validation-status">
+        <div v-if="completionStatusRef && formState[IMPORT_KEYS.VESSEL]?.completionStatus" class="validation-status">
           <el-alert
             v-if="completionStatusRef.isComplete"
             title="All Required Resources Available"
@@ -136,6 +137,7 @@ const builderStore = useBuilderStore()
 
 // --- State Management ---
 const formState = reactive({})
+const uploadRefs = ref([])
 const dynamicFields = ref([])
 const completionStatusRef = ref(null)
 const isLoading = ref(false)
@@ -146,35 +148,13 @@ const stagedFiles = ref({
 })
 const isVesselReset = ref(false)
 
-// Determine if a specific field should show as valid based on validation status
+// Checks if a field has valid files uploaded.
 const isFieldValid = (fieldKey) => {
   const fieldState = formState[fieldKey]
-  if (!fieldState?.fileName) {
-    return false // No file selected
+  if (!fieldState || fieldState.files.size === 0) {
+    return false 
   }
-
-  // For non-dynamic fields (like vessel CSV), use the basic isValid flag
-  if (fieldKey === IMPORT_KEYS.VESSEL || fieldKey === IMPORT_KEYS.PARAMETER || fieldKey === IMPORT_KEYS.UNITS) {
-    return fieldState.isValid
-  }
-
-  // For dynamic fields, check against validation status
-  if (!completionStatusRef.value) {
-    return fieldState.isValid // Fallback to basic validation
-  }
-
-  // CellML file is valid if needsModuleFile is false
-  if (fieldKey === IMPORT_KEYS.CELLML_FILE) {
-    return !completionStatusRef.value.needsModuleFile
-  }
-
-  // Config file is valid if needsConfigFile is false
-  if (fieldKey === IMPORT_KEYS.MODULE_CONFIG) {
-    return !completionStatusRef.value.needsConfigFile
-  }
-
-  // Default to basic validation
-  return fieldState.isValid
+  return Array.from(fieldState.files.values()).every(file => file?.isValid)
 }
 
 function handleExceed(field) {
@@ -214,6 +194,12 @@ const unstageFiles = () => {
 const resetForm = () => {
   resetFormState()
   unstageFiles()
+  // reset the list of files beneath the select file button
+  if (uploadRefs.value) {
+    uploadRefs.value.forEach((uploadInstance) => {
+      uploadInstance?.clearFiles()
+    })
+  }
 }
 
 // Initialize formState when config changes
@@ -258,18 +244,23 @@ const addDynamicFields = async (completionStatus) => {
   }
 }
 
-// TODO: refactor to get name separation between isValid (is correct file type)
-// and validation (contains enough information to complete the import)
 function createEmptyFieldState() {
   return {
-    files: new Map(), //  [{ filename: string, isValid: boolean, payload: raw file contents ]
+    files: new Map(), //  [key: filename, object: {isValid: boolean, payload: raw file contents} ]
     completionStatus: null, // Selected files contain enough information to complete the import
     warnings: [],
-   // fileName: null,
-   // isValid: false,
-   // payload: null,
-  //  validation: null,
   }
+}
+
+// Helper to extract vessel payload from the new Map structure
+const getVesselPayload = () => {
+  const vesselFiles = formState[IMPORT_KEYS.VESSEL]?.files
+  if (!vesselFiles || vesselFiles.size === 0) return null
+  
+  for (const fileData of vesselFiles.values()) {
+    if (fileData.payload) return fileData.payload
+  }
+  return null
 }
 
 // Create a temporary store-like object for validation that includes staged files
@@ -347,18 +338,14 @@ const createTemporaryStore = () => {
 const isFormValid = computed(() => {
   if (!displayFields.value || displayFields.value.length === 0) return false
 
-  if (props.config?.fields?.[0]?.key === IMPORT_KEYS.VESSEL) {
-    const vesselState = formState[IMPORT_KEYS.VESSEL]
-    if (!vesselState?.isValid) return false
-  }
-
+  // Strictly check if all required fields have successfully parsed their files
   return displayFields.value.every((field) => {
     if (field.required === false) return true
-    if (!formState[field.key]?.files.size === 0) return false
-    const allValid = Array.from(formState[field.key].files.values()).every(file => file?.isValid);
-    return allValid
-   //return formState[field.key]?.files.every((file) => file?.isValid === true);
-    // return formState[field.key]?.isValid
+    
+    const fieldState = formState[field.key]
+    if (!fieldState || fieldState.files.size === 0) return false
+    
+    return Array.from(fieldState.files.values()).every(file => file?.isValid)
   })
 })
 
@@ -375,7 +362,6 @@ const handleFileChange = async (uploadFile, field) => {
   const state = formState[field.key]
 
   if (field.processUpload === 'cellml') {
-    // const completionStatus = formState[IMPORT_KEYS.VESSEL]?.completionStatus
     if (formState[IMPORT_KEYS.VESSEL]?.completionStatus?.missingResources?.moduleFileIssues) {
       // Get the list of filenames the Vessel Config is actually looking for
       const expectedFilenames = Array.from(
@@ -398,14 +384,12 @@ const handleFileChange = async (uploadFile, field) => {
   }
 
   if (field.key === IMPORT_KEYS.VESSEL) {
-    const vesselFileMap = formState[IMPORT_KEYS.VESSEL]?.file
+    const vesselFileMap = formState[IMPORT_KEYS.VESSEL]?.files
 
-    if (vesselFileMap && vesselFileMap.has(currentFileName)) {
-      if (vesselFileMap.currentFileName !== rawFile.name) {
-        isVesselReset.value = true
-        resetForm()
-        isVesselReset.value = false
-      }
+    if (vesselFileMap && vesselFileMap.size > 0 && !vesselFileMap.has(rawFile.name)) {
+      isVesselReset.value = true
+      resetForm()
+      isVesselReset.value = false
     } 
   }
 
@@ -427,7 +411,6 @@ const handleFileChange = async (uploadFile, field) => {
       completionStatus = validateVesselData(data, temporaryStore)
     }
 
-   // state.file.payload = { data, fileName: rawFile.name }
     state.files.get(filename).payload = data
     state.completionStatus = completionStatus
     state.warnings = warnings
@@ -437,9 +420,10 @@ const handleFileChange = async (uploadFile, field) => {
       await stageFile(field, parsed, filename)
 
       // Re-validate vessel if needed
-      if (formState[IMPORT_KEYS.VESSEL]?.payload) {
+      const vesselPayload = getVesselPayload()
+      if (vesselPayload) {
         const temporaryStore = createTemporaryStore()
-        const newCompletionStatus = validateVesselData(formState[IMPORT_KEYS.VESSEL].payload.data, temporaryStore)
+        const newCompletionStatus = validateVesselData(vesselPayload.data, temporaryStore)
         completionStatus = newCompletionStatus
       }
     }
@@ -449,10 +433,7 @@ const handleFileChange = async (uploadFile, field) => {
       await updateVesselValidation(completionStatus)
     } else if (field.key !== IMPORT_KEYS.VESSEL) {
       // For other fields:
-      // - If a vessel has been uploaded and we have a validation result (e.g., after staging),
-      //   propagate that vessel validation instead of overwriting the status.
-      // - If no vessel payload exists, preserve existing behavior and mark validation as complete.
-      const hasVesselPayload = !!formState[IMPORT_KEYS.VESSEL]?.payload
+      const hasVesselPayload = !!getVesselPayload()
       if (hasVesselPayload && completionStatus) {
         await updateVesselValidation(completionStatus)
       } else if (!hasVesselPayload) {
@@ -482,7 +463,7 @@ const handleFileChange = async (uploadFile, field) => {
     trackEvent('import_action', {
       category: 'Import',
       action: 'import_error',
-      label: field.key || 'unknown_field', // useful context
+      label: field.key || 'unknown_field',
       file_type: 'various',
     })
     notify.error({
@@ -530,10 +511,10 @@ async function stageFile(field, parsedData, fileName) {
   }
 
   // Re-validate the Vessel CSV with staged files to see if requirements are met
-  const vesselField = formState[IMPORT_KEYS.VESSEL]
-  if (vesselField?.payload?.data) {
+  const vesselPayload = getVesselPayload()
+  if (vesselPayload?.data) {
     const temporaryStore = createTemporaryStore()
-    const newCompletionStatus = validateVesselData(vesselField.payload.data, temporaryStore)
+    const newCompletionStatus = validateVesselData(vesselPayload.data, temporaryStore)
 
     // Update state
     formState[IMPORT_KEYS.VESSEL].completionStatus = newCompletionStatus
@@ -605,40 +586,19 @@ const handleConfirm = async () => {
 
   commitStagedFiles()
 
-  // if (formState[IMPORT_KEYS.PARAMETER]?.isValid) {
-  //   const paramState = formState[IMPORT_KEYS.PARAMETER]
-  //   const { fileName, data } = paramState.payload
-
-  //   if (fileName && data) {
-  //     builderStore.addParameterFile(fileName, data)
-  //   }
-  // }
-
   if (formState[IMPORT_KEYS.PARAMETER]) {
     for (const [filename, data] of formState[IMPORT_KEYS.PARAMETER].files) {
       if (data.isValid) {
         builderStore.addParameterFile(filename, data.payload)
       }
     }
-    // const filename 
-    // const paramState = formState[IMPORT_KEYS.PARAMETER]
-    // const { fileName, data } = paramState.payload
-
-    // if (fileName && data) {
-    //   builderStore.addParameterFile(fileName, data)
-    // }
   }
 
   const importPayload = new Map()
- // const result = {}
   displayFields.value.forEach((field) => {
     for (const [filename, data] of formState[field.key].files) {
-      // console.log(data)
-      // console.log(dataKey)
       importPayload.set(filename, data)
     }
-    // for (const [filename, data] of )
-    //result[field.key] = formState[field.key].payload
   })
 
   trackEvent('import_action', {
