@@ -929,7 +929,7 @@ const loadCellMLModuleData = (content, filename, broadcastNotifications = true) 
         })
         notify.success({
           title: 'CellML Modules Loaded',
-          message: `Loaded ${result.data.length} parameters from ${filename}.`,
+          message: `Loaded ${result.data.length} modules from ${filename}`,
         })
       }
     } else if (result.issues) {
@@ -1079,7 +1079,10 @@ async function onImportConfirm(importPayload, updateProgress) {
     const vessels = data.payload
 
     if (!vessels || vessels.length === 0) {
-      console.warn('no vessel data provided')
+      notify.warning({
+        title: 'Import Aborted',
+        message: 'No vessel data provided',
+      })
       return
     }
 
