@@ -23,22 +23,47 @@
         <div v-for="field in displayFields" :key="field.key" class="field-container">
           <el-form-item :label="field.label" :required="field?.required ?? true">
             <div class="upload-row">
+              
+              <div class="file-tags-box">
+                <span v-if="!formState[field.key]?.files || formState[field.key]?.files.size === 0" class="empty-text">
+                  No file(s) selected
+                </span>
+                <transition-group v-else name="list">
+                  <el-tag
+                    v-for="[filename, fileData] in formState[field.key].files"
+                    :key="filename"
+                    :type="fileData.isValid ? 'success' : 'warning'"
+                    closable
+                    @close="removeFile(field.key, filename)"
+                    size="large"
+                    effect="light"
+                    class="file-tag"
+                  >
+                    <span class="tag-content">
+                      <el-icon v-if="fileData.isValid" class="tag-icon"><Check /></el-icon>
+                      <el-icon v-else class="tag-icon"><Warning /></el-icon>
+                      {{ filename }}
+                    </span>
+                  </el-tag>
+                </transition-group>
+              </div>
+
               <el-upload
                 ref="uploadRefs"
                 action="#"
                 multiple
                 :limit="field?.limit"
+                :show-file-list="false"
                 :auto-upload="false"
                 :on-exceed="() => handleExceed(field)"
                 :accept="field.accept"
                 :on-change="(file) => handleFileChange(file, field)"
               >
-                <el-button type="success">Select file(s)</el-button>
+                <el-button :type="isFieldValid(field.key) ? 'success' : 'primary'">
+                  <el-icon v-if="isFieldValid(field.key)" class="el-icon--left"><Check /></el-icon>
+                  {{ isFieldValid(field.key) ? 'Selected' : 'Select file(s)' }}
+                </el-button>
               </el-upload>
-
-              <el-icon v-if="isFieldValid(field.key)" color="var(--el-color-success)" size="20">
-                <Check />
-              </el-icon>
             </div>
           </el-form-item>
         </div>
@@ -111,8 +136,8 @@
 
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
-import { ElDialog, ElForm, ElFormItem, ElButton, ElUpload, ElAlert, ElIcon } from 'element-plus'
-import { Check } from '@element-plus/icons-vue'
+import { ElDialog, ElForm, ElFormItem, ElButton, ElUpload, ElAlert, ElIcon, ElTag } from 'element-plus'
+import { Check, Warning } from '@element-plus/icons-vue'
 
 import { useBuilderStore } from '../stores/builderStore'
 import { useGtm } from '../composables/useGtm'
@@ -166,6 +191,32 @@ function handleExceed(field) {
   })
 }
 
+// Handler for removing a file via the tag's close button
+const removeFile = (fieldKey, filename) => {
+  const fieldState = formState[fieldKey]
+  if (fieldState && fieldState.files.has(filename)) {
+    // Remove from local form state
+    fieldState.files.delete(filename)
+    
+    // Remove from staged files if applicable
+    stagedFiles.value.moduleFiles = stagedFiles.value.moduleFiles.filter(f => f.filename !== filename)
+    stagedFiles.value.configFiles = stagedFiles.value.configFiles.filter(f => f.filename !== filename)
+
+    // Re-evaluate overall vessel dependencies
+    const vesselPayload = getVesselPayload()
+    if (vesselPayload?.data) {
+      const temporaryStore = createTemporaryStore()
+      const newCompletionStatus = validateVesselData(vesselPayload.data, temporaryStore)
+      formState[IMPORT_KEYS.VESSEL].completionStatus = newCompletionStatus
+      updateVesselValidation(newCompletionStatus)
+    } else if (fieldKey === IMPORT_KEYS.VESSEL) {
+      // If the user deleted the last/only vessel file, wipe completion status
+      completionStatusRef.value = null
+      dynamicFields.value = []
+    }
+  }
+}
+
 function resetFormState() {
   dynamicFields.value = []
   Object.keys(formState).forEach((key) => {
@@ -194,7 +245,8 @@ const unstageFiles = () => {
 const resetForm = () => {
   resetFormState()
   unstageFiles()
-  // reset the list of files beneath the select file button
+  
+  // Clear the visual file list in the UI components
   if (uploadRefs.value) {
     uploadRefs.value.forEach((uploadInstance) => {
       uploadInstance?.clearFiles()
@@ -363,7 +415,7 @@ const handleFileChange = async (uploadFile, field) => {
 
   if (field.processUpload === 'cellml') {
     if (formState[IMPORT_KEYS.VESSEL]?.completionStatus?.missingResources?.moduleFileIssues) {
-      // Get the list of filenames the Vessel Config is actually looking for
+      // Get the list of filenames the Vessel Config is looking for
       const expectedFilenames = Array.from(
         formState[IMPORT_KEYS.VESSEL]?.completionStatus.missingResources.moduleFileIssues
         .filter((issue) => issue.file).map((issue) => issue.file)
@@ -545,7 +597,6 @@ async function stageFile(field, parsedData, fileName) {
           duration: 6000,
         })
       } else if (newCompletionStatus.needsModuleFile) {
-        // The file was fine, but we still need MORE files
         notify.warning({
           title: 'Partial Success',
           message: `"${fileName}" is valid, but additional CellML files are still required.`,
@@ -554,7 +605,6 @@ async function stageFile(field, parsedData, fileName) {
         notify.success({ title: 'CellML Ready', message: `${fileName} staged successfully.` })
       }
     }
-    // Simplified check for Config files
     else if (field.processUpload === 'config') {
       if (newCompletionStatus.needsConfigFile) {
         notify.warning({
@@ -634,12 +684,54 @@ defineExpose({
 
 .upload-row {
   display: flex;
-  align-items: center;
+  align-items: stretch; 
   gap: var(--el-spacing-small);
+  width: 100%;
 }
 
-.file-input {
-  width: 320px;
+.file-tags-box {
+  flex: 1;
+  min-height: 32px; /* Matches default button height */
+  border: 1px dashed var(--el-border-color);
+  border-radius: var(--el-border-radius-base);
+  background-color: var(--el-fill-color-light);
+  padding: 6px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s ease;
+}
+
+.empty-text {
+  color: var(--el-text-color-placeholder);
+  font-size: var(--el-font-size-small);
+  padding-left: 4px;
+}
+
+.file-tag {
+  margin: 0;
+}
+
+.tag-content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-icon {
+  font-size: 14px;
+}
+
+/* Optional simple tag animation */
+.list-enter-active,
+.list-leave-active {
+  transition: all 0.3s ease;
+}
+.list-enter-from,
+.list-leave-to {
+  opacity: 0;
+  transform: translateY(-5px);
 }
 
 .form-header {
@@ -649,7 +741,6 @@ defineExpose({
   text-align: right;
 }
 
-/* Validation & Alerts */
 .validation-status {
   margin-top: var(--el-spacing-large);
   margin-bottom: var(--el-spacing-base);
@@ -671,15 +762,6 @@ defineExpose({
 
 .issue-list-container {
   margin-top: var(--el-spacing-mini, 4px);
-}
-
-.warning-text {
-  font-size: var(--el-font-size-extra-small);
-  color: var(--el-color-warning);
-  margin-top: 4px;
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
 }
 
 .module-issue-item {
@@ -714,8 +796,7 @@ defineExpose({
   margin-top: 5px;
   line-height: 1.6;
 }
-/* Loading/Spinner Customization */
-/* Deep selectors remain necessary to override Element Plus internal classes */
+
 :deep(.el-loading-spinner svg) {
   width: 120px;
   height: 120px;
@@ -737,9 +818,9 @@ defineExpose({
 }
 
 .is-loading-content {
-  opacity: 0.2; /* Decreases the visibility of the form fields */
-  pointer-events: none; /* Prevents users from clicking anything while loading */
-  filter: grayscale(40%); /* Optional: adds a slight "disabled" look */
+  opacity: 0.2;
+  pointer-events: none;
+  filter: grayscale(40%);
   transition: opacity var(--el-transition-duration), filter var(--el-transition-duration);
 }
 
