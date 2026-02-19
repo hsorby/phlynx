@@ -1075,7 +1075,8 @@ const handleImportCommand = (option) => {
 
 async function onImportConfirm(importPayload, updateProgress) {
   if (currentImportMode.value.key === IMPORT_KEYS.VESSEL) {
-    const vessels = importPayload[IMPORT_KEYS.VESSEL]?.data
+    const [[, data]] = importPayload
+    const vessels = data.payload
 
     if (!vessels || vessels.length === 0) {
       console.warn('no vessel data provided')
