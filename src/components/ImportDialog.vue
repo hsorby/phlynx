@@ -315,7 +315,6 @@ function createEmptyFieldState() {
 const getVesselPayload = () => {
   const vesselFiles = formState[IMPORT_KEYS.VESSEL]?.files
   if (!vesselFiles || vesselFiles.size === 0) return null
-  
   for (const fileData of vesselFiles.values()) {
     if (fileData.payload) return fileData.payload
   }
@@ -477,12 +476,11 @@ const handleFileChange = async (uploadFile, field) => {
     // Specific logic for Dynamic Files (Configs/Modules)
     if (field.processUpload) {
       await stageFile(field, parsed, filename)
-
       // Re-validate vessel if needed
       const vesselPayload = getVesselPayload()
       if (vesselPayload) {
         const temporaryStore = createTemporaryStore()
-        const newCompletionStatus = validateVesselData(vesselPayload.data, temporaryStore)
+        const newCompletionStatus = validateVesselData(vesselPayload, temporaryStore)
         completionStatus = newCompletionStatus
       }
     }
