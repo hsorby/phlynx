@@ -23,55 +23,55 @@
         <div v-for="field in displayFields" :key="field.key" class="field-container">
           <el-form-item :label="field.label" :required="field?.required ?? true">
             <div class="upload-row">
-  <el-upload
-    ref="uploadRefs"
-    action="#"
-    multiple
-    :limit="field?.limit"
-    :show-file-list="false"
-    :auto-upload="false"
-    :on-exceed="() => handleExceed(field)"
-    :accept="field.accept"
-    :on-change="(file) => handleFileChange(file, field)"
-    class="upload-trigger"
-  >
-    <div class="file-drop-zone" :class="{ 'is-valid': isFieldValid(field.key), 'has-files': formState[field.key]?.files?.size > 0 }">
-      <div class="drop-zone-left">
-        <el-icon class="drop-zone-icon">
-          <Check v-if="isFieldValid(field.key)" />
-          <Upload v-else />
-        </el-icon>
-        <span class="drop-zone-label">
-          {{ isFieldValid(field.key) ? 'Ready' : 'Select file(s)' }}
-        </span>
-      </div>
+              <el-upload
+                ref="uploadRefs"
+                action="#"
+                multiple
+                :limit="field?.limit"
+                :show-file-list="false"
+                :auto-upload="false"
+                :on-exceed="() => handleExceed(field)"
+                :accept="field.accept"
+                :on-change="(file) => handleFileChange(file, field)"
+                class="upload-trigger"
+              >
+                <div class="file-drop-zone" :class="{ 'is-valid': isFieldValid(field.key), 'has-files': formState[field.key]?.files?.size > 0 }">
+                  <div class="drop-zone-left">
+                    <el-icon class="drop-zone-icon">
+                      <Check v-if="isFieldValid(field.key)" />
+                      <Upload v-else />
+                    </el-icon>
+                    <span class="drop-zone-label">
+                      {{ isFieldValid(field.key) ? 'Ready' : 'Select file(s)' }}
+                    </span>
+                  </div>
 
-      <div class="file-tags-area">
-        <span v-if="!formState[field.key]?.files || formState[field.key]?.files.size === 0" class="empty-text">
-          No file(s) selected
-        </span>
-        <transition-group v-else name="list">
-          <el-tag
-            v-for="[filename, fileData] in formState[field.key].files"
-            :key="filename"
-            :type="fileData.isValid ? 'success' : 'warning'"
-            closable
-            @close.stop="removeFile(field.key, filename)"
-            size="small"
-            effect="light"
-            class="file-tag"
-          >
-            <span class="tag-content">
-              <el-icon v-if="fileData.isValid" class="tag-icon"><Check /></el-icon>
-              <el-icon v-else class="tag-icon"><Warning /></el-icon>
-              <span>{{ filename }}</span>
-            </span>
-          </el-tag>
-        </transition-group>
-      </div>
-    </div>
-  </el-upload>
-</div>
+                  <div class="file-tags-area">
+                    <span v-if="!formState[field.key]?.files || formState[field.key]?.files.size === 0" class="empty-text">
+                      No file(s) selected
+                    </span>
+                    <transition-group v-else name="list">
+                      <el-tag
+                        v-for="[filename, fileData] in formState[field.key].files"
+                        :key="filename"
+                        :type="fileData.isValid ? 'success' : 'warning'"
+                        closable
+                        @close.stop="removeFile(field.key, filename)"
+                        size="small"
+                        effect="light"
+                        class="file-tag"
+                      >
+                        <span class="tag-content">
+                          <el-icon v-if="fileData.isValid" class="tag-icon"><Check /></el-icon>
+                          <el-icon v-else class="tag-icon"><Warning /></el-icon>
+                          <span>{{ filename }}</span>
+                        </span>
+                      </el-tag>
+                    </transition-group>
+                  </div>
+                </div>
+              </el-upload>
+            </div>
           </el-form-item>
         </div>
 
@@ -606,7 +606,7 @@ async function stageFile(field, parsedData, fileName) {
       } else if (newCompletionStatus.needsModuleFile) {
         notify.warning({
           title: 'Partial Success',
-          message: `"${fileName}" is valid, but additional CellML files are still required.`,
+          message: `"${fileName}" is valid, but additional CellML modules are still required.`,
         })
       } else {
         notify.success({ title: 'CellML Ready', message: `${fileName} staged successfully.` })
