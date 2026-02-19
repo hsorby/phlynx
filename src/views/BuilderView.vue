@@ -976,10 +976,17 @@ const loadCellMLUnitsData = (content, filename, { notify: shouldNotify = true, t
         })
       }
       if (shouldNotify) {
-        notify.success({
-          title: 'CellML Units Loaded',
-          message: `Loaded ${result.units.count} units from ${filename}.`,
-        })
+        if (result.units.count > 0) {
+          notify.success({
+            title: 'CellML Units Loaded',
+            message: `Loaded ${result.units.count} units from ${filename}.`,
+          })
+        } else {
+          notify.info({
+            title: 'No CellML Units Loaded',
+            message: `${filename} contained no unit definitions.`,
+          })
+        }
       }
     } else if (result.issues) {
       if (trackEvents) {
