@@ -1030,6 +1030,32 @@ const loadParametersData = async (content, filename, broadcastNotifications = tr
   }
 }
 
+const loadConfigData = (content, filename, broadcastNotifications = true) => {
+  try {
+    const added = builderStore.addConfigFile(content, filename)
+    if (broadcastNotifications && added) {
+      notify.success({
+        title: 'Configurations Loaded',
+        message: `Loaded ${content.length} configurations from ${filename}.`,
+      })
+    } else if (broadcastNotifications && !added) {
+      notify.info({
+        title: 'Configurations Not Loaded',
+        message: `No new configurations were added from ${filename}.`
+      })
+    }
+    return added
+  } catch (err) {
+    if (broadcastNotifications) {
+      notify.error({
+        title: 'Loading Configuration Error',
+        message: `Failed to load configurations from ${filename}.`,
+      })
+    }
+    return false
+  }
+}
+
 const performImport = (mode) => {
   currentImportConfig.value = getImportConfig(mode.key)
 
@@ -1074,20 +1100,22 @@ async function onImportConfirm(importPayload, updateProgress) {
       })
     }
   } else if (currentImportMode.value.key === IMPORT_KEYS.CELLML_FILE) {
-    const cellmlPayload = importPayload[IMPORT_KEYS.CELLML_FILE]
-    loadCellMLModuleData(cellmlPayload?.data, cellmlPayload?.fileName)
+    for (const [filename, data] of importPayload) {
+      loadCellMLModuleData(data?.payload, filename)
+    }
   } else if (currentImportMode.value.key === IMPORT_KEYS.MODULE_CONFIG) {
-    const configPayload = importPayload[IMPORT_KEYS.MODULE_CONFIG]
-    if (configPayload) {
-      builderStore.addConfigFile(configPayload.data, configPayload.fileName)
+    for (const [filename, data] of importPayload) {
+      loadConfigData(data?.payload, filename)
     }
   } else if (currentImportMode.value.key === IMPORT_KEYS.PARAMETER) {
-    const paramPayload = importPayload[IMPORT_KEYS.PARAMETER]
-    loadParametersData(paramPayload?.data, paramPayload?.fileName)
+    for (const [filename, data] of importPayload) {
+      loadParametersData(data?.payload, filename)
+    }   
     updateNodesWithNewParameters()
   } else if (currentImportMode.value.key === IMPORT_KEYS.UNITS) {
-    const unitsPayload = importPayload[IMPORT_KEYS.UNITS]
-    loadCellMLUnitsData(unitsPayload?.data, unitsPayload?.fileName)
+    for (const [filename, data] of importPayload) {
+      loadCellMLUnitsData(data?.payload, filename)
+    }
   } else {
     console.log("Cannot get here this shouldn't be an import:", currentImportMode.value.key)
   }
