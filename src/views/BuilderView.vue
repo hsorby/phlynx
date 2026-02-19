@@ -1050,19 +1050,20 @@ const loadParametersData = async (content, filename, { notify: shouldNotify = tr
 
 const loadConfigData = async (content, filename, { notify: shouldNotify = true } = {}) => {
   try {
+    console.log(content.length)
     const added = builderStore.addConfigFile(content, filename)
-    if (shouldNotify && added) {
+    if (shouldNotify && added > 0) {
       notify.success({
         title: 'Configurations Loaded',
         message: `Loaded ${content.length} configurations from ${filename}.`,
       })
-    } else if (shouldNotify && !added) {
+    } else if (shouldNotify && added === 0) {
       notify.info({
         title: 'Configurations Not Loaded',
         message: `No new configurations were added from ${filename}.`,
       })
     }
-    return { ok: added, count: added ? content.length : 0 }
+    return { ok: added > 0, count: added }
   } catch (err) {
     if (shouldNotify) {
       notify.error({
@@ -1151,11 +1152,14 @@ async function onImportConfirm(importPayload, updateProgress) {
     }
   } else if (currentImportMode.value.key === IMPORT_KEYS.MODULE_CONFIG) {
     const multiFile = importPayload.size > 1
-    const results = [...importPayload].map(([filename, data]) =>
-      loadConfigData(data?.payload, filename, { notify: !multiFile })
+    const results = await Promise.all(
+      [...importPayload].map(([filename, data]) =>
+        loadConfigData(data?.payload, filename, { notify: !multiFile })
+      )
     )
     if (multiFile) {
-      const succeeded = results.filter(r => r.ok)
+      const succeeded = results.filter((r) => r.ok)
+      console.log(results, succeeded)
       const failed = results.length - succeeded.length
       const totalConfigs = succeeded.reduce((sum, r) => sum + r.count, 0)
       if (succeeded.length > 0 && failed === 0) {

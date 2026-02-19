@@ -179,15 +179,17 @@ export const useBuilderStore = defineStore('builder', () => {
   function addConfigFile(payload, filename) {
     const configs = payload
     const configFilename = filename
+    let totalAdded = 0
+
     if (!configs || !Array.isArray(configs)) {
       console.warn('[builderStore] Invalid config file payload:', payload)
-      return false
+      return totalAdded
     }
 
     configs.forEach((config) => {
       if (!config.module_file || typeof config.module_file !== 'string') {
         console.warn('[builderStore] Skipping config: missing module_file declaration', config)
-        return false
+        return 
       }
 
       let moduleFile = availableModules.value.find((f) => f.filename === config.module_file)
@@ -230,10 +232,11 @@ export const useBuilderStore = defineStore('builder', () => {
         module.configs[existingConfigIndex] = configWithMetadata
       } else {
         module.configs.push(configWithMetadata)
+        totalAdded++
       }
     })
 
-    return true
+    return totalAdded
   }
 
   function addModuleFile(payload) {
