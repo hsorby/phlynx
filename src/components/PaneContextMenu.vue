@@ -38,7 +38,7 @@ const props = defineProps({
   },
   closeDelay: {
     type: Number,
-    default: 300,
+    default: 800,
   },
 })
 
@@ -51,7 +51,7 @@ function open(clientX, clientY) {
   x.value = clientX
   y.value = clientY
   isOpen.value = true
-  closeTimer = setTimeout(close, props.closeDelay+500)
+  closeTimer = setTimeout(close, props.closeDelay)
 }
 
 function close() {

@@ -232,6 +232,7 @@
                 @open-cellml-editor-dialog="onOpenCellMLEditorDialog"
                 @open-parameter-editor-dialog="onOpenParameterEditorDialog"
                 @open-replacement-dialog="onOpenReplacementDialog"
+                @open-context-menu="onNodeContextMenu"
                 :ref="(el) => (nodeRefs[props.id] = el)"
               />
             </template>
@@ -1492,9 +1493,8 @@ async function onReplaceConfirm(updatedData) {
 }
 
 const contextMenuRef = ref(null)
-const contextMenuPosition = ref({ x: 0, y: 0 })
 
-const contextMenuItems = [
+const paneContextMenuItems = [
   {
     label: 'Create New Module',
     action: () => createNewModuleAtPosition(mousePosition.value.x, mousePosition.value.y),
@@ -1509,10 +1509,32 @@ const contextMenuItems = [
   },
 ]
 
+const contextMenuItems = ref(paneContextMenuItems)
+
 function onPaneContextMenu(event) {
   event.preventDefault()
-  contextMenuPosition.value = { x: event.clientX, y: event.clientY }
+  contextMenuItems.value = paneContextMenuItems
   contextMenuRef.value.open(event.clientX, event.clientY)
+}
+
+function onNodeContextMenu({ clientX, clientY, nodeId }) {
+  contextMenuItems.value = [
+    {
+      label: 'Replace Module',
+      action: () => {
+        const node = findNode(nodeId)
+        if (!node) return
+        onOpenReplacementDialog({
+          nodeId,
+          nodeData: node.data,
+          name: node.data.name,
+          portOptions: node.data.portOptions,
+          portLabels: node.data.portLabels,
+        })
+      },
+    },
+  ]
+  contextMenuRef.value.open(clientX, clientY)
 }
 
 function createNewModuleAtPosition(clientX, clientY) {
@@ -2140,8 +2162,6 @@ watch(
   stroke-width: 5px;
 }
 
-/* (Optional) You can also make selected edges stand out 
-*/
 .vue-flow__edge.selected .vue-flow__edge-path {
   stroke: #409eff; /* Element Plus primary color */
   stroke-width: 7px;
