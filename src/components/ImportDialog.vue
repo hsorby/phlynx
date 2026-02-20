@@ -442,26 +442,22 @@ const handleFileChange = async (uploadFile, field) => {
   const state = formState[field.key]
 
   if (field.processUpload === 'cellml') {
-    if (formState[IMPORT_KEYS.VESSEL]?.readiness?.missingResources?.moduleFileIssues) {
-      // Get the list of filenames the Vessel Config is looking for
-      const expectedFilenames = Array.from(
-        formState[IMPORT_KEYS.VESSEL]?.readiness.missingResources.moduleFileIssues
-        .filter((issue) => issue.file).map((issue) => issue.file)
-      )
+  const moduleFileIssues = importReadiness.value?.missingResources?.moduleFileIssues
+  if (moduleFileIssues?.length > 0) {
+    const expectedFilenames = moduleFileIssues
+      .filter((issue) => issue.file)
+      .map((issue) => issue.file)
 
-      // If there are requirements and this file name isn't one of them, reject immediately
-      if (expectedFilenames.length > 0 && !expectedFilenames.includes(rawFile.name)) {
-        notify.error({
-          title: 'Incorrect File Provided',
-          message: `The configuration expects: "${expectedFilenames.join(', ')}". You provided "${
-            rawFile.name
-          }". This file will not be processed.`,
-          duration: 6000,
-        })
-        return
-      }
+    if (expectedFilenames.length > 0 && !expectedFilenames.includes(rawFile.name)) {
+      notify.error({
+        title: 'Incorrect File Provided',
+        message: `The configuration expects: "${expectedFilenames.join(', ')}". You provided "${rawFile.name}". This file will not be processed.`,
+        duration: 6000,
+      })
+      return
     }
   }
+}
 
   if (field.key === IMPORT_KEYS.VESSEL) {
     const vesselFileMap = formState[IMPORT_KEYS.VESSEL]?.files
