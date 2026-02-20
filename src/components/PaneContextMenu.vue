@@ -5,6 +5,8 @@
       class="context-menu"
       :style="{ top: y + 'px', left: x + 'px' }"
       role="menu"
+      @mouseenter="onMouseEnter"
+      @mouseleave="onMouseLeave"
     >
       <ul class="context-menu__list">
         <li
@@ -34,19 +36,26 @@ const props = defineProps({
     required: true,
     // Each item: { label: string, action: () => void, icon?: Component }
   },
+  closeDelay: {
+    type: Number,
+    default: 300,
+  },
 })
 
 const isOpen = ref(false)
 const x = ref(0)
 const y = ref(0)
+let closeTimer = null
 
 function open(clientX, clientY) {
   x.value = clientX
   y.value = clientY
   isOpen.value = true
+  closeTimer = setTimeout(close, props.closeDelay+500)
 }
 
 function close() {
+  clearTimeout(closeTimer)
   isOpen.value = false
 }
 
@@ -55,7 +64,15 @@ function select(item) {
   close()
 }
 
-function onClickOutside(event) {
+function onMouseEnter() {
+  clearTimeout(closeTimer)
+}
+
+function onMouseLeave() {
+  closeTimer = setTimeout(close, props.closeDelay)
+}
+
+function onClickOutside() {
   if (isOpen.value) {
     close()
   }
@@ -74,6 +91,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  clearTimeout(closeTimer)
   document.removeEventListener('click', onClickOutside)
   document.removeEventListener('contextmenu', onClickOutside)
   document.removeEventListener('keydown', onKeyDown)
