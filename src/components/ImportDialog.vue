@@ -21,10 +21,9 @@
           <span class="required-asterisk">*</span> Indicates required field
         </div>
         <div v-for="field in displayFields" :key="field.key" class="field-container">
-          <el-form-item :label="field.label" :required="field?.required ?? true">
+          <el-form-item class="form-item" :label="field.label" :required="field?.required ?? true" :class="{ 'is-info': field.limit }">
             <div class="upload-row">
               <div class="file-input-box" :class="{ 'is-valid': isFieldReady(field.key) }">
-
                 <div class="file-names-area" @click.stop>
                   <span v-if="!formState[field.key]?.files || formState[field.key]?.files.size === 0" class="empty-text">
                     No file(s) selected
@@ -736,14 +735,21 @@ defineExpose({
   width: 100%;
 }
 
+.form-item {
+  margin-bottom: 32;
+}
+
+.form-item.is-info {
+  margin-bottom: 0;
+}
+
 .field-hint {
   display: flex;
   align-items: center;
   gap: 4px;
-  /* margin-top: 4px; */
   font-size: var(--el-font-size-extra-small);
   color: var(--el-text-color-placeholder);
-  margin-bottom: 0;
+  margin-bottom: 4px;
 }
 
 .field-hint .el-icon {
