@@ -1499,6 +1499,10 @@ const contextMenuItems = [
     label: 'Create New Module',
     action: () => createNewModuleAtPosition(mousePosition.value.x, mousePosition.value.y),
   },
+  {
+    label: 'Clear Workspace',
+    action: () => handleClearWorkspace(),
+  },
 ]
 
 function onPaneContextMenu(event) {
