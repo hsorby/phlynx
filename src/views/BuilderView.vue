@@ -1500,6 +1500,10 @@ const contextMenuItems = [
     action: () => createNewModuleAtPosition(mousePosition.value.x, mousePosition.value.y),
   },
   {
+    label: 'Select All',
+    action: () => selectAllNodes(),
+  },
+  {
     label: 'Clear Workspace',
     action: () => handleClearWorkspace(),
   },
