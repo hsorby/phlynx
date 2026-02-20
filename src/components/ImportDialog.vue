@@ -104,6 +104,10 @@
 
               </div>
             </div>
+            <div v-if="field.limit" class="field-hint">
+              <el-icon><InfoFilled /></el-icon>
+              Up to {{ field.limit }} file{{ field.limit === 1 ? '' : 's' }} allowed
+            </div>
           </el-form-item>
         </div>
 
@@ -176,7 +180,7 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElDialog, ElForm, ElFormItem, ElButton, ElUpload, ElAlert, ElIcon, ElTag, ElPopover } from 'element-plus'
-import { Check, Warning, Upload } from '@element-plus/icons-vue'
+import { Check, Warning, Upload, InfoFilled } from '@element-plus/icons-vue'
 
 import { useBuilderStore } from '../stores/builderStore'
 import { useGtm } from '../composables/useGtm'
@@ -725,11 +729,25 @@ defineExpose({
 
 <style scoped>
 .field-container {
-  margin-bottom: var(--el-spacing-large);
+  margin-bottom: var(--el-spacing-small);
 }
 
 .upload-row {
   width: 100%;
+}
+
+.field-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  /* margin-top: 4px; */
+  font-size: var(--el-font-size-extra-small);
+  color: var(--el-text-color-placeholder);
+  margin-bottom: 0;
+}
+
+.field-hint .el-icon {
+  font-size: 12px;
 }
 
 .file-input-box {
@@ -764,6 +782,7 @@ defineExpose({
   gap: 4px;
   padding: 0 8px;
   min-width: 0;
+  margin-bottom: 0;
   overflow: hidden;
   cursor: default;
 }
@@ -779,11 +798,11 @@ defineExpose({
 }
 
 .browse-button {
-  height: 100% !important;
-  border: none !important;
-  border-radius: 0 !important;
-  margin: 0 !important;
-  padding: 0 14px !important;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  margin: 0;
+  padding: 0 14px;
 }
 
 .empty-text {
@@ -836,16 +855,17 @@ defineExpose({
 }
 
 .form-header {
+  margin-top: var(--el-spacing-mini);
   margin-bottom: var(--el-spacing-base);
   font-size: var(--el-font-size-extra-small);
   color: var(--el-text-color-secondary);
   text-align: right;
 }
 
-.validation-status {
+/* .validation-status {
   margin-top: var(--el-spacing-large);
   margin-bottom: var(--el-spacing-base);
-}
+} */
 
 .required-asterisk {
   color: var(--el-color-danger);
