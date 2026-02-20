@@ -22,6 +22,8 @@ export const FLOW_IDS = {
   MACRO: 'macro-builder-editor',
 }
 
+export const MAX_VISIBLE_TAGS = 1
+
 export const GHOST_NODE_TYPE = 'ghostNode'
 export const GHOST_MODULE_FILENAME = 'ghostModule.cellml'
 export const GHOST_MODULE_DEFINITION = {

@@ -181,7 +181,7 @@ import { Check, Warning, Upload } from '@element-plus/icons-vue'
 import { useBuilderStore } from '../stores/builderStore'
 import { useGtm } from '../composables/useGtm'
 import { notify } from '../utils/notify'
-import { IMPORT_KEYS } from '../utils/constants'
+import { IMPORT_KEYS, MAX_VISIBLE_TAGS } from '../utils/constants'
 import { createDynamicFields, validateVesselData } from '../utils/import'
 import { processModuleData } from '../utils/cellml'
 import phlynxspinner from '/src/assets/phlynxspinner.svg?raw'
@@ -200,7 +200,6 @@ const { trackEvent } = useGtm()
 const builderStore = useBuilderStore()
 
 // --- State Management ---
-const MAX_VISIBLE_TAGS = 1
 const formState = reactive({})
 const uploadRefs = ref([])
 const dynamicFields = ref([])
