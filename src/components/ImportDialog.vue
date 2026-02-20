@@ -21,10 +21,9 @@
           <span class="required-asterisk">*</span> Indicates required field
         </div>
         <div v-for="field in displayFields" :key="field.key" class="field-container">
-          <el-form-item :label="field.label" :required="field?.required ?? true">
+          <el-form-item class="form-item" :label="field.label" :required="field?.required ?? true" :class="{ 'is-info': field.limit }">
             <div class="upload-row">
               <div class="file-input-box" :class="{ 'is-valid': isFieldReady(field.key) }">
-
                 <div class="file-names-area" @click.stop>
                   <span v-if="!formState[field.key]?.files || formState[field.key]?.files.size === 0" class="empty-text">
                     No file(s) selected
@@ -104,6 +103,10 @@
 
               </div>
             </div>
+            <div v-if="field.limit" class="field-hint">
+              <el-icon><InfoFilled /></el-icon>
+              Up to {{ field.limit }} file{{ field.limit === 1 ? '' : 's' }} allowed
+            </div>
           </el-form-item>
         </div>
 
@@ -176,12 +179,12 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElDialog, ElForm, ElFormItem, ElButton, ElUpload, ElAlert, ElIcon, ElTag, ElPopover } from 'element-plus'
-import { Check, Warning, Upload } from '@element-plus/icons-vue'
+import { Check, Warning, Upload, InfoFilled } from '@element-plus/icons-vue'
 
 import { useBuilderStore } from '../stores/builderStore'
 import { useGtm } from '../composables/useGtm'
 import { notify } from '../utils/notify'
-import { IMPORT_KEYS } from '../utils/constants'
+import { IMPORT_KEYS, MAX_VISIBLE_TAGS } from '../utils/constants'
 import { createDynamicFields, validateVesselData } from '../utils/import'
 import { processModuleData } from '../utils/cellml'
 import phlynxspinner from '/src/assets/phlynxspinner.svg?raw'
@@ -200,7 +203,6 @@ const { trackEvent } = useGtm()
 const builderStore = useBuilderStore()
 
 // --- State Management ---
-const MAX_VISIBLE_TAGS = 1
 const formState = reactive({})
 const uploadRefs = ref([])
 const dynamicFields = ref([])
@@ -726,11 +728,32 @@ defineExpose({
 
 <style scoped>
 .field-container {
-  margin-bottom: var(--el-spacing-large);
+  margin-bottom: var(--el-spacing-small);
 }
 
 .upload-row {
   width: 100%;
+}
+
+.form-item {
+  margin-bottom: 32;
+}
+
+.form-item.is-info {
+  margin-bottom: 0;
+}
+
+.field-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--el-font-size-extra-small);
+  color: var(--el-text-color-placeholder);
+  margin-bottom: 4px;
+}
+
+.field-hint .el-icon {
+  font-size: 12px;
 }
 
 .file-input-box {
@@ -765,6 +788,7 @@ defineExpose({
   gap: 4px;
   padding: 0 8px;
   min-width: 0;
+  margin-bottom: 0;
   overflow: hidden;
   cursor: default;
 }
@@ -780,11 +804,11 @@ defineExpose({
 }
 
 .browse-button {
-  height: 100% !important;
-  border: none !important;
-  border-radius: 0 !important;
-  margin: 0 !important;
-  padding: 0 14px !important;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  margin: 0;
+  padding: 0 14px;
 }
 
 .empty-text {
@@ -837,16 +861,17 @@ defineExpose({
 }
 
 .form-header {
+  margin-top: var(--el-spacing-mini);
   margin-bottom: var(--el-spacing-base);
   font-size: var(--el-font-size-extra-small);
   color: var(--el-text-color-secondary);
   text-align: right;
 }
 
-.validation-status {
+/* .validation-status {
   margin-top: var(--el-spacing-large);
   margin-bottom: var(--el-spacing-base);
-}
+} */
 
 .required-asterisk {
   color: var(--el-color-danger);
