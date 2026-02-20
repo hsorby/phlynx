@@ -47,6 +47,13 @@ export const IMPORT_KEYS = {
   UNITS: 'units',
 }
 
+export const IMPORT_LABELS = {
+  VESSEL: 'Vessel Array (.csv)',
+  MODULE_CONFIG: 'Module Configurations (.json)',
+  CELLML_FILE: 'CellML Module File (.cellml or .xml)',
+  PARAMETER: 'Parameters (.csv)',
+  UNITS: 'CellML Units File (.cellml or .xml)',
+}
 export const EXPORT_KEYS = {
   CA: 'circulatoryAutogen',
   CELLML: 'cellml',
