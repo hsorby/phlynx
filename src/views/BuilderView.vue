@@ -207,6 +207,7 @@
             @dragleave="onDragLeave"
             @nodes-change="onNodeChange"
             @edges-change="onEdgeChange"
+            @pane-context-menu="onPaneContextMenu"
             :max-zoom="1.5"
             :min-zoom="0.1"
             :default-edge-options="edgeLineOptions"
@@ -288,6 +289,8 @@
     :config="currentImportConfig"
     @confirm="onImportConfirm"
   />
+
+  <PaneContextMenu ref="contextMenuRef" :items="contextMenuItems" />
 </template>
 
 <script>
@@ -333,6 +336,7 @@ import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
 import SaveDialog from '../components/SaveDialog.vue'
 import MacroBuilderDialog from '../components/MacroBuilderDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
+import PaneContextMenu from '../components/PaneContextMenu.vue'
 import { useScreenshot } from '../services/useScreenshot'
 import { generateExportZip } from '../services/caExport'
 import { createCellMLDataFragment } from '../services/cellml'
@@ -399,7 +403,7 @@ const { processMacroGeneration } = useMacroGenerator()
 
 const pendingHistoryNodes = new Set()
 
-const { onDragOver, onDrop, onDragLeave, isDragOver } = useDragAndDrop(pendingHistoryNodes)
+const { onDragOver, onDrop, onDragLeave, isDragOver, createModuleNode } = useDragAndDrop(pendingHistoryNodes)
 const historyStore = useFlowHistoryStore()
 const { loadFromVesselArray } = useLoadFromVesselArray()
 const { capture } = useScreenshot()
@@ -1485,6 +1489,46 @@ async function onReplaceConfirm(updatedData) {
   updatedData.label = label
   updateNodeData(nodeId, updatedData)
   replacementDialogVisible.value = false
+}
+
+const contextMenuRef = ref(null)
+const contextMenuPosition = ref({ x: 0, y: 0 })
+
+const contextMenuItems = [
+  {
+    label: 'Create New Module',
+    action: () => createNewModuleAtPosition(mousePosition.value.x, mousePosition.value.y),
+  },
+]
+
+function onPaneContextMenu(event) {
+  event.preventDefault()
+  contextMenuPosition.value = { x: event.clientX, y: event.clientY }
+  contextMenuRef.value.open(event.clientX, event.clientY)
+}
+
+function createNewModuleAtPosition(clientX, clientY) {
+  const allModules = builderStore.availableModules
+  const moduleFile = allModules.find((f) => f.modules?.some((m) => m.componentName === 'new_module'))
+  const moduleEntry = moduleFile?.modules?.find((m) => m.componentName === 'new_module')
+
+  if (!moduleEntry) {
+    notify.warning({ title: 'Module Not Found', message: 'new_module is not available.' })
+    return
+  }
+
+  const moduleData = {
+    name: moduleEntry.name,
+    componentName: moduleEntry.componentName,
+    sourceFile: moduleFile.filename,
+    configs: moduleEntry.configs || null,
+    configIndex: 0,
+    ports: moduleEntry.ports || [],
+    portOptions: moduleEntry.portOptions || [],
+  }
+
+  const position = screenToFlowCoordinate({ x: clientX, y: clientY })
+  createModuleNode(moduleData, position)
 }
 
 function handleAutoLayout() {
