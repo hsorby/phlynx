@@ -1400,6 +1400,7 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
     // Check if node is the specific target OR if it uses the same module (for reusability).
     const isTargetNode = node.id === updatedData.nodeId
     const isMatchingModule =
+      updatedData.scope !== 'single' &&
       node.data.sourceFile === updatedData.originalSourceFile &&
       node.data.componentName === updatedData.originalComponentName
 
