@@ -12,7 +12,12 @@
       <div v-if="loading" class="loading">Loading CellML source...</div>
 
       <div v-else class="editor-wrapper">
-        <CellMLTextEditor v-model="currentCode" :regenerate-on-change="modelValue" @save="handleSave('key')" />
+        <CellMLTextEditor
+          :model-value="currentCode"
+          :regenerate-on-change="modelValue"
+          @update:code="currentCode = $event"
+          @save="handleSave('key')"
+        />
       </div>
 
       <div class="status-bar">
@@ -223,7 +228,6 @@ const handleSave = async (source) => {
 
     emit('save', {
       nodeId: props.nodeData.nodeId,
-      // scope controls which nodes BuilderView redirects — not the merge logic.
       scope: applyToAll.value ? 'all' : 'single',
       code: mergedModelString,
       componentName: newName,
