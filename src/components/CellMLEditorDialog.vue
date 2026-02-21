@@ -166,6 +166,12 @@ const handleBeforeClose = (done) => checkDirtyAndProceed(done)
 const handleCancel = () => checkDirtyAndProceed(() => emit('update:modelValue', false))
 
 // ── Save ─────────────────────────────────────────────────────────────────────
+//
+// Both scope: single and scope: all perform identical merge logic — the
+// component is written to USER_MODULES_FILE under whatever name is in the
+// editor. The only difference is which nodes get redirected in BuilderView:
+//   scope: single → only the editing node
+//   scope: all    → all nodes sharing originalSourceFile + originalComponentName
 
 const handleSave = async (source) => {
   if (source === 'key' && !isDirty.value) return
@@ -182,76 +188,50 @@ const handleSave = async (source) => {
   try {
     const existingModelString = await store.getModuleContent(USER_MODULES_FILE)
 
-    if (!applyToAll.value) {
-      const nameExists = doesComponentExistInModel(existingModelString, newName)
-      const isOwnFork = nameExists && currentName === newName
+    // Block if the name is already taken by a different component.
+    // Updating in place (newName === currentName and we own it) is always allowed.
+    const nameExists = doesComponentExistInModel(existingModelString, newName)
+    const isUpdatingInPlace = nameExists && newName === currentName
 
-      if (nameExists && !isOwnFork) {
-        ElMessageBox.alert(
-          `A component named "${newName}" already exists in User Modules. Please rename the component in the editor before saving.`,
-          'Name Conflict',
-          { type: 'error' }
-        )
-        return
-      }
-
-      const oldNameForMerge = isOwnFork ? newName : undefined
-      const mergedModelString = mergeModelComponents(existingModelString, currentCode.value, newName, oldNameForMerge)
-      if (!mergedModelString) throw new Error('Merge operation returned empty string.')
-
-      trackEvent('editor_action', {
-        category: 'Editor',
-        action: isOwnFork ? 'save_single' : 'fork_single',
-        label: newName,
-        file_type: 'cellml',
-      })
-
-      emit('save', {
-        nodeId: props.nodeData.nodeId,
-        scope: 'single',
-        code: mergedModelString,
-        componentName: newName,
-        sourceFile: USER_MODULES_FILE,
-        originalComponentName: currentName,
-        originalSourceFile: props.nodeData.sourceFile,
-        originalConfigIndex: props.nodeData.configIndex,
-      })
-
-    } else {
-      const nameExists = doesComponentExistInModel(existingModelString, newName)
-      const isUpdatingInPlace = nameExists && newName === currentName
-
-      if (nameExists && !isUpdatingInPlace) {
-        ElMessageBox.alert(
-          `A component named "${newName}" already exists in User Modules. Please rename the component in the editor before saving.`,
-          'Name Conflict',
-          { type: 'error' }
-        )
-        return
-      }
-
-      const oldNameForMerge = isInternalModule.value ? undefined : currentName
-      const mergedModelString = mergeModelComponents(existingModelString, currentCode.value, newName, oldNameForMerge)
-      if (!mergedModelString) throw new Error('Merge operation returned empty string.')
-
-      trackEvent('editor_action', {
-        category: 'Editor',
-        action: isInternalModule.value ? 'fork_all' : 'save_all',
-        label: newName,
-        file_type: 'cellml',
-      })
-
-      emit('save', {
-        nodeId: props.nodeData.nodeId,
-        scope: 'all',
-        code: mergedModelString,
-        componentName: newName,
-        sourceFile: USER_MODULES_FILE,
-        originalComponentName: currentName,
-        originalSourceFile: props.nodeData.sourceFile,
-        originalConfigIndex: props.nodeData.configIndex,
-      })
+    if (nameExists && !isUpdatingInPlace) {
+      ElMessageBox.alert(
+        `A component named "${newName}" already exists in User Modules. Please rename the component in the editor before saving.`,
+        'Name Conflict',
+        { type: 'error' }
+      )
+      return
     }
+
+    // For internal (read-only) source modules we are always writing to
+    // USER_MODULES_FILE for the first time — no old entry to replace.
+    const oldNameForMerge = isInternalModule.value ? undefined : currentName
+
+    const mergedModelString = mergeModelComponents(
+      existingModelString,
+      currentCode.value,
+      newName,
+      oldNameForMerge
+    )
+    if (!mergedModelString) throw new Error('Merge operation returned empty string.')
+
+    trackEvent('editor_action', {
+      category: 'Editor',
+      action: applyToAll.value ? 'save_all' : 'save_single',
+      label: newName,
+      file_type: 'cellml',
+    })
+
+    emit('save', {
+      nodeId: props.nodeData.nodeId,
+      // scope controls which nodes BuilderView redirects — not the merge logic.
+      scope: applyToAll.value ? 'all' : 'single',
+      code: mergedModelString,
+      componentName: newName,
+      sourceFile: USER_MODULES_FILE,
+      originalComponentName: currentName,
+      originalSourceFile: props.nodeData.sourceFile,
+      originalConfigIndex: props.nodeData.configIndex,
+    })
 
     emit('update:modelValue', false)
   } catch (error) {
