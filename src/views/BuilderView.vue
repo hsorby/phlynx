@@ -386,6 +386,7 @@ const {
   edges,
   findEdge,
   findNode,
+  fitView,
   fromObject,
   getSelectedNodes,
   getSelectedEdges,
@@ -1496,12 +1497,16 @@ const contextMenuRef = ref(null)
 
 const paneContextMenuItems = [
   {
-    label: 'Create New Module',
+    label: 'Create Module',
     action: () => createNewModuleAtPosition(mousePosition.value.x, mousePosition.value.y),
   },
   {
     label: 'Select All',
     action: () => selectAllNodes(),
+  },
+  { 
+    label: 'Fit View',
+    action: () => fitView(),
   },
   {
     label: 'Clear Workspace',
