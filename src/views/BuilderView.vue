@@ -405,7 +405,103 @@ const { processMacroGeneration } = useMacroGenerator()
 
 const pendingHistoryNodes = new Set()
 
-const { onDragOver, onDrop, onDragLeave, isDragOver, createModuleNode } = useDragAndDrop(pendingHistoryNodes)
+const { onDragOver: onDragOverModule, onDrop: onDropModule, onDragLeave, isDragOver, createModuleNode } = useDragAndDrop(pendingHistoryNodes)
+
+/**
+ * Unified dragover handler — accepts both module drags (internal) and file drops (.cellml from OS).
+ */
+const onDragOver = (event) => {
+  const hasFiles = event.dataTransfer?.types?.includes('Files')
+  if (hasFiles) {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+  } else {
+    onDragOverModule(event)
+  }
+}
+
+/**
+ * Unified drop handler — routes OS file drops to CellML import, internal drags to the module DnD handler.
+ */
+const onDrop = async (event) => {
+  const files = event.dataTransfer?.files
+  if (files && files.length > 0) {
+    event.preventDefault()
+
+    const cellmlFiles = Array.from(files).filter((f) =>
+      f.name.toLowerCase().endsWith('.cellml')
+    )
+
+    if (cellmlFiles.length === 0) {
+      notify.warning({
+        title: 'Unsupported File Type',
+        message: 'Only .cellml files can be dropped onto the workspace.',
+      })
+      return
+    }
+
+    if (libcellml.status !== 'ready') {
+      notify.warning({
+        title: 'CellML Library Not Ready',
+        message: 'Please wait for the CellML library to finish loading and try again.',
+      })
+      return
+    }
+
+    const readFile = (file) =>
+      new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (e) => resolve(e.target.result)
+        reader.onerror = () => reject(new Error(`Failed to read ${file.name}`))
+        reader.readAsText(file)
+      })
+
+    const multiFile = cellmlFiles.length > 1
+    const results = await Promise.all(
+      cellmlFiles.map(async (file) => {
+        try {
+          const content = await readFile(file)
+          return loadCellMLData(content, file.name, { notify: !multiFile })
+        } catch {
+          return { ok: false, moduleCount: 0, unitCount: 0 }
+        }
+      })
+    )
+
+    if (multiFile) {
+      const succeeded = results.filter((r) => r.ok)
+      const failed = results.length - succeeded.length
+      const totalModules = succeeded.reduce((sum, r) => sum + r.moduleCount, 0)
+      const totalUnits = succeeded.reduce((sum, r) => sum + r.unitCount, 0)
+      const summary = [
+        totalModules > 0 ? `${totalModules} module${totalModules !== 1 ? 's' : ''}` : '',
+        totalUnits > 0 ? `${totalUnits} unit${totalUnits !== 1 ? 's' : ''}` : '',
+      ]
+        .filter(Boolean)
+        .join(' and ')
+
+      if (succeeded.length > 0 && failed === 0) {
+        notify.success({
+          title: 'CellML Files Loaded',
+          message: `Loaded ${summary} from ${succeeded.length} file${succeeded.length !== 1 ? 's' : ''}.`,
+        })
+      } else if (succeeded.length > 0) {
+        notify.warning({
+          title: 'Partial Import',
+          message: `Loaded ${summary} from ${succeeded.length} file${succeeded.length !== 1 ? 's' : ''}. ${failed} file(s) failed.`,
+        })
+      } else {
+        notify.error({
+          title: 'Import Failed',
+          message: `Failed to load all ${failed} file(s).`,
+        })
+      }
+    }
+  } else {
+    onDropModule(event)
+  }
+}
+
 const historyStore = useFlowHistoryStore()
 const { loadFromVesselArray } = useLoadFromVesselArray()
 const { capture } = useScreenshot()
