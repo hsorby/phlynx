@@ -164,13 +164,15 @@ export function useLoadFromCellML() {
         const targetNode = nodeMap.get(target)
         if (!sourceNode || !targetNode) return []
 
-        // Prefer a typed source/target port; fall back to any available port
-        const sourcePort =
-          sourceNode.data.ports.find((p) => p.type === SOURCE_PORT_TYPE) ??
-          sourceNode.data.ports[0]
-        const targetPort =
-          targetNode.data.ports.find((p) => p.type === TARGET_PORT_TYPE) ??
-          targetNode.data.ports[0]
+        // Each port node is named after its peer, so we can match exactly —
+        // the source node's exit port named after `target`, and the target
+        // node's entrance port named after `source`.
+        const sourcePort = sourceNode.data.ports.find(
+          (p) => p.type === SOURCE_PORT_TYPE && p.name === target
+        )
+        const targetPort = targetNode.data.ports.find(
+          (p) => p.type === TARGET_PORT_TYPE && p.name === source
+        )
 
         if (!sourcePort || !targetPort) return []
 
