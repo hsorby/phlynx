@@ -61,6 +61,18 @@ export function useLoadFromCellML() {
       // --- Build VueFlow nodes ---
       const modelString = store.getModuleContent(filename)
 
+      // Pre-compute per-component edge membership so each node gets exactly one
+      // port handle per edge it participates in.
+      // entrance (in) → left handle; exit (out) → right handle.
+      const entranceEdgePeers = new Map()  // compName → Set of peer names (incoming)
+      const exitEdgePeers = new Map()      // compName → Set of peer names (outgoing)
+      for (const { source, target } of edges) {
+        if (!exitEdgePeers.has(source)) exitEdgePeers.set(source, new Set())
+        exitEdgePeers.get(source).add(target)
+        if (!entranceEdgePeers.has(target)) entranceEdgePeers.set(target, new Set())
+        entranceEdgePeers.get(target).add(source)
+      }
+
       const nodes = components.map((compName) => {
         const variables = extractVariablesFromModule(modelString, compName)
         store.setVariableParameterValuesForInstance(compName, variables, filename, compName, 0)
@@ -69,18 +81,19 @@ export function useLoadFromCellML() {
         const moduleConfig = store.getModuleConfigFromConfigIndex(filename, compName, 0) ?? {}
         const portLabels = buildPortLabels(moduleConfig)
 
+        // One port handle per edge — named after the peer for tooltip clarity
         const ports = [
-          ...(moduleConfig.entrance_ports ?? []).map((p) => ({
+          ...[...(entranceEdgePeers.get(compName) ?? [])].map((peer) => ({
             uid: crypto.randomUUID(),
             type: TARGET_PORT_TYPE,
             side: 'left',
-            name: p.port_type,
+            name: peer,
           })),
-          ...(moduleConfig.exit_ports ?? []).map((p) => ({
+          ...[...(exitEdgePeers.get(compName) ?? [])].map((peer) => ({
             uid: crypto.randomUUID(),
             type: SOURCE_PORT_TYPE,
             side: 'right',
-            name: p.port_type,
+            name: peer,
           })),
         ]
 
