@@ -326,6 +326,8 @@ import { useBuilderStore } from '../stores/builderStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import useDragAndDrop from '../composables/useDnD'
 import { useLoadFromVesselArray } from '../composables/useLoadFromVesselArray'
+import { useLoadFromCellML } from '../composables/useLoadFromCellML'
+import { parseCellMLConnections } from '../services/import/parseCellMLConnections'
 import { useResizableAside } from '../composables/useResizableAside'
 import { useGtm } from '../composables/useGtm'
 import ModuleList from '../components/ModuleList.vue'
@@ -441,9 +443,34 @@ const readFileAsText = (file) =>
 /**
  * Load an array of CellML entries, each being either a browser File object or a
  * plain `{ name, content }` object (used when content is already in memory).
+ *
+ * If a single file contains inter-component connections it is treated as a
+ * connection graph and loaded into the workspace via loadFromCellML.
+ * Otherwise (or for multiple files) the files are registered as module/unit
+ * libraries via loadCellMLData as usual.
+ *
  * Shows per-file notifications for a single file; a combined summary for multiple.
  */
 const loadCellMLFiles = async (entries) => {
+  // Single-file fast path: check for connections and load as a graph if present
+  if (entries.length === 1) {
+    const entry = entries[0]
+    const content = entry instanceof File ? await readFileAsText(entry) : entry.content
+    const { components } = parseCellMLConnections(content, entry.name)
+    if (components.length > 0) {
+      await loadFromCellML(content, entry.name)
+      return [{ ok: true, moduleCount: components.length, unitCount: 0 }]
+    }
+    // No connections — fall through to the standard module-registration path
+    try {
+      const result = await loadCellMLData(content, entry.name)
+      return [result]
+    } catch {
+      return [{ ok: false, moduleCount: 0, unitCount: 0 }]
+    }
+  }
+
+  // Multi-file path: always register as module/unit libraries
   const multiFile = entries.length > 1
   const results = await Promise.all(
     entries.map(async (entry) => {
@@ -519,6 +546,7 @@ const onDrop = async (event) => {
 
 const historyStore = useFlowHistoryStore()
 const { loadFromVesselArray } = useLoadFromVesselArray()
+const { loadFromCellML } = useLoadFromCellML()
 const { capture } = useScreenshot()
 const { trackEvent } = useGtm()
 const { width: asideWidth, startResize } = useResizableAside(300, 150, 400)
