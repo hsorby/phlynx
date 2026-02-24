@@ -458,8 +458,11 @@ const loadCellMLFiles = async (entries) => {
     const content = entry instanceof File ? await readFileAsText(entry) : entry.content
     const { components } = parseCellMLConnections(content, entry.name)
     if (components.length > 0) {
+      // Register modules/units in the store first, then build the graph.
+      // loadCellMLData is kept silent here since loadFromCellML provides its own feedback.
+      const result = await loadCellMLData(content, entry.name, { notify: false })
       await loadFromCellML(content, entry.name)
-      return [{ ok: true, moduleCount: components.length, unitCount: 0 }]
+      return [result]
     }
     // No connections — fall through to the standard module-registration path
     try {

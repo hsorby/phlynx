@@ -16,7 +16,7 @@ import { useClearWorkspace } from '../utils/workspace'
 import { notify } from '../utils/notify'
 import { useGtm } from './useGtm'
 import { buildPortLabels } from '../services/import/buildPorts'
-import { extractVariablesFromModule } from '../utils/cellml'
+import { processCellMLData } from '../utils/cellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
 import { getHandleId } from '../utils/ports'
 import { SOURCE_PORT_TYPE, TARGET_PORT_TYPE } from '../utils/constants'
@@ -56,10 +56,17 @@ export function useLoadFromCellML() {
       }
 
       // --- Register synthesised configs so port labels are available on each module ---
+      console.log(configs)
       store.addConfigFile(configs, filename)
 
-      // --- Build VueFlow nodes ---
-      const modelString = store.getModuleContent(filename)
+      // --- Parse variables and portOptions directly from the CellML content ---
+      const cellmlResult = processCellMLData(cellmlContent)
+      if (cellmlResult.type !== 'success') {
+        throw new Error(`CellML parse error: ${cellmlResult.issues.map(i => i.description).join('; ')}`)
+      }
+      const componentDataByName = new Map(
+        cellmlResult.components.data.map((c) => [c.componentName, c])
+      )
 
       // Pre-compute per-component edge membership so each node gets exactly one
       // port handle per edge it participates in.
@@ -74,7 +81,11 @@ export function useLoadFromCellML() {
       }
 
       const nodes = components.map((compName) => {
-        const variables = extractVariablesFromModule(modelString, compName)
+        const compData = componentDataByName.get(compName) ?? {}
+        const variables = compData.variables ?? []
+        const portOptions = compData.portOptions ?? []
+
+        // Match parameter values now that the store is populated
         store.setVariableParameterValuesForInstance(compName, variables, filename, compName, 0)
 
         // Retrieve the config we just registered (always index 0 for CellML-derived configs)
@@ -108,7 +119,7 @@ export function useLoadFromCellML() {
             label: `${compName} — ${filename}`,
             name: compName,
             portLabels,
-            portOptions: [],
+            portOptions,
             ports,
             hasPrescribedPosition: false,
             sourceFile: filename,

@@ -8,15 +8,17 @@
  *
  * Port directionality is inferred from the public_interface attribute on each
  * component's variable declarations:
- *   public_interface="out"  →  exit_ports  (source)
- *   public_interface="in"   →  entrance_ports  (target)
+ *   public_interface="out"  ->  exit_ports  (source)
+ *   public_interface="in"   ->  entrance_ports  (target)
  *
- * Each <map_variables> entry becomes its own port label.
- * Multiple <connection> blocks between the same component pair are merged into
- * a single edge but each produce their own port label entries.
+ *
+ * Variables that serve as the environment's time signal (e.g., 'time', 't') are
+ * excluded from port labels — their name is detected dynamically from the
+ * environment component's variable declarations.
+ * 
  */
 
-const EXCLUDED_COMPONENTS = new Set(['environment'])
+import { EXCLUDED_COMPONENTS, TIME_NAMES, TIME_UNITS } from "../../utils/constants"
 
 /**
  * Parse the raw CellML XML string and return structured graph data.
@@ -25,7 +27,7 @@ const EXCLUDED_COMPONENTS = new Set(['environment'])
  * @param {string} filename - The filename (used as module_file in configs)
  * @returns {{
  *   components: string[],
- *   edges: Array<{ source: string, target: string, variables: string[] }>,
+ *   edges: Array<{ source: string, target: string }>,
  *   configs: Array<object>   // shaped for builderStore.addConfigFile
  * }}
  */
@@ -38,9 +40,24 @@ export function parseCellMLConnections(cellmlContent, filename) {
     throw new Error(`Failed to parse CellML XML: ${parseError.textContent}`)
   }
 
-  // --- 1. Build a map of component → variable → public_interface ---
-  // { componentName → { variableName → 'in' | 'out' | 'none' } }
-  const componentVariableInterfaces = new Map()
+  // --- 1. Detect the time variable name from the environment component ---
+  const excludedVarNames = new Set()
+  for (const comp of doc.querySelectorAll('component')) {
+    if (comp.getAttribute('name') === 'environment') {
+      for (const variable of comp.querySelectorAll('variable')) {
+        const varName = variable.getAttribute('name')
+        const varUnits = variable.getAttribute('units') ?? ''
+        if (varName && (TIME_NAMES.has(varName) || TIME_UNITS.has(varUnits))) {
+          excludedVarNames.add(varName)
+        }
+      }
+      break
+    }
+  }
+
+  // --- 2. Build a map of component -> variable -> { iface, units } ---
+  // { componentName -> { variableName -> { iface: 'in'|'out'|'none', units: string } } }
+  const componentVariableInfo = new Map()
 
   for (const comp of doc.querySelectorAll('component')) {
     const compName = comp.getAttribute('name')
@@ -49,28 +66,38 @@ export function parseCellMLConnections(cellmlContent, filename) {
     const varMap = new Map()
     for (const variable of comp.querySelectorAll('variable')) {
       const varName = variable.getAttribute('name')
-      const iface = variable.getAttribute('public_interface') ?? 'none'
-      if (varName) varMap.set(varName, iface)
+      if (!varName) continue
+      varMap.set(varName, {
+        iface: variable.getAttribute('public_interface') ?? 'none',
+        units: variable.getAttribute('units') ?? 'dimensionless',
+      })
     }
-    componentVariableInterfaces.set(compName, varMap)
+    componentVariableInfo.set(compName, varMap)
   }
 
-  // --- 2. Parse all <connection> blocks ---
-  // Accumulate per-component port label entries, keyed by component name.
-  // { componentName → { entrance_ports: [...], exit_ports: [...] } }
-  const componentPortAccumulator = new Map()
+  // --- 3. Parse all <connection> blocks ---
+  //
+  // For each non-excluded component pair we accumulate:
+  //   - One edge (source -> target)
+  //   - One port label entry per <map_variables> line (one per variable)
+  //
+  // Data structures:
+  //   edgeMap    : canonical pair key -> { source, target }
+  //   portLabels : componentName -> { entrance_ports, exit_ports } (one entry per variable)
 
-  // Track unique edges: key = canonical pair string, value = { source, target }
-  // We use the component that has 'out' variables as the source.
-  // For pairs where direction is ambiguous we fall back to component_1 → component_2.
   const edgeMap = new Map()
+  // portLabels: compName -> { entrance_ports: [...], exit_ports: [...] }
+  // One entry per <map_variables> line, each variable gets its own port label.
+  const portLabels = new Map()
 
-  const ensurePortAccumulator = (name) => {
-    if (!componentPortAccumulator.has(name)) {
-      componentPortAccumulator.set(name, { entrance_ports: [], exit_ports: [] })
-    }
-    return componentPortAccumulator.get(name)
+  const ensurePortLabels = (compName) => {
+    if (!portLabels.has(compName)) portLabels.set(compName, { entrance_ports: [], exit_ports: [] })
+    return portLabels.get(compName)
   }
+
+  // edgePeers: used only to count out-vars per pair for edge direction + port handle naming
+  // compName -> Set of peer names (for port handle construction in useLoadFromCellML)
+  const edgePeers = new Map()
 
   for (const connection of doc.querySelectorAll('connection')) {
     const mapComponents = connection.querySelector('map_components')
@@ -80,78 +107,88 @@ export function parseCellMLConnections(cellmlContent, filename) {
     const comp2 = mapComponents.getAttribute('component_2')
     if (!comp1 || !comp2) continue
 
-    // Skip connections that involve excluded components on either side
+    // Skip connections involving excluded components on either side
     if (EXCLUDED_COMPONENTS.has(comp1) || EXCLUDED_COMPONENTS.has(comp2)) continue
 
-    // Ensure accumulator entries exist for both components
-    const acc1 = ensurePortAccumulator(comp1)
-    const acc2 = ensurePortAccumulator(comp2)
+    const labels1 = ensurePortLabels(comp1)
+    const labels2 = ensurePortLabels(comp2)
 
-    // Process each mapped variable pair
+    let outCount1 = 0
+    let outCount2 = 0
+
     for (const mapVar of connection.querySelectorAll('map_variables')) {
       const var1 = mapVar.getAttribute('variable_1')
       const var2 = mapVar.getAttribute('variable_2')
       if (!var1 || !var2) continue
 
-      // Look up the public_interface for each side
-      const iface1 = componentVariableInterfaces.get(comp1)?.get(var1) ?? 'none'
-      const iface2 = componentVariableInterfaces.get(comp2)?.get(var2) ?? 'none'
+      // Skip time-like variables
+      if (excludedVarNames.has(var1) || excludedVarNames.has(var2)) continue
 
-      // Assign to the appropriate port bucket for each component
+      const info1 = componentVariableInfo.get(comp1)?.get(var1)
+      const info2 = componentVariableInfo.get(comp2)?.get(var2)
+      const iface1 = info1?.iface ?? 'none'
+      const iface2 = info2?.iface ?? 'none'
+
+      // Each variable gets its own port label entry
       if (iface1 === 'out') {
-        acc1.exit_ports.push({ port_type: var1, variables: [var1] })
+        labels1.exit_ports.push({ port_type: var1, variables: [var1] })
+        outCount1++
       } else if (iface1 === 'in') {
-        acc1.entrance_ports.push({ port_type: var1, variables: [var1] })
+        labels1.entrance_ports.push({ port_type: var1, variables: [var1] })
       }
 
       if (iface2 === 'out') {
-        acc2.exit_ports.push({ port_type: var2, variables: [var2] })
+        labels2.exit_ports.push({ port_type: var2, variables: [var2] })
+        outCount2++
       } else if (iface2 === 'in') {
-        acc2.entrance_ports.push({ port_type: var2, variables: [var2] })
+        labels2.entrance_ports.push({ port_type: var2, variables: [var2] })
       }
     }
 
-    // Register edge — canonical key ensures one edge per pair regardless of
-    // which component is 1 vs 2 across multiple connection blocks.
+    // Register one edge per unique component pair
     const edgeKey = [comp1, comp2].sort().join('|||')
     if (!edgeMap.has(edgeKey)) {
-      // Determine source/target: the component with more 'out' variables in this
-      // connection is the source. Fall back to comp1 → comp2.
-      let outCount1 = 0
-      let outCount2 = 0
-      for (const mapVar of connection.querySelectorAll('map_variables')) {
-        const var1 = mapVar.getAttribute('variable_1')
-        const var2 = mapVar.getAttribute('variable_2')
-        if (componentVariableInterfaces.get(comp1)?.get(var1) === 'out') outCount1++
-        if (componentVariableInterfaces.get(comp2)?.get(var2) === 'out') outCount2++
-      }
       const source = outCount1 >= outCount2 ? comp1 : comp2
       const target = source === comp1 ? comp2 : comp1
       edgeMap.set(edgeKey, { source, target })
+      // Track peers for port handle construction
+      if (!edgePeers.has(source)) edgePeers.set(source, new Set())
+      edgePeers.get(source).add(target)
+      if (!edgePeers.has(target)) edgePeers.set(target, new Set())
+      edgePeers.get(target).add(source)
     }
   }
 
-  // --- 3. Build the component list ---
-  const components = [...componentVariableInterfaces.keys()].filter(
-    (name) => !EXCLUDED_COMPONENTS.has(name) && componentPortAccumulator.has(name)
+  // --- 4. Build the component list ---
+  // Only include components that participate in at least one non-time connection
+  const components = [...componentVariableInfo.keys()].filter(
+    (name) => !EXCLUDED_COMPONENTS.has(name) && portLabels.has(name)
   )
 
-  // --- 4. Build configs shaped for builderStore.addConfigFile ---
-  // addConfigFile expects an array of config objects, each with:
-  //   module_file, module_type, entrance_ports[], exit_ports[]
-  // We pass one config per component, with no BC_type/vessel_type
-  // (these are CellML components, not vessel-array vessels).
+  // --- 5. Build configs shaped for builderStore.addConfigFile ---
+  // One port label entry per peer
   const configs = components.map((compName) => {
-    const { entrance_ports, exit_ports } = componentPortAccumulator.get(compName)
+    const { entrance_ports, exit_ports } = portLabels.get(compName) ?? { entrance_ports: [], exit_ports: [] }
+
+    // Build variables_and_units from all public variables on this component
+    const variables_and_units = []
+    for (const [varName, { iface, units }] of componentVariableInfo.get(compName)) {
+      if (iface === 'none') continue
+      variables_and_units.push([varName, units, 'access', 'variable'])
+    }
+
     return {
       module_file: filename,
       module_type: compName,
+      vessel_type: compName,
+      BC_type: 'nn',
       entrance_ports,
       exit_ports,
+      variables_and_units,
     }
   })
 
-  // --- 5. Build edges list ---
+  // --- 6. Build edges list ---
   const edges = [...edgeMap.values()]
 
   return { components, edges, configs }

@@ -22,6 +22,10 @@ export const FLOW_IDS = {
   MACRO: 'macro-builder-editor',
 }
 
+export const EXCLUDED_COMPONENTS = new Set(['environment'])
+export const TIME_UNITS = new Set(['second', 'millisecond', 'microsecond', 'minute', 'hour', 'ms', 's'])
+export const TIME_NAMES = new Set(['time', 't'])
+
 export const MAX_VISIBLE_TAGS = 1
 
 export const GHOST_NODE_TYPE = 'ghostNode'
