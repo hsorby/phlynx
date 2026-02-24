@@ -484,13 +484,7 @@ const importOptions = computed(() => [
     label: 'Parameters',
     icon: markRaw(IconParameters),
     disabled: false,
-  },
-  {
-    key: IMPORT_KEYS.UNITS,
-    label: 'Units',
-    icon: markRaw(UnitsIcon),
-    disabled: libcellml.status !== 'ready',
-  },
+  }
 ])
 currentImportMode.value = importOptions.value[0]
 
@@ -919,13 +913,13 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
 
     if (result.type === 'success') {
       // Register components (modules) with the store
-      const augmentedData = result.components.data.map((item) => ({
+      const modules = result.components.data.map((item) => ({
         ...item,
         sourceFile: filename,
       }))
       builderStore.addModuleFile({
         filename,
-        modules: augmentedData,
+        modules: modules,
         model: result.components.model,
       })
 
