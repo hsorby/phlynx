@@ -1054,22 +1054,30 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
     const result = processCellMLData(content)
 
     if (result.type === 'success') {
+      const moduleCount = result.components.data.length
+      const unitCount = result.units.count
+
       // Register components (modules) with the store
-      const modules = result.components.data.map((item) => ({
-        ...item,
-        sourceFile: filename,
-      }))
-      builderStore.addModuleFile({
-        filename,
-        modules: modules,
-        model: result.components.model,
-      })
+      if (moduleCount > 0) {
+        const modules = result.components.data.map((item) => ({
+          ...item,
+          sourceFile: filename,
+        }))
+      
+        builderStore.addModuleFile({
+          filename,
+          modules: modules,
+          model: result.components.model,
+        })
+      }
 
       // Register units with the store
-      builderStore.addUnitsFile({
-        filename,
-        model: result.units.model,
-      })
+      if (unitCount > 0) {
+        builderStore.addUnitsFile({
+          filename,
+          model: result.units.model,
+        })
+      }
 
       if (trackEvents) {
         trackEvent('cellml_load_action', {
@@ -1081,9 +1089,6 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
       }
 
       if (shouldNotify) {
-        const moduleCount = result.components.data.length
-        const unitCount = result.units.count
-
         if (moduleCount > 0 && unitCount > 0) {
           notify.success({
             title: 'CellML File Loaded',
