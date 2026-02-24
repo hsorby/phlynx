@@ -408,6 +408,77 @@ const pendingHistoryNodes = new Set()
 const { onDragOver: onDragOverModule, onDrop: onDropModule, onDragLeave, isDragOver, createModuleNode } = useDragAndDrop(pendingHistoryNodes)
 
 /**
+ * Shared multi-file notification helper.
+ * `results` must be an array of `{ ok, summary }` objects where `summary` is a
+ * human-readable description of what was loaded (e.g. "3 modules and 2 units").
+ * Titles are customisable so each import type can use its own wording.
+ */
+const notifyMultiFileResults = (results, { successTitle, partialTitle = 'Partial Import', failTitle = 'Import Failed' }) => {
+  const succeeded = results.filter((r) => r.ok)
+  const failed = results.length - succeeded.length
+  const fileWord = (n) => `${n} file${n !== 1 ? 's' : ''}`
+
+  if (succeeded.length > 0 && failed === 0) {
+    notify.success({ title: successTitle, message: `Loaded from ${fileWord(succeeded.length)}.` })
+  } else if (succeeded.length > 0) {
+    notify.warning({ title: partialTitle, message: `Loaded from ${fileWord(succeeded.length)}. ${fileWord(failed)} failed.` })
+  } else {
+    notify.error({ title: failTitle, message: `Failed to load all ${fileWord(failed)}.` })
+  }
+}
+
+/**
+ * Read a File object as text.
+ */
+const readFileAsText = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => resolve(e.target.result)
+    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`))
+    reader.readAsText(file)
+  })
+
+/**
+ * Load an array of CellML entries, each being either a browser File object or a
+ * plain `{ name, content }` object (used when content is already in memory).
+ * Shows per-file notifications for a single file; a combined summary for multiple.
+ */
+const loadCellMLFiles = async (entries) => {
+  const multiFile = entries.length > 1
+  const results = await Promise.all(
+    entries.map(async (entry) => {
+      try {
+        const content = entry instanceof File ? await readFileAsText(entry) : entry.content
+        return loadCellMLData(content, entry.name, { notify: !multiFile })
+      } catch {
+        return { ok: false, moduleCount: 0, unitCount: 0 }
+      }
+    })
+  )
+
+  if (multiFile) {
+    const succeeded = results.filter((r) => r.ok)
+    const failed = results.length - succeeded.length
+    const totalModules = succeeded.reduce((sum, r) => sum + r.moduleCount, 0)
+    const totalUnits = succeeded.reduce((sum, r) => sum + r.unitCount, 0)
+    const fileWord = (n) => `${n} file${n !== 1 ? 's' : ''}`
+    const summary = [
+      totalModules > 0 ? `${totalModules} module${totalModules !== 1 ? 's' : ''}` : '',
+      totalUnits > 0 ? `${totalUnits} unit${totalUnits !== 1 ? 's' : ''}` : '',
+    ].filter(Boolean).join(' and ')
+    if (succeeded.length > 0 && failed === 0) {
+      notify.success({ title: 'CellML Files Loaded', message: `Loaded ${summary} from ${fileWord(succeeded.length)}.` })
+    } else if (succeeded.length > 0) {
+      notify.warning({ title: 'Partial Import', message: `Loaded ${summary} from ${fileWord(succeeded.length)}. ${fileWord(failed)} failed.` })
+    } else {
+      notify.error({ title: 'Import Failed', message: `Failed to load all ${fileWord(failed)}.` })
+    }
+  }
+
+  return results
+}
+
+/**
  * Unified dragover handler — accepts both module drags (internal) and file drops (.cellml from OS).
  */
 const onDragOver = (event) => {
@@ -428,75 +499,19 @@ const onDrop = async (event) => {
   if (files && files.length > 0) {
     event.preventDefault()
 
-    const cellmlFiles = Array.from(files).filter((f) =>
-      f.name.toLowerCase().endsWith('.cellml')
-    )
+    const cellmlFiles = Array.from(files).filter((f) => f.name.toLowerCase().endsWith('.cellml'))
 
     if (cellmlFiles.length === 0) {
-      notify.warning({
-        title: 'Unsupported File Type',
-        message: 'Only .cellml files can be dropped onto the workspace.',
-      })
+      notify.warning({ title: 'Unsupported File Type', message: 'Only .cellml files can be dropped onto the workspace.' })
       return
     }
 
     if (libcellml.status !== 'ready') {
-      notify.warning({
-        title: 'CellML Library Not Ready',
-        message: 'Please wait for the CellML library to finish loading and try again.',
-      })
+      notify.warning({ title: 'CellML Library Not Ready', message: 'Please wait for the CellML library to finish loading and try again.' })
       return
     }
 
-    const readFile = (file) =>
-      new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = (e) => resolve(e.target.result)
-        reader.onerror = () => reject(new Error(`Failed to read ${file.name}`))
-        reader.readAsText(file)
-      })
-
-    const multiFile = cellmlFiles.length > 1
-    const results = await Promise.all(
-      cellmlFiles.map(async (file) => {
-        try {
-          const content = await readFile(file)
-          return loadCellMLData(content, file.name, { notify: !multiFile })
-        } catch {
-          return { ok: false, moduleCount: 0, unitCount: 0 }
-        }
-      })
-    )
-
-    if (multiFile) {
-      const succeeded = results.filter((r) => r.ok)
-      const failed = results.length - succeeded.length
-      const totalModules = succeeded.reduce((sum, r) => sum + r.moduleCount, 0)
-      const totalUnits = succeeded.reduce((sum, r) => sum + r.unitCount, 0)
-      const summary = [
-        totalModules > 0 ? `${totalModules} module${totalModules !== 1 ? 's' : ''}` : '',
-        totalUnits > 0 ? `${totalUnits} unit${totalUnits !== 1 ? 's' : ''}` : '',
-      ]
-        .filter(Boolean)
-        .join(' and ')
-
-      if (succeeded.length > 0 && failed === 0) {
-        notify.success({
-          title: 'CellML Files Loaded',
-          message: `Loaded ${summary} from ${succeeded.length} file${succeeded.length !== 1 ? 's' : ''}.`,
-        })
-      } else if (succeeded.length > 0) {
-        notify.warning({
-          title: 'Partial Import',
-          message: `Loaded ${summary} from ${succeeded.length} file${succeeded.length !== 1 ? 's' : ''}. ${failed} file(s) failed.`,
-        })
-      } else {
-        notify.error({
-          title: 'Import Failed',
-          message: `Failed to load all ${failed} file(s).`,
-        })
-      }
-    }
+    await loadCellMLFiles(cellmlFiles)
   } else {
     onDropModule(event)
   }
@@ -1200,38 +1215,8 @@ async function onImportConfirm(importPayload, updateProgress) {
       })
     }
   } else if (currentImportMode.value.key === IMPORT_KEYS.CELLML_FILE) {
-    const multiFile = importPayload.size > 1
-    const results = await Promise.all(
-      [...importPayload].map(([filename, data]) =>
-        loadCellMLData(data?.payload, filename, { notify: !multiFile })
-      )
-    )
-    if (multiFile) {
-      const succeeded = results.filter(r => r.ok)
-      const failed = results.length - succeeded.length
-      const totalModules = succeeded.reduce((sum, r) => sum + r.moduleCount, 0)
-      const totalUnits = succeeded.reduce((sum, r) => sum + r.unitCount, 0)
-      const summary = [
-        totalModules > 0 ? `${totalModules} module${totalModules !== 1 ? 's' : ''}` : '',
-        totalUnits > 0 ? `${totalUnits} unit${totalUnits !== 1 ? 's' : ''}` : '',
-      ].filter(Boolean).join(' and ')
-      if (succeeded.length > 0 && failed === 0) {
-        notify.success({
-          title: 'CellML Files Loaded',
-          message: `Loaded ${summary} from ${succeeded.length} file${succeeded.length !== 1 ? 's' : ''}.`,
-        })
-      } else if (succeeded.length > 0) {
-        notify.warning({
-          title: 'Partial Import',
-          message: `Loaded ${summary} from ${succeeded.length} file${succeeded.length !== 1 ? 's' : ''}. ${failed} file(s) failed.`,
-        })
-      } else {
-        notify.error({
-          title: 'Import Failed',
-          message: `Failed to load all ${failed} file(s).`,
-        })
-      }
-    }
+    const entries = [...importPayload].map(([name, data]) => ({ name, content: data?.payload }))
+    await loadCellMLFiles(entries)
   } else if (currentImportMode.value.key === IMPORT_KEYS.MODULE_CONFIG) {
     const multiFile = importPayload.size > 1
     const results = await Promise.all(
@@ -1240,25 +1225,7 @@ async function onImportConfirm(importPayload, updateProgress) {
       )
     )
     if (multiFile) {
-      const succeeded = results.filter((r) => r.ok)
-      const failed = results.length - succeeded.length
-      const totalConfigs = succeeded.reduce((sum, r) => sum + r.count, 0)
-      if (succeeded.length > 0 && failed === 0) {
-        notify.success({
-          title: 'Configurations Loaded',
-          message: `Loaded ${totalConfigs} configurations from ${succeeded.length} files.`,
-        })
-      } else if (succeeded.length > 0) {
-        notify.warning({
-          title: 'Partial Import',
-          message: `Loaded ${totalConfigs} configurations from ${succeeded.length} files. ${failed} file(s) failed.` ,
-        })
-      } else {
-        notify.error({
-          title: 'Import Failed',
-          message: `Failed to load all ${failed} file(s).`,
-        })
-      }
+      notifyMultiFileResults(results, { successTitle: 'Configurations Loaded' })
     }
   } else if (currentImportMode.value.key === IMPORT_KEYS.PARAMETER) {
     const multiFile = importPayload.size > 1
@@ -1268,25 +1235,7 @@ async function onImportConfirm(importPayload, updateProgress) {
       )
     )
     if (multiFile) {
-      const succeeded = results.filter(r => r.ok)
-      const failed = results.length - succeeded.length
-      const totalParams = succeeded.reduce((sum, r) => sum + r.count, 0)
-      if (succeeded.length > 0 && failed === 0) {
-        notify.success({
-          title: 'Parameters Loaded',
-          message: `Loaded ${totalParams} parameters from ${succeeded.length} files.`,
-        })
-      } else if (succeeded.length > 0) {
-        notify.warning({ 
-          title: 'Partial Import', 
-          message: `Loaded ${totalParams} parameters from ${succeeded.length} files. ${failed} file(s) failed.`, 
-        })
-      } else {
-        notify.error({ 
-          title: 'Import Failed', 
-          message: `Failed to load all ${failed} file(s).`, 
-        })
-      }
+      notifyMultiFileResults(results, { successTitle: 'Parameters Loaded' })
     }
     updateNodesWithNewParameters()
   } else {
