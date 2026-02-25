@@ -707,13 +707,8 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
     }
 
     // ------------------
-    // Validate and Print
+    // PREPARE FOR EXPORT
     // ------------------
-
-    validator.validateModel(model)
-    if (validator.errorCount()) {
-      handleLoggerErrors(validator, `Validator error count: ${validator.errorCount()}`)
-    }
 
     // Resolve and Flatten
     importer.resolveImports(model, '.')
@@ -724,10 +719,16 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
       handleLoggerErrors(importer, `Importer error count: ${importer.errorCount()}`)
     }
 
+    validator.validateModel(flattenedModel)
+    if (validator.errorCount()) {
+      handleLoggerErrors(validator, `Validator error count: ${validator.errorCount()}`)
+    }
+
     analyser.analyseModel(flattenedModel)
     if (analyser.errorCount()) {
-      // FIXME: There is a bug in libCellML where the analyser cannot handle
-      // initialisation of a variable that is computed.
+      // FIXME: There is a bug in libCellML v0.6.3 where the analyser cannot handle
+      // initialisation of a variable that is computed. Fixed in v0.6.4, but we need 
+      // a workaround for now to at least export something usable in the case where this is the only error.
       // flattenedModel.delete()
       handleLoggerErrors(analyser, `Analyser error count: ${analyser.errorCount()}`, true)
     }
@@ -794,9 +795,8 @@ export function extractVariablesFromModule(modelString, componentName, includeIn
         const units = variable.units()
         garbageCollector.add(units)
         if (isPossibleParameter(variable)) {
-           variables.add({ name: variable.name(), units: units.name() })
+          variables.add({ name: variable.name(), units: units.name() })
         }
-       
       }
     }
 
@@ -1002,7 +1002,7 @@ export function areModelsEquivalent(modelAString, modelBString) {
     return equal
   } finally {
     for (const obj of garbageCollector) {
-      obj &&obj.delete()
+      obj && obj.delete()
     }
   }
 }
