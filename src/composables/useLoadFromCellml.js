@@ -3,8 +3,10 @@
  *
  * Composable that, given a CellML file's content, parses its inter-component
  * connections, registers synthesised configs into the builderStore, and loads
- * the resulting nodes + edges into the VueFlow workspace using the same layout
- * pipeline as useLoadFromVesselArray.
+ * the resulting nodes + edges into the VueFlow workspace.
+ *
+ * All ports are general ports. Handle sides are assigned after layout based on
+ * the relative position of connected peers.
  */
 import { useVueFlow } from '@vue-flow/core'
 import { nextTick, ref } from 'vue'
@@ -19,32 +21,31 @@ import { buildPortLabels } from '../services/import/buildPorts'
 import { processCellMLData } from '../utils/cellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
 import { getHandleId } from '../utils/ports'
-import { SOURCE_PORT_TYPE, TARGET_PORT_TYPE } from '../utils/constants'
+import { SOURCE_PORT_TYPE } from '../utils/constants'
 
 export function useLoadFromCellML() {
-  const { addNodes, addEdges, onNodesInitialized, fitView, updateNodeInternals } = useVueFlow()
+  const {
+    addNodes,
+    addEdges,
+    onNodesInitialized,
+    fitView,
+    updateNodeInternals,
+    updateNodeData,
+  } = useVueFlow()
   const store = useBuilderStore()
   const historyStore = useFlowHistoryStore()
   const { trackEvent } = useGtm()
   const { clearWorkspace } = useClearWorkspace()
 
   const layoutPending = ref(false)
-  let pendingEdgeData = []    // raw { source, target } pairs from the parser
-  let pendingFlowEdges = []   // finalised VueFlow edge objects, built after nodes initialise
+  let pendingEdgeData = []
   let layoutCompleteResolve = null
   let layoutCompleteReject = null
 
-  /**
-   * Main entry point.
-   *
-   * @param {string} cellmlContent - Raw CellML XML string
-   * @param {string} filename      - The filename (e.g. 'tran_2009.cellml')
-   */
   const loadFromCellML = async (cellmlContent, filename) => {
     try {
       await clearWorkspace()
 
-      // --- Parse connections ---
       const { components, edges, configs } = parseCellMLConnections(cellmlContent, filename)
 
       if (components.length === 0) {
@@ -55,58 +56,35 @@ export function useLoadFromCellML() {
         return
       }
 
-      // --- Register synthesised configs so port labels are available on each module ---
-      console.log(configs)
       store.addConfigFile(configs, filename)
 
-      // --- Parse variables and portOptions directly from the CellML content ---
       const cellmlResult = processCellMLData(cellmlContent)
       if (cellmlResult.type !== 'success') {
-        throw new Error(`CellML parse error: ${cellmlResult.issues.map(i => i.description).join('; ')}`)
+        throw new Error(
+          `CellML parse error: ${cellmlResult.issues.map((i) => i.description).join('; ')}`
+        )
       }
       const componentDataByName = new Map(
         cellmlResult.components.data.map((c) => [c.componentName, c])
       )
-
-      // Pre-compute per-component edge membership so each node gets exactly one
-      // port handle per edge it participates in.
-      // entrance (in) → left handle; exit (out) → right handle.
-      const entranceEdgePeers = new Map()  // compName → Set of peer names (incoming)
-      const exitEdgePeers = new Map()      // compName → Set of peer names (outgoing)
-      for (const { source, target } of edges) {
-        if (!exitEdgePeers.has(source)) exitEdgePeers.set(source, new Set())
-        exitEdgePeers.get(source).add(target)
-        if (!entranceEdgePeers.has(target)) entranceEdgePeers.set(target, new Set())
-        entranceEdgePeers.get(target).add(source)
-      }
 
       const nodes = components.map((compName) => {
         const compData = componentDataByName.get(compName) ?? {}
         const variables = compData.variables ?? []
         const portOptions = compData.portOptions ?? []
 
-        // Match parameter values now that the store is populated
         store.setVariableParameterValuesForInstance(compName, variables, filename, compName, 0)
 
-        // Retrieve the config we just registered (always index 0 for CellML-derived configs)
         const moduleConfig = store.getModuleConfigFromConfigIndex(filename, compName, 0) ?? {}
         const portLabels = buildPortLabels(moduleConfig)
 
-        // One port handle per edge — named after the peer for tooltip clarity
-        const ports = [
-          ...[...(entranceEdgePeers.get(compName) ?? [])].map((peer) => ({
-            uid: crypto.randomUUID(),
-            type: TARGET_PORT_TYPE,
-            side: 'left',
-            name: peer,
-          })),
-          ...[...(exitEdgePeers.get(compName) ?? [])].map((peer) => ({
-            uid: crypto.randomUUID(),
-            type: SOURCE_PORT_TYPE,
-            side: 'right',
-            name: peer,
-          })),
-        ]
+        // All ports start on the left — sides will be corrected post-layout
+        const ports = portLabels.map((pl) => ({
+          uid: crypto.randomUUID(),
+          type: SOURCE_PORT_TYPE,
+          side: 'left',
+          name: pl.label,
+        }))
 
         return {
           id: compName,
@@ -165,38 +143,106 @@ export function useLoadFromCellML() {
     try {
       runFcoseLayout(initializedNodes, pendingEdgeData)
       await nextTick()
-      updateNodeInternals(initializedNodes.map((n) => n.id))
 
-      // Build finalised VueFlow edges now that port handles have been measured
+      // Build adjacency map
       const nodeMap = new Map(initializedNodes.map((n) => [n.id, n]))
+      const adjacency = new Map()
+      for (const { source, target } of pendingEdgeData) {
+        if (!adjacency.has(source)) adjacency.set(source, [])
+        if (!adjacency.has(target)) adjacency.set(target, [])
+        adjacency.get(source).push(target)
+        adjacency.get(target).push(source)
+      }
 
-      pendingFlowEdges = pendingEdgeData.flatMap(({ source, target }) => {
+      // Reassign handle sides based on peer positions using updateNodeData
+      for (const node of initializedNodes) {
+        const peers = adjacency.get(node.id) ?? []
+        if (peers.length === 0) continue
+
+        const nx = node.position.x + (node.dimensions?.width ?? 0) / 2
+        const ny = node.position.y + (node.dimensions?.height ?? 0) / 2
+
+        const newPorts = node.data.ports.map((port) => {
+          const connectedPeers = pendingEdgeData
+            .filter(({ source, target }) => {
+              const isSource = source === node.id
+              const isTarget = target === node.id
+              if (!isSource && !isTarget) return false
+              const peerId = isSource ? target : source
+              const peerNode = nodeMap.get(peerId)
+              if (!peerNode) return false
+              return peerNode.data.portLabels.some((pl) => pl.label === port.name)
+            })
+            .map(({ source, target }) =>
+              nodeMap.get(source === node.id ? target : source)
+            )
+            .filter(Boolean)
+
+          if (connectedPeers.length === 0) return port
+
+          const avgPx =
+            connectedPeers.reduce(
+              (sum, p) => sum + p.position.x + (p.dimensions?.width ?? 0) / 2,
+              0
+            ) / connectedPeers.length
+          const avgPy =
+            connectedPeers.reduce(
+              (sum, p) => sum + p.position.y + (p.dimensions?.height ?? 0) / 2,
+              0
+            ) / connectedPeers.length
+
+          const dx = avgPx - nx
+          const dy = avgPy - ny
+
+          const side =
+            Math.abs(dx) >= Math.abs(dy)
+              ? dx >= 0
+                ? 'right'
+                : 'left'
+              : dy >= 0
+                ? 'bottom'
+                : 'top'
+
+          return { ...port, side }
+        })
+
+        updateNodeData(node.id, { ports: newPorts })
+      }
+
+      await nextTick()
+      updateNodeInternals(initializedNodes.map((n) => n.id))
+      await nextTick()
+
+      // Build finalised edges now that handles have correct sides
+      const pendingFlowEdgesLocal = pendingEdgeData.flatMap(({ source, target }) => {
         const sourceNode = nodeMap.get(source)
         const targetNode = nodeMap.get(target)
         if (!sourceNode || !targetNode) return []
 
-        // Each port node is named after its peer, so we can match exactly —
-        // the source node's exit port named after `target`, and the target
-        // node's entrance port named after `source`.
-        const sourcePort = sourceNode.data.ports.find(
-          (p) => p.type === SOURCE_PORT_TYPE && p.name === target
-        )
-        const targetPort = targetNode.data.ports.find(
-          (p) => p.type === TARGET_PORT_TYPE && p.name === source
-        )
+        // Find shared port label between the two nodes
+        const sourceLabels = new Set(sourceNode.data.portLabels.map((pl) => pl.label))
+        const sharedLabel = targetNode.data.portLabels.find((pl) =>
+          sourceLabels.has(pl.label)
+        )?.label
+        if (!sharedLabel) return []
 
+        // Use the updated ports from the node data after updateNodeData
+        const sourcePort = sourceNode.data.ports.find((p) => p.name === sharedLabel)
+        const targetPort = targetNode.data.ports.find((p) => p.name === sharedLabel)
         if (!sourcePort || !targetPort) return []
 
-        return [{
-          id: `e_cellml_${source}_${target}_${crypto.randomUUID()}`,
-          source,
-          target,
-          sourceHandle: getHandleId(sourcePort),
-          targetHandle: getHandleId(targetPort),
-        }]
+        return [
+          {
+            id: `e_cellml_${source}_${target}_${crypto.randomUUID()}`,
+            source,
+            target,
+            sourceHandle: getHandleId(sourcePort),
+            targetHandle: getHandleId(targetPort),
+          },
+        ]
       })
 
-      addEdges(pendingFlowEdges)
+      addEdges(pendingFlowEdgesLocal)
       historyStore.clear()
       await nextTick()
 
@@ -211,7 +257,6 @@ export function useLoadFromCellML() {
     } finally {
       layoutPending.value = false
       pendingEdgeData = []
-      pendingFlowEdges = []
       layoutCompleteResolve = null
       layoutCompleteReject = null
     }
