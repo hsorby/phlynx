@@ -6,13 +6,12 @@
  *   - The connections between components as edges
  *   - Per-component port configs ready for builderStore.addConfigFile
  *
- * Port directionality is NOT used. All ports are general_ports.
- * The canonical port label for a connection is the variable name from whichever
- * component defines the variable (i.e. it appears as the LHS of an equation in
- * that component's math). Falls back to alphabetically first variable name if
- * no math definition is found.
+ * One port per unique canonical variable per component (deduplicated by port_type).
+ * One edge per unique component pair.
+ * Each edge carries its portType for unambiguous handle matching.
  *
- * Variables that serve as the environment's time signal are excluded throughout.
+ * port_type = canonicalVarName__ownerComponent (display label, unique per variable)
+ * variables = [all local var names for this component in this connection]
  */
 
 import { EXCLUDED_COMPONENTS, TIME_NAMES, TIME_UNITS } from '../../utils/constants'
@@ -72,7 +71,7 @@ export function parseCellMLConnections(cellmlContent, filename) {
   // --- 1. Detect time variable names from the environment component ---
   const excludedVarNames = new Set()
   for (const comp of doc.querySelectorAll('component')) {
-    if (comp.getAttribute('name') === 'environment') {
+    if (comp.getAttribute('name') === 'environment' || comp.getAttribute('name') === 'Environment') {
       for (const variable of comp.querySelectorAll('variable')) {
         const varName = variable.getAttribute('name')
         const varUnits = variable.getAttribute('units') ?? ''
@@ -84,11 +83,9 @@ export function parseCellMLConnections(cellmlContent, filename) {
     }
   }
 
-  // --- 2. Build component info map and defined-variable sets ---
-  // componentVariableInfo: compName -> Map<varName, { units }>
-  // componentDefinedVars:  compName -> Set<varName>  (LHS of equations)
+  // --- 2. Build component info and owned-variable sets ---
   const componentVariableInfo = new Map()
-  const componentDefinedVars = new Map()
+  const componentOwnedVars = new Map()
 
   for (const comp of doc.querySelectorAll('component')) {
     const compName = comp.getAttribute('name')
@@ -103,7 +100,7 @@ export function parseCellMLConnections(cellmlContent, filename) {
       })
     }
     componentVariableInfo.set(compName, varMap)
-    componentDefinedVars.set(compName, getDefinedVariables(comp))
+    componentOwnedVars.set(compName, getOwnedVariables(comp))
   }
 
   // --- 3. Parse all <connection> blocks ---
@@ -116,13 +113,8 @@ export function parseCellMLConnections(cellmlContent, filename) {
   //   portLabels: compName -> Set<canonicalLabel>  (deduplicated per variable)
 
   // portLabels: compName -> Set of canonical port label strings
-  const portLabelSets = new Map()
-  const edgeSet = new Map() // pairKey -> { source, target }
-
-  const ensurePortSet = (compName) => {
-    if (!portLabelSets.has(compName)) portLabelSets.set(compName, new Set())
-    return portLabelSets.get(compName)
-  }
+  const pairInfoMap = new Map()
+  const edgeSet = new Map()
 
   for (const connection of doc.querySelectorAll('connection')) {
     // Support both CellML 1.x (map_components child) and 2.x (attributes on connection)
@@ -139,56 +131,103 @@ export function parseCellMLConnections(cellmlContent, filename) {
     if (!comp1 || !comp2) continue
     if (EXCLUDED_COMPONENTS.has(comp1) || EXCLUDED_COMPONENTS.has(comp2)) continue
 
-    const labels1 = ensurePortSet(comp1)
-    const labels2 = ensurePortSet(comp2)
+    const pairKey = [comp1, comp2].sort().join('|||')
 
+    const validMappings = []
     for (const mapVar of connection.querySelectorAll('map_variables')) {
       const var1 = mapVar.getAttribute('variable_1')
       const var2 = mapVar.getAttribute('variable_2')
       if (!var1 || !var2) continue
       if (excludedVarNames.has(var1) || excludedVarNames.has(var2)) continue
+      validMappings.push({ var1, var2 })
+    }
 
-      // Canonical label: prefer the variable name from whichever component
-      // defines it (LHS of equation). Fall back to alphabetically first.
-      const defined1 = componentDefinedVars.get(comp1)?.has(var1)
-      const defined2 = componentDefinedVars.get(comp2)?.has(var2)
+    if (validMappings.length === 0) continue
 
-      let canonicalLabel
-      if (defined1 && !defined2) {
+    if (!pairInfoMap.has(pairKey)) {
+      let chosen = validMappings.find(({ var1, var2 }) => {
+        const o1 = componentOwnedVars.get(comp1)?.has(var1)
+        const o2 = componentOwnedVars.get(comp2)?.has(var2)
+        return (o1 && !o2) || (o2 && !o1)
+      }) ?? validMappings[0]
+
+      const { var1, var2 } = chosen
+      const owned1 = componentOwnedVars.get(comp1)?.has(var1)
+      const owned2 = componentOwnedVars.get(comp2)?.has(var2)
+
+      let canonicalLabel, ownerComp
+      if (owned1 && !owned2) {
         canonicalLabel = var1
-      } else if (defined2 && !defined1) {
+        ownerComp = comp1
+      } else if (owned2 && !owned1) {
         canonicalLabel = var2
+        ownerComp = comp2
       } else {
         // Both defined, neither defined, or ambiguous — alphabetically first
         canonicalLabel = [var1, var2].sort()[0]
+        ownerComp = canonicalLabel === var1 ? comp1 : comp2
       }
 
-      labels1.add(canonicalLabel)
-      labels2.add(canonicalLabel)
-    }
-
-    // One edge per unique component pair — undirected since we have no direction info
-    const pairKey = [comp1, comp2].sort().join('|||')
-    if (!edgeSet.has(pairKey)) {
+      pairInfoMap.set(pairKey, { canonicalLabel, ownerComp, comp1, comp2, mappings: validMappings })
       edgeSet.set(pairKey, { source: comp1, target: comp2 })
     }
   }
 
-  // --- 4. Build component list ---
+  // --- 4. Build edges ---
+  const edges = [...edgeSet.keys()].map((pairKey) => {
+    const { source, target } = edgeSet.get(pairKey)
+    const info = pairInfoMap.get(pairKey)
+    const portType = info ? `${info.canonicalLabel}__${info.ownerComp}` : null
+    return { source, target, portType }
+  })
+
+  // --- 5. Build component list ---
   const components = [...componentVariableInfo.keys()].filter(
-    (name) => !EXCLUDED_COMPONENTS.has(name) && portLabelSets.has(name)
+    (name) =>
+      !EXCLUDED_COMPONENTS.has(name) &&
+      edges.some(({ source, target }) => source === name || target === name)
   )
 
-  // --- 5. Build configs ---
+  // --- 6. Build configs ---
+  // Deduplicated by port_type — one port per unique canonical variable per component
+  // variables = all local var names for this component in this connection
   const configs = components.map((compName) => {
-    const labelSet = portLabelSets.get(compName) ?? new Set()
+    const general_ports = edges
+      .filter(({ source, target }) => source === compName || target === compName)
+      .reduce((acc, { source, target }) => {
+        const pairKey = [source, target].sort().join('|||')
+        const info = pairInfoMap.get(pairKey)
+        if (!info) return acc
 
-    // One general_port entry per canonical label, variables array contains
-    // all local variable names that map to this canonical label across all connections
-    const general_ports = [...labelSet].map((label) => ({
-      port_type: label,
-      variables: [label],
-    }))
+        for (const { var1, var2 } of info.mappings) {
+          const owned1 = componentOwnedVars.get(info.comp1)?.has(var1)
+          const owned2 = componentOwnedVars.get(info.comp2)?.has(var2)
+
+          let canonicalLabel, ownerComp
+          if (owned1 && !owned2) {
+            canonicalLabel = var1
+            ownerComp = info.comp1
+          } else if (owned2 && !owned1) {
+            canonicalLabel = var2
+            ownerComp = info.comp2
+          } else {
+            canonicalLabel = [var1, var2].sort()[0]
+            ownerComp = canonicalLabel === var1 ? info.comp1 : info.comp2
+          }
+
+          const portType = `${canonicalLabel}__${ownerComp}`
+          const localVar = info.comp1 === compName ? var1 : var2
+
+          if (!acc.some((p) => p.port_type === portType)) {
+            acc.push({
+              port_type: portType,
+              variables: [localVar],
+            })
+          }
+        }
+
+        return acc
+      }, [])
 
     const variables_and_units = []
     for (const [varName, { units }] of componentVariableInfo.get(compName)) {
@@ -206,8 +245,6 @@ export function parseCellMLConnections(cellmlContent, filename) {
       variables_and_units,
     }
   })
-
-  const edges = [...edgeSet.values()]
 
   return { components, edges, configs }
 }
