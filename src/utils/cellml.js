@@ -1,4 +1,5 @@
 import { isEmpty } from './variables.js'
+import { STANDARD_UNITS, AFFINE_UNIT_CONVERSIONS } from './constants.js'
 
 let _libcellml = null
 
@@ -135,42 +136,11 @@ export function isCellML(content) {
 }
 
 function isStandardUnit(name) {
-  const standard = [
-    'ampere',
-    'becquerel',
-    'candela',
-    'coulomb',
-    'dimensionless',
-    'farad',
-    'gram',
-    'gray',
-    'henry',
-    'hertz',
-    'joule',
-    'kat',
-    'kelvin',
-    'kilogram',
-    'liter',
-    'litre',
-    'lumen',
-    'lux',
-    'meter',
-    'metre',
-    'mole',
-    'newton',
-    'ohm',
-    'pascal',
-    'radian',
-    'second',
-    'siemens',
-    'sievert',
-    'steradian',
-    'tesla',
-    'volt',
-    'watt',
-    'weber',
-  ]
-  return standard.includes(name)
+  return STANDARD_UNITS.includes(name)
+}
+
+function isAffineUnit(name) {
+  return name in AFFINE_UNIT_CONVERSIONS
 }
 
 function nextAvailableVarName(component, baseName) {
