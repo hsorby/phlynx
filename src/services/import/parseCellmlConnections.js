@@ -17,31 +17,36 @@
 
 import { EXCLUDED_COMPONENTS, TIME_NAMES, TIME_UNITS } from '../../utils/constants'
 
-/**
- * Extract the set of variable names that appear as the LHS <ci> of an <eq/>
- * application in a component's math block.
- *
- * @param {Element} compElement - The <component> DOM element
- * @returns {Set<string>}
- */
-function getDefinedVariables(compElement) {
-  const defined = new Set()
-  for (const apply of compElement.querySelectorAll('math apply')) {
-    const children = Array.from(apply.children)
-    // Looking for <apply><eq/><ci>varName</ci>...</apply>
-    // and <apply><eq/><apply><diff/>...</apply>...</apply> for ODEs
-    if (children[0]?.tagName === 'eq') {
+function getOwnedVariables(compElement) {
+  const owned = new Set()
+
+  for (const mathEl of compElement.querySelectorAll('math')) {
+    // Only consider direct children of <math> — top-level statements
+    for (const apply of mathEl.children) {
+      if (apply.tagName !== 'apply') continue
+      const children = Array.from(apply.children)
+      if (children[0]?.tagName !== 'eq') continue
+
       const lhs = children[1]
       if (lhs?.tagName === 'ci') {
-        defined.add(lhs.textContent.trim())
+        owned.add(lhs.textContent.trim())
       } else if (lhs?.tagName === 'apply') {
-        // ODE: <apply><diff/><bvar>...</bvar><ci>varName</ci></apply>
+        // ODE: <apply><diff/>...</apply>
         const diffCi = lhs.querySelector('ci')
-        if (diffCi) defined.add(diffCi.textContent.trim())
+        if (diffCi) owned.add(diffCi.textContent.trim())
       }
     }
   }
-  return defined
+
+  // Initial values — constants defined in this component
+  for (const variable of compElement.querySelectorAll('variable')) {
+    if (variable.getAttribute('initial_value') !== null) {
+      const varName = variable.getAttribute('name')
+      if (varName) owned.add(varName)
+    }
+  }
+
+  return owned
 }
 
 /**
