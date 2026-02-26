@@ -1323,6 +1323,7 @@ async function handleCellMLSave(saveData) {
     // CASE B: Simple Update -> We update the EXISTING config in place.
     // We don't push a new one, we just ensure the current one is up to date.
     targetModule.configs[originalConfigIndex] = configToMigrate
+    targetModule.configIndex = originalConfigIndex
   }
 
   // Propagate Changes (Update Nodes and Filter Configs).
