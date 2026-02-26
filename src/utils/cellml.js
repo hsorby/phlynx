@@ -199,9 +199,9 @@ function createSummationComponent(model, sourceComp, sourceVarName, targetCompon
   // We need to determine the units. We'll grab the units from the first source var.
   // (Assuming all summed variables have matching units)
   const referenceVar = sourceComp.variableByName(sourceVarName)
-  const referneceUnits = referenceVar.units()
-  const unitsName = referneceUnits.name() || 'dimensionless'
-  referneceUnits.delete()
+  const referenceUnits = referenceVar.units()
+  const unitsName = referenceUnits.name() || 'dimensionless'
+  referenceUnits.delete()
 
   const sumVarName = nextAvailableVarName(sumComp, `sum_of_${sourceVarName}`)
   const sumVar = new _libcellml.Variable()
