@@ -462,15 +462,60 @@ const loadCellMLFiles = async (entries) => {
       if (nodes.value.length > 0) {
         try {
           await ElMessageBox.confirm(
-            'The workspace already contains nodes. Would you like to overwrite it or cancel?',
+            'The workspace already contains nodes. What would you like to do?',
             'Workspace Not Empty',
             {
+              distinguishCancelAndClose: true,
               confirmButtonText: 'Overwrite',
-              cancelButtonText: 'Cancel',
+              cancelButtonText: 'Add to Workspace',
               type: 'warning',
             }
           )
-        } catch {
+          // confirmed — overwrite, fall through to normal loadFromCellML below
+        } catch (action) {
+          if (action === 'cancel') {
+            // Snapshot current workspace before wiping it
+            const snapshot = toObject()
+
+            // Load new graph into clean workspace using the normal path
+            const result = await loadCellMLData(content, entry.name, { notify: false })
+            await loadFromCellML(content, entry.name)
+
+            // Remap snapshotted node IDs to avoid clashes with newly loaded nodes
+            const existingIds = new Set(nodes.value.map((n) => n.id))
+            const idRemap = new Map()
+
+            const restoredNodes = snapshot.nodes.map((n) => {
+              let newId = n.id
+              let counter = 1
+              while (existingIds.has(newId)) {
+                newId = `${n.id}_${counter++}`
+              }
+              existingIds.add(newId)
+              idRemap.set(n.id, newId)
+
+              return {
+                ...n,
+                id: newId,
+                position: { x: n.position.x + 1500, y: n.position.y },
+                data: { ...n.data, name: newId },
+              }
+            })
+
+            // Remap edge source/target to use new IDs
+            const restoredEdges = snapshot.edges.map((e) => ({
+              ...e,
+              id: `${e.id}_restored_${crypto.randomUUID()}`,
+              source: idRemap.get(e.source) ?? e.source,
+              target: idRemap.get(e.target) ?? e.target,
+            }))
+
+            addNodes(restoredNodes)
+            addEdges(restoredEdges)
+
+            return [result]
+          }
+          // 'close' — user dismissed with X, do nothing
           return []
         }
       }
