@@ -155,11 +155,10 @@ function nextAvailableVarName(component, baseName) {
   }
   return candidateName
 }
+
 function createAffineConversionComponent(model, v1, v2, v1CompName, v2CompName) {
   const u1 = v1.units().name()
   const u2 = v2.units().name()
-
-   console.log(v1CompName, v2CompName)
 
   const conv1 = AFFINE_UNIT_CONVERSIONS[u1]
   const conv2 = AFFINE_UNIT_CONVERSIONS[u2]
@@ -231,10 +230,10 @@ function createAffineConversionComponent(model, v1, v2, v1CompName, v2CompName) 
         <plus/>
         <apply>
           <times/>
-          <cn cellml:units="dimensionless" xmlns:cellml="http://www.cellml.org/cellml/2.0#">${scale}</cn>
+          <cn cellml:units="dimensionless">${scale}</cn>
           <ci>${inNewName}</ci>
         </apply>
-        <cn cellml:units="${outUnitName}" xmlns:cellml="http://www.cellml.org/cellml/2.0#">${offset}</cn>
+        <cn cellml:units="${outUnitName}">${offset}</cn>
       </apply>
     </apply>
   </math>`
