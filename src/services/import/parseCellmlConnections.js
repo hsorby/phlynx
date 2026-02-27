@@ -176,9 +176,7 @@ export function parseCellMLConnections(cellmlContent, filename) {
   // --- 4. Build edges ---
   const edges = [...edgeSet.keys()].map((pairKey) => {
     const { source, target } = edgeSet.get(pairKey)
-    const info = pairInfoMap.get(pairKey)
-    const portType = info ? `${info.canonicalLabel}__${info.ownerComp}` : null
-    return { source, target, portType }
+     return { source, target }
   })
 
   // --- 5. Build component list ---
@@ -215,12 +213,12 @@ export function parseCellMLConnections(cellmlContent, filename) {
             ownerComp = canonicalLabel === var1 ? info.comp1 : info.comp2
           }
 
-          const portType = `${canonicalLabel}__${ownerComp}`
+          const portLabel = `${canonicalLabel}__${ownerComp}`
           const localVar = info.comp1 === compName ? var1 : var2
 
-          if (!acc.some((p) => p.port_type === portType)) {
+          if (!acc.some((p) => p.port_type === portLabel)) {
             acc.push({
-              port_type: portType,
+              port_type: portLabel,
               variables: [localVar],
             })
           }

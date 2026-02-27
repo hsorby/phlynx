@@ -1,4 +1,3 @@
-
 import { useVueFlow } from '@vue-flow/core'
 import { nextTick, ref } from 'vue'
 
@@ -14,7 +13,7 @@ import { getHandleId } from '../utils/ports'
 import { SOURCE_PORT_TYPE } from '../utils/constants'
 
 function getHandleName(edge) {
-  return `${edge.source}-${edge.target}-${edge.portType}`
+  return `${edge.source}-${edge.target}`
 }
 
 function createPorts(edges, nodeName) {
