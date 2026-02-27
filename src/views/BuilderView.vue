@@ -316,6 +316,7 @@ import {
   Operation as IconParameters,
   Setting as IconModuleConfig,
 } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
 import UnitsIcon from '../components/icons/UnitsIcon.vue'
 
@@ -458,6 +459,21 @@ const loadCellMLFiles = async (entries) => {
     const content = entry instanceof File ? await readFileAsText(entry) : entry.content
     const { components } = parseCellMLConnections(content, entry.name)
     if (components.length > 0) {
+      if (nodes.value.length > 0) {
+        try {
+          await ElMessageBox.confirm(
+            'The workspace already contains nodes. Would you like to overwrite it or cancel?',
+            'Workspace Not Empty',
+            {
+              confirmButtonText: 'Overwrite',
+              cancelButtonText: 'Cancel',
+              type: 'warning',
+            }
+          )
+        } catch {
+          return []
+        }
+      }
       // Register modules/units in the store first, then build the graph.
       // loadCellMLData is kept silent here since loadFromCellML provides its own feedback.
       const result = await loadCellMLData(content, entry.name, { notify: false })
