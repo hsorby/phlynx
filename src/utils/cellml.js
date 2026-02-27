@@ -222,7 +222,7 @@ function createAffineConversionComponent(model, v1, v2, v1CompName, v2CompName) 
   outLocalVar.setInterfaceTypeByString('public')
   convComp.addVariable(outLocalVar)
 
-  const mathML = `<math xmlns="http://www.w3.org/1998/Math/MathML">
+  const mathML = `<math xmlns="http://www.w3.org/1998/Math/MathML" xmlns:cellml="http://www.cellml.org/cellml/2.0#">
     <apply>
       <eq/>
       <ci>${outNewName}</ci>
