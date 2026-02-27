@@ -1,4 +1,5 @@
 import { isEmpty } from './variables.js'
+import { STANDARD_UNITS, AFFINE_UNIT_CONVERSIONS } from './constants.js'
 
 let _libcellml = null
 
@@ -135,42 +136,11 @@ export function isCellML(content) {
 }
 
 function isStandardUnit(name) {
-  const standard = [
-    'ampere',
-    'becquerel',
-    'candela',
-    'coulomb',
-    'dimensionless',
-    'farad',
-    'gram',
-    'gray',
-    'henry',
-    'hertz',
-    'joule',
-    'kat',
-    'kelvin',
-    'kilogram',
-    'liter',
-    'litre',
-    'lumen',
-    'lux',
-    'meter',
-    'metre',
-    'mole',
-    'newton',
-    'ohm',
-    'pascal',
-    'radian',
-    'second',
-    'siemens',
-    'sievert',
-    'steradian',
-    'tesla',
-    'volt',
-    'watt',
-    'weber',
-  ]
-  return standard.includes(name)
+  return STANDARD_UNITS.includes(name)
+}
+
+function isAffineUnit(name) {
+  return name in AFFINE_UNIT_CONVERSIONS
 }
 
 function nextAvailableVarName(component, baseName) {
@@ -186,6 +156,117 @@ function nextAvailableVarName(component, baseName) {
   return candidateName
 }
 
+function createAffineConversionComponent(model, v1, v2, v1CompName, v2CompName) {
+  const u1 = v1.units().name()
+  const u2 = v2.units().name()
+
+  const conv1 = AFFINE_UNIT_CONVERSIONS[u1]
+  const conv2 = AFFINE_UNIT_CONVERSIONS[u2]
+
+  if (!conv1 && !conv2) return false
+
+  const v1Name = v1.name()
+  const v2Name = v2.name()
+
+  let inVarCompName, inVarName, outVarCompName, outVarName
+  let scale, offset, inUnitName, outUnitName
+
+  if (conv1 && conv2) {
+    if (conv1.baseUnit !== conv2.baseUnit) {
+      throw new Error(`Cannot convert between ${u1} and ${u2}: incompatible base units (${conv1.baseUnit} vs ${conv2.baseUnit})`)
+    }
+    inVarCompName  = v1CompName; inVarName  = v1Name; inUnitName  = u1
+    outVarCompName = v2CompName; outVarName = v2Name; outUnitName = u2
+    scale  = conv1.scale / conv2.scale
+    offset = (conv1.offset - conv2.offset) / conv2.scale
+  } else {
+    const conv = conv1 ?? conv2
+    // Base unit is input (computed), affine unit is output (derived display value)
+    inVarCompName  = conv1 ? v2CompName : v1CompName   // base unit side
+    inVarName      = conv1 ? v2Name : v1Name
+    inUnitName     = conv1 ? u2 : u1
+    outVarCompName = conv1 ? v1CompName : v2CompName   // affine unit side
+    outVarName     = conv1 ? v1Name : v2Name
+    outUnitName    = conv1 ? u1 : u2
+    // celsius = (1/scale) * kelvin + (-offset/scale)
+    scale  = 1 / conv.scale
+    offset = -conv.offset / conv.scale
+  }
+
+ 
+  if (!inVarName || !outVarName || !inVarCompName || !outVarCompName) {
+    throw new Error(`Affine conversion: failed to resolve variable or component names (in: ${inVarName}@${inVarCompName}, out: ${outVarName}@${outVarCompName})`)
+  }
+
+  // Get or create the single shared affine conversions component
+  let convComp = model.componentByName('affine_unit_conversions', true)
+  const isNew = convComp === null
+  if (isNew) {
+    convComp = new _libcellml.Component()
+    convComp.setName('affine_unit_conversions')
+  }
+
+  // Create uniquely named local variables within the shared component
+  const inNewName  = nextAvailableVarName(convComp, inVarName)
+
+  const inLocalVar = new _libcellml.Variable()
+  inLocalVar.setName(inNewName)
+  inLocalVar.setUnitsByName(inUnitName)
+  inLocalVar.setInterfaceTypeByString('public')
+  convComp.addVariable(inLocalVar)
+
+  const outNewName = nextAvailableVarName(convComp, outVarName)
+  const outLocalVar = new _libcellml.Variable()
+  outLocalVar.setName(outNewName)
+  outLocalVar.setUnitsByName(outUnitName)
+  outLocalVar.setInterfaceTypeByString('public')
+  convComp.addVariable(outLocalVar)
+
+  const mathML = `<math xmlns="http://www.w3.org/1998/Math/MathML">
+    <apply>
+      <eq/>
+      <ci>${outNewName}</ci>
+      <apply>
+        <plus/>
+        <apply>
+          <times/>
+          <cn cellml:units="dimensionless">${scale}</cn>
+          <ci>${inNewName}</ci>
+        </apply>
+        <cn cellml:units="${outUnitName}">${offset}</cn>
+      </apply>
+    </apply>
+  </math>`
+
+  convComp.appendMath(mathML)
+
+  // Only add to model if newly created
+  if (isNew) {
+    model.addComponent(convComp)
+  }
+
+  // Look up fresh references for equivalence wiring
+  const freshConvComp  = model.componentByName('affine_unit_conversions', true)
+  const freshInLocal   = freshConvComp.variableByName(inNewName)
+  const freshOutLocal  = freshConvComp.variableByName(outNewName)
+  const freshInVar     = model.componentByName(inVarCompName,  true).variableByName(inVarName)
+  const freshOutVar    = model.componentByName(outVarCompName, true).variableByName(outVarName)
+
+  _libcellml.Variable.addEquivalence(freshInLocal,  freshInVar)
+  _libcellml.Variable.addEquivalence(freshOutLocal, freshOutVar)
+
+  freshInLocal.delete()
+  freshOutLocal.delete()
+  freshInVar.delete()
+  freshOutVar.delete()
+  freshConvComp.delete()
+  inLocalVar.delete()
+  outLocalVar.delete()
+  convComp.delete()
+
+  return true
+}
+
 function createSummationComponent(model, sourceComp, sourceVarName, targetComponentVarNameMap) {
   // Create the Component
   let sumComp = model.componentByName('generated_summations', true)
@@ -199,9 +280,9 @@ function createSummationComponent(model, sourceComp, sourceVarName, targetCompon
   // We need to determine the units. We'll grab the units from the first source var.
   // (Assuming all summed variables have matching units)
   const referenceVar = sourceComp.variableByName(sourceVarName)
-  const referneceUnits = referenceVar.units()
-  const unitsName = referneceUnits.name() || 'dimensionless'
-  referneceUnits.delete()
+  const referenceUnits = referenceVar.units()
+  const unitsName = referenceUnits.name() || 'dimensionless'
+  referenceUnits.delete()
 
   const sumVarName = nextAvailableVarName(sumComp, `sum_of_${sourceVarName}`)
   const sumVar = new _libcellml.Variable()
@@ -460,6 +541,17 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
     // If it's already in the model (or is a standard unit like 'volt'), skip.
     if (model.hasUnitsByName(unitsName) || isStandardUnit(unitsName)) return
 
+    // Mask affine units from the validator using the base unit they're offset from
+    if (isAffineUnit(unitsName)) {
+      const { baseUnit } = AFFINE_UNIT_CONVERSIONS[unitsName]
+      const affineUnits = new _libcellml.Units()
+      affineUnits.setName(unitsName)
+      affineUnits.addUnitByReference(baseUnit) 
+      model.addUnits(affineUnits)
+      affineUnits.delete()
+      return
+    }
+
     // Search available libraries.
     let found = false
 
@@ -651,7 +743,10 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
                     const v2 = targetComp.variableByName(tgtOption)
 
                     if (v1 && v2) {
-                      _libcellml.Variable.addEquivalence(v1, v2)
+                      const handled = createAffineConversionComponent(model, v1, v2, sourceComp.name(), targetComp.name())
+                      if (!handled) {
+                        _libcellml.Variable.addEquivalence(v1, v2)
+                      }
                     }
 
                     v1.delete()
