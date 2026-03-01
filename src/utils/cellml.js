@@ -179,6 +179,12 @@ function createAffineConversionComponent(model, v1, v2, v1CompName, v2CompName) 
     outVarCompName = v2CompName; outVarName = v2Name; outUnitName = u2
     scale  = conv1.scale / conv2.scale
     offset = (conv1.offset - conv2.offset) / conv2.scale
+
+    // Both sides share the same affine unit 
+    if (scale === 1 && offset === 0) {
+      _libcellml.Variable.addEquivalence(v1, v2)
+      return true
+    }
   } else {
     const conv = conv1 ?? conv2
     // Base unit is input (computed), affine unit is output (derived display value)
@@ -188,11 +194,9 @@ function createAffineConversionComponent(model, v1, v2, v1CompName, v2CompName) 
     outVarCompName = conv1 ? v1CompName : v2CompName   // affine unit side
     outVarName     = conv1 ? v1Name : v2Name
     outUnitName    = conv1 ? u1 : u2
-    // celsius = (1/scale) * kelvin + (-offset/scale)
     scale  = 1 / conv.scale
     offset = -conv.offset / conv.scale
   }
-
  
   if (!inVarName || !outVarName || !inVarCompName || !outVarCompName) {
     throw new Error(`Affine conversion: failed to resolve variable or component names (in: ${inVarName}@${inVarCompName}, out: ${outVarName}@${outVarCompName})`)
@@ -222,7 +226,7 @@ function createAffineConversionComponent(model, v1, v2, v1CompName, v2CompName) 
   outLocalVar.setInterfaceTypeByString('public')
   convComp.addVariable(outLocalVar)
 
-  const mathML = `<math xmlns="http://www.w3.org/1998/Math/MathML">
+  const mathML = `<math xmlns="http://www.w3.org/1998/Math/MathML" xmlns:cellml="http://www.cellml.org/cellml/2.0#">
     <apply>
       <eq/>
       <ci>${outNewName}</ci>
@@ -507,6 +511,67 @@ function addVariableToParameterComponent(model, variable, parameterComponent, pa
   _libcellml.Variable.addEquivalence(sourceVar, variable)
 
   sourceVar.delete()
+}
+
+/**
+ * Post-processes a printed CellML XML string, replacing all celsius unit references
+ * with 'dimensionless' and removing the celsius unit definition.
+ *
+ * IMPORTANT - KNOWN LIMITATION:
+ * This substitution is only numerically correct when celsius variables are used
+ * exclusively as differences (e.g. (TmpC - 37) / 10), where the 273.15 K offset
+ * cancels between the two operands. It will produce WRONG results if celsius is
+ * used in any absolute context — for example, a product like (x_per_oC * T_celsius)
+ * where 5°C should be treated as 278.15 K, not 5. 
+ * 
+ * This is required as the presence of 'celsius' in a cellml model currently causes 
+ * web OpenCOR to crash.
+ * 
+ */
+function stripCelsiusToArbitraryUnit(xmlString) {
+  const CELSIUS_UNIT_NAME = 'celsius'
+
+  const domParser = new DOMParser()
+  const doc = domParser.parseFromString(xmlString, 'application/xml')
+
+  const parserError = doc.querySelector('parsererror')
+  if (parserError) {
+    console.warn('stripCelsiusToArbitraryUnit: XML parse error — returning original string unchanged.')
+    return xmlString
+  }
+
+  // Check celsius is actually declared in this model before doing anything.
+  const unitsElements = Array.from(doc.getElementsByTagNameNS(CELLML_NS, 'units'))
+  const celsiusUnitsDeclared = unitsElements.some((el) => el.getAttribute('name') === CELSIUS_UNIT_NAME)
+  if (!celsiusUnitsDeclared) {
+    return xmlString
+  }
+
+  // Remove the <units name="celsius"> definition.
+  for (const el of unitsElements) {
+    if (el.getAttribute('name') === CELSIUS_UNIT_NAME) {
+      el.parentNode.removeChild(el)
+    }
+  }
+
+  // Replace units="celsius" on <variable> elements with "dimensionless".
+  const variableElements = Array.from(doc.getElementsByTagNameNS(CELLML_NS, 'variable'))
+  for (const el of variableElements) {
+    if (el.getAttribute('units') === CELSIUS_UNIT_NAME) {
+      el.setAttribute('units', 'dimensionless')
+    }
+  }
+
+  // Replace cellml:units="celsius" on <cn> MathML literals with "dimensionless".
+  const cnElements = Array.from(doc.getElementsByTagNameNS(MATHML_NS, 'cn'))
+  for (const el of cnElements) {
+    if (el.getAttributeNS(CELLML_NS, 'units') === CELSIUS_UNIT_NAME) {
+      el.setAttributeNS(CELLML_NS, 'cellml:units', 'dimensionless')
+    }
+  }
+
+  const serializer = new XMLSerializer()
+  return serializer.serializeToString(doc)
 }
 
 export function generateFlattenedModel(nodes, edges, builderStore) {
@@ -830,6 +895,10 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
 
     let flattenedModelString = printer.printModel(flattenedModel, false)
     flattenedModel.delete()
+
+    // Strip celsius unit references before re-parsing in prioritizeEnvironmentComponent,
+    // so libCellML sees a clean model. See stripCelsiusToArbitraryUnit for known limitations.
+    flattenedModelString = stripCelsiusToArbitraryUnit(flattenedModelString)
 
     flattenedModelString = prioritizeEnvironmentComponent(flattenedModelString)
 
