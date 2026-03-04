@@ -776,13 +776,15 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
 
           if (tgtLabel) {
             if (arePortTypesCompatible(srcLabel.portType, tgtLabel.portType)) {
-              if (srcLabel.isMultiPortSum && tgtLabel.isMultiPortSum) {
+              const isSrcMultiportSum = srcLabel.multiport === 'Sum'
+              const isTgtMultiportSum = tgtLabel.multiport === 'Sum'
+              if (isSrcMultiportSum && isTgtMultiportSum) {
                 throw new Error('Multi-port-sum to Multi-port-sum connections are not supported.')
-              } else if (srcLabel.isMultiPortSum || tgtLabel.isMultiPortSum) {
-                const multiSumLabel = srcLabel.isMultiPortSum ? srcLabel : tgtLabel
-                const multiSumComponent = srcLabel.isMultiPortSum ? sourceComp : targetComp
-                const operandLabel = srcLabel.isMultiPortSum ? tgtLabel : srcLabel
-                const operandComponent = srcLabel.isMultiPortSum ? targetComp : sourceComp
+              } else if (isSrcMultiportSum || isTgtMultiportSum) {
+                const multiSumLabel = isSrcMultiportSum ? srcLabel : tgtLabel
+                const multiSumComponent = isSrcMultiportSum ? sourceComp : targetComp
+                const operandLabel = isSrcMultiportSum ? tgtLabel : srcLabel
+                const operandComponent = isSrcMultiportSum ? targetComp : sourceComp
                 const multiKey = multiSumComponent.name() + '::' + multiSumLabel.label
                 if (!multiPortSums.has(multiKey)) {
                   multiPortSums.set(multiKey, {
