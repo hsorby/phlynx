@@ -288,7 +288,6 @@ function deletePortLabel(index) {
 <style scoped>
 .el-form-item {
   margin-bottom: 15px;
-  /* More space */
 }
 
 .el-form-label {
@@ -296,54 +295,5 @@ function deletePortLabel(index) {
   margin-bottom: 12px;
   font-size: 16px;
   display: block;
-}
-
-.port-header-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-  font-weight: normal;
-  font-size: 14px;
-}
-
-.port-label-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.port-label-header,
-.port-label {
-  flex: 1;
-  min-width: 150px;
-}
-
-.port-type-header,
-.port-type-select {
-  flex: 1;
-  min-width: 60px;
-}
-
-.port-select-header,
-.port-select {
-  flex: 1;
-  min-width: 150px;
-}
-
-.port-checkbox-header,
-.port-checkbox {
-  width: 50px;
-  text-align: center;
-  align-items: center;
-}
-
-.port-action-header {
-  width: 40px;
-}
-
-.add-button {
-  margin-top: 10px;
 }
 </style>
