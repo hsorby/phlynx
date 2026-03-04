@@ -52,11 +52,11 @@
               style="width: 100%"
             >
               <el-option
-                v-for="optionObj in props.portOptions"
-                :key="optionObj.name"
-                :label="optionObj.name"
-                :value="optionObj.name"
-                :disabled="isOptionDisabled(optionObj.name, scope.row.option)"
+                v-for="option in props.portOptions"
+                :key="option.name"
+                :label="option.name"
+                :value="option.name"
+                :disabled="isOptionDisabled(option.name, scope.row.option)"
               />
             </el-select>
           </template>
@@ -75,6 +75,7 @@
                 :key="option.value"
                 :label="option.label"
                 :value="option.value"
+                :disabled="option.value === 'Sum' && scope.row.option?.length > 1"
               />
             </el-select>
           </template>
@@ -250,6 +251,18 @@ watch(
     }
   },
   { deep: true, immediate: true }
+)
+
+watch(
+  () => editableData.portLabels.map(p => p.option),
+  (newOptions) => {
+    newOptions.forEach((opt, i) => {
+      if (opt?.length > 1 && editableData.portLabels[i].multiport === 'Sum') {
+        editableData.portLabels[i].multiport = 'None'
+      }
+    })
+  },
+  { deep: true }
 )
 
 const usedOptions = computed(() => {
