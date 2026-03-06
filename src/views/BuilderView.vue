@@ -207,6 +207,7 @@
             @dragleave="onDragLeave"
             @nodes-change="onNodeChange"
             @edges-change="onEdgeChange"
+            @edge-double-click="onEdgeDoubleClick"
             @pane-context-menu="onPaneContextMenu"
             :max-zoom="1.5"
             :min-zoom="0.1"
@@ -292,6 +293,16 @@
   />
 
   <PaneContextMenu ref="contextMenuRef" :items="contextMenuItems" />
+
+  <EdgeConnectionDialog
+    v-model="edgeConnectionDialogVisible"
+    :source-node="edgeDialogSourceNode"
+    :target-node="edgeDialogTargetNode"
+    :active-edge="edgeDialogActiveEdge"
+    :all-edges="edges"
+    :all-nodes="nodes"
+    @confirm="onEdgeConnectionConfirm"
+  />
 </template>
 
 <script>
@@ -318,7 +329,6 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
-import UnitsIcon from '../components/icons/UnitsIcon.vue'
 
 import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -339,6 +349,7 @@ import ImportDialog from '../components/ImportDialog.vue'
 import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
 import SaveDialog from '../components/SaveDialog.vue'
 import MacroBuilderDialog from '../components/MacroBuilderDialog.vue'
+import EdgeConnectionDialog from '../components/EdgeConnectionDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
 import PaneContextMenu from '../components/PaneContextMenu.vue'
 import { useScreenshot } from '../services/useScreenshot'
@@ -633,6 +644,10 @@ const importDialogVisible = ref(false)
 const exportDialogVisible = ref(false)
 const replacementDialogVisible = ref(false)
 const macroBuilderDialogVisible = ref(false)
+const edgeConnectionDialogVisible = ref(false)
+const edgeDialogSourceNode = ref(null)
+const edgeDialogTargetNode = ref(null)
+const edgeDialogActiveEdge = ref(null)
 const currentEditingNode = ref({
   nodeId: '',
   instanceId: '',
@@ -1675,6 +1690,58 @@ function handleMacroGeneration(macroPayload) {
   const centerY = (screenCenterY - viewport.value.y) / viewport.value.zoom
 
   processMacroGeneration(macroPayload, { x: centerX, y: centerY })
+}
+
+function onEdgeDoubleClick({ edge }) {
+  const sourceNode = findNode(edge.source)
+  const targetNode = findNode(edge.target)
+  if (!sourceNode || !targetNode) return
+  edgeDialogSourceNode.value = sourceNode
+  edgeDialogTargetNode.value = targetNode
+  edgeDialogActiveEdge.value = edge
+  edgeConnectionDialogVisible.value = true
+}
+
+function onEdgeConnectionConfirm({ sourceNodeId, targetNodeId, sourcePortLabels, targetPortLabels, couplings }) {
+  // Update portLabels on both nodes
+  updateNodeData(sourceNodeId, { portLabels: sourcePortLabels })
+  updateNodeData(targetNodeId, { portLabels: targetPortLabels })
+
+  // Write the new couplings directly onto the edge
+  const edge = findEdge(edgeDialogActiveEdge.value?.id)
+  if (edge) {
+    edge.data = { ...edge.data, couplings }
+  }
+
+  // Recompute couplings on all OTHER edges connected to either node,
+  // since portLabels may have changed (same logic as onEditConfirm).
+  const changedNodeIds = new Set([sourceNodeId, targetNodeId])
+  const activeEdgeId = edgeDialogActiveEdge.value?.id
+
+  for (const changedNodeId of changedNodeIds) {
+    const updatedPortLabels = changedNodeId === sourceNodeId ? sourcePortLabels : targetPortLabels
+
+    edges.value
+      .filter((e) => e.id !== activeEdgeId && (e.source === changedNodeId || e.target === changedNodeId))
+      .forEach((e) => {
+        const isSrc = e.source === changedNodeId
+        const otherNode = findNode(isSrc ? e.target : e.source)
+        if (!otherNode) return
+
+        const srcIdx = edges.value.filter((x) => x.source === e.source && x !== e).length
+        const tgtIdx = edges.value.filter((x) => x.target === e.target && x !== e).length
+
+        e.data = {
+          ...e.data,
+          couplings: resolvePortCouplings(
+            isSrc ? updatedPortLabels : otherNode.data.portLabels ?? [],
+            isSrc ? otherNode.data.portLabels ?? [] : updatedPortLabels,
+            srcIdx,
+            tgtIdx
+          ),
+        }
+      })
+  }
 }
 
 function onOpenReplacementDialog(eventPayload) {
