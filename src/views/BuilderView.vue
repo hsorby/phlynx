@@ -346,6 +346,7 @@ import { generateExportZip } from '../services/caExport'
 import { createCellMLDataFragment } from '../services/cellml'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { notify } from '../utils/notify'
+import { resolvePortCouplings, checkAndClaimCouplings, buildUsedPortKeys } from '../utils/edges'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
@@ -726,10 +727,57 @@ const currentExportMode = computed(() => {
 })
 
 onConnect((connection) => {
-  // Match what we specify in connectionLineOptions.
+  const sourceNode = findNode(connection.source)
+  const targetNode = findNode(connection.target)
+
+  if (!sourceNode || !targetNode) return
+
+  // Derive ordinal indices from the existing edge graph:
+  //   sourceIndex = how many edges already leave from this source node
+  //                 (i.e. this is the Nth output being connected)
+  //   targetIndex = how many edges already arrive at this target node
+  //                 (i.e. this is the Nth input being connected)
+  // These mirror the positional semantics of out_vessels / inp_vessels.
+  const sourceIndex = edges.value.filter((e) => e.source === connection.source).length
+  const targetIndex = edges.value.filter((e) => e.target === connection.target).length
+
+  // Resolve which port labels are coupled across this conduit, using ordinal
+  // indices to select the correct slot when a label appears multiple times.
+  const couplings = resolvePortCouplings(
+    sourceNode.data.portLabels ?? [],
+    targetNode.data.portLabels ?? [],
+    sourceIndex,
+    targetIndex
+  )
+
+  // Enforce the non-multiport single-connection constraint against all existing edges.
+  // All-or-nothing: if any coupling would violate it, the whole conduit is rejected.
+  const usedPortKeys = buildUsedPortKeys(edges.value)
+  const { valid, conflicts } = checkAndClaimCouplings(
+    connection.source,
+    connection.target,
+    couplings,
+    usedPortKeys
+  )
+
+  if (!valid) {
+    notify.warning({
+      title: 'Connection Not Allowed',
+      message: conflicts[0],
+    })
+    conflicts.forEach((c) => console.warn('[onConnect]', c))
+    return
+  }
+
   const newEdge = {
     ...connection,
     ...edgeLineOptions,
+    id: `${connection.source}--${connection.target}`,
+    // The resolved port-label couplings for this conduit.
+    // Downstream consumers (CellML export, validation) read from here.
+    data: {
+      couplings,
+    },
   }
 
   addEdges(newEdge)
@@ -1565,6 +1613,49 @@ async function onEditConfirm(updatedData) {
   const { updateNodeData } = useVueFlow(targetInstance)
 
   updateNodeData(nodeId, updatedData)
+
+  // Recompute couplings on every edge connected to this node, since the node's
+  // portLabels may have changed (label renamed, portType changed, multiport
+  // toggled, entry added or removed).
+  //
+  // We re-derive ordinal indices the same way onConnect does: by counting how
+  // many edges already leave/arrive at each endpoint, iterating in edge order.
+  //
+  // We process outgoing and incoming edges separately so each group gets its
+  // own independent ordinal sequence.
+  const updatedPortLabels = updatedData.portLabels ?? []
+
+  const outgoing = edges.value.filter((e) => e.source === nodeId)
+  outgoing.forEach((edge, sourceIndex) => {
+    const targetNode = findNode(edge.target)
+    if (!targetNode) return
+    const targetIndex = edges.value.filter((e) => e.target === edge.target && e !== edge).length
+    edge.data = {
+      ...edge.data,
+      couplings: resolvePortCouplings(
+        updatedPortLabels,
+        targetNode.data.portLabels ?? [],
+        sourceIndex,
+        targetIndex
+      ),
+    }
+  })
+
+  const incoming = edges.value.filter((e) => e.target === nodeId)
+  incoming.forEach((edge, targetIndex) => {
+    const sourceNode = findNode(edge.source)
+    if (!sourceNode) return
+    const sourceIndex = edges.value.filter((e) => e.source === edge.source && e !== edge).length
+    edge.data = {
+      ...edge.data,
+      couplings: resolvePortCouplings(
+        sourceNode.data.portLabels ?? [],
+        updatedPortLabels,
+        sourceIndex,
+        targetIndex
+      ),
+    }
+  })
 }
 
 const nodeRefs = ref({})
