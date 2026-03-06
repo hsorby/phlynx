@@ -72,7 +72,6 @@
           :is-valid-connection="isValidConnection"
           @connect="onConnect"
           @edge-update="onEdgeUpdate"
-          @edge-update-end="onEdgeUpdateEnd"
         >
           <!-- Source port row -->
           <template #node-sourcePort="{ data }">
@@ -146,10 +145,11 @@
     </div>
 
     <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="$emit('update:modelValue', false)">Cancel</el-button>
-        <el-button type="primary" :disabled="!isDirty" @click="handleConfirm">Apply</el-button>
-      </span>
+      <div class="dialog-footer">
+        <el-button type="primary" @click="$emit('update:modelValue', false)">
+          Done
+        </el-button>
+      </div>
     </template>
   </el-dialog>
 </template>
@@ -157,7 +157,9 @@
 <script setup>
 import { ref, computed, nextTick } from 'vue'
 import { Plus, Delete } from '@element-plus/icons-vue'
-import { VueFlow, Position, Handle } from '@vue-flow/core'
+import { VueFlow, Position, Handle, useVueFlow } from '@vue-flow/core'
+
+// const { updateNodeInternals } = useVueFlow(FLOW_ID)
 
 // ─── Props / emits ────────────────────────────────────────────────────────────
 
@@ -177,7 +179,7 @@ const emit = defineEmits(['update:modelValue', 'confirm'])
 const FLOW_ID  = 'edge-conn-flow'
 const ROW_H    = 52          // px per port row
 const NODE_W   = 540         // px per column
-const MID_GAP  = 140         // px between columns
+const MID_GAP  = 75         // px between columns
 const PAD      = 10          // top/bottom canvas padding
 
 const portTypeOptions = [
@@ -217,12 +219,18 @@ const localTgtPorts = ref([])
 // (We use _uid instead of object refs so Vue reactivity stays simple.)
 const localCouplings = ref([])
 
-const isDirty    = ref(false)
 const flowNodes  = ref([])
 const flowEdges  = ref([])
 
 // UIDs consumed by *other* edges (so we can mark them yellow/taken).
 const takenElsewhereUids = ref(new Set())
+
+// Tracks the current coupling state of OTHER edges that share our source/target
+// node. Keyed by edge ID. When the user swaps a connection, the displaced port
+// slot must be released from the foreign edge that previously owned it — we
+// store the updated coupling here so handleConfirm can propagate it to BuilderView.
+// Initialised from props.allEdges on resetLocal; mutated by swap operations.
+const foreignEdgeCouplings = ref(new Map()) // Map<edgeId, Array<{sourcePortLabel, targetPortLabel}>>
 
 // ─── Derived helpers ──────────────────────────────────────────────────────────
 
@@ -283,7 +291,22 @@ function resetLocal() {
     return src && tgt ? [{ srcUid: src._uid, tgtUid: tgt._uid }] : []
   })
 
-  isDirty.value = false
+  // Snapshot the current coupling state of all OTHER edges that touch our
+  // source or target node. These may be mutated by swaps during the session.
+  const map = new Map()
+  for (const edge of props.allEdges) {
+    if (edge.id === props.activeEdge?.id) continue
+    if (
+      edge.source === props.sourceNode.id ||
+      edge.target === props.sourceNode.id ||
+      edge.source === props.targetNode.id ||
+      edge.target === props.targetNode.id
+    ) {
+      map.set(edge.id, JSON.parse(JSON.stringify(edge.data?.couplings || [])))
+    }
+  }
+  foreignEdgeCouplings.value = map
+
   calcTakenElsewhere()
   rebuildNodes()
   refreshEdges()
@@ -297,21 +320,23 @@ function calcTakenElsewhere() {
   for (const edge of props.allEdges) {
     if (edge.id === props.activeEdge?.id) continue
     for (const { sourcePortLabel, targetPortLabel } of (edge.data?.couplings || [])) {
-      if (isSingleConnection(sourcePortLabel)) {
-        // Match against our local port list by option fingerprint
-        const match = localSrcPorts.value.find(p =>
-          p.label === sourcePortLabel.label &&
-          p.portType === sourcePortLabel.portType &&
-          JSON.stringify(p.option) === JSON.stringify(sourcePortLabel.option)
-        )
+      // Check ACTIVE SOURCE node
+      if (edge.source === props.sourceNode.id && isSingleConnection(sourcePortLabel)) {
+        const match = localSrcPorts.value.find(p => p.label === sourcePortLabel.label && p.portType === sourcePortLabel.portType && JSON.stringify(p.option) === JSON.stringify(sourcePortLabel.option))
         if (match) taken.add(match._uid)
       }
-      if (isSingleConnection(targetPortLabel)) {
-        const match = localTgtPorts.value.find(p =>
-          p.label === targetPortLabel.label &&
-          p.portType === targetPortLabel.portType &&
-          JSON.stringify(p.option) === JSON.stringify(targetPortLabel.option)
-        )
+      if (edge.target === props.sourceNode.id && isSingleConnection(targetPortLabel)) {
+        const match = localSrcPorts.value.find(p => p.label === targetPortLabel.label && p.portType === targetPortLabel.portType && JSON.stringify(p.option) === JSON.stringify(targetPortLabel.option))
+        if (match) taken.add(match._uid)
+      }
+
+      // Check ACTIVE TARGET node
+      if (edge.source === props.targetNode.id && isSingleConnection(sourcePortLabel)) {
+        const match = localTgtPorts.value.find(p => p.label === sourcePortLabel.label && p.portType === sourcePortLabel.portType && JSON.stringify(p.option) === JSON.stringify(sourcePortLabel.option))
+        if (match) taken.add(match._uid)
+      }
+      if (edge.target === props.targetNode.id && isSingleConnection(targetPortLabel)) {
+        const match = localTgtPorts.value.find(p => p.label === targetPortLabel.label && p.portType === targetPortLabel.portType && JSON.stringify(p.option) === JSON.stringify(targetPortLabel.option))
         if (match) taken.add(match._uid)
       }
     }
@@ -359,7 +384,8 @@ function refreshEdges() {
     if (!sp || !tp) continue
 
     const valid  = sp.label === tp.label && isCompatible(sp.portType, tp.portType)
-    const isMulti = sp.multiport === 'True' || sp.multiport === 'Sum'
+    // If EITHER side is a multiport, style it as a dynamic multiport line
+    const isMulti = !isSingleConnection(sp) || !isSingleConnection(tp)
 
     edges.push({
       id:           `ce-${srcUid}-${tgtUid}`,
@@ -388,117 +414,329 @@ function refreshEdges() {
   }
 }
 
+// ─── Foreign edge coupling updates ───────────────────────────────────────────
+
+// When a swap displaces a coupling that belongs to a foreign edge (one we don't
+// own), we must update that edge's coupling record so the slot is released.
+// This mutates foreignEdgeCouplings so handleConfirm can propagate the change.
+// When a swap displaces a coupling that belongs to a foreign edge (one we don't
+// own), we must update that edge's coupling record so the slot is released.
+
+function releaseForeignSlot(portLabel, side) {
+  if (!portLabel) return null
+  const targetNodeId = side === 'source' ? props.sourceNode.id : props.targetNode.id
+
+  for (const [edgeId, couplings] of foreignEdgeCouplings.value) {
+    const edge = props.allEdges.find(e => e.id === edgeId)
+    if (!edge) continue
+
+    const idx = couplings.findIndex(c => {
+      const matchSource = edge.source === targetNodeId && 
+                          c.sourcePortLabel.label === portLabel.label && 
+                          c.sourcePortLabel.portType === portLabel.portType && 
+                          JSON.stringify(c.sourcePortLabel.option) === JSON.stringify(portLabel.option)
+                          
+      const matchTarget = edge.target === targetNodeId && 
+                          c.targetPortLabel.label === portLabel.label && 
+                          c.targetPortLabel.portType === portLabel.portType && 
+                          JSON.stringify(c.targetPortLabel.option) === JSON.stringify(portLabel.option)
+                          
+      return matchSource || matchTarget
+    })
+    
+    if (idx !== -1) {
+      const updated = [...couplings]
+      const removedCoupling = updated.splice(idx, 1)[0]
+      foreignEdgeCouplings.value.set(edgeId, updated)
+      return { edgeId, removedCoupling, side } // Return the exact details of the evicted port
+    }
+  }
+  return null
+}
+
 // ─── Connection validation ────────────────────────────────────────────────────
 
-function isValidConnection(conn) {
-  const srcUid = conn.source.replace('src-', '')
-  const tgtUid = conn.target.replace('tgt-', '')
-  const sp = srcByUid(srcUid)
-  const tp = tgtByUid(tgtUid)
-  if (!sp || !tp) return false
-  if (!sp.label || !tp.label || sp.label !== tp.label) return false
-  return isCompatible(sp.portType, tp.portType)
+function isValidConnection(connection) {
+  const sUid = (connection.source || '').replace('src-', '')
+  const tUid = (connection.target || '').replace('tgt-', '')
+  
+  const sp = srcByUid(sUid)
+  const tp = tgtByUid(tUid)
+  
+  if (!sp || !tp || !sp.label || !tp.label) return false
+  
+  return sp.label === tp.label && isCompatible(sp.portType, tp.portType)
 }
 
 // ─── Interaction handlers ─────────────────────────────────────────────────────
 
-// New connection drawn from a free handle
 function onConnect(params) {
-  const srcUid = params.source.replace('src-', '')
-  const tgtUid = params.target.replace('tgt-', '')
+  if (!isValidConnection(params)) return
 
-  // isValidConnection guarantees label and portType compatibility, so any
-  // displaced coupling can always be swapped — no need to check or remove it.
-  const draggingIdx = localCouplings.value.findIndex(c => c.srcUid === srcUid)
-  const victimIdx   = localCouplings.value.findIndex(c => c.tgtUid === tgtUid && c.srcUid !== srcUid)
+  const srcUid = (params.source || '').replace('src-', '')
+  const tgtUid = (params.target || '').replace('tgt-', '')
+  const sp = srcByUid(srcUid)
+  const tp = tgtByUid(tgtUid)
 
-  // If the target was already taken, give its source the dragging source's old target.
-  if (victimIdx !== -1 && draggingIdx !== -1) {
-    localCouplings.value[victimIdx] = { srcUid: localCouplings.value[victimIdx].srcUid, tgtUid: localCouplings.value[draggingIdx].tgtUid }
-  } else if (victimIdx !== -1) {
-    localCouplings.value[victimIdx] = { srcUid, tgtUid }
+  if (localCouplings.value.some(c => c.srcUid === srcUid && c.tgtUid === tgtUid)) return
+
+  let nextCouplings = [...localCouplings.value]
+  let impactedSrcUid = null
+  let impactedTgtUid = null
+  let impactedForeign = []
+
+  if (isSingleConnection(tp)) {
+    const localConn = nextCouplings.find(c => c.tgtUid === tgtUid)
+    if (localConn) {
+      impactedSrcUid = localConn.srcUid
+      nextCouplings = nextCouplings.filter(c => c !== localConn)
+    } else if (takenElsewhereUids.value.has(tgtUid)) {
+      const evicted = releaseForeignSlot(tp, 'target')
+      if (evicted) impactedForeign.push(evicted)
+    }
   }
 
-  if (draggingIdx !== -1) {
-    localCouplings.value[draggingIdx] = { srcUid, tgtUid }
-  } else {
-    localCouplings.value.push({ srcUid, tgtUid })
+  if (isSingleConnection(sp)) {
+    const localConn = nextCouplings.find(c => c.srcUid === srcUid)
+    if (localConn) {
+      impactedTgtUid = localConn.tgtUid
+      nextCouplings = nextCouplings.filter(c => c !== localConn)
+    } else if (takenElsewhereUids.value.has(srcUid)) {
+      const evicted = releaseForeignSlot(sp, 'source')
+      if (evicted) impactedForeign.push(evicted)
+    }
   }
 
-  isDirty.value = true
+  nextCouplings.push({ srcUid, tgtUid })
+  localCouplings.value = nextCouplings
+
+  calcTakenElsewhere()
+
+  if (impactedSrcUid) autoConnectTargeted(impactedSrcUid, 'source')
+  if (impactedTgtUid) autoConnectTargeted(impactedTgtUid, 'target')
+
+  for (const foreign of impactedForeign) {
+    autoConnectForeign(foreign)
+  }
+
+  calcTakenElsewhere()
+
   rebuildNodes()
   refreshEdges()
+  applyChanges()
 }
 
-// Existing edge handle dragged to a new endpoint
 function onEdgeUpdate({ edge, connection }) {
-  const oldSrcUid = edge.source.replace('src-', '')
-  const oldTgtUid = edge.target.replace('tgt-', '')
-  const newSrcUid = connection.source.replace('src-', '')
-  const newTgtUid = connection.target.replace('tgt-', '')
+  if (!isValidConnection(connection)) return
+  
+  // Explicitly tell Vue Flow the drop was successful so it doesn't snap back visually
+  updateEdge(edge, connection)
 
-  const dragIdx = localCouplings.value.findIndex(
-    c => c.srcUid === oldSrcUid && c.tgtUid === oldTgtUid
-  )
-  if (dragIdx === -1) return
+  const oldSrcUid = (edge.source || '').replace('src-', '')
+  const oldTgtUid = (edge.target || '').replace('tgt-', '')
+  const newSrcUid = (connection.source || '').replace('src-', '')
+  const newTgtUid = (connection.target || '').replace('tgt-', '')
 
-  // isValidConnection guarantees compatibility, so the displaced coupling can
-  // always take the dragged edge's vacated endpoint — no compatibility check needed.
-  const victimIdx = localCouplings.value.findIndex(c =>
-    c.srcUid !== oldSrcUid &&
-    c.tgtUid !== oldTgtUid &&
-    (c.tgtUid === newTgtUid || c.srcUid === newSrcUid)
+  if (oldSrcUid === newSrcUid && oldTgtUid === newTgtUid) return
+
+  let nextCouplings = localCouplings.value.filter(
+    c => !(c.srcUid === oldSrcUid && c.tgtUid === oldTgtUid)
   )
 
-  if (victimIdx !== -1) {
-    // Give the victim the endpoint we're vacating
-    localCouplings.value[victimIdx] = newTgtUid !== oldTgtUid
-      ? { srcUid: localCouplings.value[victimIdx].srcUid, tgtUid: oldTgtUid }
-      : { srcUid: oldSrcUid, tgtUid: localCouplings.value[victimIdx].tgtUid }
+  let impactedSrcUid = null
+  let impactedTgtUid = null
+  let impactedForeign = [] 
+
+  const spNew = srcByUid(newSrcUid)
+  const tpNew = tgtByUid(newTgtUid)
+
+  if (oldSrcUid === newSrcUid && oldTgtUid !== newTgtUid) {
+    if (isSingleConnection(tpNew)) {
+      const localConn = nextCouplings.find(c => c.tgtUid === newTgtUid)
+      if (localConn) {
+        impactedSrcUid = localConn.srcUid
+        nextCouplings = nextCouplings.filter(c => c !== localConn)
+      } else if (takenElsewhereUids.value.has(newTgtUid)) {
+        const evicted = releaseForeignSlot(tpNew, 'target')
+        if (evicted) impactedForeign.push(evicted)
+      }
+    }
+  } else if (oldTgtUid === newTgtUid && oldSrcUid !== newSrcUid) {
+    if (isSingleConnection(spNew)) {
+      const localConn = nextCouplings.find(c => c.srcUid === newSrcUid)
+      if (localConn) {
+        impactedTgtUid = localConn.tgtUid
+        nextCouplings = nextCouplings.filter(c => c !== localConn)
+      } else if (takenElsewhereUids.value.has(newSrcUid)) {
+        const evicted = releaseForeignSlot(spNew, 'source')
+        if (evicted) impactedForeign.push(evicted)
+      }
+    }
   }
 
-  localCouplings.value[dragIdx] = { srcUid: newSrcUid, tgtUid: newTgtUid }
+  nextCouplings.push({ srcUid: newSrcUid, tgtUid: newTgtUid })
+  localCouplings.value = nextCouplings
 
-  isDirty.value = true
+  calcTakenElsewhere()
+
+  if (impactedSrcUid) autoConnectTargeted(impactedSrcUid, 'source')
+  if (impactedTgtUid) autoConnectTargeted(impactedTgtUid, 'target')
+
+  for (const foreign of impactedForeign) {
+    autoConnectForeign(foreign)
+  }
+
+  calcTakenElsewhere()
+
   rebuildNodes()
   refreshEdges()
-}
-
-// Snap-back if edge dropped on canvas background
-function onEdgeUpdateEnd() {
-  nextTick(refreshEdges)
+  applyChanges()
 }
 
 // ─── Port editing ─────────────────────────────────────────────────────────────
 
-function onPortConfigChange() {
-  isDirty.value = true
-  autoConnect()
-  rebuildNodes()
-  refreshEdges()
+function enforceSingleConnectionConstraints() {
+  // 1. Clean up Source Ports
+  for (const sp of localSrcPorts.value) {
+    if (isSingleConnection(sp)) {
+      if (takenElsewhereUids.value.has(sp._uid)) {
+        localCouplings.value = localCouplings.value.filter(c => c.srcUid !== sp._uid)
+      } else {
+        const myCouplings = localCouplings.value.filter(c => c.srcUid === sp._uid)
+        if (myCouplings.length > 1) {
+          const keep = myCouplings[0]
+          localCouplings.value = localCouplings.value.filter(c => c.srcUid !== sp._uid || c === keep)
+        }
+      }
+    }
+  }
+
+  // 2. Clean up Target Ports
+  for (const tp of localTgtPorts.value) {
+    if (isSingleConnection(tp)) {
+      if (takenElsewhereUids.value.has(tp._uid)) {
+        localCouplings.value = localCouplings.value.filter(c => c.tgtUid !== tp._uid)
+      } else {
+        const myCouplings = localCouplings.value.filter(c => c.tgtUid === tp._uid)
+        if (myCouplings.length > 1) {
+          const keep = myCouplings[0]
+          localCouplings.value = localCouplings.value.filter(c => c.tgtUid !== tp._uid || c === keep)
+        }
+      }
+    }
+  }
 }
 
-// Auto-match: for each unconnected source port, find a compatible unconnected
-// target port and add the coupling. Runs after any port edit so that fixing a
-// label or portType immediately wires up the connection.
+function onPortConfigChange() {
+  enforceSingleConnectionConstraints() // Prune illegal connections if switched to 'None'
+  autoConnect()                        // Instantly build valid connections if switched to 'True'
+  rebuildNodes()
+  refreshEdges()
+
+  applyChanges()
+}
+
+// Auto-match: for each unconnected source port, find compatible unconnected target ports.
 function autoConnect() {
-  const usedSrcUids = new Set(localCouplings.value.map(c => c.srcUid))
-  const usedTgtUids = new Set(localCouplings.value.map(c => c.tgtUid))
-
   for (const sp of localSrcPorts.value) {
-    if (usedSrcUids.has(sp._uid)) continue
     if (!sp.label || !sp.label.trim()) continue
+    
+    // Check if source is fully booked
+    const srcUsedCount = localCouplings.value.filter(c => c.srcUid === sp._uid).length
+    if (isSingleConnection(sp) && (srcUsedCount > 0 || takenElsewhereUids.value.has(sp._uid))) continue
 
-    const tp = localTgtPorts.value.find(p =>
-      !usedTgtUids.has(p._uid) &&
-      p.label === sp.label &&
-      isCompatible(sp.portType, p.portType)
-    )
+    // Find all matching target labels
+    const compatibleTargets = localTgtPorts.value.filter(tp => {
+      if (tp.label !== sp.label || !isCompatible(sp.portType, tp.portType)) return false
+      
+      const tgtUsedCount = localCouplings.value.filter(c => c.tgtUid === tp._uid).length
+      if (isSingleConnection(tp) && (tgtUsedCount > 0 || takenElsewhereUids.value.has(tp._uid))) return false
+      if (localCouplings.value.some(c => c.srcUid === sp._uid && c.tgtUid === tp._uid)) return false
+      return true
+    })
 
-    if (tp) {
+    // Plug them in!
+    for (const tp of compatibleTargets) {
       localCouplings.value.push({ srcUid: sp._uid, tgtUid: tp._uid })
-      usedSrcUids.add(sp._uid)
-      usedTgtUids.add(tp._uid)
+      if (isSingleConnection(sp)) break // Move to the next source port
+    }
+  }
+}
+
+function autoConnectTargeted(uid, type) {
+  if (type === 'source') {
+    const sp = srcByUid(uid)
+    if (!sp || !sp.label) return
+    
+    const match = localTgtPorts.value.find(tp => {
+      if (tp.label !== sp.label || !isCompatible(sp.portType, tp.portType)) return false
+      const isTaken = localCouplings.value.some(c => c.tgtUid === tp._uid) || takenElsewhereUids.value.has(tp._uid)
+      return isSingleConnection(tp) ? !isTaken : true
+    })
+    
+    if (match) {
+      localCouplings.value = [...localCouplings.value, { srcUid: uid, tgtUid: match._uid }]
+    }
+  } else if (type === 'target') {
+    const tp = tgtByUid(uid)
+    if (!tp || !tp.label) return
+    
+    const match = localSrcPorts.value.find(sp => {
+      if (sp.label !== tp.label || !isCompatible(sp.portType, tp.portType)) return false
+      const isTaken = localCouplings.value.some(c => c.srcUid === sp._uid) || takenElsewhereUids.value.has(sp._uid)
+      return isSingleConnection(sp) ? !isTaken : true
+    })
+    
+    if (match) {
+      localCouplings.value = [...localCouplings.value, { srcUid: match._uid, tgtUid: uid }]
+    }
+  }
+}
+
+function autoConnectForeign({ edgeId, removedCoupling, side }) {
+  if (side === 'target') {
+    const oldTargetLabel = removedCoupling.targetPortLabel
+    const match = localTgtPorts.value.find(tp => {
+      if (tp.label !== oldTargetLabel.label || tp.portType !== oldTargetLabel.portType) return false
+      const isTakenLocally = localCouplings.value.some(c => c.tgtUid === tp._uid)
+      const isTakenForeignly = takenElsewhereUids.value.has(tp._uid)
+      return isSingleConnection(tp) ? (!isTakenLocally && !isTakenForeignly) : true
+    })
+
+    if (match) {
+      const currentCouplings = foreignEdgeCouplings.value.get(edgeId) || []
+      foreignEdgeCouplings.value.set(edgeId, [...currentCouplings, {
+        sourcePortLabel: removedCoupling.sourcePortLabel,
+        targetPortLabel: {
+          portType: match.portType,
+          label: match.label,
+          option: JSON.parse(JSON.stringify(match.option)),
+          multiport: match.multiport
+        }
+      }])
+      calcTakenElsewhere() // Update global tracking instantly
+    }
+  } else if (side === 'source') {
+    const oldSourceLabel = removedCoupling.sourcePortLabel
+    const match = localSrcPorts.value.find(sp => {
+      if (sp.label !== oldSourceLabel.label || sp.portType !== oldSourceLabel.portType) return false
+      const isTakenLocally = localCouplings.value.some(c => c.srcUid === sp._uid)
+      const isTakenForeignly = takenElsewhereUids.value.has(sp._uid)
+      return isSingleConnection(sp) ? (!isTakenLocally && !isTakenForeignly) : true
+    })
+
+    if (match) {
+      const currentCouplings = foreignEdgeCouplings.value.get(edgeId) || []
+      foreignEdgeCouplings.value.set(edgeId, [...currentCouplings, {
+        sourcePortLabel: {
+          portType: match.portType,
+          label: match.label,
+          option: JSON.parse(JSON.stringify(match.option)),
+          multiport: match.multiport
+        },
+        targetPortLabel: removedCoupling.targetPortLabel
+      }])
+      calcTakenElsewhere() // Update global tracking instantly
     }
   }
 }
@@ -511,9 +749,11 @@ function deletePort(uid, side) {
     localTgtPorts.value = localTgtPorts.value.filter(p => p._uid !== uid)
     localCouplings.value = localCouplings.value.filter(c => c.tgtUid !== uid)
   }
-  isDirty.value = true
+
   rebuildNodes()
   refreshEdges()
+
+  applyChanges()
 }
 
 function addPort(side) {
@@ -521,34 +761,33 @@ function addPort(side) {
   const entry = { _uid: uid, portType: 'general_ports', label: '', option: [], multiport: 'None' }
   if (side === 'source') localSrcPorts.value.push(entry)
   else                   localTgtPorts.value.push(entry)
-  isDirty.value = true
   rebuildNodes()
   refreshEdges()
+
+  applyChanges()
 }
 
 // ─── Confirm / save ───────────────────────────────────────────────────────────
 
-function handleConfirm() {
-  // Reconstruct couplings in the { sourcePortLabel, targetPortLabel } format
-  // that resolvePortCouplings produces, so BuilderView can write directly to
-  // edge.data.couplings without re-running any coupling logic.
-  const couplings = localCouplings.value.flatMap(({ srcUid, tgtUid }) => {
-    const sp = srcByUid(srcUid)
-    const tp = tgtByUid(tgtUid)
-    if (!sp || !tp) return []
-    const { _uid: _s, ...sourcePortLabel } = sp
-    const { _uid: _t, ...targetPortLabel } = tp
-    return [{ sourcePortLabel, targetPortLabel }]
-  })
-
+function applyChanges() {
+  // Format the data exactly as the parent component expects it
   emit('confirm', {
-    sourceNodeId:   props.sourceNode.id,
-    targetNodeId:   props.targetNode.id,
-    sourcePortLabels: localSrcPorts.value.map(({ _uid, ...p }) => p),
-    targetPortLabels: localTgtPorts.value.map(({ _uid, ...p }) => p),
-    couplings,
+    sourceNodeId: props.sourceNode.id,
+    targetNodeId: props.targetNode.id,
+    sourcePortLabels: JSON.parse(JSON.stringify(localSrcPorts.value)),
+    targetPortLabels: JSON.parse(JSON.stringify(localTgtPorts.value)),
+    // Convert localCouplings back into the format your parent expects (usually an array of objects)
+    couplings: localCouplings.value.map(c => {
+       const sp = srcByUid(c.srcUid)
+       const tp = tgtByUid(c.tgtUid)
+       return {
+         sourcePortLabel: { portType: sp.portType, label: sp.label, option: sp.option, multiport: sp.multiport },
+         targetPortLabel: { portType: tp.portType, label: tp.label, option: tp.option, multiport: tp.multiport }
+       }
+    }),
+    // If your parent supports processing foreign edge updates via the confirm event, include them:
+    foreignEdgeCouplings: Array.from(foreignEdgeCouplings.value.entries()) 
   })
-  emit('update:modelValue', false)
 }
 
 function onClosed() {

@@ -329,6 +329,7 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
+import UnitsIcon from '../components/icons/UnitsIcon.vue'
 
 import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -1702,27 +1703,42 @@ function onEdgeDoubleClick({ edge }) {
   edgeConnectionDialogVisible.value = true
 }
 
-function onEdgeConnectionConfirm({ sourceNodeId, targetNodeId, sourcePortLabels, targetPortLabels, couplings }) {
+function onEdgeConnectionConfirm({ sourceNodeId, targetNodeId, sourcePortLabels, targetPortLabels, couplings, foreignCouplings }) {
   // Update portLabels on both nodes
   updateNodeData(sourceNodeId, { portLabels: sourcePortLabels })
   updateNodeData(targetNodeId, { portLabels: targetPortLabels })
 
-  // Write the new couplings directly onto the edge
-  const edge = findEdge(edgeDialogActiveEdge.value?.id)
-  if (edge) {
-    edge.data = { ...edge.data, couplings }
+  // Write the new couplings directly onto the active edge
+  const activeEdge = findEdge(edgeDialogActiveEdge.value?.id)
+  if (activeEdge) {
+    activeEdge.data = { ...activeEdge.data, couplings }
   }
 
-  // Recompute couplings on all OTHER edges connected to either node,
-  // since portLabels may have changed (same logic as onEditConfirm).
+  // Apply any coupling changes to other edges that were displaced by swaps.
+  // The dialog tracks these explicitly in foreignCouplings so we write them
+  // directly rather than recomputing — recomputing would re-derive from
+  // portLabel slot order and ignore the user's manual swap intent.
+  if (foreignCouplings) {
+    for (const [edgeId, updatedCouplings] of Object.entries(foreignCouplings)) {
+      const edge = findEdge(edgeId)
+      if (edge) {
+        edge.data = { ...edge.data, couplings: updatedCouplings }
+      }
+    }
+  }
+
+  // For any remaining connected edges whose portLabels changed (due to edits
+  // in the dialog, not swaps), recompute their couplings via resolvePortCouplings.
+  // Skip edges already handled above via foreignCouplings.
+  const handledEdgeIds = new Set(Object.keys(foreignCouplings || {}))
+  handledEdgeIds.add(edgeDialogActiveEdge.value?.id)
   const changedNodeIds = new Set([sourceNodeId, targetNodeId])
-  const activeEdgeId = edgeDialogActiveEdge.value?.id
 
   for (const changedNodeId of changedNodeIds) {
     const updatedPortLabels = changedNodeId === sourceNodeId ? sourcePortLabels : targetPortLabels
 
     edges.value
-      .filter((e) => e.id !== activeEdgeId && (e.source === changedNodeId || e.target === changedNodeId))
+      .filter((e) => !handledEdgeIds.has(e.id) && (e.source === changedNodeId || e.target === changedNodeId))
       .forEach((e) => {
         const isSrc = e.source === changedNodeId
         const otherNode = findNode(isSrc ? e.target : e.source)
