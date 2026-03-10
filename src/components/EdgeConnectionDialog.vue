@@ -131,7 +131,10 @@
             >
               <template v-if="data.side === 'source'">
                 <div class ="port-controls ghost-controls" @mousedown.stop>
-                  <span class="ghost-label">+ add port</span>
+                  <span class="ghost-label">
+                    <el-icon><Plus /></el-icon>
+                    add port
+                  </span>
                 </div>
                 <Handle
                   type="source" id="out"
@@ -146,7 +149,10 @@
                   class="port-handle handle--free"
                 />
                 <div class ="port-controls ghost-controls" @mousedown.stop>
-                  <span class="ghost-label">+ add port</span>
+                  <span class="ghost-label">
+                    <el-icon><Plus /></el-icon>
+                    add port
+                  </span>
                 </div>
               </template>
             </div>
@@ -1020,22 +1026,35 @@ watch(() => props.modelValue, (v) => { if (v) resetLocal() })
 
 /* -- Ghost ports -- */
 :deep(.port-row--ghost) {
-  opacity: 0.4;
-  border: 1px dashed #c0c4cc;
-  background: #f5f7fa;
+  background: transparent;
+  border: 1.5px dashed #dcdfe6;
+  opacity: 1;
   cursor: pointer;
-  transition: opacity 0.15s, border-color 0.15s;
+  align-items: center;
   justify-content: center;
+  gap: 6px;
+  transition: border-color 0.15s, background 0.15s;
 }
 :deep(.port-row--ghost:hover) {
-  opacity: 0.85;
   border-color: #409eff;
+  background: #ecf5ff;
 }
 .ghost-label {
-  font-size: 12px;
-  color: #909399;
+  display: flex;
+  align-items: center;
+  justify-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #c0c4cc;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
   pointer-events: none;
   user-select: none;
+  transition: color 0.15s;
+}
+:deep(.port-row--ghost:hover) .ghost-label {
+  color: #409eff;
 }
 
 /* ── Handles ── */
