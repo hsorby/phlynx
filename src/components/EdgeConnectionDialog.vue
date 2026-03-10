@@ -122,19 +122,40 @@
               </div>
             </div>
           </template>
+
+          <!-- Ghost port row -->
+          <template #node-ghostPort="{ data }">
+            <div
+              :class="['port-row', data.side === 'source' ? 'port-row--source' : 'port-row--target', 'port-row--ghost']"
+              @click="activateGhost(data.side)"
+            >
+              <template v-if="data.side === 'source'">
+                <div class ="port-controls ghost-controls" @mousedown.stop>
+                  <span class="ghost-label">+ add port</span>
+                </div>
+                <Handle
+                  type="source" id="out"
+                  :position="Position.Right"
+                  class="port-handle handle--free"
+                />
+              </template>
+              <template v-else>
+                <Handle
+                  type="target" id="in"
+                  :position="Position.Left"
+                  class="port-handle handle--free"
+                />
+                <div class ="port-controls ghost-controls" @mousedown.stop>
+                  <span class="ghost-label">+ add port</span>
+                </div>
+              </template>
+            </div>
+          </template>
         </VueFlow>
       </div>
 
-      <!-- Legend + add-port controls -->
+      <!-- Legend -->
       <div class="bottom-bar">
-        <div class="add-btns">
-          <el-tooltip content="Add source port" placement="top">
-            <el-button :icon="Plus" type="success" plain circle size="small" @click="addPort('source')" />
-          </el-tooltip>
-          <el-tooltip content="Add target port" placement="top">
-            <el-button :icon="Plus" type="success" plain circle size="small" @click="addPort('target')" />
-          </el-tooltip>
-        </div>
         <div class="legend">
           <span class="legend-item"><span class="legend-dot dot-connected"></span>Connected</span>
           <span class="legend-item"><span class="legend-dot" style="background:#67c23a"></span>Multiport</span>
@@ -155,11 +176,9 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed } from 'vue'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import { VueFlow, Position, Handle, useVueFlow } from '@vue-flow/core'
-
-// const { updateNodeInternals } = useVueFlow(FLOW_ID)
 
 // ─── Props / emits ────────────────────────────────────────────────────────────
 
@@ -167,7 +186,7 @@ const props = defineProps({
   modelValue:  { type: Boolean, default: false },
   sourceNode:  Object,
   targetNode:  Object,
-  activeEdge:  Object,       // the edge that was double-clicked
+  activeEdge:  Object,       
   allEdges:    { type: Array, default: () => [] },
   allNodes:    { type: Array, default: () => [] },
 })
@@ -177,9 +196,12 @@ const emit = defineEmits(['update:modelValue', 'confirm'])
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const FLOW_ID  = 'edge-conn-flow'
+const { updateEdge } = useVueFlow(FLOW_ID)
+
+let edgeUpdateSuccessful = false
 const ROW_H    = 52          // px per port row
 const NODE_W   = 540         // px per column
-const MID_GAP  = 75         // px between columns
+const MID_GAP  = 75           // px between columns
 const PAD      = 10          // top/bottom canvas padding
 
 const portTypeOptions = [
@@ -193,9 +215,13 @@ const multiportOptions = [
   { value: 'None',  label: 'None'  },
 ]
 
-// ─── Compatibility (mirrors portCouplings.js) ─────────────────────────────────
+const ghostSrcPort = ref(null)
+const ghostTgtPort = ref(null)
+
+// ─── Compatibility ─────────────────────────────────
 
 const TARGET_COMPATIBLE = {
+  entrance_ports: new Set(['general_ports']),
   exit_ports:    new Set(['entrance_ports', 'general_ports']),
   general_ports: new Set(['entrance_ports', 'exit_ports', 'general_ports']),
 }
@@ -216,16 +242,15 @@ const localTgtPorts = ref([])
 
 // The active couplings for this edge.
 // Each entry: { srcUid: string, tgtUid: string }
-// (We use _uid instead of object refs so Vue reactivity stays simple.)
 const localCouplings = ref([])
 
 const flowNodes  = ref([])
 const flowEdges  = ref([])
 
-// UIDs consumed by *other* edges (so we can mark them yellow/taken).
+// UIDs consumed by other edges
 const takenElsewhereUids = ref(new Set())
 
-// Tracks the current coupling state of OTHER edges that share our source/target
+// Tracks the current coupling state of other edges that share our source/target
 // node. Keyed by edge ID. When the user swaps a connection, the displaced port
 // slot must be released from the foreign edge that previously owned it — we
 // store the updated coupling here so handleConfirm can propagate it to BuilderView.
@@ -235,7 +260,7 @@ const foreignEdgeCouplings = ref(new Map()) // Map<edgeId, Array<{sourcePortLabe
 // ─── Derived helpers ──────────────────────────────────────────────────────────
 
 const canvasHeight = computed(() =>
-  Math.max(localSrcPorts.value.length, localTgtPorts.value.length, 4) * ROW_H + PAD * 2
+  (Math.max(localSrcPorts.value.length, localTgtPorts.value.length, 4) + 1) * ROW_H + PAD * 2
 )
 
 function srcByUid(uid) { return localSrcPorts.value.find(p => p._uid === uid) }
@@ -249,6 +274,7 @@ function rowClass(data) {
   if (data.isTakenElsewhere) return 'row--taken'
   return 'row--free'
 }
+
 function handleClass(data) {
   if (data.isConnected)      return 'handle--connected'
   if (data.isTakenElsewhere) return 'handle--taken'
@@ -274,7 +300,10 @@ function resetLocal() {
     JSON.parse(JSON.stringify(props.targetNode?.data?.portLabels || []))
   )
 
-  // Convert edge.data.couplings → { srcUid, tgtUid } pairs by matching on
+  ghostSrcPort.value = {}
+  ghostTgtPort.value = {}
+
+  // Convert edge.data.couplings -> { srcUid, tgtUid } pairs by matching on
   // option array identity (the unique fingerprint per slot).
   const rawCouplings = props.activeEdge?.data?.couplings || []
   localCouplings.value = rawCouplings.flatMap(({ sourcePortLabel, targetPortLabel }) => {
@@ -373,6 +402,23 @@ function rebuildNodes() {
   }))
 
   flowNodes.value = [...srcNodes, ...tgtNodes]
+
+  if (ghostSrcPort.value) {
+    flowNodes.value.push({
+      id: 'ghost-src',
+      type: 'ghostPort',
+      position: { x: 0, y: PAD + localSrcPorts.value.length * ROW_H },
+      data: { side: 'source' }
+    })
+  }
+  if (ghostTgtPort.value) {
+    flowNodes.value.push({
+      id: 'ghost-tgt',
+      type: 'ghostPort',
+      position: { x: NODE_W + MID_GAP, y: PAD + localTgtPorts.value.length * ROW_H },
+      data: { side: 'target' }
+    })
+  }
 }
 
 function refreshEdges() {
@@ -408,6 +454,7 @@ function refreshEdges() {
   const srcConn = connectedSrcUids()
   const tgtConn = connectedTgtUids()
   for (const node of flowNodes.value) {
+    if (!node.data.port) continue // for ghost ports - could make more robust
     const uid = node.data.port._uid
     node.data.isConnected      = srcConn.has(uid) || tgtConn.has(uid)
     node.data.isTakenElsewhere = takenElsewhereUids.value.has(uid)
@@ -416,12 +463,10 @@ function refreshEdges() {
 
 // ─── Foreign edge coupling updates ───────────────────────────────────────────
 
-// When a swap displaces a coupling that belongs to a foreign edge (one we don't
-// own), we must update that edge's coupling record so the slot is released.
+// When a swap displaces a coupling that belongs to a foreign edge, release the slot.
 // This mutates foreignEdgeCouplings so handleConfirm can propagate the change.
 // When a swap displaces a coupling that belongs to a foreign edge (one we don't
 // own), we must update that edge's coupling record so the slot is released.
-
 function releaseForeignSlot(portLabel, side) {
   if (!portLabel) return null
   const targetNodeId = side === 'source' ? props.sourceNode.id : props.targetNode.id
@@ -457,6 +502,7 @@ function releaseForeignSlot(portLabel, side) {
 // ─── Connection validation ────────────────────────────────────────────────────
 
 function isValidConnection(connection) {
+  if (connection.source === 'ghost-src' || connection.target === 'ghost-tgt') return true
   const sUid = (connection.source || '').replace('src-', '')
   const tUid = (connection.target || '').replace('tgt-', '')
   
@@ -471,6 +517,27 @@ function isValidConnection(connection) {
 // ─── Interaction handlers ─────────────────────────────────────────────────────
 
 function onConnect(params) {
+  const isGhostSrc = params.source === 'ghost-src'
+  const isGhostTgt = params.target === 'ghost-tgt'
+
+  if (isGhostSrc || isGhostTgt) {
+    if (isGhostSrc) {
+      // Infer from the real target port
+      const tUid = params.target.replace('tgt-', '')
+      const tp = tgtByUid(tUid)
+      activateGhost('source', tp)
+      // Rewrite params to use the newly created port's node id
+      params = { ...params, source: `src-${localSrcPorts.value.at(-1)._uid}` }
+    }
+    if (isGhostTgt) {
+      // Infer from the real source port
+      const sUid = params.source.replace('src-', '')
+      const sp = srcByUid(sUid)
+      activateGhost('target', sp)
+      params = { ...params, target: `tgt-${localTgtPorts.value.at(-1)._uid}` }
+    }
+  }
+
   if (!isValidConnection(params)) return
 
   const srcUid = (params.source || '').replace('src-', '')
@@ -527,66 +594,39 @@ function onConnect(params) {
 }
 
 function onEdgeUpdate({ edge, connection }) {
+  if (!connection?.source || !connection?.target) return
   if (!isValidConnection(connection)) return
-  
-  // Explicitly tell Vue Flow the drop was successful so it doesn't snap back visually
-  updateEdge(edge, connection)
 
-  const oldSrcUid = (edge.source || '').replace('src-', '')
-  const oldTgtUid = (edge.target || '').replace('tgt-', '')
-  const newSrcUid = (connection.source || '').replace('src-', '')
-  const newTgtUid = (connection.target || '').replace('tgt-', '')
+  const newSrc = connection.source.replace('src-', '')
+  const newTgt = connection.target.replace('tgt-', '')
 
-  if (oldSrcUid === newSrcUid && oldTgtUid === newTgtUid) return
+  const oldSrc = edge.source.replace('src-', '')
+  const oldTgt = edge.target.replace('tgt-', '')
 
-  let nextCouplings = localCouplings.value.filter(
-    c => !(c.srcUid === oldSrcUid && c.tgtUid === oldTgtUid)
+  const current = localCouplings.value.find(
+    c => c.srcUid === oldSrc && c.tgtUid === oldTgt
   )
 
-  let impactedSrcUid = null
-  let impactedTgtUid = null
-  let impactedForeign = [] 
+  if (!current) return
 
-  const spNew = srcByUid(newSrcUid)
-  const tpNew = tgtByUid(newTgtUid)
+  const existing = localCouplings.value.find(
+    c => c.srcUid === newSrc && c.tgtUid === newTgt
+  )
 
-  if (oldSrcUid === newSrcUid && oldTgtUid !== newTgtUid) {
-    if (isSingleConnection(tpNew)) {
-      const localConn = nextCouplings.find(c => c.tgtUid === newTgtUid)
-      if (localConn) {
-        impactedSrcUid = localConn.srcUid
-        nextCouplings = nextCouplings.filter(c => c !== localConn)
-      } else if (takenElsewhereUids.value.has(newTgtUid)) {
-        const evicted = releaseForeignSlot(tpNew, 'target')
-        if (evicted) impactedForeign.push(evicted)
-      }
-    }
-  } else if (oldTgtUid === newTgtUid && oldSrcUid !== newSrcUid) {
-    if (isSingleConnection(spNew)) {
-      const localConn = nextCouplings.find(c => c.srcUid === newSrcUid)
-      if (localConn) {
-        impactedTgtUid = localConn.tgtUid
-        nextCouplings = nextCouplings.filter(c => c !== localConn)
-      } else if (takenElsewhereUids.value.has(newSrcUid)) {
-        const evicted = releaseForeignSlot(spNew, 'source')
-        if (evicted) impactedForeign.push(evicted)
-      }
-    }
+  if (existing && existing !== current) {
+
+
+    existing.srcUid = current.srcUid
+    existing.tgtUid = current.tgtUid
+
+    current.srcUid = newSrc
+    current.tgtUid = newTgt
+  } else {
+    current.srcUid = newSrc
+    current.tgtUid = newTgt
   }
 
-  nextCouplings.push({ srcUid: newSrcUid, tgtUid: newTgtUid })
-  localCouplings.value = nextCouplings
-
-  calcTakenElsewhere()
-
-  if (impactedSrcUid) autoConnectTargeted(impactedSrcUid, 'source')
-  if (impactedTgtUid) autoConnectTargeted(impactedTgtUid, 'target')
-
-  for (const foreign of impactedForeign) {
-    autoConnectForeign(foreign)
-  }
-
-  calcTakenElsewhere()
+  edgeUpdateSuccessful = true
 
   rebuildNodes()
   refreshEdges()
@@ -632,11 +672,11 @@ function onPortConfigChange() {
   autoConnect()                        // Instantly build valid connections if switched to 'True'
   rebuildNodes()
   refreshEdges()
-
   applyChanges()
 }
 
 // Auto-match: for each unconnected source port, find compatible unconnected target ports.
+// to do: apply this on opening the dialog
 function autoConnect() {
   for (const sp of localSrcPorts.value) {
     if (!sp.label || !sp.label.trim()) continue
@@ -714,7 +754,7 @@ function autoConnectForeign({ edgeId, removedCoupling, side }) {
           multiport: match.multiport
         }
       }])
-      calcTakenElsewhere() // Update global tracking instantly
+      calcTakenElsewhere() 
     }
   } else if (side === 'source') {
     const oldSourceLabel = removedCoupling.sourcePortLabel
@@ -736,7 +776,7 @@ function autoConnectForeign({ edgeId, removedCoupling, side }) {
         },
         targetPortLabel: removedCoupling.targetPortLabel
       }])
-      calcTakenElsewhere() // Update global tracking instantly
+      calcTakenElsewhere() 
     }
   }
 }
@@ -749,10 +789,8 @@ function deletePort(uid, side) {
     localTgtPorts.value = localTgtPorts.value.filter(p => p._uid !== uid)
     localCouplings.value = localCouplings.value.filter(c => c.tgtUid !== uid)
   }
-
   rebuildNodes()
   refreshEdges()
-
   applyChanges()
 }
 
@@ -763,20 +801,50 @@ function addPort(side) {
   else                   localTgtPorts.value.push(entry)
   rebuildNodes()
   refreshEdges()
+  applyChanges()
+}
 
+function activateGhost(side, inferFrom = null) {
+  const uid = `new_${side}_${Date.now()}`
+
+  let portType = 'general_ports'
+
+  // side refers to the side that the ghost node is being added
+  if (side === 'target') {
+    portType = inferFrom?.portType === 'exit_ports' ? 'entrance_ports' : 'general_ports'
+  } else if (side === 'source') {
+    portType = inferFrom?.portType === 'entrance_ports' ? 'exit_ports' : 'general_ports'
+  } else {
+    return // should trigger error
+  }
+
+  const entry = {
+    _uid: uid,
+    portType: portType,
+    label:    inferFrom?.label    ?? '',
+    option:   [],           
+    multiport: inferFrom?.multiport ?? 'None',
+  }
+  if (side === 'source') {
+    localSrcPorts.value.push(entry)
+    ghostSrcPort.value = {}
+  } else {
+    localTgtPorts.value.push(entry)
+    ghostTgtPort.value = {}
+  }
+  rebuildNodes()
+  refreshEdges()
   applyChanges()
 }
 
 // ─── Confirm / save ───────────────────────────────────────────────────────────
 
 function applyChanges() {
-  // Format the data exactly as the parent component expects it
   emit('confirm', {
     sourceNodeId: props.sourceNode.id,
     targetNodeId: props.targetNode.id,
     sourcePortLabels: JSON.parse(JSON.stringify(localSrcPorts.value)),
     targetPortLabels: JSON.parse(JSON.stringify(localTgtPorts.value)),
-    // Convert localCouplings back into the format your parent expects (usually an array of objects)
     couplings: localCouplings.value.map(c => {
        const sp = srcByUid(c.srcUid)
        const tp = tgtByUid(c.tgtUid)
@@ -785,8 +853,6 @@ function applyChanges() {
          targetPortLabel: { portType: tp.portType, label: tp.label, option: tp.option, multiport: tp.multiport }
        }
     }),
-    // If your parent supports processing foreign edge updates via the confirm event, include them:
-    foreignEdgeCouplings: Array.from(foreignEdgeCouplings.value.entries()) 
   })
 }
 
@@ -950,6 +1016,26 @@ watch(() => props.modelValue, (v) => { if (v) resetLocal() })
   width: 100%;
   padding: 0 10px;
   pointer-events: auto;
+}
+
+/* -- Ghost ports -- */
+:deep(.port-row--ghost) {
+  opacity: 0.4;
+  border: 1px dashed #c0c4cc;
+  background: #f5f7fa;
+  cursor: pointer;
+  transition: opacity 0.15s, border-color 0.15s;
+  justify-content: center;
+}
+:deep(.port-row--ghost:hover) {
+  opacity: 0.85;
+  border-color: #409eff;
+}
+.ghost-label {
+  font-size: 12px;
+  color: #909399;
+  pointer-events: none;
+  user-select: none;
 }
 
 /* ── Handles ── */
