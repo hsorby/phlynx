@@ -34,7 +34,7 @@
             <span style="width:64px">Type</span>
             <span style="width:170px">Label</span>
             <span style="flex:1">Variables</span>
-            <span style="width:80px">Multi</span>
+            <span style="width:80px">Multiport</span>
             <span style="width:28px"></span>
           </div>
         </div>
@@ -46,7 +46,7 @@
             <span style="width:64px">Type</span>
             <span style="width:170px">Label</span>
             <span style="flex:1">Variables</span>
-            <span style="width:80px">Multi</span>
+            <span style="width:80px">Multiport</span>
           </div>
         </div>
       </div>
@@ -801,16 +801,6 @@ function deletePort(uid, side) {
   applyChanges()
 }
 
-function addPort(side) {
-  const uid = `new_${side}_${Date.now()}`
-  const entry = { _uid: uid, portType: 'general_ports', label: '', option: [], multiport: 'None' }
-  if (side === 'source') localSrcPorts.value.push(entry)
-  else                   localTgtPorts.value.push(entry)
-  rebuildNodes()
-  refreshEdges()
-  applyChanges()
-}
-
 function activateGhost(side, inferFrom = null) {
   const uid = `new_${side}_${Date.now()}`
 
@@ -1018,7 +1008,6 @@ watch(() => props.modelValue, (v) => { if (v) resetLocal() })
 
 :deep(.port-controls) {
   display: flex;
-  align-items: center;
   gap: 8px;
   width: 100%;
   padding: 0 10px;
@@ -1031,8 +1020,6 @@ watch(() => props.modelValue, (v) => { if (v) resetLocal() })
   border: 1.5px dashed #dcdfe6;
   opacity: 1;
   cursor: pointer;
-  align-items: center;
-  justify-content: center;
   gap: 6px;
   transition: border-color 0.15s, background 0.15s;
 }
@@ -1041,9 +1028,6 @@ watch(() => props.modelValue, (v) => { if (v) resetLocal() })
   background: #ecf5ff;
 }
 .ghost-label {
-  display: flex;
-  align-items: center;
-  justify-items: center;
   gap: 5px;
   font-size: 11px;
   font-weight: 600;
@@ -1054,34 +1038,38 @@ watch(() => props.modelValue, (v) => { if (v) resetLocal() })
   user-select: none;
   transition: color 0.15s;
 }
+:deep(.ghost-controls) {
+  justify-content: center;
+  align-items: center;
+}
 :deep(.port-row--ghost:hover) .ghost-label {
   color: #409eff;
 }
 
 /* ── Handles ── */
 :deep(.port-handle) {
-  width: 11px !important;
-  height: 11px !important;
-  border-radius: 50% !important;
-  border: 2px solid white !important;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid white;
   transition: transform 0.1s ease, background 0.1s ease;
 }
 :deep(.handle--connected) {
-  background: #409eff !important;
+  background: #409eff;
 }
 :deep(.handle--taken) {
-  background: #e6a23c !important;
+  background: #e6a23c;
 }
 :deep(.handle--free) {
-  background: #c0c4cc !important;
+  background: #c0c4cc;
 }
 :deep(.vue-flow__handle-valid) {
-  background: #67c23a !important;
-  transform: scale(1.4) !important;
+  background: #67c23a;
+  transform: scale(1.4);
 }
 :deep(.vue-flow__handle-connecting) {
-  background: #409eff !important;
-  transform: scale(1.2) !important;
+  background: #409eff;
+  transform: scale(1.2);
 }
 
 /* ── Bottom bar ── */
