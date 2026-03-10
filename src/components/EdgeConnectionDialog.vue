@@ -508,6 +508,7 @@ function releaseForeignSlot(portLabel, side) {
 // ─── Connection validation ────────────────────────────────────────────────────
 
 function isValidConnection(connection) {
+  if (connection.source === 'ghost-src' && connection.target === 'ghost-tgt') return false
   if (connection.source === 'ghost-src' || connection.target === 'ghost-tgt') return true
   const sUid = (connection.source || '').replace('src-', '')
   const tUid = (connection.target || '').replace('tgt-', '')
