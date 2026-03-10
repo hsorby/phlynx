@@ -133,7 +133,7 @@
                 <div class ="port-controls ghost-controls" @mousedown.stop>
                   <span class="ghost-label">
                     <el-icon><Plus /></el-icon>
-                    add port
+                    Add Port
                   </span>
                 </div>
                 <Handle
@@ -151,7 +151,7 @@
                 <div class ="port-controls ghost-controls" @mousedown.stop>
                   <span class="ghost-label">
                     <el-icon><Plus /></el-icon>
-                    add port
+                    Add Port
                   </span>
                 </div>
               </template>
@@ -204,7 +204,6 @@ const emit = defineEmits(['update:modelValue', 'confirm'])
 const FLOW_ID  = 'edge-conn-flow'
 const { updateEdge } = useVueFlow(FLOW_ID)
 
-let edgeUpdateSuccessful = false
 const ROW_H    = 52          // px per port row
 const NODE_W   = 540         // px per column
 const MID_GAP  = 75           // px between columns
@@ -220,9 +219,6 @@ const multiportOptions = [
   { value: 'Sum',   label: 'Sum'   },
   { value: 'None',  label: 'None'  },
 ]
-
-const ghostSrcPort = ref(null)
-const ghostTgtPort = ref(null)
 
 // ─── Compatibility ─────────────────────────────────
 
@@ -305,9 +301,6 @@ function resetLocal() {
     props.targetNode.id,
     JSON.parse(JSON.stringify(props.targetNode?.data?.portLabels || []))
   )
-
-  ghostSrcPort.value = {}
-  ghostTgtPort.value = {}
 
   // Convert edge.data.couplings -> { srcUid, tgtUid } pairs by matching on
   // option array identity (the unique fingerprint per slot).
@@ -409,22 +402,19 @@ function rebuildNodes() {
 
   flowNodes.value = [...srcNodes, ...tgtNodes]
 
-  if (ghostSrcPort.value) {
-    flowNodes.value.push({
-      id: 'ghost-src',
-      type: 'ghostPort',
-      position: { x: 0, y: PAD + localSrcPorts.value.length * ROW_H },
-      data: { side: 'source' }
-    })
-  }
-  if (ghostTgtPort.value) {
-    flowNodes.value.push({
-      id: 'ghost-tgt',
-      type: 'ghostPort',
-      position: { x: NODE_W + MID_GAP, y: PAD + localTgtPorts.value.length * ROW_H },
-      data: { side: 'target' }
-    })
-  }
+  flowNodes.value.push({
+    id: 'ghost-src',
+    type: 'ghostPort',
+    position: { x: 0, y: PAD + localSrcPorts.value.length * ROW_H },
+    data: { side: 'source' }
+  })
+
+  flowNodes.value.push({
+    id: 'ghost-tgt',
+    type: 'ghostPort',
+    position: { x: NODE_W + MID_GAP, y: PAD + localTgtPorts.value.length * ROW_H },
+    data: { side: 'target' }
+  })
 }
 
 function refreshEdges() {
@@ -604,6 +594,8 @@ function onEdgeUpdate({ edge, connection }) {
   if (!connection?.source || !connection?.target) return
   if (!isValidConnection(connection)) return
 
+  updateEdge(edge, connection)
+
   const newSrc = connection.source.replace('src-', '')
   const newTgt = connection.target.replace('tgt-', '')
 
@@ -632,8 +624,6 @@ function onEdgeUpdate({ edge, connection }) {
     current.srcUid = newSrc
     current.tgtUid = newTgt
   }
-
-  edgeUpdateSuccessful = true
 
   rebuildNodes()
   refreshEdges()
@@ -824,10 +814,8 @@ function activateGhost(side, inferFrom = null) {
   }
   if (side === 'source') {
     localSrcPorts.value.push(entry)
-    ghostSrcPort.value = {}
   } else {
     localTgtPorts.value.push(entry)
-    ghostTgtPort.value = {}
   }
   rebuildNodes()
   refreshEdges()
@@ -940,7 +928,6 @@ watch(() => props.modelValue, (v) => { if (v) resetLocal() })
   font-weight: 800;
   letter-spacing: 1.5px;
   color: #909399;
-  text-transform: uppercase;
   padding-left: 2px;
 }
 .col-subheaders {
@@ -1033,7 +1020,6 @@ watch(() => props.modelValue, (v) => { if (v) resetLocal() })
   font-weight: 600;
   color: #c0c4cc;
   letter-spacing: 0.5px;
-  text-transform: uppercase;
   pointer-events: none;
   user-select: none;
   transition: color 0.15s;
