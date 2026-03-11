@@ -1125,7 +1125,7 @@ const onEdgeChange = (changes) => {
   const selectChanges = []
   changes.forEach((c) => {
     if (c.type === 'remove') {
-      indexRemoveEdge(c.item)
+      indexRemoveEdge(c)
       removeChanges.push({ edge: snapshotEdge(c) })
     } else if (c.type === 'add') {
       indexAddEdge(c.item)
@@ -1722,11 +1722,6 @@ function indexRemoveEdge(edge) {
 
   if (index.get(edge.source)?.size === 0) index.delete(edge.source)
   if (index.get(edge.target)?.size === 0) index.delete(edge.target)
-}
-
-function indexUpdateEdge(oldEdge, newEdge) {
-  indexRemoveEdge(oldEdge)
-  indexAddEdge(newEdge)
 }
 
 // Extract subgraph (1 degree of separation from the active edge)
