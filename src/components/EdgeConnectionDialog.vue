@@ -171,6 +171,24 @@
       </div>
     </div>
 
+    <!-- Swap confirmation dialog -->
+    <el-dialog
+      v-model="swapDialog.visible"
+      title="Port already connected"
+      width="380px"
+      :show-close="false"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      append-to-body
+    >
+      <span>This port is already connected. What would you like to do?</span>
+      <template #footer>
+        <el-button @click="resolveSwap('cancel')">Cancel</el-button>
+        <el-button @click="resolveSwap('overwrite')">Overwrite</el-button>
+        <el-button type="primary" @click="resolveSwap('swap')">Swap</el-button>
+      </template>
+    </el-dialog>
+
     <template #footer>
       <div class="dialog-footer">
         <el-button type="primary" @click="$emit('update:modelValue', false)">
@@ -251,6 +269,20 @@ const flowEdges  = ref([])
 
 // UIDs consumed by other edges
 const takenElsewhereUids = ref(new Set())
+
+// ─── Swap confirmation dialog ─────────────────────────────────────────────────
+const swapDialog = ref({ visible: false, resolve: null })
+
+function askSwapIntent() {
+  return new Promise(resolve => {
+    swapDialog.value = { visible: true, resolve }
+  })
+}
+
+function resolveSwap(intent) {
+  swapDialog.value.visible = false
+  swapDialog.value.resolve?.(intent) // 'swap' | 'overwrite' | 'cancel'
+}
 
 // Mutable local copy of the subgraph (Map<edgeId, clonedEdge>).
 // releaseForeignSlot writes into this; applyChanges diffs it against
@@ -509,7 +541,7 @@ function isValidConnection(connection) {
 
 // ─── Interaction handlers ─────────────────────────────────────────────────────
 
-function onConnect(params) {
+async function onConnect(params) {
   const isGhostSrc = params.source === 'ghost-src'
   const isGhostTgt = params.target === 'ghost-tgt'
 
@@ -541,13 +573,16 @@ function onConnect(params) {
   const sp = srcByUid(srcUid)
   const tp = tgtByUid(tgtUid)
 
+  // Block new connections onto already-occupied single-connection ports.
+  // (onEdgeUpdate removes the dragged coupling first so it won't hit these guards.)
   if (isSingleConnection(sp) && localCouplings.value.some(c => c.srcUid === srcUid)) return
   if (isSingleConnection(tp) && localCouplings.value.some(c => c.tgtUid === tgtUid)) return
 
   let nextCouplings = [...localCouplings.value]
 
-  nextCouplings = releasePortHandles(tp, tgtUid, 'target', nextCouplings)
-  nextCouplings = releasePortHandles(sp, srcUid, 'source', nextCouplings)
+  nextCouplings = await releasePortHandles(tp, tgtUid, 'target', nextCouplings)
+  nextCouplings = await releasePortHandles(sp, srcUid, 'source', nextCouplings)
+  if (nextCouplings === null) return // user cancelled
   localCouplings.value = connectPorts(srcUid, tgtUid, nextCouplings)
 
   calcTakenElsewhere()
@@ -556,28 +591,35 @@ function onConnect(params) {
   applyChanges()
 }
 
-function releasePortHandles(port, nodeUid, side, newCouplings) {
+async function releasePortHandles(port, nodeUid, side, newCouplings) {
   if (isSingleConnection(port)) {
     const localConn = newCouplings.find(c => (side === 'source' ? c.srcUid : c.tgtUid) === nodeUid)
     if (localConn) {
+      const intent = await askSwapIntent()
+      if (intent === 'cancel') return null
+      // 'overwrite': just drop the displaced coupling (already filtered below)
+      // 'swap': not applicable in onConnect — no old slot to rehome into, treat as overwrite
       newCouplings = newCouplings.filter(c => c !== localConn)
     } else if (takenElsewhereUids.value.has(nodeUid)) {
+      const intent = await askSwapIntent()
+      if (intent === 'cancel') return null
       releaseForeignHandle(port, side)
     }
   }
   return newCouplings
 }
 
-function swapConnections(port, oldUid, newUid, side, couplings) {
+async function swapConnections(port, oldUid, newUid, side, couplings) {
   const localConn = couplings.find(c => (side === 'source' ? c.srcUid : c.tgtUid) === newUid)
   if (!localConn) {
     if (isSingleConnection(port) && takenElsewhereUids.value.has(newUid)) {
+      const intent = await askSwapIntent()
+      if (intent === 'cancel') return null
       const result = releaseForeignHandle(port, side)
       calcTakenElsewhere()
-      if (result) {
+      if (result && intent === 'swap') {
         const { partnerPortLabel, edgeId } = result
-        // Rehome the old slot's port into the sibling edge — onEdgeUpdate's final
-        // connectPorts handles installing the new local connection.
+        // Rehome the vacated old slot's port into the sibling edge
         const oldPort = side === 'target' ? tgtByUid(oldUid) : srcByUid(oldUid)
         if (oldPort) rehomeForeignHandle(oldPort, partnerPortLabel, edgeId, side)
         calcTakenElsewhere()
@@ -586,7 +628,13 @@ function swapConnections(port, oldUid, newUid, side, couplings) {
     return couplings
   }
 
+  const intent = await askSwapIntent()
+  if (intent === 'cancel') return null
+
   const next = couplings.filter(c => c !== localConn)
+  if (intent === 'overwrite') return next
+
+  // swap: rehome the displaced local coupling into the vacated old slot
   const swapSrcUid = side === 'target' ? oldUid : localConn.srcUid
   const swapTgtUid = side === 'target' ? localConn.tgtUid : oldUid
   return connectPorts(swapSrcUid, swapTgtUid, next)
@@ -596,6 +644,7 @@ function rehomeForeignHandle(oldPort, partnerPortLabel, edgeId, side) {
   const sibling = localSubgraph.value.get(edgeId)
   if (!sibling) return
 
+  // Serialise the local port object to the same shape as stored portLabels
   const newPortLabel = {
     label:     oldPort.label,
     portType:  oldPort.portType,
@@ -612,8 +661,10 @@ function rehomeForeignHandle(oldPort, partnerPortLabel, edgeId, side) {
     couplings: [...(sibling.data?.couplings || []), newCoupling],
   }
 
+  // Mark the rehomed port as taken in portUsage so it shows yellow
   portUsage.set(oldPort._uid, { edgeId, portLabel: newPortLabel })
 }
+
 // Attempts to connect srcUid -> tgtUid. Returns the updated couplings array if
 // successful, or the original array unchanged if the connection is invalid or
 // already exists.
@@ -628,7 +679,7 @@ function connectPorts(srcUid, tgtUid, couplings) {
   return [...couplings, { srcUid, tgtUid }]
 }
 
-function onEdgeUpdate({ edge, connection }) {
+async function onEdgeUpdate({ edge, connection }) {
   if (!connection?.source || !connection?.target) return
   if (!isValidConnection(connection)) return
 
@@ -658,8 +709,10 @@ function onEdgeUpdate({ edge, connection }) {
     return
   }
 
-  nextCouplings = swapConnections(tp, oldTgtUid, newTgtUid, 'target', nextCouplings) 
-  nextCouplings = swapConnections(sp, oldSrcUid, newSrcUid, 'source', nextCouplings) 
+  nextCouplings = await swapConnections(tp, oldTgtUid, newTgtUid, 'target', nextCouplings)
+  if (nextCouplings === null) return // user cancelled
+  nextCouplings = await swapConnections(sp, oldSrcUid, newSrcUid, 'source', nextCouplings)
+  if (nextCouplings === null) return // user cancelled
 
   nextCouplings = connectPorts(newSrcUid, newTgtUid, nextCouplings)
   localCouplings.value = nextCouplings
