@@ -1697,8 +1697,8 @@ function rebuildNodeEdgeIndex() {
     if (!map.has(edge.source)) map.set(edge.source, new Set())
     if (!map.has(edge.target)) map.set(edge.target, new Set())
 
-    map.get(edge.source).add(edge)
-    map.get(edge.target).add(edge)
+    map.get(edge.source).add(edge.id)
+    map.get(edge.target).add(edge.id)
   }
 
   nodeEdgeIndex.value = map
@@ -1710,30 +1710,34 @@ function indexAddEdge(edge) {
   if (!index.has(edge.source)) index.set(edge.source, new Set())
   if (!index.has(edge.target)) index.set(edge.target, new Set())
 
-  index.get(edge.source).add(edge)
-  index.get(edge.target).add(edge)
+  index.get(edge.source).add(edge.id)
+  index.get(edge.target).add(edge.id)
 }
 
-function indexRemoveEdge(edge) {
+function indexRemoveEdge(change) {
+  const edge = findEdge(change.id)
+  const source = edge?.source ?? change.source
+  const target = edge?.target ?? change.target
   const index = nodeEdgeIndex.value
 
-  index.get(edge.source)?.delete(edge)
-  index.get(edge.target)?.delete(edge)
+  index.get(source)?.delete(change.id)
+  index.get(target)?.delete(change.id)
 
-  if (index.get(edge.source)?.size === 0) index.delete(edge.source)
-  if (index.get(edge.target)?.size === 0) index.delete(edge.target)
+  if (index.get(source)?.size === 0) index.delete(source)
+  if (index.get(target)?.size === 0) index.delete(target)
 }
 
-// Extract subgraph (1 degree of separation from the active edge)
+// Extract subgraph (1 degree of separation from the active edge).
 function buildEdgeSubgraph(activeEdge) {
-  const adjacentEdges = new Set([
+  const adjacentIds = new Set([
     ...(nodeEdgeIndex.value.get(activeEdge.source) || []),
     ...(nodeEdgeIndex.value.get(activeEdge.target) || [])
   ])
 
   const edgeSubgraph = new Map()
-  for (const edge of adjacentEdges) {
-    edgeSubgraph.set(edge.id, detachReactivity(edge)) 
+  for (const edgeId of adjacentIds) {
+    const edge = findEdge(edgeId)
+    if (edge) edgeSubgraph.set(edgeId, detachReactivity(edge))
   }
   return edgeSubgraph
 }
@@ -1744,10 +1748,13 @@ function onEdgeDoubleClick({ edge }) {
 
   if (!sourceNode || !targetNode) return
 
+  // Pass deep-cloned snapshots so the dialog has a stable, non-reactive view
+  // of the node data. Live refs mutated by updateNodeData during confirm would
+  // otherwise change the dialog's bound props mid-flight.
   edgeDialogSubgraph.value = buildEdgeSubgraph(edge)
-  edgeDialogSourceNode.value = sourceNode
-  edgeDialogTargetNode.value = targetNode
-  edgeDialogActiveEdge.value = edge
+  edgeDialogSourceNode.value = detachReactivity(sourceNode)
+  edgeDialogTargetNode.value = detachReactivity(targetNode)
+  edgeDialogActiveEdge.value = detachReactivity(edge)
   edgeConnectionDialogVisible.value = true
 }
 
@@ -1762,10 +1769,9 @@ function onEdgeConnectionConfirm({ sourceNodeId, targetNodeId, sourcePortLabels,
     activeEdge.data = { ...activeEdge.data, couplings }
   }
 
-  // Apply any coupling changes to other edges that were displaced by swaps.
-  // The dialog tracks these explicitly in foreignCouplings so we write them
-  // directly rather than recomputing — recomputing would re-derive from
-  // portLabel slot order and ignore the user's manual swap intent.
+  // Apply any coupling changes to sibling edges that were displaced by the user
+  // swapping a "taken elsewhere" port. The dialog tracks these explicitly in
+  // foreignCouplings so we write them directly.
   if (foreignCouplings) {
     for (const [edgeId, updatedCouplings] of Object.entries(foreignCouplings)) {
       const edge = findEdge(edgeId)
@@ -1773,38 +1779,6 @@ function onEdgeConnectionConfirm({ sourceNodeId, targetNodeId, sourcePortLabels,
         edge.data = { ...edge.data, couplings: updatedCouplings }
       }
     }
-  }
-
-  // For any remaining connected edges whose portLabels changed (due to edits
-  // in the dialog, not swaps), recompute their couplings via resolvePortCouplings.
-  // Skip edges already handled above via foreignCouplings.
-  const handledEdgeIds = new Set(Object.keys(foreignCouplings || {}))
-  handledEdgeIds.add(edgeDialogActiveEdge.value?.id)
-  const changedNodeIds = new Set([sourceNodeId, targetNodeId])
-
-  for (const changedNodeId of changedNodeIds) {
-    const updatedPortLabels = changedNodeId === sourceNodeId ? sourcePortLabels : targetPortLabels
-
-    edges.value
-      .filter((e) => !handledEdgeIds.has(e.id) && (e.source === changedNodeId || e.target === changedNodeId))
-      .forEach((e) => {
-        const isSrc = e.source === changedNodeId
-        const otherNode = findNode(isSrc ? e.target : e.source)
-        if (!otherNode) return
-
-        const srcIdx = edges.value.filter((x) => x.source === e.source && x !== e).length
-        const tgtIdx = edges.value.filter((x) => x.target === e.target && x !== e).length
-
-        e.data = {
-          ...e.data,
-          couplings: resolvePortCouplings(
-            isSrc ? updatedPortLabels : otherNode.data.portLabels ?? [],
-            isSrc ? otherNode.data.portLabels ?? [] : updatedPortLabels,
-            srcIdx,
-            tgtIdx
-          ),
-        }
-      })
   }
 }
 
@@ -2071,6 +2045,9 @@ function handleLoadWorkspace(file) {
       fromObject(loadedState.flow)
       // nodes.value = loadedState.flow.nodes
       // edges.value = loadedState.flow.edges
+
+      // Rebuild the edge index so the EdgeConnectionDialog subgraph is correct.
+      rebuildNodeEdgeIndex()
 
       // Restore Pinia store state.
       builderStore.loadState(loadedState.store)
