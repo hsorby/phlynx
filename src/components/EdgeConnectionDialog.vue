@@ -441,46 +441,38 @@ function syncPortWorkspace() {
 }
 
 function buildFlowNodes() {
-  const srcConnected  = connectedSrcUids()
-  const tgtConnected  = connectedTgtUids()
-
-  const srcNodes = localSrcPorts.value.map((p, i) => ({
-    id:       `src-${p._uid}`,
-    type:     'sourcePort',
-    position: { x: 0, y: PAD + i * ROW_H },
-    data: {
-      port:             p,
-      isConnected:      srcConnected.has(p._uid),
-      isTakenElsewhere: takenElsewhereUids.value.has(p._uid),
-    },
-  }))
-
-  const tgtNodes = localTgtPorts.value.map((p, i) => ({
-    id:       `tgt-${p._uid}`,
-    type:     'targetPort',
-    position: { x: NODE_W + MID_GAP, y: PAD + i * ROW_H },
-    data: {
-      port:             p,
-      isConnected:      tgtConnected.has(p._uid),
-      isTakenElsewhere: takenElsewhereUids.value.has(p._uid),
-    },
-  }))
+  const srcNodes = buildPortNodes(localSrcPorts.value, connectedSrcUids(), 'source')
+  const tgtNodes = buildPortNodes(localTgtPorts.value, connectedTgtUids(), 'target')
 
   flowNodes.value = [...srcNodes, ...tgtNodes]
 
-  flowNodes.value.push({
-    id: 'ghost-src',
-    type: 'ghostPort',
-    position: { x: 0, y: PAD + localSrcPorts.value.length * ROW_H },
-    data: { side: 'source' }
+  ;['source', 'target'].forEach(side => {
+    const prefix = side === 'source' ? 'src' : 'tgt'
+    const ports  = side === 'source' ? localSrcPorts.value : localTgtPorts.value
+    const x      = side === 'source' ? 0 : NODE_W + MID_GAP
+    flowNodes.value.push({
+      id:       `ghost-${prefix}`,
+      type:     'ghostPort',
+      position: { x, y: PAD + ports.length * ROW_H },
+      data:     { side },
+    })
   })
+}
 
-  flowNodes.value.push({
-    id: 'ghost-tgt',
-    type: 'ghostPort',
-    position: { x: NODE_W + MID_GAP, y: PAD + localTgtPorts.value.length * ROW_H },
-    data: { side: 'target' }
-  })
+function buildPortNodes(ports, connectedUids, side) {
+  const prefix = side === 'source' ? 'src' : 'tgt'
+  const type   = side === 'source' ? 'sourcePort' : 'targetPort'
+  const x      = side === 'source' ? 0 : NODE_W + MID_GAP
+  return ports.map((p, i) => ({
+    id:       `${prefix}-${p._uid}`,
+    type,
+    position: { x, y: PAD + i * ROW_H },
+    data: {
+      port:             p,
+      isConnected:      connectedUids.has(p._uid),
+      isTakenElsewhere: takenElsewhereUids.value.has(p._uid),
+    },
+  }))
 }
 
 function buildFlowEdges() {
