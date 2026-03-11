@@ -327,8 +327,9 @@ function resetLocal() {
     return src && tgt ? [{ srcUid: src._uid, tgtUid: tgt._uid }] : []
   })
 
-  rebuildPortUsage()
-  
+  rebuildPortUsage()           // seeds portUsage + takenElsewhereUids
+  enforceCouplingConstraints() // prune any invalid/duplicate couplings on open
+  applyChanges()               // persist cleaned state immediately
   rebuildNodes()
   refreshEdges()
 }
@@ -503,7 +504,6 @@ function isValidConnection(connection) {
   const sp = srcByUid(sUid)
   const tp = tgtByUid(tUid)
   if (!sp || !tp || !sp.label || !tp.label) return false
-  
   return sp.label === tp.label && isCompatible(sp.portType, tp.portType)
 }
 
@@ -538,10 +538,16 @@ function onConnect(params) {
 
   if (localCouplings.value.some(c => c.srcUid === srcUid && c.tgtUid === tgtUid)) return
 
+  const sp = srcByUid(srcUid)
+  const tp = tgtByUid(tgtUid)
+
+  if (isSingleConnection(sp) && localCouplings.value.some(c => c.srcUid === srcUid)) return
+  if (isSingleConnection(tp) && localCouplings.value.some(c => c.tgtUid === tgtUid)) return
+
   let nextCouplings = [...localCouplings.value]
 
-  nextCouplings = releasePortHandles(tgtByUid(tgtUid), tgtUid, 'target', nextCouplings)
-  nextCouplings = releasePortHandles(srcByUid(srcUid), srcUid, 'source', nextCouplings)
+  nextCouplings = releasePortHandles(tp, tgtUid, 'target', nextCouplings)
+  nextCouplings = releasePortHandles(sp, srcUid, 'source', nextCouplings)
   localCouplings.value = connectPorts(srcUid, tgtUid, nextCouplings)
 
   calcTakenElsewhere()
@@ -568,15 +574,13 @@ function swapConnections(port, oldUid, newUid, side, couplings) {
     if (isSingleConnection(port) && takenElsewhereUids.value.has(newUid)) {
       const result = releaseForeignHandle(port, side)
       calcTakenElsewhere()
-      if (result?.partnerUid) {
-        const { partnerUid, partnerPortLabel, edgeId } = result
-        // Rehome the old port into the sibling edge in place of the freed slot
-        const oldPort = side === 'target' ? srcByUid(oldUid) : tgtByUid(oldUid)
+      if (result) {
+        const { partnerPortLabel, edgeId } = result
+        // Rehome the old slot's port into the sibling edge — onEdgeUpdate's final
+        // connectPorts handles installing the new local connection.
+        const oldPort = side === 'target' ? tgtByUid(oldUid) : srcByUid(oldUid)
         if (oldPort) rehomeForeignHandle(oldPort, partnerPortLabel, edgeId, side)
         calcTakenElsewhere()
-        const swapSrcUid = side === 'target' ? partnerUid : oldUid
-        const swapTgtUid = side === 'target' ? oldUid : partnerUid
-        return connectPorts(swapSrcUid, swapTgtUid, couplings)
       }
     }
     return couplings
@@ -588,23 +592,28 @@ function swapConnections(port, oldUid, newUid, side, couplings) {
   return connectPorts(swapSrcUid, swapTgtUid, next)
 }
 
-function rehomeForeignHandle(newPortLabel, partnerPortLabel, edgeId, side) {
+function rehomeForeignHandle(oldPort, partnerPortLabel, edgeId, side) {
   const sibling = localSubgraph.value.get(edgeId)
   if (!sibling) return
+
+  const newPortLabel = {
+    label:     oldPort.label,
+    portType:  oldPort.portType,
+    option:    oldPort.option,
+    multiport: oldPort.multiport,
+  }
+
   const newCoupling = side === 'source'
     ? { sourcePortLabel: newPortLabel, targetPortLabel: partnerPortLabel }
     : { sourcePortLabel: partnerPortLabel, targetPortLabel: newPortLabel }
+
   sibling.data = {
     ...sibling.data,
     couplings: [...(sibling.data?.couplings || []), newCoupling],
   }
-  // Mark the new port as taken in portUsage
-  const newPort = side === 'source'
-    ? localSrcPorts.value.find(p => p.label === newPortLabel.label && p.portType === newPortLabel.portType)
-    : localTgtPorts.value.find(p => p.label === newPortLabel.label && p.portType === newPortLabel.portType)
-  if (newPort) portUsage.set(newPort._uid, { edgeId, portLabel: newPortLabel })
-}
 
+  portUsage.set(oldPort._uid, { edgeId, portLabel: newPortLabel })
+}
 // Attempts to connect srcUid -> tgtUid. Returns the updated couplings array if
 // successful, or the original array unchanged if the connection is invalid or
 // already exists.
@@ -616,7 +625,6 @@ function connectPorts(srcUid, tgtUid, couplings) {
   if (sp.label !== tp.label) return couplings
   if (!isCompatible(sp.portType, tp.portType)) return couplings
   if (couplings.some(c => c.srcUid === srcUid && c.tgtUid === tgtUid)) return couplings
-  console.log(srcUid, tgtUid)
   return [...couplings, { srcUid, tgtUid }]
 }
 
