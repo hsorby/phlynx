@@ -299,8 +299,7 @@
     :source-node="edgeDialogSourceNode"
     :target-node="edgeDialogTargetNode"
     :active-edge="edgeDialogActiveEdge"
-    :all-edges="edges"
-    :all-nodes="nodes"
+    :subgraph="edgeDialogSubgraph"
     @confirm="onEdgeConnectionConfirm"
   />
 </template>
@@ -329,7 +328,6 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
-import UnitsIcon from '../components/icons/UnitsIcon.vue'
 
 import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -536,6 +534,7 @@ const loadCellMLFiles = async (entries) => {
       // loadCellMLData is kept silent here since loadFromCellML provides its own feedback.
       const result = await loadCellMLData(content, entry.name, { notify: false })
       await loadFromCellML(content, entry.name)
+      rebuildNodeEdgeIndex()
       return [result]
     }
     // No connections — fall through to the standard module-registration path
@@ -649,6 +648,7 @@ const edgeConnectionDialogVisible = ref(false)
 const edgeDialogSourceNode = ref(null)
 const edgeDialogTargetNode = ref(null)
 const edgeDialogActiveEdge = ref(null)
+const edgeDialogSubgraph = ref(null)
 const currentEditingNode = ref({
   nodeId: '',
   instanceId: '',
@@ -1125,8 +1125,10 @@ const onEdgeChange = (changes) => {
   const selectChanges = []
   changes.forEach((c) => {
     if (c.type === 'remove') {
+      indexRemoveEdge(c.item)
       removeChanges.push({ edge: snapshotEdge(c) })
     } else if (c.type === 'add') {
+      indexAddEdge(c.item)
       addChanges.push({ edge: snapshotEdge(c) })
     } else if (c.type === 'select' && undoRedoSelection) {
       const edge = findEdge(c.id)
@@ -1364,6 +1366,7 @@ async function onImportConfirm(importPayload, updateProgress) {
           updateProgress(`${statusMessage || 'Loading vessel array...'} (${current}/${total})`)
         }
       })
+      rebuildNodeEdgeIndex()
 
       notify.success({
         title: 'Import Complete',
@@ -1494,8 +1497,7 @@ async function handleCellMLSave(saveData) {
   // Safety check: If we can't find the original, create a blank config
   let configToMigrate = {}
   if (originalModule && originalModule.configs && originalModule.configs[originalConfigIndex]) {
-    // Deep copy to break reactivity
-    configToMigrate = JSON.parse(JSON.stringify(originalModule.configs[originalConfigIndex]))
+    configToMigrate = detachReactivity(originalModule.configs[originalConfigIndex])
   }
 
   // Load the New Data into the Store
@@ -1595,7 +1597,7 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
     }))
 
     const newData = {
-      ...JSON.parse(JSON.stringify(node.data)),
+      ...detachReactivity(node.data),
       componentName: updatedData.componentName,
       sourceFile: updatedData.sourceFile,
       label: `${updatedData.componentName} — ${updatedData.sourceFile}`,
@@ -1617,6 +1619,7 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
 
   return validPortNames
 }
+
 function onOpenMacroBuilderDialog() {
   macroBuilderDialogVisible.value = true
 }
@@ -1630,15 +1633,7 @@ async function onEditConfirm(updatedData) {
 
   updateNodeData(nodeId, updatedData)
 
-  // Recompute couplings on every edge connected to this node, since the node's
-  // portLabels may have changed (label renamed, portType changed, multiport
-  // toggled, entry added or removed).
-  //
-  // We re-derive ordinal indices the same way onConnect does: by counting how
-  // many edges already leave/arrive at each endpoint, iterating in edge order.
-  //
-  // We process outgoing and incoming edges separately so each group gets its
-  // own independent ordinal sequence.
+  // Recompute couplings on every edge connected to this node
   const updatedPortLabels = updatedData.portLabels ?? []
 
   const outgoing = edges.value.filter((e) => e.source === nodeId)
@@ -1693,10 +1688,68 @@ function handleMacroGeneration(macroPayload) {
   processMacroGeneration(macroPayload, { x: centerX, y: centerY })
 }
 
+const nodeEdgeIndex = ref(new Map())
+
+function rebuildNodeEdgeIndex() {
+  const map = new Map()
+
+  for (const edge of edges.value) {
+    if (!map.has(edge.source)) map.set(edge.source, new Set())
+    if (!map.has(edge.target)) map.set(edge.target, new Set())
+
+    map.get(edge.source).add(edge)
+    map.get(edge.target).add(edge)
+  }
+
+  nodeEdgeIndex.value = map
+}
+
+function indexAddEdge(edge) {
+  const index = nodeEdgeIndex.value
+
+  if (!index.has(edge.source)) index.set(edge.source, new Set())
+  if (!index.has(edge.target)) index.set(edge.target, new Set())
+
+  index.get(edge.source).add(edge)
+  index.get(edge.target).add(edge)
+}
+
+function indexRemoveEdge(edge) {
+  const index = nodeEdgeIndex.value
+
+  index.get(edge.source)?.delete(edge)
+  index.get(edge.target)?.delete(edge)
+
+  if (index.get(edge.source)?.size === 0) index.delete(edge.source)
+  if (index.get(edge.target)?.size === 0) index.delete(edge.target)
+}
+
+function indexUpdateEdge(oldEdge, newEdge) {
+  indexRemoveEdge(oldEdge)
+  indexAddEdge(newEdge)
+}
+
+// Extract subgraph (1 degree of separation from the active edge)
+function buildEdgeSubgraph(activeEdge) {
+  const adjacentEdges = new Set([
+    ...(nodeEdgeIndex.value.get(activeEdge.source) || []),
+    ...(nodeEdgeIndex.value.get(activeEdge.target) || [])
+  ])
+
+  const edgeSubgraph = new Map()
+  for (const edge of adjacentEdges) {
+    edgeSubgraph.set(edge.id, detachReactivity(edge)) 
+  }
+  return edgeSubgraph
+}
+
 function onEdgeDoubleClick({ edge }) {
   const sourceNode = findNode(edge.source)
   const targetNode = findNode(edge.target)
+
   if (!sourceNode || !targetNode) return
+
+  edgeDialogSubgraph.value = buildEdgeSubgraph(edge)
   edgeDialogSourceNode.value = sourceNode
   edgeDialogTargetNode.value = targetNode
   edgeDialogActiveEdge.value = edge
@@ -2095,8 +2148,8 @@ const copySelection = () => {
 
   // Create a deep copy to avoid reference issues
   clipboard.value = {
-    nodes: JSON.parse(JSON.stringify(nodes)),
-    edges: JSON.parse(JSON.stringify(edges)),
+    nodes: detachReactivity(nodes),
+    edges: detachReactivity(edges),
   }
 }
 

@@ -193,11 +193,11 @@ const props = defineProps({
   sourceNode:  Object,
   targetNode:  Object,
   activeEdge:  Object,       
-  allEdges:    { type: Array, default: () => [] },
-  allNodes:    { type: Array, default: () => [] },
+  subgraph: Map,
 })
 
 const emit = defineEmits(['update:modelValue', 'confirm'])
+const portUsage = new Map() // Map<portUid, {edgeId, couplingIndex}>
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -252,12 +252,10 @@ const flowEdges  = ref([])
 // UIDs consumed by other edges
 const takenElsewhereUids = ref(new Set())
 
-// Tracks the current coupling state of other edges that share our source/target
-// node. Keyed by edge ID. When the user swaps a connection, the displaced port
-// slot must be released from the foreign edge that previously owned it — we
-// store the updated coupling here so handleConfirm can propagate it to BuilderView.
-// Initialised from props.allEdges on resetLocal; mutated by swap operations.
-const foreignEdgeCouplings = ref(new Map()) // Map<edgeId, Array<{sourcePortLabel, targetPortLabel}>>
+// Mutable local copy of the subgraph (Map<edgeId, clonedEdge>).
+// releaseForeignSlot writes into this; applyChanges diffs it against
+// props.subgraph to compute foreignCouplings for the confirm emit.
+const localSubgraph = ref(new Map())
 
 // ─── Derived helpers ──────────────────────────────────────────────────────────
 
@@ -302,9 +300,19 @@ function resetLocal() {
     JSON.parse(JSON.stringify(props.targetNode?.data?.portLabels || []))
   )
 
-  // Convert edge.data.couplings -> { srcUid, tgtUid } pairs by matching on
-  // option array identity (the unique fingerprint per slot).
-  const rawCouplings = props.activeEdge?.data?.couplings || []
+  // Seed a mutable local copy of the subgraph so releaseForeignSlot can mutate
+  // sibling edges without touching the prop, and applyChanges can diff later.
+  localSubgraph.value = new Map(
+    [...(props.subgraph || [])].map(([edgeId, edge]) => [
+      edgeId,
+      JSON.parse(JSON.stringify(edge)),
+    ])
+  )
+
+  // Resolve the active edge's couplings (portLabel pairs) into local uid pairs
+  // by matching against the just-stamped localSrcPorts / localTgtPorts.
+  const activeEdgeSnapshot = localSubgraph.value.get(props.activeEdge?.id)
+  const rawCouplings = activeEdgeSnapshot?.data?.couplings || []
   localCouplings.value = rawCouplings.flatMap(({ sourcePortLabel, targetPortLabel }) => {
     const src = localSrcPorts.value.find(p =>
       p.label === sourcePortLabel.label &&
@@ -319,57 +327,85 @@ function resetLocal() {
     return src && tgt ? [{ srcUid: src._uid, tgtUid: tgt._uid }] : []
   })
 
-  // Snapshot the current coupling state of all OTHER edges that touch our
-  // source or target node. These may be mutated by swaps during the session.
-  const map = new Map()
-  for (const edge of props.allEdges) {
-    if (edge.id === props.activeEdge?.id) continue
-    if (
-      edge.source === props.sourceNode.id ||
-      edge.target === props.sourceNode.id ||
-      edge.source === props.targetNode.id ||
-      edge.target === props.targetNode.id
-    ) {
-      map.set(edge.id, JSON.parse(JSON.stringify(edge.data?.couplings || [])))
-    }
-  }
-  foreignEdgeCouplings.value = map
-
-  calcTakenElsewhere()
+  rebuildPortUsage()
+  
   rebuildNodes()
   refreshEdges()
 }
 
-// ─── Globally-taken calculation ───────────────────────────────────────────────
-// Scans all other edges' couplings to find which port label slots are consumed.
+// ─── Port-usage tracking ──────────────────────────────────────────────────────
+// portUsage: Map<portUid, { edgeId, portLabel }>
+// Covers every port slot claimed by a *sibling* edge (i.e. any edge in the
+// subgraph that touches the source or target node, excluding the active edge).
+// We store the matched portLabel so releaseForeignSlot can remove the exact
+// coupling entry without a second lookup.
 
-function calcTakenElsewhere() {
-  const taken = new Set()
-  for (const edge of props.allEdges) {
-    if (edge.id === props.activeEdge?.id) continue
+function rebuildPortUsage() {
+  portUsage.clear()
+
+  const activeEdgeId = props.activeEdge?.id
+
+  for (const [edgeId, edge] of localSubgraph.value) {
+    if (edgeId === activeEdgeId) continue // active edge is tracked via localCouplings
+
     for (const { sourcePortLabel, targetPortLabel } of (edge.data?.couplings || [])) {
-      // Check ACTIVE SOURCE node
-      if (edge.source === props.sourceNode.id && isSingleConnection(sourcePortLabel)) {
-        const match = localSrcPorts.value.find(p => p.label === sourcePortLabel.label && p.portType === sourcePortLabel.portType && JSON.stringify(p.option) === JSON.stringify(sourcePortLabel.option))
-        if (match) taken.add(match._uid)
-      }
-      if (edge.target === props.sourceNode.id && isSingleConnection(targetPortLabel)) {
-        const match = localSrcPorts.value.find(p => p.label === targetPortLabel.label && p.portType === targetPortLabel.portType && JSON.stringify(p.option) === JSON.stringify(targetPortLabel.option))
-        if (match) taken.add(match._uid)
+      // Only mark ports that belong to *our* source or target node.
+      // The subgraph can contain edges between other node pairs.
+      if (edge.source === props.sourceNode.id) {
+        const sp = localSrcPorts.value.find(p =>
+          p.label    === sourcePortLabel?.label &&
+          p.portType === sourcePortLabel?.portType &&
+          JSON.stringify(p.option) === JSON.stringify(sourcePortLabel?.option)
+        )
+        if (sp) portUsage.set(sp._uid, { edgeId, portLabel: sourcePortLabel })
       }
 
-      // Check ACTIVE TARGET node
-      if (edge.source === props.targetNode.id && isSingleConnection(sourcePortLabel)) {
-        const match = localTgtPorts.value.find(p => p.label === sourcePortLabel.label && p.portType === sourcePortLabel.portType && JSON.stringify(p.option) === JSON.stringify(sourcePortLabel.option))
-        if (match) taken.add(match._uid)
-      }
-      if (edge.target === props.targetNode.id && isSingleConnection(targetPortLabel)) {
-        const match = localTgtPorts.value.find(p => p.label === targetPortLabel.label && p.portType === targetPortLabel.portType && JSON.stringify(p.option) === JSON.stringify(targetPortLabel.option))
-        if (match) taken.add(match._uid)
+      if (edge.target === props.targetNode.id) {
+        const tp = localTgtPorts.value.find(p =>
+          p.label    === targetPortLabel?.label &&
+          p.portType === targetPortLabel?.portType &&
+          JSON.stringify(p.option) === JSON.stringify(targetPortLabel?.option)
+        )
+        if (tp) portUsage.set(tp._uid, { edgeId, portLabel: targetPortLabel })
       }
     }
   }
-  takenElsewhereUids.value = taken
+
+  calcTakenElsewhere()
+}
+
+// Derive the takenElsewhereUids set directly from portUsage.
+function calcTakenElsewhere() {
+  takenElsewhereUids.value = new Set(portUsage.keys())
+}
+
+// Remove the coupling that claims `port` from its sibling edge in localSubgraph,
+// freeing the slot for the active edge to take over.
+// Returns { edgeId, updatedCouplings } so the caller can pass it to applyChanges.
+function releaseForeignSlot(port, side) {
+  const usage = portUsage.get(port._uid)
+  if (!usage) return null
+
+  const { edgeId, portLabel } = usage
+  const sibling = localSubgraph.value.get(edgeId)
+  if (!sibling) return null
+
+  const before = sibling.data?.couplings || []
+  sibling.data = {
+    ...sibling.data,
+    couplings: before.filter(c => {
+      const labelToCheck = side === 'source' ? c.sourcePortLabel : c.targetPortLabel
+      return !(
+        labelToCheck?.label    === portLabel.label &&
+        labelToCheck?.portType === portLabel.portType &&
+        JSON.stringify(labelToCheck?.option) === JSON.stringify(portLabel.option)
+      )
+    }),
+  }
+
+  portUsage.delete(port._uid)
+
+  return { edgeId, updatedCouplings: sibling.data.couplings }
 }
 
 // ─── VueFlow node / edge builders ─────────────────────────────────────────────
@@ -457,44 +493,6 @@ function refreshEdges() {
   }
 }
 
-// ─── Foreign edge coupling updates ───────────────────────────────────────────
-
-// When a swap displaces a coupling that belongs to a foreign edge, release the slot.
-// This mutates foreignEdgeCouplings so handleConfirm can propagate the change.
-// When a swap displaces a coupling that belongs to a foreign edge (one we don't
-// own), we must update that edge's coupling record so the slot is released.
-function releaseForeignSlot(portLabel, side) {
-  if (!portLabel) return null
-  const targetNodeId = side === 'source' ? props.sourceNode.id : props.targetNode.id
-
-  for (const [edgeId, couplings] of foreignEdgeCouplings.value) {
-    const edge = props.allEdges.find(e => e.id === edgeId)
-    if (!edge) continue
-
-    const idx = couplings.findIndex(c => {
-      const matchSource = edge.source === targetNodeId && 
-                          c.sourcePortLabel.label === portLabel.label && 
-                          c.sourcePortLabel.portType === portLabel.portType && 
-                          JSON.stringify(c.sourcePortLabel.option) === JSON.stringify(portLabel.option)
-                          
-      const matchTarget = edge.target === targetNodeId && 
-                          c.targetPortLabel.label === portLabel.label && 
-                          c.targetPortLabel.portType === portLabel.portType && 
-                          JSON.stringify(c.targetPortLabel.option) === JSON.stringify(portLabel.option)
-                          
-      return matchSource || matchTarget
-    })
-    
-    if (idx !== -1) {
-      const updated = [...couplings]
-      const removedCoupling = updated.splice(idx, 1)[0]
-      foreignEdgeCouplings.value.set(edgeId, updated)
-      return { edgeId, removedCoupling, side } // Return the exact details of the evicted port
-    }
-  }
-  return null
-}
-
 // ─── Connection validation ────────────────────────────────────────────────────
 
 function isValidConnection(connection) {
@@ -579,9 +577,6 @@ function onConnect(params) {
   if (impactedSrcUid) autoConnectTargeted(impactedSrcUid, 'source')
   if (impactedTgtUid) autoConnectTargeted(impactedTgtUid, 'target')
 
-  for (const foreign of impactedForeign) {
-    autoConnectForeign(foreign)
-  }
 
   calcTakenElsewhere()
 
@@ -730,54 +725,6 @@ function autoConnectTargeted(uid, type) {
   }
 }
 
-function autoConnectForeign({ edgeId, removedCoupling, side }) {
-  if (side === 'target') {
-    const oldTargetLabel = removedCoupling.targetPortLabel
-    const match = localTgtPorts.value.find(tp => {
-      if (tp.label !== oldTargetLabel.label || tp.portType !== oldTargetLabel.portType) return false
-      const isTakenLocally = localCouplings.value.some(c => c.tgtUid === tp._uid)
-      const isTakenForeignly = takenElsewhereUids.value.has(tp._uid)
-      return isSingleConnection(tp) ? (!isTakenLocally && !isTakenForeignly) : true
-    })
-
-    if (match) {
-      const currentCouplings = foreignEdgeCouplings.value.get(edgeId) || []
-      foreignEdgeCouplings.value.set(edgeId, [...currentCouplings, {
-        sourcePortLabel: removedCoupling.sourcePortLabel,
-        targetPortLabel: {
-          portType: match.portType,
-          label: match.label,
-          option: JSON.parse(JSON.stringify(match.option)),
-          multiport: match.multiport
-        }
-      }])
-      calcTakenElsewhere() 
-    }
-  } else if (side === 'source') {
-    const oldSourceLabel = removedCoupling.sourcePortLabel
-    const match = localSrcPorts.value.find(sp => {
-      if (sp.label !== oldSourceLabel.label || sp.portType !== oldSourceLabel.portType) return false
-      const isTakenLocally = localCouplings.value.some(c => c.srcUid === sp._uid)
-      const isTakenForeignly = takenElsewhereUids.value.has(sp._uid)
-      return isSingleConnection(sp) ? (!isTakenLocally && !isTakenForeignly) : true
-    })
-
-    if (match) {
-      const currentCouplings = foreignEdgeCouplings.value.get(edgeId) || []
-      foreignEdgeCouplings.value.set(edgeId, [...currentCouplings, {
-        sourcePortLabel: {
-          portType: match.portType,
-          label: match.label,
-          option: JSON.parse(JSON.stringify(match.option)),
-          multiport: match.multiport
-        },
-        targetPortLabel: removedCoupling.targetPortLabel
-      }])
-      calcTakenElsewhere() 
-    }
-  }
-}
-
 function deletePort(uid, side) {
   if (side === 'source') {
     localSrcPorts.value = localSrcPorts.value.filter(p => p._uid !== uid)
@@ -825,6 +772,22 @@ function activateGhost(side, inferFrom = null) {
 // ─── Confirm / save ───────────────────────────────────────────────────────────
 
 function applyChanges() {
+  // Collect any sibling-edge coupling changes made by releaseForeignSlot,
+  // so BuilderView can write them back without recomputing from scratch.
+  const foreignCouplings = {}
+  const activeEdgeId = props.activeEdge?.id
+
+  for (const [edgeId, localEdge] of localSubgraph.value) {
+    if (edgeId === activeEdgeId) continue
+
+    const originalCouplings = props.subgraph?.get(edgeId)?.data?.couplings || []
+    const localCouplingsArr  = localEdge?.data?.couplings || []
+
+    if (JSON.stringify(originalCouplings) !== JSON.stringify(localCouplingsArr)) {
+      foreignCouplings[edgeId] = localCouplingsArr
+    }
+  }
+
   emit('confirm', {
     sourceNodeId: props.sourceNode.id,
     targetNodeId: props.targetNode.id,
@@ -838,6 +801,7 @@ function applyChanges() {
          targetPortLabel: { portType: tp.portType, label: tp.label, option: tp.option, multiport: tp.multiport }
        }
     }),
+    foreignCouplings,
   })
 }
 
