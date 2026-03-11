@@ -182,7 +182,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import { VueFlow, Position, Handle, useVueFlow } from '@vue-flow/core'
 
@@ -284,9 +284,9 @@ function handleClass(data) {
 // ─── Initialisation ───────────────────────────────────────────────────────────
 
 function stamp(nodeId, labels) {
-  return (labels || []).map((p, i) => ({
+  return (labels || []).map((p) => ({
     ...p,
-    _uid: p._uid || `${nodeId}_p${i}_${Date.now()}`,
+    _uid: p._uid || `${nodeId}_${crypto.randomUUID()}`,
   }))
 }
 
@@ -335,22 +335,18 @@ function resetLocal() {
 
 // ─── Port-usage tracking ──────────────────────────────────────────────────────
 // portUsage: Map<portUid, { edgeId, portLabel }>
-// Covers every port slot claimed by a *sibling* edge (i.e. any edge in the
+// Covers every port slot claimed by a sibling edge (i.e. any edge in the
 // subgraph that touches the source or target node, excluding the active edge).
-// We store the matched portLabel so releaseForeignSlot can remove the exact
-// coupling entry without a second lookup.
-
 function rebuildPortUsage() {
   portUsage.clear()
 
   const activeEdgeId = props.activeEdge?.id
 
   for (const [edgeId, edge] of localSubgraph.value) {
-    if (edgeId === activeEdgeId) continue // active edge is tracked via localCouplings
+    if (edgeId === activeEdgeId) continue
 
     for (const { sourcePortLabel, targetPortLabel } of (edge.data?.couplings || [])) {
-      // Only mark ports that belong to *our* source or target node.
-      // The subgraph can contain edges between other node pairs.
+      // Only mark the source-side port if this edge's source is our source node.
       if (edge.source === props.sourceNode.id) {
         const sp = localSrcPorts.value.find(p =>
           p.label    === sourcePortLabel?.label &&
@@ -360,6 +356,7 @@ function rebuildPortUsage() {
         if (sp) portUsage.set(sp._uid, { edgeId, portLabel: sourcePortLabel })
       }
 
+      // Only mark the target-side port if this edge's target is our target node.
       if (edge.target === props.targetNode.id) {
         const tp = localTgtPorts.value.find(p =>
           p.label    === targetPortLabel?.label &&
@@ -381,8 +378,7 @@ function calcTakenElsewhere() {
 
 // Remove the coupling that claims `port` from its sibling edge in localSubgraph,
 // freeing the slot for the active edge to take over.
-// Returns { edgeId, updatedCouplings } so the caller can pass it to applyChanges.
-function releaseForeignSlot(port, side) {
+function releaseForeignHandle(port, side) {
   const usage = portUsage.get(port._uid)
   if (!usage) return null
 
@@ -390,22 +386,26 @@ function releaseForeignSlot(port, side) {
   const sibling = localSubgraph.value.get(edgeId)
   if (!sibling) return null
 
-  const before = sibling.data?.couplings || []
+  // Find the full coupling so we can identify the partner port on the other side
+  const coupling = sibling.data?.couplings?.find(c => {
+    const labelToCheck = side === 'source' ? c.sourcePortLabel : c.targetPortLabel
+    return labelToCheck?.label === portLabel.label &&
+           labelToCheck?.portType === portLabel.portType &&
+           JSON.stringify(labelToCheck?.option) === JSON.stringify(portLabel.option)
+  })
+
+  const partnerPortLabel = side === 'source' ? coupling?.targetPortLabel : coupling?.sourcePortLabel
+  const partnerPort = side === 'source'
+    ? localTgtPorts.value.find(p => p.label === partnerPortLabel?.label && p.portType === partnerPortLabel?.portType)
+    : localSrcPorts.value.find(p => p.label === partnerPortLabel?.label && p.portType === partnerPortLabel?.portType)
+
   sibling.data = {
     ...sibling.data,
-    couplings: before.filter(c => {
-      const labelToCheck = side === 'source' ? c.sourcePortLabel : c.targetPortLabel
-      return !(
-        labelToCheck?.label    === portLabel.label &&
-        labelToCheck?.portType === portLabel.portType &&
-        JSON.stringify(labelToCheck?.option) === JSON.stringify(portLabel.option)
-      )
-    }),
+    couplings: sibling.data.couplings.filter(c => c !== coupling),
   }
-
   portUsage.delete(port._uid)
 
-  return { edgeId, updatedCouplings: sibling.data.couplings }
+  return { partnerUid: partnerPort?._uid ?? null, partnerPortLabel, edgeId }
 }
 
 // ─── VueFlow node / edge builders ─────────────────────────────────────────────
@@ -462,7 +462,7 @@ function refreshEdges() {
     if (!sp || !tp) continue
 
     const valid  = sp.label === tp.label && isCompatible(sp.portType, tp.portType)
-    // If EITHER side is a multiport, style it as a dynamic multiport line
+    // If either side is a multiport, style it as a dynamic multiport line
     const isMulti = !isSingleConnection(sp) || !isSingleConnection(tp)
 
     edges.push({
@@ -500,10 +500,8 @@ function isValidConnection(connection) {
   if (connection.source === 'ghost-src' || connection.target === 'ghost-tgt') return true
   const sUid = (connection.source || '').replace('src-', '')
   const tUid = (connection.target || '').replace('tgt-', '')
-  
   const sp = srcByUid(sUid)
   const tp = tgtByUid(tUid)
-  
   if (!sp || !tp || !sp.label || !tp.label) return false
   
   return sp.label === tp.label && isCompatible(sp.portType, tp.portType)
@@ -537,89 +535,131 @@ function onConnect(params) {
 
   const srcUid = (params.source || '').replace('src-', '')
   const tgtUid = (params.target || '').replace('tgt-', '')
-  const sp = srcByUid(srcUid)
-  const tp = tgtByUid(tgtUid)
 
   if (localCouplings.value.some(c => c.srcUid === srcUid && c.tgtUid === tgtUid)) return
 
   let nextCouplings = [...localCouplings.value]
-  let impactedSrcUid = null
-  let impactedTgtUid = null
-  let impactedForeign = []
 
-  if (isSingleConnection(tp)) {
-    const localConn = nextCouplings.find(c => c.tgtUid === tgtUid)
-    if (localConn) {
-      impactedSrcUid = localConn.srcUid
-      nextCouplings = nextCouplings.filter(c => c !== localConn)
-    } else if (takenElsewhereUids.value.has(tgtUid)) {
-      const evicted = releaseForeignSlot(tp, 'target')
-      if (evicted) impactedForeign.push(evicted)
-    }
-  }
-
-  if (isSingleConnection(sp)) {
-    const localConn = nextCouplings.find(c => c.srcUid === srcUid)
-    if (localConn) {
-      impactedTgtUid = localConn.tgtUid
-      nextCouplings = nextCouplings.filter(c => c !== localConn)
-    } else if (takenElsewhereUids.value.has(srcUid)) {
-      const evicted = releaseForeignSlot(sp, 'source')
-      if (evicted) impactedForeign.push(evicted)
-    }
-  }
-
-  nextCouplings.push({ srcUid, tgtUid })
-  localCouplings.value = nextCouplings
+  nextCouplings = releasePortHandles(tgtByUid(tgtUid), tgtUid, 'target', nextCouplings)
+  nextCouplings = releasePortHandles(srcByUid(srcUid), srcUid, 'source', nextCouplings)
+  localCouplings.value = connectPorts(srcUid, tgtUid, nextCouplings)
 
   calcTakenElsewhere()
-
-  if (impactedSrcUid) autoConnectTargeted(impactedSrcUid, 'source')
-  if (impactedTgtUid) autoConnectTargeted(impactedTgtUid, 'target')
-
-
-  calcTakenElsewhere()
-
   rebuildNodes()
   refreshEdges()
   applyChanges()
+}
+
+function releasePortHandles(port, nodeUid, side, newCouplings) {
+  if (isSingleConnection(port)) {
+    const localConn = newCouplings.find(c => (side === 'source' ? c.srcUid : c.tgtUid) === nodeUid)
+    if (localConn) {
+      newCouplings = newCouplings.filter(c => c !== localConn)
+    } else if (takenElsewhereUids.value.has(nodeUid)) {
+      releaseForeignHandle(port, side)
+    }
+  }
+  return newCouplings
+}
+
+function swapConnections(port, oldUid, newUid, side, couplings) {
+  const localConn = couplings.find(c => (side === 'source' ? c.srcUid : c.tgtUid) === newUid)
+  if (!localConn) {
+    if (isSingleConnection(port) && takenElsewhereUids.value.has(newUid)) {
+      const result = releaseForeignHandle(port, side)
+      calcTakenElsewhere()
+      if (result?.partnerUid) {
+        const { partnerUid, partnerPortLabel, edgeId } = result
+        // Rehome the old port into the sibling edge in place of the freed slot
+        const oldPort = side === 'target' ? srcByUid(oldUid) : tgtByUid(oldUid)
+        if (oldPort) rehomeForeignHandle(oldPort, partnerPortLabel, edgeId, side)
+        calcTakenElsewhere()
+        const swapSrcUid = side === 'target' ? partnerUid : oldUid
+        const swapTgtUid = side === 'target' ? oldUid : partnerUid
+        return connectPorts(swapSrcUid, swapTgtUid, couplings)
+      }
+    }
+    return couplings
+  }
+
+  const next = couplings.filter(c => c !== localConn)
+  const swapSrcUid = side === 'target' ? oldUid : localConn.srcUid
+  const swapTgtUid = side === 'target' ? localConn.tgtUid : oldUid
+  return connectPorts(swapSrcUid, swapTgtUid, next)
+}
+
+function rehomeForeignHandle(newPortLabel, partnerPortLabel, edgeId, side) {
+  const sibling = localSubgraph.value.get(edgeId)
+  if (!sibling) return
+  const newCoupling = side === 'source'
+    ? { sourcePortLabel: newPortLabel, targetPortLabel: partnerPortLabel }
+    : { sourcePortLabel: partnerPortLabel, targetPortLabel: newPortLabel }
+  sibling.data = {
+    ...sibling.data,
+    couplings: [...(sibling.data?.couplings || []), newCoupling],
+  }
+  // Mark the new port as taken in portUsage
+  const newPort = side === 'source'
+    ? localSrcPorts.value.find(p => p.label === newPortLabel.label && p.portType === newPortLabel.portType)
+    : localTgtPorts.value.find(p => p.label === newPortLabel.label && p.portType === newPortLabel.portType)
+  if (newPort) portUsage.set(newPort._uid, { edgeId, portLabel: newPortLabel })
+}
+
+// Attempts to connect srcUid -> tgtUid. Returns the updated couplings array if
+// successful, or the original array unchanged if the connection is invalid or
+// already exists.
+function connectPorts(srcUid, tgtUid, couplings) {
+  const sp = srcByUid(srcUid)
+  const tp = tgtByUid(tgtUid)
+  if (!sp || !tp) return couplings
+  if (!sp.label || !tp.label) return couplings
+  if (sp.label !== tp.label) return couplings
+  if (!isCompatible(sp.portType, tp.portType)) return couplings
+  if (couplings.some(c => c.srcUid === srcUid && c.tgtUid === tgtUid)) return couplings
+  console.log(srcUid, tgtUid)
+  return [...couplings, { srcUid, tgtUid }]
 }
 
 function onEdgeUpdate({ edge, connection }) {
   if (!connection?.source || !connection?.target) return
   if (!isValidConnection(connection)) return
 
-  updateEdge(edge, connection)
+  const newSrcUid = connection.source.replace('src-', '')
+  const newTgtUid = connection.target.replace('tgt-', '')
+  const oldSrcUid = edge.source.replace('src-', '')
+  const oldTgtUid = edge.target.replace('tgt-', '')
 
-  const newSrc = connection.source.replace('src-', '')
-  const newTgt = connection.target.replace('tgt-', '')
+  // Nothing changed
+  if (newSrcUid === oldSrcUid && newTgtUid === oldTgtUid) return
 
-  const oldSrc = edge.source.replace('src-', '')
-  const oldTgt = edge.target.replace('tgt-', '')
+  const sp = srcByUid(newSrcUid)
+  const tp = tgtByUid(newTgtUid)
+  if (!sp || !tp) return
 
-  const current = localCouplings.value.find(
-    c => c.srcUid === oldSrc && c.tgtUid === oldTgt
+  // Remove the coupling being dragged — its old slot is now vacant.
+  let nextCouplings = localCouplings.value.filter(
+    c => !(c.srcUid === oldSrcUid && c.tgtUid === oldTgtUid)
   )
 
-  if (!current) return
-
-  const existing = localCouplings.value.find(
-    c => c.srcUid === newSrc && c.tgtUid === newTgt
-  )
-
-  if (existing && existing !== current) {
-
-
-    existing.srcUid = current.srcUid
-    existing.tgtUid = current.tgtUid
-
-    current.srcUid = newSrc
-    current.tgtUid = newTgt
-  } else {
-    current.srcUid = newSrc
-    current.tgtUid = newTgt
+  // Deduplicate: dragged onto the same target it already had.
+  if (nextCouplings.some(c => c.srcUid === newSrcUid && c.tgtUid === newTgtUid)) {
+    localCouplings.value = nextCouplings
+    rebuildNodes()
+    refreshEdges()
+    applyChanges()
+    return
   }
 
+  nextCouplings = swapConnections(tp, oldTgtUid, newTgtUid, 'target', nextCouplings) 
+  nextCouplings = swapConnections(sp, oldSrcUid, newSrcUid, 'source', nextCouplings) 
+
+  nextCouplings = connectPorts(newSrcUid, newTgtUid, nextCouplings)
+  localCouplings.value = nextCouplings
+
+  // Tell VueFlow to update the rendered edge path
+  updateEdge(edge, connection)
+
+  calcTakenElsewhere()
   rebuildNodes()
   refreshEdges()
   applyChanges()
@@ -627,31 +667,36 @@ function onEdgeUpdate({ edge, connection }) {
 
 // ─── Port editing ─────────────────────────────────────────────────────────────
 
-function enforceSingleConnectionConstraints() {
-  // 1. Clean up Source Ports
+function enforceCouplingConstraints() {
+  // 1. Drop any couplings that are now type/label-incompatible (e.g. portType changed).
+  localCouplings.value = localCouplings.value.filter(c => {
+    const sp = srcByUid(c.srcUid)
+    const tp = tgtByUid(c.tgtUid)
+    return sp && tp && sp.label === tp.label && isCompatible(sp.portType, tp.portType)
+  })
+
+  // 2. Drop couplings that violate single-connection constraints.
   for (const sp of localSrcPorts.value) {
     if (isSingleConnection(sp)) {
       if (takenElsewhereUids.value.has(sp._uid)) {
         localCouplings.value = localCouplings.value.filter(c => c.srcUid !== sp._uid)
       } else {
-        const myCouplings = localCouplings.value.filter(c => c.srcUid === sp._uid)
-        if (myCouplings.length > 1) {
-          const keep = myCouplings[0]
+        const mine = localCouplings.value.filter(c => c.srcUid === sp._uid)
+        if (mine.length > 1) {
+          const keep = mine[0]
           localCouplings.value = localCouplings.value.filter(c => c.srcUid !== sp._uid || c === keep)
         }
       }
     }
   }
-
-  // 2. Clean up Target Ports
   for (const tp of localTgtPorts.value) {
     if (isSingleConnection(tp)) {
       if (takenElsewhereUids.value.has(tp._uid)) {
         localCouplings.value = localCouplings.value.filter(c => c.tgtUid !== tp._uid)
       } else {
-        const myCouplings = localCouplings.value.filter(c => c.tgtUid === tp._uid)
-        if (myCouplings.length > 1) {
-          const keep = myCouplings[0]
+        const mine = localCouplings.value.filter(c => c.tgtUid === tp._uid)
+        if (mine.length > 1) {
+          const keep = mine[0]
           localCouplings.value = localCouplings.value.filter(c => c.tgtUid !== tp._uid || c === keep)
         }
       }
@@ -660,15 +705,13 @@ function enforceSingleConnectionConstraints() {
 }
 
 function onPortConfigChange() {
-  enforceSingleConnectionConstraints() // Prune illegal connections if switched to 'None'
-  autoConnect()                        // Instantly build valid connections if switched to 'True'
+  enforceCouplingConstraints() // Prune incompatible/illegal connections after config change
+  autoConnect()                // Re-connect newly compatible ports
   rebuildNodes()
   refreshEdges()
   applyChanges()
 }
 
-// Auto-match: for each unconnected source port, find compatible unconnected target ports.
-// to do: apply this on opening the dialog
 function autoConnect() {
   for (const sp of localSrcPorts.value) {
     if (!sp.label || !sp.label.trim()) continue
@@ -687,40 +730,9 @@ function autoConnect() {
       return true
     })
 
-    // Plug them in!
     for (const tp of compatibleTargets) {
       localCouplings.value.push({ srcUid: sp._uid, tgtUid: tp._uid })
       if (isSingleConnection(sp)) break // Move to the next source port
-    }
-  }
-}
-
-function autoConnectTargeted(uid, type) {
-  if (type === 'source') {
-    const sp = srcByUid(uid)
-    if (!sp || !sp.label) return
-    
-    const match = localTgtPorts.value.find(tp => {
-      if (tp.label !== sp.label || !isCompatible(sp.portType, tp.portType)) return false
-      const isTaken = localCouplings.value.some(c => c.tgtUid === tp._uid) || takenElsewhereUids.value.has(tp._uid)
-      return isSingleConnection(tp) ? !isTaken : true
-    })
-    
-    if (match) {
-      localCouplings.value = [...localCouplings.value, { srcUid: uid, tgtUid: match._uid }]
-    }
-  } else if (type === 'target') {
-    const tp = tgtByUid(uid)
-    if (!tp || !tp.label) return
-    
-    const match = localSrcPorts.value.find(sp => {
-      if (sp.label !== tp.label || !isCompatible(sp.portType, tp.portType)) return false
-      const isTaken = localCouplings.value.some(c => c.srcUid === sp._uid) || takenElsewhereUids.value.has(sp._uid)
-      return isSingleConnection(sp) ? !isTaken : true
-    })
-    
-    if (match) {
-      localCouplings.value = [...localCouplings.value, { srcUid: match._uid, tgtUid: uid }]
     }
   }
 }
@@ -739,7 +751,7 @@ function deletePort(uid, side) {
 }
 
 function activateGhost(side, inferFrom = null) {
-  const uid = `new_${side}_${Date.now()}`
+  const uid = `new_${side}_${crypto.randomUUID()}`
 
   let portType = 'general_ports'
 
@@ -811,7 +823,6 @@ function onClosed() {
 
 // ─── Watchers ─────────────────────────────────────────────────────────────────
 
-import { watch } from 'vue'
 watch(() => props.modelValue, (v) => { if (v) resetLocal() })
 </script>
 
