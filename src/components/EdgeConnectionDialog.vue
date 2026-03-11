@@ -734,29 +734,20 @@ function pruneInvalidConnections() {
   })
 
   // 2. Drop couplings that violate single-connection constraints.
-  for (const sp of localSrcPorts.value) {
-    if (isSingleConnection(sp)) {
-      if (takenElsewhereUids.value.has(sp._uid)) {
-        localCouplings.value = localCouplings.value.filter(c => c.srcUid !== sp._uid)
-      } else {
-        const mine = localCouplings.value.filter(c => c.srcUid === sp._uid)
-        if (mine.length > 1) {
-          const keep = mine[0]
-          localCouplings.value = localCouplings.value.filter(c => c.srcUid !== sp._uid || c === keep)
-        }
-      }
-    }
-  }
-  for (const tp of localTgtPorts.value) {
-    if (isSingleConnection(tp)) {
-      if (takenElsewhereUids.value.has(tp._uid)) {
-        localCouplings.value = localCouplings.value.filter(c => c.tgtUid !== tp._uid)
-      } else {
-        const mine = localCouplings.value.filter(c => c.tgtUid === tp._uid)
-        if (mine.length > 1) {
-          const keep = mine[0]
-          localCouplings.value = localCouplings.value.filter(c => c.tgtUid !== tp._uid || c === keep)
-        }
+  pruneSingleConnectionSide(localSrcPorts.value, 'source')
+  pruneSingleConnectionSide(localTgtPorts.value, 'target')
+}
+
+function pruneSingleConnectionSide(ports, side) {
+  const uidKey = side === 'source' ? 'srcUid' : 'tgtUid'
+  for (const port of ports) {
+    if (!isSingleConnection(port)) continue
+    if (takenElsewhereUids.value.has(port._uid)) {
+      localCouplings.value = localCouplings.value.filter(c => c[uidKey] !== port._uid)
+    } else {
+      const mine = localCouplings.value.filter(c => c[uidKey] === port._uid)
+      if (mine.length > 1) {
+        localCouplings.value = localCouplings.value.filter(c => c[uidKey] !== port._uid || c === mine[0])
       }
     }
   }
