@@ -253,6 +253,17 @@ function isSingleConnection(portLabel) {
   return !portLabel.multiport || portLabel.multiport === 'None'
 }
 
+// Finds a port in a list by matching label, portType, and option.
+// Used wherever a portLabel object needs to be resolved to a stamped local port.
+function findPortByLabel(ports, portLabel) {
+  if (!portLabel) return null
+  return ports.find(p =>
+    p.label    === portLabel.label &&
+    p.portType === portLabel.portType &&
+    JSON.stringify(p.option) === JSON.stringify(portLabel.option)
+  ) ?? null
+}
+
 // ─── State ────────────────────────────────────────────────────────────────────
 
 // Deep copies of the node's portLabels, each stamped with a stable _uid.
@@ -345,16 +356,8 @@ function initLocalState() {
   const activeEdgeSnapshot = localSubgraph.value.get(props.activeEdge?.id)
   const rawCouplings = activeEdgeSnapshot?.data?.couplings || []
   localCouplings.value = rawCouplings.flatMap(({ sourcePortLabel, targetPortLabel }) => {
-    const src = localSrcPorts.value.find(p =>
-      p.label === sourcePortLabel.label &&
-      p.portType === sourcePortLabel.portType &&
-      JSON.stringify(p.option) === JSON.stringify(sourcePortLabel.option)
-    )
-    const tgt = localTgtPorts.value.find(p =>
-      p.label === targetPortLabel.label &&
-      p.portType === targetPortLabel.portType &&
-      JSON.stringify(p.option) === JSON.stringify(targetPortLabel.option)
-    )
+    const src = findPortByLabel(localSrcPorts.value, sourcePortLabel)
+    const tgt = findPortByLabel(localTgtPorts.value, targetPortLabel)
     return src && tgt ? [{ srcUid: src._uid, tgtUid: tgt._uid }] : []
   })
 
@@ -378,21 +381,13 @@ function indexSiblingPorts() {
     for (const { sourcePortLabel, targetPortLabel } of (edge.data?.couplings || [])) {
       // Only mark the source-side port if this edge's source is our source node.
       if (edge.source === props.sourceNode.id) {
-        const sp = localSrcPorts.value.find(p =>
-          p.label    === sourcePortLabel?.label &&
-          p.portType === sourcePortLabel?.portType &&
-          JSON.stringify(p.option) === JSON.stringify(sourcePortLabel?.option)
-        )
+        const sp = findPortByLabel(localSrcPorts.value, sourcePortLabel)
         if (sp) portUsage.set(sp._uid, { edgeId, portLabel: sourcePortLabel })
       }
 
       // Only mark the target-side port if this edge's target is our target node.
       if (edge.target === props.targetNode.id) {
-        const tp = localTgtPorts.value.find(p =>
-          p.label    === targetPortLabel?.label &&
-          p.portType === targetPortLabel?.portType &&
-          JSON.stringify(p.option) === JSON.stringify(targetPortLabel?.option)
-        )
+        const tp = findPortByLabel(localTgtPorts.value, targetPortLabel)
         if (tp) portUsage.set(tp._uid, { edgeId, portLabel: targetPortLabel })
       }
     }
@@ -408,7 +403,7 @@ function syncTakenElsewhere() {
 
 // Remove the coupling that claims `port` from its sibling edge in localSubgraph,
 // freeing the slot for the active edge to take over.
-function releaseForeignHandle(port, side) {
+function evictForeignHandle(port, side) {
   const usage = portUsage.get(port._uid)
   if (!usage) return null
 
@@ -426,8 +421,8 @@ function releaseForeignHandle(port, side) {
 
   const partnerPortLabel = side === 'source' ? coupling?.targetPortLabel : coupling?.sourcePortLabel
   const partnerPort = side === 'source'
-    ? localTgtPorts.value.find(p => p.label === partnerPortLabel?.label && p.portType === partnerPortLabel?.portType)
-    : localSrcPorts.value.find(p => p.label === partnerPortLabel?.label && p.portType === partnerPortLabel?.portType)
+    ? findPortByLabel(localTgtPorts.value, partnerPortLabel)
+    : findPortByLabel(localSrcPorts.value, partnerPortLabel)
 
   sibling.data = {
     ...sibling.data,
@@ -552,14 +547,27 @@ async function onConnect(params) {
       // Infer from the real target port
       const tUid = params.target.replace('tgt-', '')
       const tp = tgtByUid(tUid)
+      // Evict any existing connection on the real target port before activating ghost
+      if (isSingleConnection(tp)) {
+        let next = [...localCouplings.value]
+        next = await evictHandle(tp, tUid, 'target', next)
+        if (next === null) return
+        localCouplings.value = next
+      }
       activateGhost('source', tp)
-      // Rewrite params to use the newly created port's node id
       params = { ...params, source: `src-${localSrcPorts.value.at(-1)._uid}` }
     }
     if (isGhostTgt) {
       // Infer from the real source port
       const sUid = params.source.replace('src-', '')
       const sp = srcByUid(sUid)
+      // Evict any existing connection on the real source port before activating ghost
+      if (isSingleConnection(sp)) {
+        let next = [...localCouplings.value]
+        next = await evictHandle(sp, sUid, 'source', next)
+        if (next === null) return
+        localCouplings.value = next
+      }
       activateGhost('target', sp)
       params = { ...params, target: `tgt-${localTgtPorts.value.at(-1)._uid}` }
     }
@@ -580,8 +588,8 @@ async function onConnect(params) {
 
   let nextCouplings = [...localCouplings.value]
 
-  nextCouplings = await releasePortHandles(tp, tgtUid, 'target', nextCouplings)
-  nextCouplings = await releasePortHandles(sp, srcUid, 'source', nextCouplings)
+  nextCouplings = await evictHandle(tp, tgtUid, 'target', nextCouplings)
+  nextCouplings = await evictHandle(sp, srcUid, 'source', nextCouplings)
   if (nextCouplings === null) return
   localCouplings.value = connectPorts(srcUid, tgtUid, nextCouplings)
 
@@ -589,7 +597,7 @@ async function onConnect(params) {
   syncPortWorkspace()
 }
 
-async function releasePortHandles(port, nodeUid, side, newCouplings) {
+async function evictHandle(port, nodeUid, side, newCouplings) {
   if (isSingleConnection(port)) {
     const localConn = newCouplings.find(c => (side === 'source' ? c.srcUid : c.tgtUid) === nodeUid)
     if (localConn) {
@@ -599,7 +607,7 @@ async function releasePortHandles(port, nodeUid, side, newCouplings) {
     } else if (takenElsewhereUids.value.has(nodeUid)) {
       const intent = await askSwapIntent()
       if (intent === 'cancel') return null
-      releaseForeignHandle(port, side)
+      evictForeignHandle(port, side)
     }
   }
   return newCouplings
@@ -611,7 +619,7 @@ async function swapConnections(port, oldUid, newUid, side, couplings) {
     if (isSingleConnection(port) && takenElsewhereUids.value.has(newUid)) {
       const intent = await askSwapIntent()
       if (intent === 'cancel') return null
-      const result = releaseForeignHandle(port, side)
+      const result = evictForeignHandle(port, side)
       syncTakenElsewhere()
       if (result && intent === 'swap') {
         const { partnerPortLabel, edgeId } = result
