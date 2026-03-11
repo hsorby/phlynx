@@ -72,6 +72,8 @@
           :is-valid-connection="isValidConnection"
           @connect="onConnect"
           @edge-update="onEdgeUpdate"
+          @connect-start="onConnectStart"
+          @connect-end="onConnectEnd"
         >
           <!-- Source port row -->
           <template #node-sourcePort="{ data }">
@@ -93,7 +95,7 @@
                 type="source"
                 id="out"
                 :position="Position.Right"
-                :class="['port-handle', handleClass(data)]"
+                :class="['port-handle', handleClass(data), { 'handle--valid-target': validConnectUids.has(data.port._uid) }]"
               />
             </div>
           </template>
@@ -105,7 +107,7 @@
                 type="target"
                 id="in"
                 :position="Position.Left"
-                :class="['port-handle', handleClass(data)]"
+                :class="['port-handle', handleClass(data), { 'handle--valid-target': validConnectUids.has(data.port._uid) }]"
               />
               <div class="port-controls" @mousedown.stop>
                 <el-button type="danger" :icon="Delete" circle plain size="small" @click="deletePort(data.port._uid, 'target')" />
@@ -139,14 +141,14 @@
                 <Handle
                   type="source" id="out"
                   :position="Position.Right"
-                  class="port-handle handle--free"
+                  :class="['port-handle', draggingFrom?.side === 'target' && draggingFrom?.uid !== 'ghost-tgt' ? 'handle--valid-target' : 'handle--free']"
                 />
               </template>
               <template v-else>
                 <Handle
                   type="target" id="in"
                   :position="Position.Left"
-                  class="port-handle handle--free"
+                  :class="['port-handle', draggingFrom?.side === 'source' && draggingFrom?.uid !== 'ghost-src' ? 'handle--valid-target' : 'handle--free']"
                 />
                 <div class ="port-controls ghost-controls" @mousedown.stop>
                   <span class="ghost-label">
@@ -279,6 +281,34 @@ const flowEdges  = ref([])
 
 // UIDs consumed by other edges
 const takenElsewhereUids = ref(new Set())
+
+// The port a connection drag was started from, cleared on drag end
+const draggingFrom = ref(null) // { uid, side }
+
+// UIDs of ports that would be valid connection targets for the current drag.
+// If dragging from a ghost port, all ports on the opposite side are valid
+// since the ghost will be configured to match whatever it connects to.
+const validConnectUids = computed(() => {
+  if (!draggingFrom.value) return new Set()
+  const { uid, side } = draggingFrom.value
+  const isGhost = uid === 'ghost-src' || uid === 'ghost-tgt'
+  const candidates = side === 'source' ? localTgtPorts.value : localSrcPorts.value
+  if (isGhost) return new Set(candidates.map(p => p._uid))
+  const port = side === 'source' ? srcByUid(uid) : tgtByUid(uid)
+  if (!port) return new Set()
+  return new Set(
+    candidates
+      .filter(p => {
+        if (!p.label || !port.label) return false
+        if (p.label !== port.label) return false
+        const [srcType, tgtType] = side === 'source'
+          ? [port.portType, p.portType]
+          : [p.portType, port.portType]
+        return isCompatible(srcType, tgtType)
+      })
+      .map(p => p._uid)
+  )
+})
 
 // ─── Swap confirmation dialog ─────────────────────────────────────────────────
 const swapDialog = ref({ visible: false, resolve: null })
@@ -850,6 +880,21 @@ function activateGhost(side, inferFrom = null) {
   syncPortWorkspace()
 }
 
+// ─── Connection drag tracking ────────────────────────────────────────────────
+
+function onConnectStart({ nodeId, handleId, handleType }) {
+  const isGhost = nodeId === 'ghost-src' || nodeId === 'ghost-tgt'
+  const uid  = isGhost ? nodeId : nodeId?.replace('src-', '').replace('tgt-', '')
+  const side = nodeId === 'ghost-src' ? 'source'
+             : nodeId === 'ghost-tgt' ? 'target'
+             : handleType === 'source' ? 'source' : 'target'
+  draggingFrom.value = { uid, side }
+}
+
+function onConnectEnd() {
+  draggingFrom.value = null
+}
+
 // ─── Confirm / save ───────────────────────────────────────────────────────────
 
 function buildPayload() {
@@ -1087,7 +1132,7 @@ watch(() => props.modelValue, (v) => { if (v) initLocalState() })
   height: 11px;
   border-radius: 50%;
   border: 2px solid white;
-  transition: transform 0.1s ease, background 0.1s ease;
+  transition: background 0.1s ease;
 }
 :deep(.handle--connected) {
   background: #409eff;
@@ -1100,11 +1145,10 @@ watch(() => props.modelValue, (v) => { if (v) initLocalState() })
 }
 :deep(.vue-flow__handle-valid) {
   background: #67c23a;
-  transform: scale(1.4);
 }
-:deep(.vue-flow__handle-connecting) {
-  background: #409eff;
-  transform: scale(1.2);
+:deep(.handle--valid-target) {
+  background: #67c23a !important;
+  box-shadow: 0 0 0 3px rgba(103, 194, 58, 0.35);
 }
 
 /* ── Bottom bar ── */
