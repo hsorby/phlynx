@@ -605,9 +605,6 @@ async function onConnect(connection) {
   const sp = srcByUid(srcUid)
   const tp = tgtByUid(tgtUid)
 
-  if (isSingleConnection(sp) && localCouplings.value.some(c => c.srcUid === srcUid)) return
-  if (isSingleConnection(tp) && localCouplings.value.some(c => c.tgtUid === tgtUid)) return
-
   let nextCouplings = [...localCouplings.value]
 
   nextCouplings = await evictHandle(tp, tgtUid, 'target', nextCouplings)
