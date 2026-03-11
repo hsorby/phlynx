@@ -530,14 +530,14 @@ function isValidConnection(connection) {
 
 // ─── Interaction handlers ─────────────────────────────────────────────────────
 
-async function onConnect(params) {
-  const isGhostSrc = params.source === 'ghost-src'
-  const isGhostTgt = params.target === 'ghost-tgt'
+async function onConnect(connection) {
+  const isGhostSrc = connection.source === 'ghost-src'
+  const isGhostTgt = connection.target === 'ghost-tgt'
 
   if (isGhostSrc || isGhostTgt) {
     if (isGhostSrc) {
       // Infer from the real target port
-      const tUid = params.target.replace('tgt-', '')
+      const tUid = connection.target.replace('tgt-', '')
       const tp = tgtByUid(tUid)
       // Evict any existing connection on the real target port before activating ghost
       if (isSingleConnection(tp)) {
@@ -547,11 +547,11 @@ async function onConnect(params) {
         localCouplings.value = next
       }
       activateGhost('source', tp)
-      params = { ...params, source: `src-${localSrcPorts.value.at(-1)._uid}` }
+      connection = { ...connection, source: `src-${localSrcPorts.value.at(-1)._uid}` }
     }
     if (isGhostTgt) {
       // Infer from the real source port
-      const sUid = params.source.replace('src-', '')
+      const sUid = connection.source.replace('src-', '')
       const sp = srcByUid(sUid)
       // Evict any existing connection on the real source port before activating ghost
       if (isSingleConnection(sp)) {
@@ -561,14 +561,14 @@ async function onConnect(params) {
         localCouplings.value = next
       }
       activateGhost('target', sp)
-      params = { ...params, target: `tgt-${localTgtPorts.value.at(-1)._uid}` }
+      connection = { ...connection, target: `tgt-${localTgtPorts.value.at(-1)._uid}` }
     }
   }
 
-  if (!isValidConnection(params)) return
+  if (!isValidConnection(connection)) return
 
-  const srcUid = (params.source || '').replace('src-', '')
-  const tgtUid = (params.target || '').replace('tgt-', '')
+  const srcUid = (connection.source || '').replace('src-', '')
+  const tgtUid = (connection.target || '').replace('tgt-', '')
 
   if (localCouplings.value.some(c => c.srcUid === srcUid && c.tgtUid === tgtUid)) return
 
