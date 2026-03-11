@@ -684,6 +684,40 @@ async function onEdgeUpdate({ edge, connection }) {
   if (!connection?.source || !connection?.target) return
   if (!isValidConnection(connection)) return
 
+  // If dragged onto a ghost slot, activate it into a real port first then
+  // rewrite connection to point at the new port so the rest of onEdgeUpdate
+  // runs normally and installs the connection.
+  if (connection.source === 'ghost-src' || connection.target === 'ghost-tgt') {
+    if (connection.source === 'ghost-src') {
+      const tUid = connection.target.replace('tgt-', '')
+      const tp = tgtByUid(tUid)
+      if (isSingleConnection(tp)) {
+        let next = localCouplings.value.filter(
+          c => !(c.srcUid === edge.source.replace('src-', '') && c.tgtUid === edge.target.replace('tgt-', ''))
+        )
+        next = await evictHandle(tp, tUid, 'target', next)
+        if (next === null) return
+        localCouplings.value = next
+      }
+      activateGhost('source', tp)
+      connection = { ...connection, source: `src-${localSrcPorts.value.at(-1)._uid}` }
+    }
+    if (connection.target === 'ghost-tgt') {
+      const sUid = connection.source.replace('src-', '')
+      const sp = srcByUid(sUid)
+      if (isSingleConnection(sp)) {
+        let next = localCouplings.value.filter(
+          c => !(c.srcUid === edge.source.replace('src-', '') && c.tgtUid === edge.target.replace('tgt-', ''))
+        )
+        next = await evictHandle(sp, sUid, 'source', next)
+        if (next === null) return
+        localCouplings.value = next
+      }
+      activateGhost('target', sp)
+      connection = { ...connection, target: `tgt-${localTgtPorts.value.at(-1)._uid}` }
+    }
+  }
+
   const newSrcUid = connection.source.replace('src-', '')
   const newTgtUid = connection.target.replace('tgt-', '')
   const oldSrcUid = edge.source.replace('src-', '')
