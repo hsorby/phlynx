@@ -191,9 +191,8 @@
 
     <template #footer>
       <div class="dialog-footer">
-        <el-button type="primary" @click="$emit('update:modelValue', false)">
-          Done
-        </el-button>
+        <el-button @click="handleCancel">Cancel</el-button>
+        <el-button type="primary" @click="handleConfirm">Done</el-button>
       </div>
     </template>
   </el-dialog>
@@ -315,19 +314,19 @@ function handleClass(data) {
 
 // ─── Initialisation ───────────────────────────────────────────────────────────
 
-function stamp(nodeId, labels) {
+function stampUids(nodeId, labels) {
   return (labels || []).map((p) => ({
     ...p,
     _uid: p._uid || `${nodeId}_${crypto.randomUUID()}`,
   }))
 }
 
-function resetLocal() {
-  localSrcPorts.value = stamp(
+function initLocalState() {
+  localSrcPorts.value = stampUids(
     props.sourceNode.id,
     JSON.parse(JSON.stringify(props.sourceNode?.data?.portLabels || []))
   )
-  localTgtPorts.value = stamp(
+  localTgtPorts.value = stampUids(
     props.targetNode.id,
     JSON.parse(JSON.stringify(props.targetNode?.data?.portLabels || []))
   )
@@ -359,18 +358,16 @@ function resetLocal() {
     return src && tgt ? [{ srcUid: src._uid, tgtUid: tgt._uid }] : []
   })
 
-  rebuildPortUsage()           // seeds portUsage + takenElsewhereUids
-  enforceCouplingConstraints() // prune any invalid/duplicate couplings on open
-  applyChanges()               // persist cleaned state immediately
-  rebuildNodes()
-  refreshEdges()
+  indexSiblingPorts()           
+  pruneInvalidConnections() 
+  syncPortWorkspace()
 }
 
 // ─── Port-usage tracking ──────────────────────────────────────────────────────
 // portUsage: Map<portUid, { edgeId, portLabel }>
 // Covers every port slot claimed by a sibling edge (i.e. any edge in the
 // subgraph that touches the source or target node, excluding the active edge).
-function rebuildPortUsage() {
+function indexSiblingPorts() {
   portUsage.clear()
 
   const activeEdgeId = props.activeEdge?.id
@@ -401,11 +398,11 @@ function rebuildPortUsage() {
     }
   }
 
-  calcTakenElsewhere()
+  syncTakenElsewhere()
 }
 
 // Derive the takenElsewhereUids set directly from portUsage.
-function calcTakenElsewhere() {
+function syncTakenElsewhere() {
   takenElsewhereUids.value = new Set(portUsage.keys())
 }
 
@@ -443,7 +440,12 @@ function releaseForeignHandle(port, side) {
 
 // ─── VueFlow node / edge builders ─────────────────────────────────────────────
 
-function rebuildNodes() {
+function syncPortWorkspace() {
+  buildFlowNodes()
+  buildFlowEdges()
+}
+
+function buildFlowNodes() {
   const srcConnected  = connectedSrcUids()
   const tgtConnected  = connectedTgtUids()
 
@@ -486,7 +488,7 @@ function rebuildNodes() {
   })
 }
 
-function refreshEdges() {
+function buildFlowEdges() {
   const edges = []
 
   for (const { srcUid, tgtUid } of localCouplings.value) {
@@ -573,8 +575,6 @@ async function onConnect(params) {
   const sp = srcByUid(srcUid)
   const tp = tgtByUid(tgtUid)
 
-  // Block new connections onto already-occupied single-connection ports.
-  // (onEdgeUpdate removes the dragged coupling first so it won't hit these guards.)
   if (isSingleConnection(sp) && localCouplings.value.some(c => c.srcUid === srcUid)) return
   if (isSingleConnection(tp) && localCouplings.value.some(c => c.tgtUid === tgtUid)) return
 
@@ -582,13 +582,11 @@ async function onConnect(params) {
 
   nextCouplings = await releasePortHandles(tp, tgtUid, 'target', nextCouplings)
   nextCouplings = await releasePortHandles(sp, srcUid, 'source', nextCouplings)
-  if (nextCouplings === null) return // user cancelled
+  if (nextCouplings === null) return
   localCouplings.value = connectPorts(srcUid, tgtUid, nextCouplings)
 
-  calcTakenElsewhere()
-  rebuildNodes()
-  refreshEdges()
-  applyChanges()
+  syncTakenElsewhere()
+  syncPortWorkspace()
 }
 
 async function releasePortHandles(port, nodeUid, side, newCouplings) {
@@ -597,8 +595,6 @@ async function releasePortHandles(port, nodeUid, side, newCouplings) {
     if (localConn) {
       const intent = await askSwapIntent()
       if (intent === 'cancel') return null
-      // 'overwrite': just drop the displaced coupling (already filtered below)
-      // 'swap': not applicable in onConnect — no old slot to rehome into, treat as overwrite
       newCouplings = newCouplings.filter(c => c !== localConn)
     } else if (takenElsewhereUids.value.has(nodeUid)) {
       const intent = await askSwapIntent()
@@ -616,13 +612,12 @@ async function swapConnections(port, oldUid, newUid, side, couplings) {
       const intent = await askSwapIntent()
       if (intent === 'cancel') return null
       const result = releaseForeignHandle(port, side)
-      calcTakenElsewhere()
+      syncTakenElsewhere()
       if (result && intent === 'swap') {
         const { partnerPortLabel, edgeId } = result
-        // Rehome the vacated old slot's port into the sibling edge
         const oldPort = side === 'target' ? tgtByUid(oldUid) : srcByUid(oldUid)
         if (oldPort) rehomeForeignHandle(oldPort, partnerPortLabel, edgeId, side)
-        calcTakenElsewhere()
+        syncTakenElsewhere()
       }
     }
     return couplings
@@ -644,7 +639,6 @@ function rehomeForeignHandle(oldPort, partnerPortLabel, edgeId, side) {
   const sibling = localSubgraph.value.get(edgeId)
   if (!sibling) return
 
-  // Serialise the local port object to the same shape as stored portLabels
   const newPortLabel = {
     label:     oldPort.label,
     portType:  oldPort.portType,
@@ -661,7 +655,6 @@ function rehomeForeignHandle(oldPort, partnerPortLabel, edgeId, side) {
     couplings: [...(sibling.data?.couplings || []), newCoupling],
   }
 
-  // Mark the rehomed port as taken in portUsage so it shows yellow
   portUsage.set(oldPort._uid, { edgeId, portLabel: newPortLabel })
 }
 
@@ -703,16 +696,14 @@ async function onEdgeUpdate({ edge, connection }) {
   // Deduplicate: dragged onto the same target it already had.
   if (nextCouplings.some(c => c.srcUid === newSrcUid && c.tgtUid === newTgtUid)) {
     localCouplings.value = nextCouplings
-    rebuildNodes()
-    refreshEdges()
-    applyChanges()
+    syncPortWorkspace()
     return
   }
 
   nextCouplings = await swapConnections(tp, oldTgtUid, newTgtUid, 'target', nextCouplings)
-  if (nextCouplings === null) return // user cancelled
+  if (nextCouplings === null) return
   nextCouplings = await swapConnections(sp, oldSrcUid, newSrcUid, 'source', nextCouplings)
-  if (nextCouplings === null) return // user cancelled
+  if (nextCouplings === null) return
 
   nextCouplings = connectPorts(newSrcUid, newTgtUid, nextCouplings)
   localCouplings.value = nextCouplings
@@ -720,15 +711,13 @@ async function onEdgeUpdate({ edge, connection }) {
   // Tell VueFlow to update the rendered edge path
   updateEdge(edge, connection)
 
-  calcTakenElsewhere()
-  rebuildNodes()
-  refreshEdges()
-  applyChanges()
+  syncTakenElsewhere()
+  syncPortWorkspace()
 }
 
 // ─── Port editing ─────────────────────────────────────────────────────────────
 
-function enforceCouplingConstraints() {
+function pruneInvalidConnections() {
   // 1. Drop any couplings that are now type/label-incompatible (e.g. portType changed).
   localCouplings.value = localCouplings.value.filter(c => {
     const sp = srcByUid(c.srcUid)
@@ -766,11 +755,9 @@ function enforceCouplingConstraints() {
 }
 
 function onPortConfigChange() {
-  enforceCouplingConstraints() // Prune incompatible/illegal connections after config change
+  pruneInvalidConnections() 
   autoConnect()                // Re-connect newly compatible ports
-  rebuildNodes()
-  refreshEdges()
-  applyChanges()
+  syncPortWorkspace()
 }
 
 function autoConnect() {
@@ -806,9 +793,7 @@ function deletePort(uid, side) {
     localTgtPorts.value = localTgtPorts.value.filter(p => p._uid !== uid)
     localCouplings.value = localCouplings.value.filter(c => c.tgtUid !== uid)
   }
-  rebuildNodes()
-  refreshEdges()
-  applyChanges()
+  syncPortWorkspace()
 }
 
 function activateGhost(side, inferFrom = null) {
@@ -837,54 +822,57 @@ function activateGhost(side, inferFrom = null) {
   } else {
     localTgtPorts.value.push(entry)
   }
-  rebuildNodes()
-  refreshEdges()
-  applyChanges()
+  syncPortWorkspace()
 }
 
 // ─── Confirm / save ───────────────────────────────────────────────────────────
 
-function applyChanges() {
-  // Collect any sibling-edge coupling changes made by releaseForeignSlot,
-  // so BuilderView can write them back without recomputing from scratch.
+function buildPayload() {
   const foreignCouplings = {}
   const activeEdgeId = props.activeEdge?.id
 
   for (const [edgeId, localEdge] of localSubgraph.value) {
     if (edgeId === activeEdgeId) continue
-
     const originalCouplings = props.subgraph?.get(edgeId)?.data?.couplings || []
     const localCouplingsArr  = localEdge?.data?.couplings || []
-
     if (JSON.stringify(originalCouplings) !== JSON.stringify(localCouplingsArr)) {
       foreignCouplings[edgeId] = localCouplingsArr
     }
   }
 
-  emit('confirm', {
+  return {
     sourceNodeId: props.sourceNode.id,
     targetNodeId: props.targetNode.id,
     sourcePortLabels: JSON.parse(JSON.stringify(localSrcPorts.value)),
     targetPortLabels: JSON.parse(JSON.stringify(localTgtPorts.value)),
     couplings: localCouplings.value.map(c => {
-       const sp = srcByUid(c.srcUid)
-       const tp = tgtByUid(c.tgtUid)
-       return {
-         sourcePortLabel: { portType: sp.portType, label: sp.label, option: sp.option, multiport: sp.multiport },
-         targetPortLabel: { portType: tp.portType, label: tp.label, option: tp.option, multiport: tp.multiport }
-       }
+      const sp = srcByUid(c.srcUid)
+      const tp = tgtByUid(c.tgtUid)
+      return {
+        sourcePortLabel: { portType: sp.portType, label: sp.label, option: sp.option, multiport: sp.multiport },
+        targetPortLabel: { portType: tp.portType, label: tp.label, option: tp.option, multiport: tp.multiport }
+      }
     }),
     foreignCouplings,
-  })
+  }
+}
+
+function handleConfirm() {
+  emit('confirm', buildPayload())
+  emit('update:modelValue', false)
+}
+
+function handleCancel() {
+  emit('update:modelValue', false)
 }
 
 function onClosed() {
-  emit('update:modelValue', false)
+  // nothing — cleanup happens in initLocalState on next open
 }
 
 // ─── Watchers ─────────────────────────────────────────────────────────────────
 
-watch(() => props.modelValue, (v) => { if (v) resetLocal() })
+watch(() => props.modelValue, (v) => { if (v) initLocalState() })
 </script>
 
 <style scoped>
