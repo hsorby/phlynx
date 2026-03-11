@@ -77,7 +77,7 @@
         >
           <!-- Source port row -->
           <template #node-sourcePort="{ data }">
-            <div :class="['port-row', 'port-row--source', rowClass(data)]">
+            <div :class="['port-row', 'port-row--source', rowClass(data), { 'row--valid-target': validConnectUids.has(data.port._uid) }]">
               <div class="port-controls" @mousedown.stop>
                 <el-select v-model="data.port.portType" size="small" style="width:64px" @change="onPortConfigChange">
                   <el-option v-for="o in portTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
@@ -102,7 +102,7 @@
 
           <!-- Target port row -->
           <template #node-targetPort="{ data }">
-            <div :class="['port-row', 'port-row--target', rowClass(data)]">
+            <div :class="['port-row', 'port-row--target', rowClass(data), { 'row--valid-target': validConnectUids.has(data.port._uid) }]">
               <Handle
                 type="target"
                 id="in"
@@ -1082,7 +1082,8 @@ watch(() => props.modelValue, (v) => { if (v) initLocalState() })
 :deep(.row--free) {
   opacity: 0.55;
 }
-:deep(.row--free:hover) {
+:deep(.row--free:hover),
+:deep(.row--free.row--valid-target) {
   opacity: 1;
   border-color: #c0c4cc;
 }
