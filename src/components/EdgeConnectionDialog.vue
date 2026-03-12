@@ -186,8 +186,8 @@
       <span>This port is already connected. What would you like to do?</span>
       <template #footer>
         <el-button @click="resolveSwap('cancel')">Cancel</el-button>
-        <el-button @click="resolveSwap('overwrite')">Overwrite</el-button>
-        <el-button type="primary" @click="resolveSwap('swap')">Swap</el-button>
+        <el-button @click="resolveSwap('overwrite')">Replace</el-button>
+        <el-button v-if="swapDialog.canSwap" type="primary" @click="resolveSwap('swap')">Swap</el-button>
       </template>
     </el-dialog>
 
@@ -313,9 +313,9 @@ const validConnectUids = computed(() => {
 // ─── Swap confirmation dialog ─────────────────────────────────────────────────
 const swapDialog = ref({ visible: false, resolve: null })
 
-function askSwapIntent() {
+function askSwapIntent(canSwap = false) {
   return new Promise(resolve => {
-    swapDialog.value = { visible: true, resolve }
+    swapDialog.value = { visible: true, resolve, canSwap }
   })
 }
 
@@ -620,11 +620,11 @@ async function evictHandle(port, nodeUid, side, newCouplings) {
   if (isSingleConnection(port)) {
     const localConn = newCouplings.find(c => (side === 'source' ? c.srcUid : c.tgtUid) === nodeUid)
     if (localConn) {
-      const intent = await askSwapIntent()
+      const intent = await askSwapIntent(false)
       if (intent === 'cancel') return null
       newCouplings = newCouplings.filter(c => c !== localConn)
     } else if (takenElsewhereUids.value.has(nodeUid)) {
-      const intent = await askSwapIntent()
+      const intent = await askSwapIntent(false)
       if (intent === 'cancel') return null
       evictForeignHandle(port, side)
     }
@@ -636,7 +636,8 @@ async function swapConnections(port, oldUid, newUid, side, couplings) {
   const localConn = couplings.find(c => (side === 'source' ? c.srcUid : c.tgtUid) === newUid)
   if (!localConn) {
     if (isSingleConnection(port) && takenElsewhereUids.value.has(newUid)) {
-      const intent = await askSwapIntent()
+      console.log('hi')
+      const intent = await askSwapIntent(true)
       if (intent === 'cancel') return null
       const result = evictForeignHandle(port, side)
       syncTakenElsewhere()
@@ -650,7 +651,7 @@ async function swapConnections(port, oldUid, newUid, side, couplings) {
     return couplings
   }
 
-  const intent = await askSwapIntent()
+  const intent = await askSwapIntent(true)
   if (intent === 'cancel') return null
 
   const next = couplings.filter(c => c !== localConn)
