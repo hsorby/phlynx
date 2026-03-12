@@ -5,6 +5,7 @@
     top="4vh"
     teleported
     :show-close="false"
+    :style="{ maxHeight: '92vh' }"
     @closed="onClosed"
     @update:model-value="$emit('update:modelValue', $event)"
     @wheel.stop
@@ -52,7 +53,8 @@
       </div>
 
       <!-- VueFlow canvas -->
-      <div class="flow-canvas" :style="{ height: canvasHeight + 'px' }">
+      <div ref="canvasEl" class="flow-canvas">
+        <div :style="{ height: canvasHeight + 'px', position: 'relative' }">
         <VueFlow
           :id="FLOW_ID"
           :nodes="flowNodes"
@@ -171,9 +173,10 @@
         <div
           v-if="dragState.active"
           class="drag-ghost"
-          :style="{ top: dragState.mouseY + 'px', left: '40px' }"
+          :style="{ top: (dragState.clientY ? viewportY(dragState.clientY) : 0) + 'px', left: '40px' }"
         >
           {{ dragState.uid }}
+        </div>
         </div>
       </div>
 
@@ -216,7 +219,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import { VueFlow, Position, Handle, useVueFlow } from '@vue-flow/core'
 
@@ -301,22 +304,102 @@ const takenElsewhereUids = ref(new Set())
 // dragState tracks an in-progress port drag: which port, which side, the Y
 // coordinate where the drag started, and the port's index at drag start.
 
+const canvasEl = ref(null)
+
 const dragState = ref({
   active: false,
   uid: null,
   fromIndex: -1,
   overIndex: -1,
   mouseY: 0,
-  offsetY: 0
 })
 
-function startDrag(event, uid, side) {
-  event.preventDefault()
+// ── Drag coordinate helpers ───────────────────────────────────────────────────
+// viewportY: clientY relative to canvas top edge (viewport coords — for visual translateY)
+// contentY:  viewportY + scrollTop (content coords — for index calculation)
+// Keeping these separate means the visual offset never drifts when scrolling.
 
-  const ports = side === 'source'
+function viewportY(clientY) {
+  const el = canvasEl.value
+  if (!el) return 0
+  return clientY - el.getBoundingClientRect().top
+}
+
+function contentY(clientY) {
+  const el = canvasEl.value
+  if (!el) return 0
+  return viewportY(clientY) + el.scrollTop
+}
+
+// dragOffsetY drives the translateY of the dragged row.
+// It is a plain ref so updating it does NOT trigger VueFlow node re-renders.
+const dragOffsetY = ref(0)
+
+let autoScrollRaf = null
+const AUTOSCROLL_ZONE = 60   // px from canvas edge that triggers autoscroll
+const AUTOSCROLL_SPEED = 10  // max px per frame
+
+function startAutoScroll() {
+  if (autoScrollRaf) return
+  function tick() {
+    const state = dragState.value
+    const el = canvasEl.value
+    if (!state?.active || !el) { autoScrollRaf = null; return }
+
+    const vy = viewportY(state.clientY)
+    const canvasH = el.clientHeight
+    const maxScroll = el.scrollHeight - el.clientHeight
+
+    if (vy < AUTOSCROLL_ZONE && el.scrollTop > 0) {
+      // Near top — scroll up
+      const speed = AUTOSCROLL_SPEED * (1 - vy / AUTOSCROLL_ZONE)
+      el.scrollTop = Math.max(0, el.scrollTop - speed)
+    } else if (vy > canvasH - AUTOSCROLL_ZONE && el.scrollTop < maxScroll) {
+      // Near bottom — scroll down
+      const speed = AUTOSCROLL_SPEED * (1 - (canvasH - vy) / AUTOSCROLL_ZONE)
+      el.scrollTop = Math.min(maxScroll, el.scrollTop + speed)
+    }
+
+    // Update visual offset after scroll (content coords unchanged, viewport shifted)
+    dragOffsetY.value = contentY(state.clientY) - state.startContentY
+    // Check if index needs updating due to scroll
+    updateDragIndex(state)
+
+    autoScrollRaf = requestAnimationFrame(tick)
+  }
+  autoScrollRaf = requestAnimationFrame(tick)
+}
+
+function stopAutoScroll() {
+  if (autoScrollRaf) { cancelAnimationFrame(autoScrollRaf); autoScrollRaf = null }
+}
+
+function updateDragIndex(state) {
+  const ports = state.side === 'source'
     ? localSrcPorts.value
     : localTgtPorts.value
 
+  const delta = contentY(state.clientY) - state.startContentY
+  const shift = Math.round(delta / ROW_H)
+  const nextIndex = Math.max(0, Math.min(ports.length - 1, state.fromIndex + shift))
+
+  if (nextIndex !== state.overIndex) {
+    const diff = nextIndex - state.fromIndex
+    const moved = ports.splice(state.fromIndex, 1)[0]
+    ports.splice(nextIndex, 0, moved)
+    // Re-anchor startContentY so delta stays relative to new position
+    state.startContentY += diff * ROW_H
+    state.fromIndex = nextIndex
+    state.overIndex = nextIndex
+    // Reset visual offset to 0 — row is now at its correct index position
+    dragOffsetY.value = 0
+    syncPortWorkspace()
+  }
+}
+
+function startDrag(event, uid, side) {
+  event.preventDefault()
+  const ports = side === 'source' ? localSrcPorts.value : localTgtPorts.value
   const index = ports.findIndex(p => p._uid === uid)
 
   dragState.value = {
@@ -325,67 +408,42 @@ function startDrag(event, uid, side) {
     side,
     fromIndex: index,
     overIndex: index,
-    startY: event.clientY,
-    mouseY: event.clientY
+    startContentY: contentY(event.clientY),
+    clientY: event.clientY,
   }
+  dragOffsetY.value = 0
 
-  window.addEventListener("mousemove", onDragMove)
-  window.addEventListener("mouseup", endDrag)
+  window.addEventListener('mousemove', onDragMove)
+  window.addEventListener('mouseup', endDrag)
+  startAutoScroll()
 }
 
 function onDragMove(event) {
   const state = dragState.value
   if (!state.active) return
 
-  state.mouseY = event.clientY
-
-  const delta = event.clientY - state.startY
-  const shift = Math.round(delta / ROW_H)
-
-  const ports = state.side === 'source'
-    ? localSrcPorts.value
-    : localTgtPorts.value
-
-  const nextIndex = Math.max(
-    0,
-    Math.min(ports.length - 1, state.fromIndex + shift)
-  )
-
-if (nextIndex !== state.overIndex) {
-
-  const diff = nextIndex - state.fromIndex
-
-  const moved = ports.splice(state.fromIndex, 1)[0]
-  ports.splice(nextIndex, 0, moved)
-
-  // keep dragged row aligned with cursor
-  state.startY += diff * ROW_H
-
-  state.fromIndex = nextIndex
-  state.overIndex = nextIndex
-
-  syncPortWorkspace()
-}
+  state.clientY = event.clientY
+  dragOffsetY.value = contentY(event.clientY) - state.startContentY
+  updateDragIndex(state)
 }
 
 function endDrag() {
   const state = dragState.value
   if (!state.active) return
 
-  const ports = state.side === 'source'
-    ? localSrcPorts.value
-    : localTgtPorts.value
-
-  const moved = ports.splice(state.fromIndex, 1)[0]
-  ports.splice(state.overIndex, 0, moved)
-
   dragState.value.active = false
-
-  window.removeEventListener("mousemove", onDragMove)
-  window.removeEventListener("mouseup", endDrag)
-
+  dragOffsetY.value = 0
+  stopAutoScroll()
+  window.removeEventListener('mousemove', onDragMove)
+  window.removeEventListener('mouseup', endDrag)
   syncPortWorkspace()
 }
+
+onUnmounted(() => {
+  stopAutoScroll()
+  window.removeEventListener('mousemove', onDragMove)
+  window.removeEventListener('mouseup', endDrag)
+})
 
 function rowStyle(data) {
   const state = dragState.value
@@ -397,16 +455,16 @@ function rowStyle(data) {
 
   const index = ports.findIndex(p => p._uid === data.port._uid)
 
-  const { fromIndex, overIndex, mouseY } = state
+  const { fromIndex, overIndex } = state
 
-  // dragged row
+  // dragged row — translateY driven by dragOffsetY (not recalculated through VueFlow)
   if (data.port._uid === state.uid) {
-    const delta = mouseY - state.startY
     return {
-      transform: `translateY(${delta}px)`,
+      transform: `translateY(${dragOffsetY.value}px)`,
       zIndex: 50,
       boxShadow: '0 6px 16px rgba(0,0,0,0.15)',
-      cursor: 'grabbing'
+      cursor: 'grabbing',
+      transition: 'none',
     }
   }
 
@@ -1190,8 +1248,9 @@ watch(() => props.modelValue, (v) => { if (v) initLocalState() })
   border: 1px solid #dcdfe6;
   border-radius: 0 0 4px 4px;
   background: #fafafa;
-  position: relative;
-  overflow: hidden;
+  max-height: 65vh;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* ── Port row nodes ── */
