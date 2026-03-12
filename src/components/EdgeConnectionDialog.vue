@@ -166,8 +166,8 @@
       <div class="bottom-bar">
         <div class="legend">
           <span class="legend-item"><span class="legend-dot dot-connected"></span>Connected</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#67c23a"></span>Multiport</span>
-          <span class="legend-item"><span class="legend-dot dot-taken"></span>Taken elsewhere</span>
+          <span class="legend-item"><span class="legend-dot dot-taken"></span>Taken (single)</span>
+          <span class="legend-item"><span class="legend-dot dot-taken-multi"></span>Taken (multiport)</span>
           <span class="legend-item"><span class="legend-dot dot-free"></span>Free</span>
         </div>
       </div>
@@ -342,14 +342,18 @@ function connectedSrcUids() { return new Set(localCouplings.value.map(c => c.src
 function connectedTgtUids() { return new Set(localCouplings.value.map(c => c.tgtUid)) }
 
 function rowClass(data) {
-  if (data.isConnected)     return 'row--connected'
-  if (data.isTakenElsewhere) return 'row--taken'
+  if (data.isConnected)      return 'row--connected'
+  if (data.isTakenElsewhere) return data.port.multiport && data.port.multiport !== 'None'
+    ? 'row--taken-multi'
+    : 'row--taken'
   return 'row--free'
 }
 
 function handleClass(data) {
   if (data.isConnected)      return 'handle--connected'
-  if (data.isTakenElsewhere) return 'handle--taken'
+  if (data.isTakenElsewhere) return data.port.multiport && data.port.multiport !== 'None'
+    ? 'handle--taken-multi'
+    : 'handle--taken'
   return 'handle--free'
 }
 
@@ -531,9 +535,8 @@ function buildFlowEdges() {
       targetHandle: 'in',
       updatable:    true,
       style: {
-        stroke:          !valid ? '#f56c6c' : isMulti ? '#67c23a' : '#409eff',
+        stroke:          '#409eff',
         strokeWidth:     2.5,
-        strokeDasharray: isMulti ? '6,4' : '0',
       },
     })
   }
@@ -1074,11 +1077,18 @@ watch(() => props.modelValue, (v) => { if (v) initLocalState() })
   box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.12);
 }
 
-/* Taken by another edge = amber dashed */
+/* Taken by another edge, single-connection = amber dashed */
 :deep(.row--taken) {
   background: #fdf6ec;
   border: 1px dashed #e6a23c;
   opacity: 0.8;
+}
+
+/* Taken by another edge, multiport = white/opaque (still connectable) */
+:deep(.row--taken-multi) {
+  background: #ffffff;
+  border-color: #dcdfe6;
+  opacity: 1;
 }
 
 /* Free / unconnected = faded */
@@ -1144,6 +1154,10 @@ watch(() => props.modelValue, (v) => { if (v) initLocalState() })
 :deep(.handle--taken) {
   background: #e6a23c;
 }
+:deep(.handle--taken-multi) {
+  background: #ffffff;
+  border: 2px solid #c0c4cc;
+}
 :deep(.handle--free) {
   background: #c0c4cc;
 }
@@ -1185,7 +1199,8 @@ watch(() => props.modelValue, (v) => { if (v) initLocalState() })
   display: inline-block;
 }
 .dot-connected { background: #409eff; }
-.dot-taken     { background: #e6a23c; border: 1px dashed #e6a23c; }
+.dot-taken        { background: #e6a23c; border: 1px dashed #e6a23c; }
+.dot-taken-multi  { background: #ffffff; border: 1px solid #c0c4cc; }
 .dot-free      { background: #c0c4cc; }
 
 /* ── Footer ── */
