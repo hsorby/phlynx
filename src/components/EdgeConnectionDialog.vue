@@ -77,7 +77,10 @@
         >
           <!-- Source port row -->
           <template #node-sourcePort="{ data }">
-            <div :class="['port-row', 'port-row--source', rowClass(data), { 'row--valid-target': validConnectUids.has(data.port._uid) }]">
+            <div
+              :class="['port-row', 'port-row--source', rowClass(data), { 'row--valid-target': validConnectUids.has(data.port._uid) }]"
+              :style="rowStyle(data)"
+            >
               <div class="port-controls" @mousedown.stop>
                 <el-select v-model="data.port.portType" size="small" style="width:64px" @change="onPortConfigChange">
                   <el-option v-for="o in portTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
@@ -89,6 +92,7 @@
                 <el-select v-model="data.port.multiport" size="small" style="width:80px" @change="onPortConfigChange">
                   <el-option v-for="o in multiportOptions" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
+                <span class="drag-handle" @mousedown.stop="startDrag($event, data.port._uid, 'source')">⠿</span>
                 <el-button type="danger" :icon="Delete" circle plain size="small" @click="deletePort(data.port._uid, 'source')" />
               </div>
               <Handle
@@ -102,7 +106,10 @@
 
           <!-- Target port row -->
           <template #node-targetPort="{ data }">
-            <div :class="['port-row', 'port-row--target', rowClass(data), { 'row--valid-target': validConnectUids.has(data.port._uid) }]">
+            <div
+              :class="['port-row', 'port-row--target', rowClass(data), { 'row--valid-target': validConnectUids.has(data.port._uid) }]"
+              :style="rowStyle(data)"
+            >
               <Handle
                 type="target"
                 id="in"
@@ -110,6 +117,7 @@
                 :class="['port-handle', handleClass(data), { 'handle--valid-target': validConnectUids.has(data.port._uid) }]"
               />
               <div class="port-controls" @mousedown.stop>
+                <span class="drag-handle" @mousedown.stop="startDrag($event, data.port._uid, 'target')">⠿</span>
                 <el-button type="danger" :icon="Delete" circle plain size="small" @click="deletePort(data.port._uid, 'target')" />
                 <el-select v-model="data.port.portType" size="small" style="width:64px" @change="onPortConfigChange">
                   <el-option v-for="o in portTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
@@ -160,6 +168,13 @@
             </div>
           </template>
         </VueFlow>
+        <div
+            v-if="dragState.active"
+            class="drag-ghost"
+            :style="{ top: dragState.mouseY + 'px' }"
+          >
+            Dragging...
+          </div>
       </div>
 
       <!-- Legend -->
@@ -282,6 +297,106 @@ const flowEdges  = ref([])
 // UIDs consumed by other edges
 const takenElsewhereUids = ref(new Set())
 
+// ─── Drag-to-reorder ──────────────────────────────────────────────────────────
+// dragState tracks an in-progress port drag: which port, which side, the Y
+// coordinate where the drag started, and the port's index at drag start.
+
+const dragState = ref({
+  active: false,
+  uid: null,
+  fromIndex: -1,
+  overIndex: -1,
+  mouseY: 0,
+  offsetY: 0
+})
+
+function startDrag(event, uid, side) {
+  event.preventDefault()
+
+  const ports = side === 'source'
+    ? localSrcPorts.value
+    : localTgtPorts.value
+
+  const index = ports.findIndex(p => p._uid === uid)
+
+  dragState.value = {
+    active: true,
+    uid,
+    side,
+    fromIndex: index,
+    overIndex: index,
+    mouseY: event.clientY
+  }
+
+  window.addEventListener("mousemove", onDragMove)
+  window.addEventListener("mouseup", endDrag)
+}
+
+function onDragMove(event) {
+  const state = dragState.value
+  if (!state.active) return
+
+  const delta = event.clientY - state.mouseY
+  const shift = Math.round(delta / ROW_H)
+
+  const ports = state.side === 'source'
+    ? localSrcPorts.value
+    : localTgtPorts.value
+
+  const nextIndex = Math.max(
+    0,
+    Math.min(ports.length - 1, state.fromIndex + shift)
+  )
+
+  state.overIndex = nextIndex
+}
+
+function endDrag() {
+  const state = dragState.value
+  if (!state.active) return
+
+  const ports = state.side === 'source'
+    ? localSrcPorts.value
+    : localTgtPorts.value
+
+  const moved = ports.splice(state.fromIndex, 1)[0]
+  ports.splice(state.overIndex, 0, moved)
+
+  dragState.value.active = false
+
+  window.removeEventListener("mousemove", onDragMove)
+  window.removeEventListener("mouseup", endDrag)
+
+  syncPortWorkspace()
+}
+
+function rowStyle(data) {
+  const state = dragState.value
+  if (!state?.active) return {}
+
+  const ports = state.side === 'source'
+    ? localSrcPorts.value
+    : localTgtPorts.value
+
+  const index = ports.findIndex(p => p._uid === data.port._uid)
+
+  const { fromIndex, overIndex } = state
+
+  if (index === fromIndex) {
+    return { opacity: 0.2, pointerEvents: 'none' }
+  }
+
+  if (fromIndex < overIndex && index > fromIndex && index <= overIndex) {
+    return { transform: `translateY(-${ROW_H}px)` }
+  }
+
+  if (fromIndex > overIndex && index < fromIndex && index >= overIndex) {
+    return { transform: `translateY(${ROW_H}px)` }
+  }
+
+  return {}
+}
+
 // The port a connection drag was started from, cleared on drag end
 const draggingFrom = ref(null) // { uid, side }
 
@@ -342,6 +457,7 @@ function connectedSrcUids() { return new Set(localCouplings.value.map(c => c.src
 function connectedTgtUids() { return new Set(localCouplings.value.map(c => c.tgtUid)) }
 
 function rowClass(data) {
+  if (dragState.value?.uid === data.port._uid) return 'row--dragging'
   if (data.isConnected)      return 'row--connected'
   if (data.isTakenElsewhere) return data.port.multiport && data.port.multiport !== 'None'
     ? 'row--taken-multi'
@@ -1053,6 +1169,28 @@ watch(() => props.modelValue, (v) => { if (v) initLocalState() })
 }
 
 /* ── Port row nodes ── */
+.port-row {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  transition: transform 0.15s ease;
+}
+.drag-handle {
+  cursor: grab;
+  margin-right: 6px;
+}
+.drag-handle:active {
+  cursor: grabbing;
+}
+.drag-ghost {
+  position: fixed;
+  left: 20px;
+  pointer-events: none;
+  background: white;
+  border: 1px solid #ccc;
+  padding: 6px 10px;
+  z-index: 9999;
+}
 :deep(.port-row) {
   display: flex;
   align-items: center;
@@ -1062,6 +1200,28 @@ watch(() => props.modelValue, (v) => { if (v) initLocalState() })
   background: #fff;
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
   position: relative;
+}
+:deep(.row--dragging) {
+  background: #f0f7ff;
+  border-color: #409eff;
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.25);
+  opacity: 0.9;
+  z-index: 10;
+}
+:deep(.drag-handle) {
+  cursor: grab;
+  color: #c0c4cc;
+  font-size: 16px;
+  padding: 0 4px;
+  user-select: none;
+  line-height: 1;
+  flex-shrink: 0;
+}
+:deep(.drag-handle:hover) {
+  color: #409eff;
+}
+:deep(.drag-handle:active) {
+  cursor: grabbing;
 }
 :deep(.port-row--source) {
   width: v-bind('NODE_W + "px"');
