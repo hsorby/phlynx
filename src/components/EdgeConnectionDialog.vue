@@ -169,12 +169,12 @@
           </template>
         </VueFlow>
         <div
-            v-if="dragState.active"
-            class="drag-ghost"
-            :style="{ top: dragState.mouseY + 'px' }"
-          >
-            Dragging...
-          </div>
+          v-if="dragState.active"
+          class="drag-ghost"
+          :style="{ top: dragState.mouseY + 'px', left: '40px' }"
+        >
+          {{ dragState.uid }}
+        </div>
       </div>
 
       <!-- Legend -->
@@ -325,6 +325,7 @@ function startDrag(event, uid, side) {
     side,
     fromIndex: index,
     overIndex: index,
+    startY: event.clientY,
     mouseY: event.clientY
   }
 
@@ -336,7 +337,9 @@ function onDragMove(event) {
   const state = dragState.value
   if (!state.active) return
 
-  const delta = event.clientY - state.mouseY
+  state.mouseY = event.clientY
+
+  const delta = event.clientY - state.startY
   const shift = Math.round(delta / ROW_H)
 
   const ports = state.side === 'source'
@@ -348,7 +351,21 @@ function onDragMove(event) {
     Math.min(ports.length - 1, state.fromIndex + shift)
   )
 
+if (nextIndex !== state.overIndex) {
+
+  const diff = nextIndex - state.fromIndex
+
+  const moved = ports.splice(state.fromIndex, 1)[0]
+  ports.splice(nextIndex, 0, moved)
+
+  // keep dragged row aligned with cursor
+  state.startY += diff * ROW_H
+
+  state.fromIndex = nextIndex
   state.overIndex = nextIndex
+
+  syncPortWorkspace()
+}
 }
 
 function endDrag() {
@@ -380,16 +397,25 @@ function rowStyle(data) {
 
   const index = ports.findIndex(p => p._uid === data.port._uid)
 
-  const { fromIndex, overIndex } = state
+  const { fromIndex, overIndex, mouseY } = state
 
-  if (index === fromIndex) {
-    return { opacity: 0.2, pointerEvents: 'none' }
+  // dragged row
+  if (data.port._uid === state.uid) {
+    const delta = mouseY - state.startY
+    return {
+      transform: `translateY(${delta}px)`,
+      zIndex: 50,
+      boxShadow: '0 6px 16px rgba(0,0,0,0.15)',
+      cursor: 'grabbing'
+    }
   }
 
+  // rows shifting upward
   if (fromIndex < overIndex && index > fromIndex && index <= overIndex) {
     return { transform: `translateY(-${ROW_H}px)` }
   }
 
+  // rows shifting downward
   if (fromIndex > overIndex && index < fromIndex && index >= overIndex) {
     return { transform: `translateY(${ROW_H}px)` }
   }
@@ -1175,21 +1201,16 @@ watch(() => props.modelValue, (v) => { if (v) initLocalState() })
   align-items: center;
   transition: transform 0.15s ease;
 }
+.row--dragging {
+  transition: none;
+  cursor: grabbing;
+}
 .drag-handle {
   cursor: grab;
   margin-right: 6px;
 }
 .drag-handle:active {
   cursor: grabbing;
-}
-.drag-ghost {
-  position: fixed;
-  left: 20px;
-  pointer-events: none;
-  background: white;
-  border: 1px solid #ccc;
-  padding: 6px 10px;
-  z-index: 9999;
 }
 :deep(.port-row) {
   display: flex;
