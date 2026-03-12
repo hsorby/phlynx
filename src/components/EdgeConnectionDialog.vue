@@ -642,7 +642,6 @@ async function swapConnections(port, oldUid, newUid, side, couplings) {
   const localConn = couplings.find(c => (side === 'source' ? c.srcUid : c.tgtUid) === newUid)
   if (!localConn) {
     if (isSingleConnection(port) && takenElsewhereUids.value.has(newUid)) {
-      console.log('hi')
       const intent = await askSwapIntent(true)
       if (intent === 'cancel') return null
       const result = evictForeignHandle(port, side)
