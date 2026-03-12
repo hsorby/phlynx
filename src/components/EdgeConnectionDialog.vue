@@ -408,17 +408,23 @@ function indexSiblingPorts() {
   for (const [edgeId, edge] of localSubgraph.value) {
     if (edgeId === activeEdgeId) continue
 
+    // Check for ports with an existing connection
     for (const { sourcePortLabel, targetPortLabel } of (edge.data?.couplings || [])) {
-      // Only mark the source-side port if this edge's source is our source node.
       if (edge.source === props.sourceNode.id) {
         const sp = findPortByLabel(localSrcPorts.value, sourcePortLabel)
         if (sp) portUsage.set(sp._uid, { edgeId, portLabel: sourcePortLabel })
       }
-
-      // Only mark the target-side port if this edge's target is our target node.
+      if (edge.target === props.sourceNode.id) {
+        const sp = findPortByLabel(localSrcPorts.value, targetPortLabel)
+        if (sp) portUsage.set(sp._uid, { edgeId, portLabel: targetPortLabel })
+      }
       if (edge.target === props.targetNode.id) {
         const tp = findPortByLabel(localTgtPorts.value, targetPortLabel)
         if (tp) portUsage.set(tp._uid, { edgeId, portLabel: targetPortLabel })
+      }
+      if (edge.source === props.targetNode.id) {
+        const tp = findPortByLabel(localTgtPorts.value, sourcePortLabel)
+        if (tp) portUsage.set(tp._uid, { edgeId, portLabel: sourcePortLabel })
       }
     }
   }
