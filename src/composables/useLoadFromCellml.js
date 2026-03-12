@@ -94,11 +94,16 @@ export function useLoadFromCellML() {
 
         const rawPorts = moduleConfig.general_ports ?? []
 
+        // If a component has more than one edge, set all ports to be True
+        const edgeCount = edges.filter(
+          e => e.source === compName || e.target === compName
+        ).length
+
         const portLabels = rawPorts.map((p) => ({
           portType: 'general_ports',
           label: p.port_type,
           option: p.variables ?? [],
-          multiport: 'None',
+          multiport: edgeCount > 1 ? 'True' : 'None',
         }))
 
         const ports = createPorts(edges, compName)
