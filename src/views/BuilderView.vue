@@ -356,7 +356,7 @@ import { generateExportZip } from '../services/caExport'
 import { createCellMLDataFragment } from '../services/cellml'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { notify } from '../utils/notify'
-import { resolvePortCouplings, checkAndClaimCouplings, buildUsedPortKeys } from '../utils/edges'
+import { resolvePortCouplings } from '../utils/edges'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
@@ -765,25 +765,6 @@ onConnect((connection) => {
     sourceIndex,
     targetIndex
   )
-
-  // Enforce the non-multiport single-connection constraint against all existing edges.
-  // All-or-nothing: if any coupling would violate it, the whole conduit is rejected.
-  const usedPortKeys = buildUsedPortKeys(edges.value)
-  const { valid, conflicts } = checkAndClaimCouplings(
-    connection.source,
-    connection.target,
-    couplings,
-    usedPortKeys
-  )
-
-  if (!valid) {
-    notify.warning({
-      title: 'Connection Not Allowed',
-      message: conflicts[0],
-    })
-    conflicts.forEach((c) => console.warn('[onConnect]', c))
-    return
-  }
 
   const newEdge = {
     ...connection,
