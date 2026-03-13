@@ -1974,6 +1974,45 @@ async function onExportConfirm(fileName, handle) {
 }
 
 /**
+ * Recomputes port-label couplings for edges that have none — e.g. files saved
+ * before couplings were introduced, or where edge data was lost on serialisation.
+ * Uses the same ordinal-index logic as the live onConnect handler so results
+ * are identical to a freshly drawn connection.
+ */
+function recomputeMissingCouplings() {
+  const nodeMap = new Map(nodes.value.map((n) => [n.id, n]))
+
+  // Track inbound/outbound ordinal counts per node, matching buildEdges semantics.
+  const sourceOutCount = new Map()
+  const targetInCount  = new Map()
+
+  for (const edge of edges.value) {
+    if (edge.data?.couplings?.length) continue  // already has valid couplings
+
+    const sourceNode = nodeMap.get(edge.source)
+    const targetNode = nodeMap.get(edge.target)
+    if (!sourceNode || !targetNode) continue
+
+    const sourceIndex = sourceOutCount.get(edge.source) ?? 0
+    const targetIndex = targetInCount.get(edge.target)  ?? 0
+
+    const couplings = resolvePortCouplings(
+      sourceNode.data.portLabels ?? [],
+      targetNode.data.portLabels ?? [],
+      sourceIndex,
+      targetIndex
+    )
+
+    if (couplings.length) {
+      edge.data = { ...edge.data, couplings }
+    }
+
+    sourceOutCount.set(edge.source, sourceIndex + 1)
+    targetInCount.set(edge.target,  targetIndex  + 1)
+  }
+}
+
+/**
  * Collects all state and creates blob from it.
  */
 function createSaveBlob() {
@@ -2029,6 +2068,11 @@ function handleLoadWorkspace(file) {
 
       // Rebuild the edge index so the EdgeConnectionDialog subgraph is correct.
       rebuildNodeEdgeIndex()
+
+      // Recompute couplings for any edge missing them (e.g. saved before couplings
+      // were introduced, or saved with an older serialiser that dropped edge data).
+      // resolvePortCouplings is deterministic so this is always safe to run.
+      recomputeMissingCouplings()
 
       // Restore Pinia store state.
       builderStore.loadState(loadedState.store)
