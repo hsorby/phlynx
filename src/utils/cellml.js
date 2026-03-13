@@ -737,7 +737,10 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
           } else if (nodeVariable.type === 'constant') {
             const v = node.data.variables.find((cv) => cv.name === nodeVariable.name)
             if (!isEmpty(v?.value)) {
-              addVariableToParameterComponent(model, variable, parameterComponent, v)
+              addVariableToParameterComponent(model, variable, parameterComponent, {
+                ...v,
+                name: `${node.data.name}_${v.name}`, 
+              })
             }
           }
         }
