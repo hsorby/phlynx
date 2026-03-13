@@ -1594,17 +1594,18 @@ function onOpenReplacementDialog(eventPayload) {
 }
 
 async function onReplaceConfirm(updatedData) {
-  const nodeId = currentEditingNode.value.nodeId
+  const { nodeId, instanceId } = currentEditingNode.value 
   if (!nodeId) return
+
   const compLabel = updatedData.componentName
   const filePart = updatedData.sourceFile
-  const label = filePart ? `${compLabel} — ${filePart}` : compLabel
+  updatedData.label = filePart ? `${compLabel} — ${filePart}` : compLabel
 
-  updatedData.label = label
+  const targetInstance = instanceId || FLOW_IDS.MAIN    
+  const { updateNodeData } = useVueFlow(targetInstance) 
   updateNodeData(nodeId, updatedData)
   replacementDialogVisible.value = false
 }
-
 const contextMenuRef = ref(null)
 
 const paneContextMenuItems = [
