@@ -53,7 +53,7 @@
       </div>
 
       <!-- VueFlow canvas -->
-      <div ref="canvasEl" class="flow-canvas">
+      <div ref="canvasEl" class="flow-canvas" @wheel.stop.prevent="onCanvasWheel">
         <div :style="{ height: canvasHeight + 'px', position: 'relative' }">
         <VueFlow
           :id="FLOW_ID"
@@ -170,13 +170,6 @@
             </div>
           </template>
         </VueFlow>
-        <div
-          v-if="dragState.active"
-          class="drag-ghost"
-          :style="{ top: (dragState.clientY ? viewportY(dragState.clientY) : 0) + 'px', left: '40px' }"
-        >
-          {{ dragState.uid }}
-        </div>
         </div>
       </div>
 
@@ -219,7 +212,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import { VueFlow, Position, Handle, useVueFlow } from '@vue-flow/core'
 
@@ -239,7 +232,7 @@ const portUsage = new Map() // Map<portUid, {edgeId, couplingIndex}>
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const FLOW_ID  = 'edge-conn-flow'
-const { updateEdge } = useVueFlow(FLOW_ID)
+const { updateEdge, panBy, getViewport, setViewport } = useVueFlow(FLOW_ID)
 
 const ROW_H    = 52          // px per port row
 const NODE_W   = 540         // px per column
@@ -351,20 +344,14 @@ function startAutoScroll() {
     const maxScroll = el.scrollHeight - el.clientHeight
 
     if (vy < AUTOSCROLL_ZONE && el.scrollTop > 0) {
-      // Near top — scroll up
-      const speed = AUTOSCROLL_SPEED * (1 - vy / AUTOSCROLL_ZONE)
+      const speed = AUTOSCROLL_SPEED * (1 - Math.max(0, vy) / AUTOSCROLL_ZONE)
       el.scrollTop = Math.max(0, el.scrollTop - speed)
     } else if (vy > canvasH - AUTOSCROLL_ZONE && el.scrollTop < maxScroll) {
-      // Near bottom — scroll down
       const speed = AUTOSCROLL_SPEED * (1 - (canvasH - vy) / AUTOSCROLL_ZONE)
       el.scrollTop = Math.min(maxScroll, el.scrollTop + speed)
     }
 
-    // Update visual offset after scroll (content coords unchanged, viewport shifted)
-    dragOffsetY.value = contentY(state.clientY) - state.startContentY
-    // Check if index needs updating due to scroll
-    updateDragIndex(state)
-
+    updateDragState(state)
     autoScrollRaf = requestAnimationFrame(tick)
   }
   autoScrollRaf = requestAnimationFrame(tick)
@@ -374,27 +361,31 @@ function stopAutoScroll() {
   if (autoScrollRaf) { cancelAnimationFrame(autoScrollRaf); autoScrollRaf = null }
 }
 
-function updateDragIndex(state) {
+function updateDragState(state) {
   const ports = state.side === 'source'
     ? localSrcPorts.value
     : localTgtPorts.value
 
-  const delta = contentY(state.clientY) - state.startContentY
-  const shift = Math.round(delta / ROW_H)
-  const nextIndex = Math.max(0, Math.min(ports.length - 1, state.fromIndex + shift))
+  // Index calculation uses content coords (includes scrollTop).
+  const totalDelta = contentY(state.clientY) - state.startContentY
+  const nextIndex = Math.max(0, Math.min(ports.length - 1,
+    state.originIndex + Math.round(totalDelta / ROW_H)
+  ))
 
   if (nextIndex !== state.overIndex) {
-    const diff = nextIndex - state.fromIndex
-    const moved = ports.splice(state.fromIndex, 1)[0]
+    const moved = ports.splice(state.overIndex, 1)[0]
     ports.splice(nextIndex, 0, moved)
-    // Re-anchor startContentY so delta stays relative to new position
-    state.startContentY += diff * ROW_H
-    state.fromIndex = nextIndex
     state.overIndex = nextIndex
-    // Reset visual offset to 0 — row is now at its correct index position
-    dragOffsetY.value = 0
     syncPortWorkspace()
   }
+
+  // Visual offset: pure cursor movement in screen pixels, with two corrections:
+  // 1. scrollDrift — scrollTop has changed since drag start; contentY includes it
+  //    but VueFlow transforms don't, so subtract the drift.
+  // 2. slotDisplacement — VueFlow repositions the node to its new slot's Y;
+  //    translateY adds on top, so subtract how far the slot has moved.
+  const slotDisplacement = (state.overIndex - state.originIndex) * ROW_H
+  dragOffsetY.value = totalDelta - slotDisplacement
 }
 
 function startDrag(event, uid, side) {
@@ -406,9 +397,11 @@ function startDrag(event, uid, side) {
     active: true,
     uid,
     side,
+    originIndex: index,
     fromIndex: index,
     overIndex: index,
     startContentY: contentY(event.clientY),
+    startScrollTop: canvasEl.value?.scrollTop ?? 0,
     clientY: event.clientY,
   }
   dragOffsetY.value = 0
@@ -423,8 +416,7 @@ function onDragMove(event) {
   if (!state.active) return
 
   state.clientY = event.clientY
-  dragOffsetY.value = contentY(event.clientY) - state.startContentY
-  updateDragIndex(state)
+  updateDragState(state)
 }
 
 function endDrag() {
@@ -441,6 +433,7 @@ function endDrag() {
 
 onUnmounted(() => {
   stopAutoScroll()
+  stopConnectAutoScroll()
   window.removeEventListener('mousemove', onDragMove)
   window.removeEventListener('mouseup', endDrag)
 })
@@ -466,16 +459,6 @@ function rowStyle(data) {
       cursor: 'grabbing',
       transition: 'none',
     }
-  }
-
-  // rows shifting upward
-  if (fromIndex < overIndex && index > fromIndex && index <= overIndex) {
-    return { transform: `translateY(-${ROW_H}px)` }
-  }
-
-  // rows shifting downward
-  if (fromIndex > overIndex && index < fromIndex && index >= overIndex) {
-    return { transform: `translateY(${ROW_H}px)` }
   }
 
   return {}
@@ -598,6 +581,7 @@ function initLocalState() {
   indexSiblingPorts()           
   pruneInvalidConnections() 
   syncPortWorkspace()
+  nextTick(() => setViewport({ x: 0, y: 0, zoom: 1 }))
 }
 
 // ─── Port-usage tracking ──────────────────────────────────────────────────────
@@ -1095,10 +1079,84 @@ function onConnectStart({ nodeId, handleId, handleType }) {
              : nodeId === 'ghost-tgt' ? 'target'
              : handleType === 'source' ? 'source' : 'target'
   draggingFrom.value = { uid, side }
+  startConnectAutoScroll()
 }
 
 function onConnectEnd() {
   draggingFrom.value = null
+  stopConnectAutoScroll()
+  // Transfer the VueFlow viewport offset back into DOM scrollTop so that
+  // mousewheel scroll continues from the correct position after connection drag.
+  const el = canvasEl.value
+  if (el) {
+    const vp = getViewport()
+    if (vp.y < 0) {
+      el.scrollTop = Math.min(el.scrollHeight - el.clientHeight, -vp.y)
+      setViewport({ ...vp, y: 0 })
+    }
+  }
+}
+
+// ── Wheel scroll guard ────────────────────────────────────────────────────────
+// Block mousewheel scroll entirely while a connection drag is in progress.
+// During connection drag we use panBy autoscroll instead; mixing the two
+// causes the connection line to drift.
+function onCanvasWheel(event) {
+  if (draggingFrom.value) return  // blocked during connection drag
+  canvasEl.value.scrollTop += event.deltaY
+}
+
+// ── Connection drag autoscroll ────────────────────────────────────────────────
+// During a connection drag, VueFlow owns the connection line and handle positions
+// in its own transform space. We pan the VueFlow viewport (not the DOM scroll)
+// so the line and handles move together without drift.
+// Panning is clamped to y <= 0 so users can't scroll above the content.
+
+let connectScrollRaf = null
+let connectClientY = 0
+const CONNECT_AUTOSCROLL_ZONE = 60
+const CONNECT_AUTOSCROLL_SPEED = 10
+
+function onConnectMouseMove(event) {
+  connectClientY = event.clientY
+}
+
+function startConnectAutoScroll() {
+  if (connectScrollRaf) return
+  const el = canvasEl.value
+  if (!el) return
+  window.addEventListener('mousemove', onConnectMouseMove)
+
+  function tick() {
+    if (!draggingFrom.value) { stopConnectAutoScroll(); return }
+    const el = canvasEl.value
+    if (!el) { connectScrollRaf = null; return }
+
+    const rect = el.getBoundingClientRect()
+    const vy = connectClientY - rect.top
+    const canvasH = el.clientHeight
+    const minY = canvasH - el.scrollHeight   // max downward pan = content height - visible height
+    const viewport = getViewport()
+    let panDelta = 0
+
+    if (vy < CONNECT_AUTOSCROLL_ZONE && viewport.y < 0) {
+      panDelta = CONNECT_AUTOSCROLL_SPEED * (1 - Math.max(0, vy) / CONNECT_AUTOSCROLL_ZONE)
+    } else if (vy > canvasH - CONNECT_AUTOSCROLL_ZONE && viewport.y > minY) {
+      panDelta = -CONNECT_AUTOSCROLL_SPEED * (1 - (canvasH - vy) / CONNECT_AUTOSCROLL_ZONE)
+    }
+
+    if (panDelta !== 0) {
+      setViewport({ ...viewport, y: Math.max(minY, Math.min(0, viewport.y + panDelta)) })
+    }
+
+    connectScrollRaf = requestAnimationFrame(tick)
+  }
+  connectScrollRaf = requestAnimationFrame(tick)
+}
+
+function stopConnectAutoScroll() {
+  if (connectScrollRaf) { cancelAnimationFrame(connectScrollRaf); connectScrollRaf = null }
+  window.removeEventListener('mousemove', onConnectMouseMove)
 }
 
 // ─── Confirm / save ───────────────────────────────────────────────────────────
@@ -1286,7 +1344,7 @@ watch(() => props.modelValue, (v) => { if (v) initLocalState() })
   border-color: #409eff;
   box-shadow: 0 4px 12px rgba(64, 158, 255, 0.25);
   opacity: 0.9;
-  z-index: 10;
+  z-index: 999;
 }
 :deep(.drag-handle) {
   cursor: grab;
