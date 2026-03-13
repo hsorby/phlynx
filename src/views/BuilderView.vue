@@ -1977,10 +1977,21 @@ async function onExportConfirm(fileName, handle) {
  * Recomputes port-label couplings for edges that have none — e.g. files saved
  * before couplings were introduced, or where edge data was lost on serialisation.
  * Uses the same ordinal-index logic as the live onConnect handler so results
- * are identical to a freshly drawn connection.
+ * are identical to a freshly drawn connection. Might not need in future.
  */
 function recomputeMissingCouplings() {
   const nodeMap = new Map(nodes.value.map((n) => [n.id, n]))
+
+  // Normalise portLabels on every node: migrate legacy field names.
+  for (const node of nodes.value) {
+    if (!node.data?.portLabels) continue
+    node.data.portLabels = node.data.portLabels.map((pl) => ({
+      ...pl,
+      // 'isMultiPortSum' was the old field name; 'multiport' is current.
+      // If multiport is absent, default to 'None' (single-connection)
+      multiport: pl.multiport ?? 'None',
+    }))
+  }
 
   // Track inbound/outbound ordinal counts per node, matching buildEdges semantics.
   const sourceOutCount = new Map()
