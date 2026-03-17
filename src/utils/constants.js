@@ -27,6 +27,12 @@ export const AFFINE_UNIT_CONVERSIONS = {
   fahrenheit: { baseUnit: 'kelvin',  scale: 5 / 9,    offset: 255.372 },
 }
 
+export const CELLML_NS = 'http://www.cellml.org/cellml/2.0#'
+export const MATHML_NS = 'http://www.w3.org/1998/Math/MathML'
+export const BQBIOL_NS = 'http://biomodels.net/biology-qualifiers/'
+export const GLOBAL_PARAMETERS = 'parameters_global'
+export const MODEL_PARAMETERS = 'parameters'
+
 export const STANDARD_UNITS = [
     'ampere',
     'becquerel',
@@ -89,6 +95,7 @@ export const IMPORT_KEYS = {
   MODULE_CONFIG: 'moduleConfig',
   CELLML_FILE: 'cellMLFile',
   PARAMETER: 'parameter',
+  TURTLE: 'turtle',
 }
 
 export const IMPORT_LABELS = {
@@ -96,11 +103,19 @@ export const IMPORT_LABELS = {
   MODULE_CONFIG: 'Module Configurations (.json)',
   CELLML_FILE: 'CellML File (.cellml or .xml)',
   PARAMETER: 'Parameters (.csv)',
+  TURTLE: 'Annotations (.ttl)',
 }
 export const EXPORT_KEYS = {
   CA: 'circulatoryAutogen',
   CELLML: 'cellml',
 }
+
+export const TTL_FILE_TYPES = [
+  {
+    description: 'Turtle RDF File',
+    accept: { 'application/ttl': ['.ttl'] },
+  },
+]
 
 export const CELLML_FILE_TYPES = [
   {
