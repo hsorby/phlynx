@@ -1436,25 +1436,35 @@ function onOpenParameterEditorDialog(eventPayload) {
   editParameterDialogVisible.value = true
 }
 
-function filterConfig(config, validNamesSet) {
-  // Clean the Ports (Nested arrays).
+function filterConfig(config, validPortNames, validVariableNames, updatedModule) {
   const portFields = ['entrance_ports', 'exit_ports', 'general_ports']
-
   portFields.forEach((field) => {
     if (config[field]) {
       config[field] = config[field].map((port) => ({
         ...port,
-        // Filter the variables list inside this specific port.
-        variables: (port.variables || []).filter((name) => validNamesSet.has(name)),
+        variables: (port.variables || []).filter((name) => validPortNames.has(name)),
       }))
     }
   })
 
-  // Clean the Definitions (Array of arrays).
   if (config.variables_and_units) {
-    config.variables_and_units = config.variables_and_units.filter((entry) => validNamesSet.has(entry[0]))
+    const existingNames = new Set(config.variables_and_units.map((e) => e[0]))
+
+    // Use validVariableNames here, not validPortNames
+    config.variables_and_units = config.variables_and_units.filter((entry) =>
+      validVariableNames.has(entry[0])
+    )
+
+    if (updatedModule?.variables) {
+      const newEntries = updatedModule.variables
+        .filter((v) => !existingNames.has(v.name))
+        .map((v) => [v.name, v.units ?? 'dimensionless', 'access', 'variable'])
+
+      config.variables_and_units.push(...newEntries)
+    }
   }
 }
+
 /**
  * Handler for both Saving (Updating) and Forking CellML modules.
  * Handles:
@@ -1518,7 +1528,8 @@ async function handleCellMLSave(saveData) {
   // Clean the Config (Remove ports that no longer exist).
   // Now that we have the valid ports from the new CellML, clean the config.
   const activeConfig = targetModule.configs[targetModule.configIndex]
-  filterConfig(activeConfig, validPortNames)
+  const validVariableNames = new Set((targetModule?.variables || []).map((v) => v.name))
+  filterConfig(activeConfig, validPortNames, validVariableNames, targetModule)
 }
 
 /**
@@ -1768,17 +1779,18 @@ function onOpenReplacementDialog(eventPayload) {
 }
 
 async function onReplaceConfirm(updatedData) {
-  const nodeId = currentEditingNode.value.nodeId
+  const { nodeId, instanceId } = currentEditingNode.value 
   if (!nodeId) return
+
   const compLabel = updatedData.componentName
   const filePart = updatedData.sourceFile
-  const label = filePart ? `${compLabel} — ${filePart}` : compLabel
+  updatedData.label = filePart ? `${compLabel} — ${filePart}` : compLabel
 
-  updatedData.label = label
+  const targetInstance = instanceId || FLOW_IDS.MAIN    
+  const { updateNodeData } = useVueFlow(targetInstance) 
   updateNodeData(nodeId, updatedData)
   replacementDialogVisible.value = false
 }
-
 const contextMenuRef = ref(null)
 
 const paneContextMenuItems = [
@@ -2145,21 +2157,42 @@ const getBoundingCenter = (nodes) => {
   }
 }
 
-const copySelection = () => {
+const copySelection = async () => {
   const nodes = getSelectedNodes.value
   const edges = getSelectedEdges.value
 
-  if (nodes.length === 0) return
+  if (nodes.length === 0) return  
+  
+  const payload = {
+    nodes: detatchReactivity(nodes),
+    edges: detatchReactivity(edges),
+  }
 
-  // Create a deep copy to avoid reference issues
-  clipboard.value = {
-    nodes: detachReactivity(nodes),
-    edges: detachReactivity(edges),
+  clipboard.value = payload
+
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(payload))
+  } catch (err) {
+    console.warn("Clipboard write failed", err)
   }
 }
 
-const pasteSelection = (atMouse = false) => {
-  if (clipboard.value.nodes.length === 0) return
+const pasteSelection = async (atMouse = false) => {
+  let sourceClipboard = clipboard.value
+
+  // Try reading from system clipboard (for cross-window paste)
+  try {
+    const text = await navigator.clipboard.readText()
+    const parsed = JSON.parse(text)
+
+    if (parsed?.nodes && parsed?.edges) {
+      sourceClipboard = parsed
+    }
+  } catch (err) {
+    // Ignore clipboard read errors (browser permissions etc)
+  }
+
+  if (!sourceClipboard.nodes || sourceClipboard.nodes.length === 0) return
 
   const newNodes = []
   const newEdges = []
@@ -2172,7 +2205,7 @@ const pasteSelection = (atMouse = false) => {
     const mouseFlowPos = screenToFlowCoordinate(mousePosition.value)
 
     // Find the center of the nodes currently in the clipboard
-    const clipboardCenter = getBoundingCenter(clipboard.value.nodes)
+    const clipboardCenter = getBoundingCenter(sourceClipboard.nodes)
 
     // Calculate difference to move center -> mouse
     dx = mouseFlowPos.x - clipboardCenter.x
@@ -2183,17 +2216,19 @@ const pasteSelection = (atMouse = false) => {
   const idMap = {}
   const nodeIdSet = nodes.value.map((n) => n.id)
   const edgeIdSet = edges.value.map((e) => e.id)
-  const namesSet = new Set()
-  allNodeNames.value.forEach((name) => {
-    namesSet.add(name)
-  })
 
-  clipboard.value.nodes.forEach((node) => {
+  const namesSet = new Set()
+  allNodeNames.value.forEach((name) => namesSet.add(name))
+
+  sourceClipboard.nodes.forEach((node) => {
     const newId = getNextNodeId(nodeIdSet)
     idMap[node.id] = newId
     nodeIdSet.push(newId)
 
-    const finalName = generateUniqueModuleName({ name: node.data.componentName }, namesSet)
+    const finalName = generateUniqueModuleName(
+      { name: node.data.componentName },
+      namesSet
+    )
     namesSet.add(finalName)
 
     // Create the new node with offset position.
@@ -2213,8 +2248,7 @@ const pasteSelection = (atMouse = false) => {
     })
   })
 
-  // Only copy edges if BOTH source and target are in the copied set.
-  clipboard.value.edges.forEach((edge) => {
+  sourceClipboard.edges.forEach((edge) => {
     const newSource = idMap[edge.source]
     const newTarget = idMap[edge.target]
 

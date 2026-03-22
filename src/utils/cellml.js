@@ -684,6 +684,16 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
     parameterComponent.setName(MODEL_PARAMETERS)
     model.addComponent(parameterComponent)
 
+    // Count how many nodes use each constant variable name
+    const constantNameRefCount = new Map()
+    for (const node of nodes) {
+      for (const v of (node.data.variables ?? [])) {
+        if (v.type === 'constant' && !isEmpty(v.value)) {
+          constantNameRefCount.set(v.name, (constantNameRefCount.get(v.name) ?? 0) + 1)
+        }
+      }
+    }
+
     // ---------------------------------
     // Process Nodes (Create Components)
     // ---------------------------------
@@ -742,7 +752,11 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
           } else if (nodeVariable.type === 'constant') {
             const v = node.data.variables.find((cv) => cv.name === nodeVariable.name)
             if (!isEmpty(v?.value)) {
-              addVariableToParameterComponent(model, variable, parameterComponent, v)
+              const isShared = (constantNameRefCount.get(v.name) ?? 0) > 1
+              addVariableToParameterComponent(model, variable, parameterComponent, {
+                ...v,
+                name: isShared ? `${node.data.name}_${v.name}` : v.name,
+              })
             }
           }
         }
@@ -826,7 +840,6 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
       }
     }
 
-    // throw new Error('Debugging multi-port-sum connections.')
     // Handle Multi-Port-Sum Connections
     for (const sumData of multiPortSums.values()) {
       const { sourceComp, srcLabel, targets } = sumData
@@ -890,7 +903,6 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
       // FIXME: There is a bug in libCellML v0.6.3 where the analyser cannot handle
       // initialisation of a variable that is computed. Fixed in v0.6.4, but we need 
       // a workaround for now to at least export something usable in the case where this is the only error.
-      // flattenedModel.delete()
       handleLoggerErrors(analyser, `Analyser error count: ${analyser.errorCount()}`, true)
     }
 
