@@ -72,6 +72,7 @@
           :edges-updatable="true"
           :auto-connect="false"
           :is-valid-connection="isValidConnection"
+          @pane-click="onPaneClick"
           @connect="onConnect"
           @edge-update="onEdgeUpdate"
           @connect-start="onConnectStart"
@@ -472,6 +473,10 @@ const validConnectUids = computed(() => {
   )
 })
 
+function onPaneClick() {
+  dragState.value = null
+}
+
 // ─── Swap confirmation dialog ─────────────────────────────────────────────────
 const swapDialog = ref({ visible: false, resolve: null })
 
@@ -505,7 +510,7 @@ function connectedTgtUids() { return new Set(localCouplings.value.map(c => c.tgt
 
 function rowClass(data) {
   if (dragState.value?.uid === data.port._uid) return 'row--dragging'
-  if (data.isConnected)      return 'row--connected'
+  if (data.isConnected) return 'row--connected'
   if (data.isTakenElsewhere) return data.port.multiport && data.port.multiport !== 'None'
     ? 'row--taken-multi'
     : 'row--taken'
