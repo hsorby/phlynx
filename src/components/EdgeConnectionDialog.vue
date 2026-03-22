@@ -215,6 +215,10 @@
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import { VueFlow, Position, Handle, useVueFlow } from '@vue-flow/core'
+import { FLOW_IDS, ROW_H, NODE_W, MID_GAP, PAD, 
+  portTypeOptions, multiportOptions, TARGET_COMPATIBLE,
+  AUTOSCROLL_SPEED, AUTOSCROLL_ZONE,
+ } from '../utils/constants'
 
 // ─── Props / emits ────────────────────────────────────────────────────────────
 
@@ -231,32 +235,9 @@ const portUsage = new Map() // Map<portUid, {edgeId, couplingIndex}>
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const FLOW_ID  = 'edge-conn-flow'
-const { updateEdge, panBy, getViewport, setViewport } = useVueFlow(FLOW_ID)
-
-const ROW_H    = 52          // px per port row
-const NODE_W   = 540         // px per column
-const MID_GAP  = 75           // px between columns
-const PAD      = 10          // top/bottom canvas padding
-
-const portTypeOptions = [
-  { value: 'general_ports',  label: 'G' },
-  { value: 'entrance_ports', label: 'I' },
-  { value: 'exit_ports',     label: 'O' },
-]
-const multiportOptions = [
-  { value: 'True',  label: 'True'  },
-  { value: 'Sum',   label: 'Sum'   },
-  { value: 'None',  label: 'None'  },
-]
+const { updateEdge, getViewport, setViewport } = useVueFlow(FLOW_IDS.EDGE)
 
 // ─── Compatibility ─────────────────────────────────
-
-const TARGET_COMPATIBLE = {
-  entrance_ports: new Set(['general_ports']),
-  exit_ports:    new Set(['entrance_ports', 'general_ports']),
-  general_ports: new Set(['entrance_ports', 'exit_ports', 'general_ports']),
-}
 
 function isCompatible(srcType, tgtType) {
   return TARGET_COMPATIBLE[srcType]?.has(tgtType) ?? false
@@ -329,8 +310,6 @@ function contentY(clientY) {
 const dragOffsetY = ref(0)
 
 let autoScrollRaf = null
-const AUTOSCROLL_ZONE = 60   // px from canvas edge that triggers autoscroll
-const AUTOSCROLL_SPEED = 10  // max px per frame
 
 function startAutoScroll() {
   if (autoScrollRaf) return
