@@ -358,6 +358,7 @@ import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { notify } from '../utils/notify'
 import { resolvePortCouplings } from '../utils/edges'
 import { getHelperLines } from '../utils/helperLines'
+import { detachReactivity } from '../utils/reactivity'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
 import { relayoutNodes } from '../services/layouts/physics'
@@ -907,10 +908,6 @@ function updateHelperLines(changes, nodes) {
     helperLineVertical.value = helperLines.vertical
     alignment.value = helperLines.alignment
   }
-}
-
-const detachReactivity = (item) => {
-  return JSON.parse(JSON.stringify(item))
 }
 
 const snapshotEdge = (change) => {

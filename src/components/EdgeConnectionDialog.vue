@@ -219,6 +219,7 @@ import { FLOW_IDS, ROW_H, NODE_W, MID_GAP, PAD,
   portTypeOptions, multiportOptions, TARGET_COMPATIBLE,
   AUTOSCROLL_SPEED, AUTOSCROLL_ZONE,
  } from '../utils/constants'
+import { detachReactivity } from '../utils/reactivity'
 
 // ─── Props / emits ────────────────────────────────────────────────────────────
 
@@ -531,11 +532,11 @@ function stampUids(nodeId, labels) {
 function initLocalState() {
   localSrcPorts.value = stampUids(
     props.sourceNode.id,
-    JSON.parse(JSON.stringify(props.sourceNode?.data?.portLabels || []))
+    detachReactivity(props.sourceNode?.data?.portLabels || [])
   )
   localTgtPorts.value = stampUids(
     props.targetNode.id,
-    JSON.parse(JSON.stringify(props.targetNode?.data?.portLabels || []))
+    detachReactivity(props.targetNode?.data?.portLabels || [])
   )
 
   // Seed a mutable local copy of the subgraph so releaseForeignSlot can mutate
@@ -543,7 +544,7 @@ function initLocalState() {
   localSubgraph.value = new Map(
     [...(props.subgraph || [])].map(([edgeId, edge]) => [
       edgeId,
-      JSON.parse(JSON.stringify(edge)),
+      detachReactivity(edge),
     ])
   )
 
@@ -691,15 +692,15 @@ function buildFlowEdges() {
     const isMulti = !isSingleConnection(sp) || !isSingleConnection(tp)
 
     edges.push({
-      id:           `ce-${srcUid}-${tgtUid}`,
-      source:       `src-${srcUid}`,
-      target:       `tgt-${tgtUid}`,
+      id: `ce-${srcUid}-${tgtUid}`,
+      source: `src-${srcUid}`,
+      target: `tgt-${tgtUid}`,
       sourceHandle: 'out',
       targetHandle: 'in',
-      updatable:    true,
+      updatable: true,
       style: {
-        stroke:          '#409eff',
-        strokeWidth:     2.5,
+        stroke: '#409eff',
+        strokeWidth: 2.5,
       },
     })
   }
@@ -712,7 +713,7 @@ function buildFlowEdges() {
   for (const node of flowNodes.value) {
     if (!node.data.port) continue // for ghost ports - could make more robust
     const uid = node.data.port._uid
-    node.data.isConnected      = srcConn.has(uid) || tgtConn.has(uid)
+    node.data.isConnected = srcConn.has(uid) || tgtConn.has(uid)
     node.data.isTakenElsewhere = takenElsewhereUids.value.has(uid)
   }
 }
@@ -979,8 +980,8 @@ function pruneSingleConnectionSide(ports, side) {
 }
 
 function onPortConfigChange() {
-  pruneInvalidConnections() 
-  autoConnect()                // Re-connect newly compatible ports
+  pruneInvalidConnections()
+  autoConnect()
   syncPortWorkspace()
 }
 
@@ -1156,8 +1157,8 @@ function buildPayload() {
   return {
     sourceNodeId: props.sourceNode.id,
     targetNodeId: props.targetNode.id,
-    sourcePortLabels: JSON.parse(JSON.stringify(localSrcPorts.value)),
-    targetPortLabels: JSON.parse(JSON.stringify(localTgtPorts.value)),
+    sourcePortLabels: detachReactivity(localSrcPorts.value),
+    targetPortLabels: detachReactivity(localTgtPorts.value),
     couplings: localCouplings.value.map(c => {
       const sp = srcByUid(c.srcUid)
       const tp = tgtByUid(c.tgtUid)
