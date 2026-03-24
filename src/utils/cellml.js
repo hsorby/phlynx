@@ -888,6 +888,10 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
     importer.resolveImports(model, '.')
     const flattenedModel = importer.flattenModel(model)
 
+    if (!flattenedModel) {
+      handleLoggerErrors(importer, `Importer error count: ${importer.errorCount()}`)
+    }
+
     if (importer.errorCount()) {
       flattenedModel.delete()
       handleLoggerErrors(importer, `Importer error count: ${importer.errorCount()}`)
