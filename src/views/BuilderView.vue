@@ -361,7 +361,7 @@ import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
 import { relayoutNodes } from '../services/layouts/physics'
-import { generateFlattenedModel, initLibCellML, processCellMLData } from '../utils/cellml'
+import { generateFlattenedModel, initLibCellML, processCellMLData, extractVariablesFromModule } from '../utils/cellml'
 import {
   edgeLineOptions,
   CELLML_FILE_TYPES,
@@ -2343,6 +2343,38 @@ const pasteSelection = async (atMouse = false) => {
         selected: true,
       })
     }
+  })
+
+  newNodes.forEach((newNode) => {
+    const { name, sourceFile, componentName, configIndex } = newNode.data
+    if (!sourceFile || !componentName) return
+
+    const modelString = builderStore.getModuleContent(sourceFile)
+    const variables = extractVariablesFromModule(modelString, componentName)
+    newNode.data.variables = variables
+
+    const resolvedIndex = configIndex ?? 0
+    const targetModule = builderStore.getModulesModule(sourceFile, componentName)
+
+    if (targetModule && 
+    (!targetModule.configs?.[resolvedIndex]?.module_file?.length  ||
+    !targetModule.configs?.[resolvedIndex]?.module_type?.length ||
+    !targetModule.configs?.[resolvedIndex]?.variables_and_units?.length)) {
+      const syntheticConfig = {
+        module_file: sourceFile,
+        module_type: componentName,
+        variables_and_units: variables.map((v) => [v.name, v.units ?? 'dimensionless', 'access', 'variable']),
+      }
+      builderStore.addConfigFile([syntheticConfig], sourceFile)
+    }
+
+    builderStore.setVariableParameterValuesForInstance(
+      name,
+      variables,
+      sourceFile,
+      componentName,
+      resolvedIndex
+    )
   })
 
   getSelectedNodes.value.forEach((n) => (n.selected = false))
