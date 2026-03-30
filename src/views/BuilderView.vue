@@ -2163,9 +2163,22 @@ const copySelection = async () => {
 
   if (nodes.length === 0) return  
   
+  const storeSnapshot = {}
+  for (const node of nodes) {
+    const { sourceFile, componentName } = node.data
+    if (!sourceFile || !componentName) continue
+    if (storeSnapshot[sourceFile]) continue
+
+    const moduleFile = builderStore.availableModules.find((f) => f.filename === sourceFile)
+    if (moduleFile) {
+      storeSnapshot[sourceFile] = detachReactivity(moduleFile)
+    }
+  }
+
   const payload = {
     nodes: detachReactivity(nodes),
     edges: detachReactivity(edges),
+    storeSnapshot,
   }
 
   clipboard.value = payload
@@ -2184,7 +2197,6 @@ const pasteSelection = async (atMouse = false) => {
   try {
     const text = await navigator.clipboard.readText()
     const parsed = JSON.parse(text)
-
     if (parsed?.nodes && parsed?.edges) {
       sourceClipboard = parsed
     }
@@ -2193,6 +2205,16 @@ const pasteSelection = async (atMouse = false) => {
   }
 
   if (!sourceClipboard.nodes || sourceClipboard.nodes.length === 0) return
+
+  if (sourceClipboard.storeSnapshot) {
+    console.log('test')
+    for (const moduleFile of Object.values(sourceClipboard.storeSnapshot)) {
+      console.log(moduleFile)
+      if (!builderStore.hasModuleFile(moduleFile.filename)) {
+        builderStore.addModuleFile(moduleFile)
+      }
+    }
+  }
 
   const newNodes = []
   const newEdges = []
