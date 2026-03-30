@@ -2165,13 +2165,36 @@ const copySelection = async () => {
   
   const storeSnapshot = {}
   for (const node of nodes) {
-    const { sourceFile, componentName } = node.data
+    const { sourceFile, componentName, configIndex } = node.data
     if (!sourceFile || !componentName) continue
-    if (storeSnapshot[sourceFile]) continue
 
     const moduleFile = builderStore.availableModules.find((f) => f.filename === sourceFile)
-    if (moduleFile) {
-      storeSnapshot[sourceFile] = detachReactivity(moduleFile)
+    if (!moduleFile) continue
+
+    const component = moduleFile.modules.find((m) => m.name === componentName || m.componentName === componentName)
+    if (!component) continue
+
+    const key = `${sourceFile}::${componentName}`
+    if (storeSnapshot[key]) {
+      // Component already captured — add this config if it's a new one
+      const config = component.configs?.[configIndex]
+      if (config !== undefined && !storeSnapshot[key].configs.some(
+        (c) => c.BC_type === config.BC_type && c.vessel_type === config.vessel_type
+      )) {
+        storeSnapshot[key].configs.push(detachReactivity(config))
+      }
+      continue
+    }
+
+    const config = component.configs?.[configIndex]
+    storeSnapshot[key] = {
+      sourceFile,
+      componentName,
+      // Carry only the relevant config; others in the file are not needed
+      configs: config !== undefined ? [detachReactivity(config)] : [],
+      // The model (CellML text) is needed to reconstruct the component in a new window
+      model: moduleFile.model,
+      filename: moduleFile.filename,
     }
   }
 
@@ -2207,11 +2230,44 @@ const pasteSelection = async (atMouse = false) => {
   if (!sourceClipboard.nodes || sourceClipboard.nodes.length === 0) return
 
   if (sourceClipboard.storeSnapshot) {
-    console.log('test')
-    for (const moduleFile of Object.values(sourceClipboard.storeSnapshot)) {
-      console.log(moduleFile)
-      if (!builderStore.hasModuleFile(moduleFile.filename)) {
-        builderStore.addModuleFile(moduleFile)
+    for (const entry of Object.values(sourceClipboard.storeSnapshot)) {
+      const existingFile = builderStore.availableModules.find((f) => f.filename === entry.filename)
+
+      if (!existingFile) {
+        // The whole file is absent 
+        builderStore.addModuleFile({
+          filename: entry.filename,
+          model: entry.model,
+          modules: [{
+            name: entry.componentName,
+            componentName: entry.componentName,
+            configs: entry.configs,
+          }],
+        })
+      } else {
+        // The file exists but this specific component or config may be missing
+        const existingComponent = existingFile.modules.find(
+          (m) => m.name === entry.componentName || m.componentName === entry.componentName
+        )
+
+        if (!existingComponent) {
+          existingFile.modules.push({
+            name: entry.componentName,
+            componentName: entry.componentName,
+            configs: entry.configs,
+          })
+        } else {
+          // Component exists but config is missing
+          if (!existingComponent.configs) existingComponent.configs = []
+          for (const config of entry.configs) {
+            const alreadyPresent = existingComponent.configs.some(
+              (c) => c.BC_type === config.BC_type && c.vessel_type === config.vessel_type
+            )
+            if (!alreadyPresent) {
+              existingComponent.configs.push(config)
+            }
+          }
+        }
       }
     }
   }
