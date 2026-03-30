@@ -102,8 +102,13 @@ export default function useDragAndDrop(pendingHistoryNodes) {
 
     if (!config) {
       config = {
+        vessel_type: finalName,
+        BC_type: 'phlynx',
         module_file: sourceFile,
         module_type: componentName,
+        entrance_ports: [],
+        exit_ports:[],       
+        general_ports:[],
         variables_and_units: variables.map((v) => [v.name, v.units ?? 'dimensionless', 'access', 'variable']),
       }
       builderStore.addConfigFile([config], sourceFile)
