@@ -361,7 +361,7 @@ import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
 import { relayoutNodes } from '../services/layouts/physics'
-import { generateFlattenedModel, initLibCellML, processCellMLData, extractVariablesFromModule } from '../utils/cellml'
+import { generateFlattenedModel, initLibCellML, processCellMLData, extractVariablesFromModule, createEditableModelFromSourceModelAndComponent } from '../utils/cellml'
 import {
   edgeLineOptions,
   CELLML_FILE_TYPES,
@@ -2187,13 +2187,18 @@ const copySelection = async () => {
     }
 
     const config = component.configs?.[configIndex]
+
+    const { xml: componentModel } = createEditableModelFromSourceModelAndComponent(
+      moduleFile.model,
+      componentName
+    )
+    if (!componentModel) continue
+
     storeSnapshot[key] = {
       sourceFile,
       componentName,
-      // Carry only the relevant config; others in the file are not needed
       configs: config !== undefined ? [detachReactivity(config)] : [],
-      // The model (CellML text) is needed to reconstruct the component in a new window
-      model: moduleFile.model,
+      model: componentModel,
       filename: moduleFile.filename,
     }
   }
