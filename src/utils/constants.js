@@ -36,12 +36,16 @@ export const PAD      = 10          // top/bottom canvas padding
 export const AUTOSCROLL_ZONE = 60   // px from canvas edge that triggers autoscroll
 export const AUTOSCROLL_SPEED = 10  // max px per frame
 
-
 export const TARGET_COMPATIBLE = {
   entrance_ports: new Set(['general_ports']),
   exit_ports:    new Set(['entrance_ports', 'general_ports']),
   general_ports: new Set(['entrance_ports', 'exit_ports', 'general_ports']),
 }
+export const CELLML_NS = 'http://www.cellml.org/cellml/2.0#'
+export const MATHML_NS = 'http://www.w3.org/1998/Math/MathML'
+export const BQBIOL_NS = 'http://biomodels.net/biology-qualifiers/'
+export const GLOBAL_PARAMETERS = 'parameters_global'
+export const MODEL_PARAMETERS = 'parameters'
 
 export const STANDARD_UNITS = [
     'ampere',
@@ -117,6 +121,7 @@ export const IMPORT_KEYS = {
   MODULE_CONFIG: 'moduleConfig',
   CELLML_FILE: 'cellMLFile',
   PARAMETER: 'parameter',
+  TURTLE: 'turtle',
 }
 
 export const IMPORT_LABELS = {
@@ -124,11 +129,19 @@ export const IMPORT_LABELS = {
   MODULE_CONFIG: 'Module Configurations (.json)',
   CELLML_FILE: 'CellML File (.cellml or .xml)',
   PARAMETER: 'Parameters (.csv)',
+  TURTLE: 'Annotations (.ttl)',
 }
 export const EXPORT_KEYS = {
   CA: 'circulatoryAutogen',
   CELLML: 'cellml',
 }
+
+export const TTL_FILE_TYPES = [
+  {
+    description: 'Turtle RDF File',
+    accept: { 'application/ttl': ['.ttl'] },
+  },
+]
 
 export const CELLML_FILE_TYPES = [
   {

@@ -1,5 +1,5 @@
 <template>
-  <el-dialog :model-value="modelValue" title="Edit Module" width="700px" teleported @closed="resetForm"
+  <el-dialog :model-value="modelValue" title="Edit Module" width="800px" teleported @closed="resetForm"
     @update:model-value="closeDialog" @mousedown.stop @wheel.stop>
     <el-form :model="editableData" label-position="left" @submit.prevent="handleConfirm">
       <el-form-item label="Module Name">
@@ -65,19 +65,35 @@
         <!-- Multiport -->
         <el-table-column label="Multiport" width="100">
           <template #default="scope">
-            <el-select
-              v-model="scope.row.multiport"
-              size="small"
-              placeholder="Select"
-            >
-              <el-option
-                v-for="option in multiportOptions"
-                :key="option.value"
-                :label="option.label"
-                :value="option.value"
-                :disabled="option.value === 'Sum' && scope.row.option?.length > 1"
-              />
-            </el-select>
+            <div style="display: flex; flex-direction: column; gap: 5px">
+              <el-select
+                v-model="scope.row.multiport"
+                size="small"
+                placeholder="Select"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="option in multiportOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                  :disabled="option.value === 'Sum' && scope.row.option?.length > 1"
+                />
+              </el-select>
+              <div
+                v-if="scope.row.multiport === 'Multiply'"
+                style="display: flex; align-items: center; gap: 5px"
+              >
+                <span class="multiply-prefix">&times;</span>
+                <el-input-number
+                  v-model="scope.row.multiplyFactor"
+                  :controls="false"
+                  size="small"
+                  placeholder="1"
+                  style="width: 100%"
+                />
+              </div>
+            </div>
           </template>
         </el-table-column>
 
@@ -120,7 +136,7 @@
 
 <script setup>
 import { computed, reactive, watch } from 'vue'
-import { ElDialog, ElForm, ElFormItem, ElInput, ElButton } from 'element-plus'
+import { ElDialog, ElForm, ElFormItem, ElInput, ElButton, ElInputNumber } from 'element-plus'
 import { Delete, Plus } from '@element-plus/icons-vue'
 import { useGtm } from '../composables/useGtm'
 import { notify } from '../utils/notify'
@@ -172,6 +188,10 @@ const multiportOptions = [
   {
     value: 'Sum',
     label: 'Sum',
+  },
+  {
+    value: 'Multiply',
+    label: 'Multiply',
   },
   {
     value: 'None',
@@ -231,6 +251,14 @@ function handleConfirm() {
     (p) => p.option && p.label && p.label.trim()
   )
 
+  const invalidFactor = finalPortLabels.find(
+    (p) => p.multiport === 'Multiply' && (p.multiplyFactor === null || p.multiplyFactor === undefined || p.multiplyFactor === 0)
+  )
+  if (invalidFactor) {
+    notify.error({ message: `Port "${invalidFactor.label}" has Multiply selected but the scale factor is missing or zero.` })
+    return
+  }
+
   trackEvent('edit_module_action', {
     category: 'EditModule',
     action: 'edit_module',
@@ -269,6 +297,18 @@ watch(
   { deep: true }
 )
 
+watch(
+  () => editableData.portLabels.map(p => p.multiport),
+  (newMultiports) => {
+    newMultiports.forEach((mp, i) => {
+      if (mp !== 'Multiply') {
+        editableData.portLabels[i].multiplyFactor = 1
+      }
+    })
+  },
+  { deep: true }
+)
+
 const usedOptions = computed(() => {
   return new Set(
     editableData.portLabels
@@ -294,6 +334,7 @@ function addPortLabel() {
     option: '',
     label: '',
     multiport: 'None',
+    multiplyFactor: 1,
   })
 }
 
@@ -312,5 +353,11 @@ function deletePortLabel(index) {
   margin-bottom: 12px;
   font-size: 16px;
   display: block;
+}
+
+.multiply-prefix {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-color-info);
 }
 </style>
