@@ -185,7 +185,7 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore) {
         ])
       }
 
-      const config = libraryStore.getModuleConfigFromConfigIndex(
+      const config = libraryStore.findConfigByIndex(
         node.data.sourceFile,
         node.data.componentName,
         node.data.configIndex
@@ -231,7 +231,7 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore) {
     const module_config = Array.from(uniqueModuleConfigs.values());
 
     // --- 2. CONSOLIDATE PARAMETER FILES INTO ONE CSV ---
-    const globalConstants = libraryStore.getGlobalVariables()
+    const globalConstants = libraryStore.globalVariables
 
     for (const variable of globalConstants) {
       allParameters.add(JSON.stringify({

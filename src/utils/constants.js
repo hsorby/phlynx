@@ -92,7 +92,7 @@ export const MAX_VISIBLE_TAGS = 1
 export const GHOST_NODE_TYPE = 'ghostNode'
 export const GHOST_MODULE_FILENAME = 'ghostModule.cellml'
 export const GHOST_MODULE_DEFINITION = {
-  filename: GHOST_MODULE_FILENAME,
+  collectionName: GHOST_MODULE_FILENAME,
   modules: [
     {
       name: 'Ghost',

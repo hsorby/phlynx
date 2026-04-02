@@ -136,7 +136,7 @@ watch(
     if (newData && props.modelValue) {
       loading.value = true
       try {
-        const modelString = await store.getModuleContent(newData.sourceFile)
+        const modelString = await store.getModelByCollectionName(newData.sourceFile)
         const { xml, errors } = createEditableModelFromSourceModelAndComponent(modelString, newData.componentName)
         if (errors.length > 0) {
           console.error('Errors while extracting component for editing:', errors)
@@ -204,7 +204,7 @@ const handleSave = async (source) => {
     const hasSiblings = siblingCount.value > 0
     const isAppending = isInternalModule.value || (!applyToAll.value && hasSiblings)
 
-    const existingModelString = await store.getModuleContent(USER_MODULES_FILE)
+    const existingModelString = await store.getModelByCollectionName(USER_MODULES_FILE)
 
     // Block if the name is already taken by a different component.
     // Updating in place (newName === currentName and we own it) is always allowed.

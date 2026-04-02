@@ -22,8 +22,8 @@ export function generateUniqueModuleName(moduleData, existingNames) {
   return finalName
 }
 
-export function sanitiseModuleName(name) {
-  // Sanitize: replace spaces with underscores, remove invalid characters
+export function sanitiseName(name) {
+  // Sanitise: replace spaces with underscores, remove invalid characters
   // Valid CellML component names: alphanumeric, underscore, and must start with letter or underscore
   let sanitised = name
     .trim()

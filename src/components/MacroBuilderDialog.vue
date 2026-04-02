@@ -8,8 +8,8 @@
   >
     <el-container style="flex-grow: 1; min-height: 0">
       <el-aside :width="asideWidth + 'px'" class="module-aside">
-        <h4 style="margin-top: 0">Available Modules</h4>
-        <ModuleList />
+        <h4 style="margin-top: 0">Module Library </h4>
+        <LibraryArea />
       </el-aside>
 
       <div class="resize-handle" @mousedown="startResize">
@@ -28,8 +28,8 @@
             :nodes="nodes"
             :delete-key-code="['Backspace', 'Delete']"
           >
-            <template #node-moduleNode="props">
-              <ModuleNode
+            <template #node-instanceNode="props">
+              <InstanceNode
                 :id="props.id"
                 :data="props.data"
                 :selected="props.selected"
@@ -78,8 +78,8 @@ import {
 } from 'element-plus'
 
 import WorkbenchArea from './WorkbenchArea.vue'
-import ModuleList from './ModuleList.vue'
-import ModuleNode from './ModuleNode.vue'
+import LibraryArea from './LibraryArea.vue'
+import InstanceNode from './InstanceNode.vue'
 import GhostNode from './GhostNode.vue'
 import GhostSetupModal from './GhostSetupDialog.vue'
 import { useLibraryStore } from '../stores/libraryStore'
@@ -157,8 +157,8 @@ watch(
   () => props.modelValue,
   (newVal) => {
     newVal
-      ? libraryStore.addModuleFile(GHOST_MODULE_DEFINITION)
-      : libraryStore.removeModuleFile(GHOST_MODULE_FILENAME)
+      ? libraryStore.addOrUpdateCollection(GHOST_MODULE_DEFINITION)
+      : libraryStore.removeCollection(GHOST_MODULE_FILENAME)
   }
 )
 

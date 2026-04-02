@@ -195,8 +195,9 @@ function resolveValue(name, type, units, value) {
 
   // Determine lookup key based on type
   const lookupName = name + (type === 'global_constant' ? '' : '_' + props.instanceName)
+  
   // Get all raw matches from store
-  const allMatches = libraryStore.getParameterValuesForInstanceVariable(lookupName)
+  const allMatches = libraryStore.getParameterValueForInstanceVariable(lookupName)
 
   // We only care about values that were stored with the same units as the current variable
   const relevantMatches = allMatches.filter((match) => match?.units === units)

@@ -43,7 +43,7 @@ export function useLoadFromVesselArray() {
       pendingEdges = result.edges
       pendingNodeDataMap.clear()
       result.nodes.forEach((n) => {
-        store.setVariableParameterValuesForInstance(
+        store.setParameterValuesForInstance(
           n.data.name,
           n.data.variables,
           n.data.sourceFile,

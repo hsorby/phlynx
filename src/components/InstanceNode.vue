@@ -1,15 +1,15 @@
 <template>
   <div
-    class="module-node"
+    class="instance-node"
     :id="id"
-    ref="moduleNode"
+    ref="instanceNode"
     :class="{ selected: selected }"
     @contextmenu.stop.prevent="openContextMenu"
     @mousedown.capture="StopDrag"
   >
     <NodeResizer min-width="180" min-height="105" :is-visible="selected" />
 
-    <el-card :class="[domainTypeClass, 'module-card']" shadow="hover">
+    <el-card :class="[domainTypeClass, 'instance-card']" shadow="hover">
       <div v-if="isMissingParameters" class="status-indicator">
         <el-tooltip content="At least one parameter has not been assigned a value" placement="top" effect="light">
           <el-icon class="warning-icon">
@@ -18,7 +18,7 @@
         </el-tooltip>
       </div>
 
-      <div class="module-name" @dblclick="startEditing">
+      <div class="instance-name" @dblclick="startEditing">
         <span v-if="!isEditing">
           {{ data.name }}
         </span>
@@ -35,7 +35,7 @@
           :auto-close="1200"
         >
           <el-dropdown trigger="click" @command="handleSetDomainType" @visible-change="(val) => isDropdownOpen = val">
-            <el-button size="small" circle class="module-button">
+            <el-button size="small" circle class="instance-button">
               <el-icon><Key /></el-icon>
             </el-button>
             <template #dropdown>
@@ -64,7 +64,7 @@
         >
           <el-dropdown trigger="click" @command="addPort({ side: $event })">
           
-            <el-button size="small" circle class="module-button">
+            <el-button size="small" circle class="instance-button">
               <el-icon><Place /></el-icon>
             </el-button>
           
@@ -90,7 +90,7 @@
             size="small"
             circle
             @click="openEditDialog"
-            class="module-button"
+            class="instance-button"
           >
             <el-icon><Edit /></el-icon>
           </el-button>
@@ -104,7 +104,7 @@
             :show-after="300"
             :auto-close="1200"
         >
-          <el-button size="small" circle @click="openEditParameterDialog" class="module-button">
+          <el-button size="small" circle @click="openEditParameterDialog" class="instance-button">
             <el-icon><Operation /></el-icon>
           </el-button>
         </el-tooltip>
@@ -121,7 +121,7 @@
             size="small"
             circle
             @click="openCellMLEditDialog"
-            class="module-button"
+            class="instance-button"
             :show-after="300"
             :auto-close="1200"
           >
@@ -165,7 +165,7 @@ import CellMLIcon from './icons/CellMLIcon.vue'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { getHandleId, getHandleStyle, portPosition } from '../utils/ports'
-import { sanitiseModuleName } from '../utils/nodes'
+import { sanitiseName } from '../utils/nodes'
 import { notify } from '../utils/notify'
 import { isEditableVariableType, isEmpty } from '../utils/variables'
 import '../assets/vueflownode.css'
@@ -366,7 +366,7 @@ function saveEdit() {
     return
   }
 
-  const sanitisedName = sanitiseModuleName(editingName.value)
+  const sanitisedName = sanitiseName(editingName.value)
 
   if (!sanitisedName) {
     isEditing.value = false
@@ -384,7 +384,7 @@ function saveEdit() {
   updateNodeData(props.id, { name: sanitisedName })
   isEditing.value = false
   setTimeout(() => {
-    libraryStore.setVariableParameterValuesForInstance(
+    libraryStore.setParameterValuesForInstance(
       sanitisedName,
       props.data.variables,
       props.data.sourceFile,
@@ -408,7 +408,7 @@ function openContextMenu(event) {
 <style lang="scss" scoped>
 @import '../assets/vueflowhandle.css';
 
-.module-node {
+.instance-node {
   display: block;
   width: 100%;
   height: 100%;
@@ -416,8 +416,8 @@ function openContextMenu(event) {
   border-radius: 10px;
 }
 
-.module-node > .el-card,
-.module-card {
+.instance-node > .el-card,
+.instance-card {
   width: 100%;
   height: 100%;
   margin: 0;
@@ -456,7 +456,7 @@ function openContextMenu(event) {
   }
 }
 
-.module-button {
+.instance-button {
   margin: 0;
 }
 </style>

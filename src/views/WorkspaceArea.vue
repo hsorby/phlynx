@@ -154,7 +154,7 @@
     <el-container style="flex-grow: 1; min-height: 0">
       <el-aside :width="asideWidth + 'px'" class="module-aside">
         <h4 style="margin-top: 0">Available Modules</h4>
-        <ModuleList />
+        <LibraryArea />
       </el-aside>
 
       <div class="resize-handle" @mousedown="startResize">
@@ -223,8 +223,8 @@
                 <CameraFilled />
               </ControlButton>
             </Controls>
-            <template #node-moduleNode="props">
-              <ModuleNode
+            <template #node-instanceNode="props">
+              <InstanceNode
                 :id="props.id"
                 :data="props.data"
                 :selected="props.selected"
@@ -340,9 +340,9 @@ import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
 import { useResizableAside } from '../composables/useResizableAside'
 import { useGtm } from '../composables/useGtm'
-import ModuleList from '../components/ModuleList.vue'
+import LibraryArea from '../components/LibraryArea.vue'
 import Workbench from '../components/WorkbenchArea.vue'
-import ModuleNode from '../components/ModuleNode.vue'
+import instanceNode from '../components/InstanceNode.vue'
 import EditModuleDialog from '../components/EditModuleDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
@@ -387,11 +387,6 @@ import {
 import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import EditParameterDialog from '../components/EditParameterDialog.vue'
 
-// import testModuleBGContent from '../assets/bg_modules.cellml?raw'
-// import testModuleColonContent from '../assets/colon_FTU_modules.cellml?raw'
-// import testModuleNewColonContent from '../assets/colon_FTU_modules_new.cellml?raw'
-// import testParamertersCSV from '../assets/colon_FTU_parameters.csv?raw'
-
 const {
   addEdges,
   addNodes,
@@ -420,7 +415,7 @@ const { processMacroGeneration } = useMacroGenerator()
 
 const pendingHistoryNodes = new Set()
 
-const { onDragOver: onDragOverModule, onDrop: onDropModule, onDragLeave, isDragOver, createModuleNode } = useDragAndDrop(pendingHistoryNodes)
+const { onDragOver: onDragOverModule, onDrop: onDropModule, onDragLeave, isDragOver, createInstanceNode } = useDragAndDrop(pendingHistoryNodes)
 
 /**
  * Shared multi-file notification helper.
@@ -1141,8 +1136,8 @@ const screenshotDisabled = computed(() => nodes.value.length === 0 && vueFlowRef
 
 function updateNodesWithNewParameters() {
   nodes.value.forEach((node) => {
-    if (node.type === 'moduleNode') {
-      libraryStore.setVariableParameterValuesForInstance(
+    if (node.type === 'instanceNode') {
+      libraryStore.setParameterValuesForInstance(
         node.data.name,
         node.data.variables,
         node.data.sourceFile,
@@ -1169,8 +1164,8 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
           sourceFile: filename,
         }))
       
-        libraryStore.addModuleFile({
-          filename,
+        libraryStore.addOrUpdateCollection({
+          collectionName: filename,
           modules: modules,
           model: result.components.model,
         })
@@ -1284,7 +1279,7 @@ const loadParametersData = async (content, filename, { notify: shouldNotify = tr
 
 const loadConfigData = async (content, filename, { notify: shouldNotify = true } = {}) => {
   try {
-    const added = libraryStore.addConfigFile(content, filename)
+    const added = libraryStore.addConfigFile(filename, content)
     if (shouldNotify && added > 0) {
       notify.success({
         title: 'Configurations Loaded',
@@ -1480,7 +1475,7 @@ async function handleCellMLSave(saveData) {
   const isForkOrRename = isRename || isNewFile
 
   // Get the original configuration to migrate (if it exists).
-  const originalModule = libraryStore.getModulesModule(originalSourceFile, originalComponentName)
+  const originalModule = libraryStore.findModulesByComponentName(originalSourceFile, originalComponentName)
 
   // Safety check: If we can't find the original, create a blank config
   let configToMigrate = {}
@@ -1493,7 +1488,7 @@ async function handleCellMLSave(saveData) {
   await loadCellMLData(code, sourceFile, { notify: false })
 
   // Retrieve the "Target" Module (The one we just loaded)
-  let targetModule = libraryStore.getModulesModule(sourceFile, componentName)
+  let targetModule = libraryStore.findModulesByComponentName(sourceFile, componentName)
 
   if (!targetModule) {
     console.warn(`Mismatch: Requested ${componentName}, but store didn't register it. Check component name extraction.`)
@@ -1841,7 +1836,7 @@ function onNodeContextMenu({ clientX, clientY, nodeId }) {
 }
 
 function createNewModuleAtPosition(clientX, clientY) {
-  const allModules = libraryStore.availableModules
+  const allModules = libraryStore.availableCollections
   const moduleFile = allModules.find((f) => f.modules?.some((m) => m.componentName === 'new_module'))
   const moduleEntry = moduleFile?.modules?.find((m) => m.componentName === 'new_module')
 
@@ -1853,7 +1848,7 @@ function createNewModuleAtPosition(clientX, clientY) {
   const moduleData = {
     name: moduleEntry.name,
     componentName: moduleEntry.componentName,
-    sourceFile: moduleFile.filename,
+    sourceFile: moduleFile.collectionName,
     configs: moduleEntry.configs || null,
     configIndex: 0,
     ports: moduleEntry.ports || [],
@@ -1861,7 +1856,7 @@ function createNewModuleAtPosition(clientX, clientY) {
   }
 
   const position = screenToFlowCoordinate({ x: clientX, y: clientY })
-  createModuleNode(moduleData, position)
+  createInstanceNode(moduleData, position)
 }
 
 function handleAutoLayout() {
@@ -2168,7 +2163,7 @@ const copySelection = async () => {
     const { sourceFile, componentName, configIndex } = node.data
     if (!sourceFile || !componentName) continue
 
-    const moduleFile = libraryStore.availableModules.find((f) => f.filename === sourceFile)
+    const moduleFile = libraryStore.availableCollections.find((f) => f.collectionName === sourceFile)
     if (!moduleFile) continue
 
     const component = moduleFile.modules.find((m) => m.name === componentName || m.componentName === componentName)
@@ -2199,7 +2194,7 @@ const copySelection = async () => {
       componentName,
       configs: config !== undefined ? [detachReactivity(config)] : [],
       model: componentModel,
-      filename: moduleFile.filename,
+      collectionName: moduleFile.collectionName,
     }
   }
 
@@ -2236,12 +2231,12 @@ const pasteSelection = async (atMouse = false) => {
 
   if (sourceClipboard.storeSnapshot) {
     for (const entry of Object.values(sourceClipboard.storeSnapshot)) {
-      const existingFile = libraryStore.availableModules.find((f) => f.filename === entry.filename)
+      const existingFile = libraryStore.availableCollections.find((f) => f.collectionName === entry.collectionName)
 
       if (!existingFile) {
         // The whole file is absent 
-        libraryStore.addModuleFile({
-          filename: entry.filename,
+        libraryStore.addOrUpdateCollection({
+          collectionName: entry.collectionName,
           model: entry.model,
           modules: [{
             name: entry.componentName,
@@ -2354,12 +2349,12 @@ const pasteSelection = async (atMouse = false) => {
     const { name, sourceFile, componentName, configIndex } = newNode.data
     if (!sourceFile || !componentName) return
 
-    const modelString = libraryStore.getModuleContent(sourceFile)
+    const modelString = libraryStore.getModelByCollectionName(sourceFile)
     const variables = extractVariablesFromModule(modelString, componentName)
     newNode.data.variables = variables
 
     const resolvedIndex = configIndex ?? 0
-    const targetModule = libraryStore.getModulesModule(sourceFile, componentName)
+    const targetModule = libraryStore.findModulesByComponentName(sourceFile, componentName)
 
     if (targetModule && 
     (!targetModule.configs?.[resolvedIndex]?.module_file?.length  ||
@@ -2370,10 +2365,10 @@ const pasteSelection = async (atMouse = false) => {
         module_type: componentName,
         variables_and_units: variables.map((v) => [v.name, v.units ?? 'dimensionless', 'access', 'variable']),
       }
-      libraryStore.addConfigFile([syntheticConfig], sourceFile)
+      libraryStore.addConfigFile(sourceFile, [syntheticConfig])
     }
 
-    libraryStore.setVariableParameterValuesForInstance(
+    libraryStore.setParameterValuesForInstance(
       name,
       variables,
       sourceFile,
@@ -2596,7 +2591,7 @@ onMounted(async () => {
   }
 
   for (const [path, content] of Object.entries(moduleConfigs)) {
-    libraryStore.addConfigFile(content.default, path.split('/').pop())
+    libraryStore.addConfigFile(path.split('/').pop(), content.default)
   }
 })
 

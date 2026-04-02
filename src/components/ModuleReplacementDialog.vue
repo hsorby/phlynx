@@ -9,7 +9,7 @@
   >
     <div class="container">
       <div class="module-list-wrapper">
-        <ModuleList selectable @select="onModuleSelected" />
+        <LibraryArea selectable @select="onModuleSelected" />
       </div>
 
       <div class="sidebar">
@@ -52,8 +52,8 @@
 import { ref } from 'vue'
 import { ElCheckbox, ElButton } from 'element-plus'
 
-import ModuleList from './ModuleList.vue'
 import { useGtm } from '../composables/useGtm'
+import LibraryArea from './LibraryArea.vue'
 
 const props = defineProps({
   modelValue: {

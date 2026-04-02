@@ -74,7 +74,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
   }
 
   /**
-   * Creates a new module node at the given position and adds it to the flow.
+   * Creates a new instance node at the given position and adds it to the flow.
    * Returns the new node's id and type so the caller can handle any
    * post-creation logic (e.g. opening the ghost setup dialog).
    *
@@ -82,19 +82,19 @@ export default function useDragAndDrop(pendingHistoryNodes) {
    * @param {{x: number, y: number}} position - Flow coordinates to place the node.
    * @returns {{ nodeId: string, nodeType: string }}
    */
-  function createModuleNode(moduleData, position) {
+  function createInstanceNode(moduleData, position) {
     const nodeId = getId(getNodes.value.map((n) => n.id))
     const existingNames = new Set(getNodes.value.map((n) => n.data.name))
-    const finalName = generateUniqueModuleName(moduleData, existingNames)
+    const finalName = generateUniqueInstanceName(moduleData, existingNames)
 
     const componentName = moduleData.componentName
-    const nodeType = moduleData.sourceFile === GHOST_MODULE_FILENAME ? GHOST_NODE_TYPE : 'moduleNode'
+    const nodeType = moduleData.sourceFile === GHOST_MODULE_FILENAME ? GHOST_NODE_TYPE : 'instanceNode'
     const sourceFile = moduleData.sourceFile
     const label = sourceFile ? `${componentName} — ${sourceFile}` : componentName
 
     pendingHistoryNodes.add(nodeId)
 
-    const modelString = libraryStore.getModuleContent(sourceFile)
+    const modelString = libraryStore.getModelByCollectionName(sourceFile)
     const variables = extractVariablesFromModule(modelString, componentName)
 
     const configIndex = moduleData.configIndex || 0
@@ -102,21 +102,21 @@ export default function useDragAndDrop(pendingHistoryNodes) {
 
     if (!config) {
       config = {
-        vessel_type: finalName,
-        BC_type: 'phlynx',
+        module_type: finalName,
+        module_subtype: 'phlynx',
         module_file: sourceFile,
-        module_type: componentName,
+        component_type: componentName,
         entrance_ports: [],
         exit_ports:[],       
         general_ports:[],
         variables_and_units: variables.map((v) => [v.name, v.units ?? 'dimensionless', 'access', 'variable']),
       }
-      libraryStore.addConfigFile([config], sourceFile)
+      libraryStore.addConfigFile(sourceFile, [config])
     }
 
     const portLabels = buildPortLabels(config)
 
-    libraryStore.setVariableParameterValuesForInstance(
+    libraryStore.setParameterValuesForInstance(
       finalName,
       variables,
       sourceFile,
@@ -185,7 +185,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
       y: event.clientY,
     })
 
-    const { nodeId, nodeType } = createModuleNode(moduleData, position)
+    const { nodeId, nodeType } = createInstanceNode(moduleData, position)
 
     if (nodeType === GHOST_NODE_TYPE) {
       pendingGhostNodeId.value = nodeId
@@ -203,6 +203,6 @@ export default function useDragAndDrop(pendingHistoryNodes) {
     onDragLeave,
     onDragOver,
     onDrop,
-    createModuleNode,
+    createInstanceNode,
   }
 }

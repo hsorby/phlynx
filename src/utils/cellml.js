@@ -789,7 +789,7 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
   const unitsLibraryCache = new Map() // Key: filename, Value: libcellml.Model
   const unitsImportSourceMap = new Map() // Key: filename, Value: libcellml.ImportSource
 
-  const globalVariables = libraryStore.getGlobalVariables()
+  const globalVariables = libraryStore.globalVariables
 
   // ------------------------------
   // HELPER: Reusable Unit Importer
@@ -892,8 +892,8 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
 
       // Load and cache source model if not already done.
       if (!modelCache.has(fileName)) {
-        if (!libraryStore.hasModuleFile(fileName)) throw new Error(`Missing file: ${fileName}`)
-        const parsedModel = parser.parseModel(libraryStore.getModuleContent(fileName))
+        if (!libraryStore.hasCollection(fileName)) throw new Error(`Missing file: ${fileName}`)
+        const parsedModel = parser.parseModel(libraryStore.getModelByCollectionName(fileName))
         if (parser.errorCount() > 0) {
           handleLoggerErrors(parser, `Error parsing ${fileName} [${parser.errorCount()} errors]:`)
         }

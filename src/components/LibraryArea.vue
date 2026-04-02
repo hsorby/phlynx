@@ -17,17 +17,17 @@
       <template v-if="filteredModuleFiles.length > 0">
         <div
           v-for="file in filteredModuleFiles"
-          :key="file.filename"
+          :key="file.collectionName"
           class="mlc__group"
         >
           <!-- Group header -->
           <button
             class="mlc__group-header"
-            :class="{ 'is-open': activeCollapseNames.includes(file.filename) }"
-            @click="toggleGroup(file.filename)"
+            :class="{ 'is-open': activeCollapseNames.includes(file.collectionName) }"
+            @click="toggleGroup(file.collectionName)"
           >
             <el-icon class="mlc__group-chevron"><ArrowRight /></el-icon>
-            <span class="mlc__group-name"><span class="mlc__group-name-text">{{ displayName(file.filename) }}</span></span>
+            <span class="mlc__group-name"><span class="mlc__group-name-text">{{ displayName(file.collectionName) }}</span></span>
             <el-tag size="small" type="info" effect="plain" round class="mlc__group-count">
               {{ file.modules.length }}
             </el-tag>
@@ -35,7 +35,7 @@
 
           <!-- Module cards -->
           <transition name="slide">
-            <div v-show="activeCollapseNames.includes(file.filename)" class="mlc__group-body">
+            <div v-show="activeCollapseNames.includes(file.collectionName)" class="mlc__group-body">
               <el-card
                 v-for="module in file.modules"
                 :key="module.name"
@@ -88,7 +88,7 @@
                             size="small"
                             circle
                             :icon="View"
-                            @click.stop="openPreview(module, file.filename)"
+                            @click.stop="openPreview(module, file.collectionName)"
                           />
                         </el-tooltip>
                       </div>
@@ -152,7 +152,7 @@ const { onDragStart } = useDragAndDrop()
 
 const filterText = ref('')
 const activeCollapseNames = ref([])
-const knownFilenames = ref(new Set())
+const knownFileNames = ref(new Set())
 const selectedConfigs = reactive({})
 const showPreview = ref(false)
 const previewTarget = ref(null)
@@ -174,14 +174,14 @@ onBeforeUnmount(() => {
 
 const filteredModuleFiles = computed(() => {
   const q = filterText.value.toLowerCase()
-  if (!q) return store.availableModules
+  if (!q) return store.availableCollections
 
-  return store.availableModules
-    .map((file) => ({
-      ...file,
-      modules: file.modules.filter((m) => m.name.toLowerCase().includes(q)),
+  return store.availableCollections
+    .map((collection) => ({
+      ...collection,
+      modules: collection.modules.filter((m) => m.name.toLowerCase().includes(q)),
     }))
-    .filter((file) => file.modules.length > 0)
+    .filter((collection) => collection.modules.length > 0)
 })
 
 // ─── Accordion ───────────────────────────────────────────────────────────────
@@ -200,7 +200,7 @@ function displayName(filename) {
 
 function configLabel(config) {
   if (!config) return ''
-  return [config.vessel_type, config.BC_type].filter(Boolean).join(' – ')
+  return [config.module_type, config.module_subtype].filter(Boolean).join(' – ')
 }
 
 // ─── Watchers ─────────────────────────────────────────────────────────────────
@@ -213,7 +213,7 @@ watch(
         if (selectedConfigs[mod.name] === undefined) selectedConfigs[mod.name] = 0
       })
     })
-    activeCollapseNames.value = filterText.value ? files.map((f) => f.filename) : []
+    activeCollapseNames.value = filterText.value ? files.map((f) => f.collectionName) : []
   },
   { immediate: true, deep: true }
 )
@@ -222,8 +222,8 @@ watch(
   () => store.availableModules,
   (currentModuleFiles) => {
     for (const file of currentModuleFiles) {
-      if (!knownFilenames.value.has(file.filename)) {
-        knownFilenames.value.add(file.filename)
+      if (!knownFileNames.value.has(file.collectionName)) {
+        knownFileNames.value.add(file.collectionName)
       }
     }
   },
@@ -246,11 +246,11 @@ function handleDragEnd() {
 
 // ─── Preview ──────────────────────────────────────────────────────────────────
 
-function openPreview(module, filename) {
+function openPreview(module, collectionName) {
   const configIndex = selectedConfigs[module.name] ?? 0
   previewTarget.value = {
     moduleName: module.name,
-    filename,
+    collectionName,
     configIndex,
     configData: module.configs[configIndex],
   }

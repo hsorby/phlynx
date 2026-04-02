@@ -25,10 +25,10 @@ function mergeIn(sourceMap, targetMap) {
   }
 }
 
-// 'builder' is the store's ID
-export const useLibraryStore = defineStore('builder', () => {
+// 'library' is the store's ID
+export const useLibraryStore = defineStore('library', () => {
   // --- STATE ---
-  const availableModules = ref([])
+  const availableCollections = ref([])
   const availableUnits = ref([])
   const lastSaveName = ref('phlynx-project')
   const lastExportName = ref('phlynx-export')
@@ -39,8 +39,8 @@ export const useLibraryStore = defineStore('builder', () => {
 
   // --- DEBUG ---
 
-  function listModules() {
-    availableModules.value.forEach((e) => console.log(e.filename))
+  function listCollections() {
+    availableCollections.value.forEach((e) => console.log(e.filename))
   }
 
   function listUnits() {
@@ -51,7 +51,7 @@ export const useLibraryStore = defineStore('builder', () => {
   }
 
   // --- ACTIONS ---
-  function normalizeValue(val) {
+  function normaliseValue(val) {
     if (!val || val === '-') return val // Ignore placeholders
 
     const num = parseFloat(val)
@@ -63,11 +63,12 @@ export const useLibraryStore = defineStore('builder', () => {
   }
 
   function createParameterKey(parameter) {
-    return `${parameter.variable_name.trim()}||${parameter.units.trim()}||${normalizeValue(
+    return `${parameter.variable_name.trim()}||${parameter.units.trim()}||${normaliseValue(
       parameter.value.trim()
     )}||${parameter.data_reference.trim()}`
   }
 
+  // SMELL - should parameters even be in the library store?
   function addParameterFile(filename, data) {
     if (!data || !Array.isArray(data)) return false
 
@@ -76,7 +77,6 @@ export const useLibraryStore = defineStore('builder', () => {
       if (availableParameters.value.has(key)) {
         availableParameters.value.get(key).count += 1
         availableParameters.value.get(key).source.push(filename)
-        // console.log(`Parameter already exists, skipping: ${key}, count: ${availableParameters.value.get(key).count}`)
         continue
       }
 
@@ -84,11 +84,12 @@ export const useLibraryStore = defineStore('builder', () => {
       if (trimmedVariableName === '' || trimmedVariableName === '#') {
         continue
       }
+
       const newParameterSet = {
         data_reference: param.data_reference.trim(),
         variable_name: trimmedVariableName,
         units: param.units.trim(),
-        value: normalizeValue(param.value.trim()),
+        value: normaliseValue(param.value.trim()),
         source: [filename],
         count: 1,
         id: 'id_' + availableParameters.value.size,
@@ -114,7 +115,7 @@ export const useLibraryStore = defineStore('builder', () => {
     return globalConstants.value.get(variableName)
   }
 
-  function getParameterValuesForInstanceVariable(instanceVariable) {
+  function getParameterValueForInstanceVariable(instanceVariable) {
     let results = []
     const paramKeys = availableVariableNameIdMap.value.get(instanceVariable)
     if (paramKeys) {
@@ -124,11 +125,12 @@ export const useLibraryStore = defineStore('builder', () => {
     return results
   }
 
-  function setVariableParameterValuesForInstance(instanceName, variables, sourceFile, componentName, configIndex) {
-    const module = getModulesModule(sourceFile, componentName)
+  // SMELLY 
+  function setParameterValuesForInstance(instanceName, variables, collectionFile, componentName, configIndex) {
+    const modules = findModulesByComponentName(collectionFile, componentName)
     let variablesAndUnits = []
-    if (module?.configs && configIndex !== undefined && module.configs[configIndex]) {
-      variablesAndUnits = module.configs[configIndex]?.variables_and_units ?? []
+    if (modules?.configs && configIndex !== undefined && modules.configs[configIndex]) {
+      variablesAndUnits = modules.configs[configIndex]?.variables_and_units ?? []
     }
     const configMap = new Map(variablesAndUnits.map((arr) => [arr[0], arr]))
     for (const variable of variables) {
@@ -138,7 +140,7 @@ export const useLibraryStore = defineStore('builder', () => {
       variable.type = variableType
       if (isEditableVariableType(variableType)) {
         const lookupName = variable.name + (variableType === 'global_constant' ? '' : '_' + instanceName)
-        const parameterValues = getParameterValuesForInstanceVariable(lookupName)
+        const parameterValues = getParameterValueForInstanceVariable(lookupName)
         if (parameterValues.length === 1 && parameterValues[0].units === variable.units) {
           if (variableType === 'global_constant') {
             assignGlobalConstant(variable.name, parameterValues[0].value, parameterValues[0].units)
@@ -175,8 +177,7 @@ export const useLibraryStore = defineStore('builder', () => {
   /**
    * Adds configuration(s) to the appropriate module(s)
    */
-  // TODO: change order of these inputs to align with other methods
-  function addConfigFile(payload, filename) {
+  function addConfigFile(filename, payload) {
     const configs = payload
     const configFilename = filename
     let totalAdded = 0
@@ -187,23 +188,23 @@ export const useLibraryStore = defineStore('builder', () => {
     }
 
     configs.forEach((config) => {
-      if (!config.module_file || typeof config.module_file !== 'string') {
-        console.warn('[libraryStore] Skipping config: missing module_file declaration', config)
+      if (!config.component_file || typeof config.component_file !== 'string') {
         return 
       }
 
-      let moduleFile = availableModules.value.find((f) => f.filename === config.module_file)
+      let collection = availableCollections.value.find((f) => f.collectionName === config.component_file)
 
-      if (!moduleFile) {
-        moduleFile = {
-          filename: config.module_file,
+      // SMELL: stub should only be associated with a module, not a whole collection.
+      if (!collection) {
+        collection = {
+          collectionName: config.component_file,
           modules: [],
           isStub: true,
         }
-        availableModules.value.push(moduleFile)
+        availableCollections.value.push(collection)
       }
 
-      let module = moduleFile.modules.find((m) => m.name === config.module_type || m.type === config.module_type)
+      let module = collection.modules.find((m) => m.name === config.module_type || m.type === config.module_type)
 
       if (!module) {
         module = {
@@ -211,7 +212,7 @@ export const useLibraryStore = defineStore('builder', () => {
           componentName: config.module_type,
           configs: [],
         }
-        moduleFile.modules.push(module)
+        collection.modules.push(module)
       }
 
       if (!module.configs) {
@@ -219,9 +220,10 @@ export const useLibraryStore = defineStore('builder', () => {
       }
 
       const existingConfigIndex = module.configs.findIndex(
-        (c) => c.BC_type === config.BC_type && c.vessel_type === config.vessel_type
+        (c) => c.module_subtype === config.module_subtype && c.module_type === config.module_type
       )
 
+      // SMELL - do we need this?
       const configWithMetadata = {
         ...config,
         _sourceFile: configFilename,
@@ -239,17 +241,18 @@ export const useLibraryStore = defineStore('builder', () => {
     return totalAdded
   }
 
-  function addModuleFile(payload) {
-    const existingFile = availableModules.value.find((f) => f.filename === payload.filename)
+  function addOrUpdateCollection(payload) {
+    const existingCollection = availableCollections.value.find((f) => f.collectionName === payload.collectionName)
 
-    if (existingFile) {
-      if (existingFile.isStub) {
-        delete existingFile.isStub
+    if (existingCollection) {
+      // SMELL: collection shouldn't be a stub, only a module.
+      if (existingCollection.isStub) {
+        delete existingCollection.isStub
       }
 
-      if (existingFile.modules) {
+      if (existingCollection.modules) {
         payload.modules.forEach((newMod) => {
-          const oldMod = existingFile.modules.find((m) => m.name === newMod.name)
+          const oldMod = existingCollection.modules.find((m) => m.name === newMod.name)
           if (oldMod && oldMod.configs && oldMod.configs.length > 0) {
             newMod.configs = oldMod.configs
           }
@@ -257,11 +260,11 @@ export const useLibraryStore = defineStore('builder', () => {
       }
     }
 
-    addOrUpdateFile(availableModules, payload)
+    addOrUpdateFile(availableCollections, payload)
   }
 
   function loadState(state) {
-    mergeIntoStore(state.availableModules, availableModules.value)
+    mergeIntoStore(state.availableCollections, availableCollections.value)
     mergeIntoStore(state.availableUnits, availableUnits.value)
     if (state.availableParameters) {
       mergeIn(new Map(state.availableParameters), availableParameters.value)
@@ -276,35 +279,15 @@ export const useLibraryStore = defineStore('builder', () => {
     lastExportName.value = state.lastExportName || 'phlynx-export'
   }
 
-  function removeFile(collection, filename) {
-    const index = collection.value.findIndex((f) => f.filename === filename)
-    if (index !== -1) {
-      collection.value.splice(index, 1)
-    }
-  }
-
   /**
-   * Removes a module file and its modules from the list.
-   * @param {string} filename - The name of the file to remove.
+   * Removes a collection and the associated modules from the list.
+   * @param {string} collectionName - The name of the collection to remove.
    */
-  function removeModuleFile(filename) {
-    removeFile(availableModules, filename)
-  }
-
-  function getModuleContent(filename) {
-    const index = availableModules.value.findIndex((f) => f.filename === filename)
+  function removeCollection(collectionName) {
+    const index = availableCollections.value.findIndex((f) => f.collectionName === collectionName)
     if (index !== -1) {
-      return availableModules.value[index].model
+      availableCollections.value.splice(index, 1)
     }
-    return ''
-  }
-
-  function getModulesModule(filename, moduleName) {
-    const file = availableModules.value.find((f) => f.filename === filename)
-    if (!file) return null
-
-    const module = file.modules.find((m) => m.name === moduleName)
-    return module || null
   }
 
   /**
@@ -322,55 +305,54 @@ export const useLibraryStore = defineStore('builder', () => {
   }
 
   /**
-   * Checks if a module file is already loaded.
-   * @param {string} filename - The name of the file to check.
-   * @returns {boolean} - True if the file is loaded, false otherwise.
+   * Checks if a collection is already loaded.
+   * @param {string} collectionName - The name of the collection to check.
+   * @returns {boolean} - True if the collection is loaded, false otherwise.
    */
-  function hasModuleFile(filename) {
-    return availableModules.value.some((f) => f.filename === filename)
+  function hasCollection(collectionName) {
+    return availableCollections.value.some((f) => f.collectionName === collectionName)
   }
 
-  function getConfigForVessel(vesselType, bcType) {
-    for (const file of availableModules.value) {
-      for (const module of file.modules) {
-        if (module.configs) {
-          const configIndex = module.configs.findIndex((c) => c.vessel_type === vesselType && c.BC_type === bcType)
-          if (configIndex !== -1) {
-            return {
-              config: module.configs[configIndex],
-              configIndex: configIndex,
-              module: module,
-              filename: file.filename,
-            }
-          }
-        }
-      }
+  // ---- GETTERS ----
+
+  /**
+   * Returns the cellml content of a collection.
+   */
+  function getModelByCollectionName(collectionName) {
+    const index = availableCollections.value.findIndex((f) => f.collectionName === collectionName)
+    if (index !== -1) {
+      return availableCollections.value[index].model
     }
-    return null
+    return ''
   }
 
-  function getModuleConfigFromConfigIndex(filename, moduleName, configIndex) {
-    const module = getModulesModule(filename, moduleName)
-    return module.configs[configIndex]
+  /**
+   * Returns modules associated with a componentName within the given collection file.
+   */
+  function findModulesByComponentName(collectionName, componentName) {
+    const collection = collectionsByName.value.get(collectionName)
+    if (!collection) return null
+
+    return collection.modules.find((m) => m.name === componentName) || null
   }
 
-  const getConfigsForModule = computed(() => {
-    return (moduleName) => {
-      if (!moduleName) return []
-      
-      for (const file of availableModules.value) {
-        const module = file.modules.find((m) => m.name === moduleName)
-        if (module && module.configs) {
-          return module.configs
-        }
-      }
-      return []
-    }
-  })
+  function findConfigByName(moduleType, moduleSubtype) {
+    const key = `${moduleType}||${moduleSubtype}`
+    return configsByTypeAndSubtype.value.get(key) || null
+  }
+
+  function findConfigByIndex(collection, componentName, configIndex) {
+    const modules = findModulesByComponentName(collection, componentName)
+    return modules.configs[configIndex]
+  }
+
+  function findConfigsForModule(moduleName) {
+    return configsByModuleName.value.get(moduleName) || []
+  }
 
   function getState() {
     return {
-      availableModules: availableModules.value,
+      availableCollections: availableCollections.value,
       availableParameters: Array.from(availableParameters.value.entries()),
       availableUnits: availableUnits.value,
       availableVariableNameIdMap: Array.from(availableVariableNameIdMap.value.entries()),
@@ -380,44 +362,94 @@ export const useLibraryStore = defineStore('builder', () => {
     }
   }
 
-  function getGlobalVariables() {
-    return globalConstants.value
-  }
+  const globalVariables = computed(() => globalConstants.value)
+
+  const allModules = computed(() => 
+    availableCollections.value.flatMap((collection => collection.modules || []))
+  )
+
+  const modulesByName = computed(() => {
+    const map = new Map()
+    for (const collection of availableCollections.value) {
+      for (const module of collection.modules || []) {
+        map.set(module.name, module)
+      }
+    }
+    return map
+  })
+
+  const collectionsByName = computed(() => {
+    const map = new Map()
+    for (const collection of availableCollections.value) {
+      map.set(collection.collectionName, collection)
+    }
+    return map
+  })
+
+  const configsByTypeAndSubtype = computed(() => {
+    const map = new Map()
+    for (const collection of availableCollections.value) {
+      for (const module of collection.modules || []) {
+        for (const config of module.configs || []) {
+          const key = `${config.module_type}||${config.module_subtype}`
+          map.set(key, { config, module, collection: collection.collectionName })
+        }
+      }
+    }
+    return map
+  })
+
+  const configsByModuleName = computed(() => {
+    const map = new Map()
+
+    for (const module of allModules.value) {
+      map.set(module.name, module.configs || [])
+    }
+
+    return map
+  })
 
   return {
     // State
-    availableModules,
+    availableCollections,
     availableUnits,
     lastExportName,
     lastSaveName,
 
+    // Derived State
+    collectionsByName,
+    modulesByName,
+    configsByTypeAndSubtype,
+    configsByModuleName,
+    allModules,
+    globalVariables,
+
     // Actions
     addConfigFile,
-    addModuleFile,
+    addOrUpdateCollection,
     addParameterFile,
     addUnitsFile,
     assignGlobalConstant,
     clearGlobalConstants,
     loadState,
-    removeModuleFile,
+    removeCollection,
     setLastExportName,
     setLastSaveName,
-    setVariableParameterValuesForInstance,
+    setParameterValuesForInstance,
 
-    // Getters
-    getConfigForVessel,
+    // Query
     getGlobalConstant,
-    getGlobalVariables,
-    getModuleContent,
-    getModulesModule,
-    getModuleConfigFromConfigIndex,
-    getConfigsForModule,
-    getParameterValuesForInstanceVariable,
+    getModelByCollectionName,
+    findModulesByComponentName,
+    findConfigByName,
+    findConfigByIndex,
+    findConfigsForModule,
+    getParameterValueForInstanceVariable,
     getState,
-    hasModuleFile,
+    hasCollection,
 
     // Debug
-    listModules,
+    listCollections,
     listUnits,
   }
 })

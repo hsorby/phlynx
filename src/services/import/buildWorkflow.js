@@ -11,8 +11,7 @@ function buildNodes(libraryStore, vessels, progressCallback = null) {
       progressCallback(index, vessels.length, vessel.name)
     }
 
-    // Use libraryStore method to find the config
-    const configData = libraryStore.getConfigForVessel(vessel.vessel_type, vessel.BC_type)
+    const configData = libraryStore.findConfigByName(vessel.vessel_type, vessel.BC_type)
 
     if (!configData) {
       console.warn(
@@ -22,7 +21,7 @@ function buildNodes(libraryStore, vessels, progressCallback = null) {
       // Return a placeholder node
       return {
         id: vessel.name,
-        type: 'moduleNode',
+        type: 'instanceNode',
         position: { x: 100, y: 100 },
         data: {
           ...vessel,
@@ -37,9 +36,9 @@ function buildNodes(libraryStore, vessels, progressCallback = null) {
 
     const { config, configIndex, module, filename } = configData
 
-    const modelString = libraryStore.getModuleContent(filename)
+    const modelString = libraryStore.getModelByCollectionName(filename)
     const variables = extractVariablesFromModule(modelString, module.componentName)
-    libraryStore.setVariableParameterValuesForInstance(
+    libraryStore.setParameterValuesForInstance(
       vessel.name,
       variables,
       filename,
@@ -55,7 +54,7 @@ function buildNodes(libraryStore, vessels, progressCallback = null) {
 
     return {
       id: vessel.name,
-      type: 'moduleNode',
+      type: 'instanceNode',
       // Use vessel position if provided, otherwise use dummy position
       ...(hasPosition
         ? {

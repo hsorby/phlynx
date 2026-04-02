@@ -81,7 +81,7 @@ export function useLoadFromCellML() {
         const variables = compData.variables ?? []
         const portOptions = compData.portOptions ?? []
 
-        store.setVariableParameterValuesForInstance(
+        store.setParameterValuesForInstance(
           compName,
           variables,
           filename,
@@ -90,7 +90,7 @@ export function useLoadFromCellML() {
         )
 
         const moduleConfig =
-          store.getModuleConfigFromConfigIndex(filename, compName, 0) ?? {}
+          store.findConfigByIndex(filename, compName, 0) ?? {}
 
         const rawPorts = moduleConfig.general_ports ?? []
 
@@ -110,7 +110,7 @@ export function useLoadFromCellML() {
 
         return {
           id: compName,
-          type: 'moduleNode',
+          type: 'instanceNode',
           position: { x: 100, y: 100 },
           style: { opacity: 0 },
           data: {

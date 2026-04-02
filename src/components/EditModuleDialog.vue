@@ -140,7 +140,7 @@ import { ElDialog, ElForm, ElFormItem, ElInput, ElButton, ElInputNumber } from '
 import { Delete, Plus } from '@element-plus/icons-vue'
 import { useGtm } from '../composables/useGtm'
 import { notify } from '../utils/notify'
-import { sanitiseModuleName } from '../utils/nodes'
+import { sanitiseName } from '../utils/nodes'
 import { detachReactivity } from '../utils/reactivity'
 
 const props = defineProps({
@@ -231,7 +231,7 @@ function handleConfirm() {
     return
   }
 
-  const sanitisedName = sanitiseModuleName(editableData.name)
+  const sanitisedName = sanitiseName(editableData.name)
   if (!sanitisedName) {
     notify.error({ message: 'Module name is not valid.' })
     return

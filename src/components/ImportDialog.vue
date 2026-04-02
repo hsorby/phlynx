@@ -669,11 +669,11 @@ async function stageFile(field, parsedData, fileName) {
 }
 
 const commitStagedFiles = () => {
-  stagedFiles.value.moduleFiles.forEach(({ filename, payload }) => {
-    libraryStore.addModuleFile(payload)
+  stagedFiles.value.componentFiles.forEach(({ payload }) => {
+    libraryStore.addOrUpdateCollection(payload)
   })
   stagedFiles.value.configFiles.forEach(({ filename, payload }) => {
-    libraryStore.addConfigFile(payload, filename)
+    libraryStore.addConfigFile(filename, payload)
   })
 }
 
