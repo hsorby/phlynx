@@ -26,7 +26,7 @@ function mergeIn(sourceMap, targetMap) {
 }
 
 // 'builder' is the store's ID
-export const useBuilderStore = defineStore('builder', () => {
+export const useLibraryStore = defineStore('builder', () => {
   // --- STATE ---
   const availableModules = ref([])
   const availableUnits = ref([])
@@ -182,13 +182,13 @@ export const useBuilderStore = defineStore('builder', () => {
     let totalAdded = 0
 
     if (!configs || !Array.isArray(configs)) {
-      console.warn('[builderStore] Invalid config file payload:', payload)
+      console.warn('[libraryStore] Invalid config file payload:', payload)
       return totalAdded
     }
 
     configs.forEach((config) => {
       if (!config.module_file || typeof config.module_file !== 'string') {
-        console.warn('[builderStore] Skipping config: missing module_file declaration', config)
+        console.warn('[libraryStore] Skipping config: missing module_file declaration', config)
         return 
       }
 

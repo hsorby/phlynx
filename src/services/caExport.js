@@ -105,10 +105,10 @@ function checkSharedPorts(nodes, edges) {
  * @param {string} fileName - The name for the exported files.
  * @param {Array} nodes - The array of nodes from Vue Flow.
  * @param {Array} edges - The array of edges from Vue Flow.
- * @param {Object} builderStore - The Pinia builder store.
+ * @param {Object} libraryStore - The Pinia builder store.
  * @returns {Promise<Blob>} A promise that resolves with the zip file blob.
  */
-export async function generateExportZip(fileName, nodes, edges, builderStore) {
+export async function generateExportZip(fileName, nodes, edges, libraryStore) {
   try {
     const zip = new JSZip()
 
@@ -185,7 +185,7 @@ export async function generateExportZip(fileName, nodes, edges, builderStore) {
         ])
       }
 
-      const config = builderStore.getModuleConfigFromConfigIndex(
+      const config = libraryStore.getModuleConfigFromConfigIndex(
         node.data.sourceFile,
         node.data.componentName,
         node.data.configIndex
@@ -231,7 +231,7 @@ export async function generateExportZip(fileName, nodes, edges, builderStore) {
     const module_config = Array.from(uniqueModuleConfigs.values());
 
     // --- 2. CONSOLIDATE PARAMETER FILES INTO ONE CSV ---
-    const globalConstants = builderStore.getGlobalVariables()
+    const globalConstants = libraryStore.getGlobalVariables()
 
     for (const variable of globalConstants) {
       allParameters.add(JSON.stringify({

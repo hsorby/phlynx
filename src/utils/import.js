@@ -4,7 +4,7 @@ import { IMPORT_KEYS, IMPORT_LABELS } from './constants'
 import { isCellML } from './cellml'
 
 // TODO: really need to rename to check complete or something similar?
-export const validateVesselData = (vesselData, builderStore) => {
+export const validateVesselData = (vesselData, libraryStore) => {
   const errors = []
   const warnings = []
   const missingResources = {
@@ -14,7 +14,7 @@ export const validateVesselData = (vesselData, builderStore) => {
   }
 
   const availableCellMLModules = new Set()
-  builderStore.availableModules.forEach((file) => {
+  libraryStore.availableModules.forEach((file) => {
     if (file.isStub) {
       return
     }
@@ -32,7 +32,7 @@ export const validateVesselData = (vesselData, builderStore) => {
   const availableConfigs = new Map() // key: "vessel_type:BC_type", value: config object with metadata
   const moduleTypesInConfigs = new Set()
 
-  builderStore.availableModules.forEach((file) => {
+  libraryStore.availableModules.forEach((file) => {
     file.modules?.forEach((module) => {
       module.configs?.forEach((config) => {
         if (config.vessel_type && config.BC_type) {
@@ -65,7 +65,7 @@ export const validateVesselData = (vesselData, builderStore) => {
       missingConfigs.push(key)
       missingResources.configs.add(key)
     } else {
-      const moduleFileIssue = validateModuleFileAssociation(config, builderStore)
+      const moduleFileIssue = validateModuleFileAssociation(config, libraryStore)
       
       if (moduleFileIssue) {
         // Use composite key for automatic deduplication via Map
@@ -133,10 +133,10 @@ export const validateVesselData = (vesselData, builderStore) => {
  * This ensures that modules come from the CellML file specified in the config.
  * 
  * @param {Object} config - The configuration object with vessel_type, BC_type, module_file, module_type
- * @param {Object} builderStore - The store containing availableModules
+ * @param {Object} libraryStore - The store containing availableModules
  * @returns {Object|null} - Issue object if there's a problem, null if validation passes
  */
-function validateModuleFileAssociation(config, builderStore) {
+function validateModuleFileAssociation(config, libraryStore) {
   const { module_file, module_type, vessel_type, BC_type } = config
   
   if (!module_file) {
@@ -151,7 +151,7 @@ function validateModuleFileAssociation(config, builderStore) {
   }
   
   // Find the module file in available modules
-  const moduleFile = builderStore.availableModules.find(
+  const moduleFile = libraryStore.availableModules.find(
     f => f.filename === module_file
   )
   
@@ -270,7 +270,7 @@ export function groupModuleFileIssues(moduleFileIssues) {
   })
 }
 
-const parseVesselCsv = (file, builderStore = null) => {
+const parseVesselCsv = (file, libraryStore = null) => {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       header: true,
@@ -291,8 +291,8 @@ const parseVesselCsv = (file, builderStore = null) => {
           reject(new Error(`Invalid vessel array file format: ${results.data[0]}`))
           return
         }
-        if (builderStore) {
-          const completionStatus = validateVesselData(results.data, builderStore)
+        if (libraryStore) {
+          const completionStatus = validateVesselData(results.data, libraryStore)
           resolve({
             data: results.data,
             // warnings: completionStatus.warnings,

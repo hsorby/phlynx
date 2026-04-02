@@ -133,7 +133,7 @@ import {
 import { Warning } from '@element-plus/icons-vue'
 import { useVueFlow } from '@vue-flow/core'
 
-import { useBuilderStore } from '../stores/builderStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import { isEditableVariableType } from '../utils/variables'
 import phlynxspinner from '/src/assets/phlynxspinner.svg?raw'
 
@@ -146,7 +146,7 @@ const emit = defineEmits(['update:modelValue'])
 
 const searchColumn = ref('name')
 const searchQuery = ref('')
-const builderStore = useBuilderStore()
+const libraryStore = useLibraryStore()
 const parameterRows = ref([])
 const isLoading = ref(false)
 const loadingText = ref('Loading parameters...')
@@ -196,7 +196,7 @@ function resolveValue(name, type, units, value) {
   // Determine lookup key based on type
   const lookupName = name + (type === 'global_constant' ? '' : '_' + props.instanceName)
   // Get all raw matches from store
-  const allMatches = builderStore.getParameterValuesForInstanceVariable(lookupName)
+  const allMatches = libraryStore.getParameterValuesForInstanceVariable(lookupName)
 
   // We only care about values that were stored with the same units as the current variable
   const relevantMatches = allMatches.filter((match) => match?.units === units)
@@ -229,7 +229,7 @@ function loadData() {
   variables = node.data.variables || []
   parameterRows.value = variables.map((variable) => {
     const displayValue =
-      variable.type === 'global_constant' ? builderStore.getGlobalConstant(variable.name)?.value : variable.value
+      variable.type === 'global_constant' ? libraryStore.getGlobalConstant(variable.name)?.value : variable.value
     const result = resolveValue(variable.name, variable.type, variable.units, displayValue)
 
     return {
@@ -398,7 +398,7 @@ async function handleConfirm() {
     if (isEditableVariableType(row.type)) {
       const variable = variables.find((v) => v.name === row.name)
       if (row.type === 'global_constant') {
-        builderStore.assignGlobalConstant(row.name, row.value, row.units)
+        libraryStore.assignGlobalConstant(row.name, row.value, row.units)
         variable.type = row.type // Update the node's variable type
         variable.value = undefined // Clear the value for global constants
       } else {

@@ -1,7 +1,7 @@
 import { useVueFlow } from '@vue-flow/core'
 import { nextTick, ref } from 'vue'
 
-import { useBuilderStore } from '../stores/builderStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { runFcoseLayout } from '../services/layouts/cytoscape'
 import { useClearWorkspace } from '../utils/workspace'
@@ -38,7 +38,7 @@ export function useLoadFromCellML() {
     updateNodeData,
   } = useVueFlow()
 
-  const store = useBuilderStore()
+  const store = useLibraryStore()
   const historyStore = useFlowHistoryStore()
   const { trackEvent } = useGtm()
   const { clearWorkspace } = useClearWorkspace()

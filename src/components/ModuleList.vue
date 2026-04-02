@@ -136,7 +136,7 @@
 <script setup>
 import { computed, ref, watch, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { View, Search, ArrowRight } from '@element-plus/icons-vue'
-import { useBuilderStore } from '../stores/builderStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import useDragAndDrop from '../composables/useDnD'
 import ModulePreviewDialog from './ModulePreviewDialog.vue'
 import { TOOLTIP_AUTO_CLOSE } from '../utils/constants'
@@ -147,7 +147,7 @@ const props = defineProps({
 
 const emit = defineEmits(['select'])
 
-const store = useBuilderStore()
+const store = useLibraryStore()
 const { onDragStart } = useDragAndDrop()
 
 const filterText = ref('')

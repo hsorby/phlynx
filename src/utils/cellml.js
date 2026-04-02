@@ -768,7 +768,7 @@ function stripCelsiusToArbitraryUnit(xmlString) {
   return serializer.serializeToString(doc)
 }
 
-export function generateFlattenedModel(nodes, edges, builderStore) {
+export function generateFlattenedModel(nodes, edges, libraryStore) {
   const appVersion = __APP_VERSION__ || '0.0.0'
 
   // Initialize core objects
@@ -789,7 +789,7 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
   const unitsLibraryCache = new Map() // Key: filename, Value: libcellml.Model
   const unitsImportSourceMap = new Map() // Key: filename, Value: libcellml.ImportSource
 
-  const globalVariables = builderStore.getGlobalVariables()
+  const globalVariables = libraryStore.getGlobalVariables()
 
   // ------------------------------
   // HELPER: Reusable Unit Importer
@@ -814,7 +814,7 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
     // Search available libraries.
     let found = false
 
-    for (const entry of builderStore.availableUnits) {
+    for (const entry of libraryStore.availableUnits) {
       // Lazy Load: Parse library only if not already cached
       if (!unitsLibraryCache.has(entry.filename)) {
         const libModel = parser.parseModel(entry.model)
@@ -892,8 +892,8 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
 
       // Load and cache source model if not already done.
       if (!modelCache.has(fileName)) {
-        if (!builderStore.hasModuleFile(fileName)) throw new Error(`Missing file: ${fileName}`)
-        const parsedModel = parser.parseModel(builderStore.getModuleContent(fileName))
+        if (!libraryStore.hasModuleFile(fileName)) throw new Error(`Missing file: ${fileName}`)
+        const parsedModel = parser.parseModel(libraryStore.getModuleContent(fileName))
         if (parser.errorCount() > 0) {
           handleLoggerErrors(parser, `Error parsing ${fileName} [${parser.errorCount()} errors]:`)
         }

@@ -63,7 +63,7 @@ import { computed, ref, watch } from 'vue'
 import { ElButton, ElCheckbox, ElDialog, ElMessageBox, ElTag, ElTooltip } from 'element-plus'
 import { useVueFlow } from '@vue-flow/core'
 import CellMLTextEditor from './CellMLTextEditor.vue'
-import { useBuilderStore } from '../stores/builderStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import { useGtm } from '../composables/useGtm'
 import { USER_MODULES_FILE } from '../utils/constants'
 import {
@@ -88,7 +88,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'save'])
 
-const store = useBuilderStore()
+const store = useLibraryStore()
 const { trackEvent } = useGtm()
 const { nodes } = useVueFlow()
 

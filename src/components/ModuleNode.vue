@@ -162,7 +162,7 @@ import { Handle, useVueFlow } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
 import { Delete, Edit, Key, Place, WarningFilled, Operation } from '@element-plus/icons-vue'
 import CellMLIcon from './icons/CellMLIcon.vue'
-import { useBuilderStore } from '../stores/builderStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { getHandleId, getHandleStyle, portPosition } from '../utils/ports'
 import { sanitiseModuleName } from '../utils/nodes'
@@ -173,7 +173,7 @@ import { detachReactivity } from '../utils/reactivity'
 
 const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } = useVueFlow()
 const historyStore = useFlowHistoryStore()
-const builderStore = useBuilderStore()
+const libraryStore = useLibraryStore()
 
 const props = defineProps({
   data: {
@@ -237,7 +237,7 @@ const isMissingParameters = computed(() => {
   for (const variable of props.data.variables || []) {
     if (isEditableVariableType(variable.type)) {
       if (variable.type === 'global_constant') {
-        const globalConstant = builderStore.getGlobalConstant(variable.name)
+        const globalConstant = libraryStore.getGlobalConstant(variable.name)
         if (isEmpty(globalConstant?.value)) {
           return true
         }
@@ -384,7 +384,7 @@ function saveEdit() {
   updateNodeData(props.id, { name: sanitisedName })
   isEditing.value = false
   setTimeout(() => {
-    builderStore.setVariableParameterValuesForInstance(
+    libraryStore.setVariableParameterValuesForInstance(
       sanitisedName,
       props.data.variables,
       props.data.sourceFile,

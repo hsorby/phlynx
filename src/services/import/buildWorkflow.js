@@ -4,15 +4,15 @@ import { SOURCE_PORT_TYPE, TARGET_PORT_TYPE } from '../../utils/constants'
 import { extractVariablesFromModule } from '../../utils/cellml'
 import { resolvePortCouplings, checkAndClaimCouplings, buildUsedPortKeys } from '../../utils/edges'
 
-function buildNodes(builderStore, vessels, progressCallback = null) {
+function buildNodes(libraryStore, vessels, progressCallback = null) {
 
   return vessels.map((vessel, index) => {
     if (progressCallback) {
       progressCallback(index, vessels.length, vessel.name)
     }
 
-    // Use builderStore method to find the config
-    const configData = builderStore.getConfigForVessel(vessel.vessel_type, vessel.BC_type)
+    // Use libraryStore method to find the config
+    const configData = libraryStore.getConfigForVessel(vessel.vessel_type, vessel.BC_type)
 
     if (!configData) {
       console.warn(
@@ -37,9 +37,9 @@ function buildNodes(builderStore, vessels, progressCallback = null) {
 
     const { config, configIndex, module, filename } = configData
 
-    const modelString = builderStore.getModuleContent(filename)
+    const modelString = libraryStore.getModuleContent(filename)
     const variables = extractVariablesFromModule(modelString, module.componentName)
-    builderStore.setVariableParameterValuesForInstance(
+    libraryStore.setVariableParameterValuesForInstance(
       vessel.name,
       variables,
       filename,
@@ -181,8 +181,8 @@ function buildEdges(vessels, nodes) {
   return edges
 }
 
-export function buildWorkflowGraph(builderStore, vessels, progressCallback = null) {
-  const nodes = buildNodes(builderStore, vessels, progressCallback)
+export function buildWorkflowGraph(libraryStore, vessels, progressCallback = null) {
+  const nodes = buildNodes(libraryStore, vessels, progressCallback)
   const edges = buildEdges(vessels, nodes)
   return { nodes, edges }
 }

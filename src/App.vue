@@ -34,13 +34,13 @@
 <script setup>
 import { computed, ref, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { useBuilderStore } from './stores/builderStore'
+import { useLibraryStore } from './stores/libraryStore'
 
 const appVersion = __APP_VERSION__ + __BUILD_STATE_MARKER__
 const route = useRoute()
-const builderStore = useBuilderStore()
+const libraryStore = useLibraryStore()
 
-const sessionName = computed(() => builderStore.lastSaveName)
+const sessionName = computed(() => libraryStore.lastSaveName)
 
 const editingValue = ref('')
 const isEditing = ref(false)
@@ -70,7 +70,7 @@ function saveEdit() {
   }
 
   if (name !== sessionName.value) {
-    builderStore.setLastSaveName(name)
+    libraryStore.setLastSaveName(name)
   }
 
   isEditing.value = false

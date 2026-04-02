@@ -118,25 +118,25 @@
             :closable="false"
             show-icon
           >
-            <template #default> All necessary modules and configurations are available. </template>
+            <template #default> All necessary components and configurations are available. </template>
           </el-alert>
 
           <el-alert v-else title="Additional Files Required" type="warning" :closable="false" show-icon>
             <template #default>
               <div>Please provide the following files to complete the import:</div>
               <ul class="missing-resources">
-                <li v-if="importReadiness.needsModuleFile" class="config-note">
-                  <strong>CellML Module File</strong>
+                <li v-if="importReadiness.needsComponentFile" class="config-note">
+                  <strong>CellML Component File</strong>
                   <div
-                    v-if="importReadiness.missingResources?.moduleFileIssues?.length > 0"
+                    v-if="importReadiness.missingResources?.componentFileIssues?.length > 0"
                     class="issue-list-container"
                   >
                     <div
-                      v-for="moduleFileIssue in importReadiness.missingResources.moduleFileIssues"
-                      :key="moduleFileIssue.uniqueKey"
-                      class="module-issue-item"
+                      v-for="componentFileIssue in importReadiness.missingResources.componentFileIssues"
+                      :key="componentFileIssue.uniqueKey"
+                      class="component-issue-item"
                     >
-                      • {{ moduleFileIssue.message }}
+                      • {{ componentFileIssue.message }}
                     </div>
                   </div>
                   <div v-else-if="importReadiness.missingResources?.moduleTypes?.length > 0" class="module-type-list">
@@ -144,16 +144,16 @@
                   </div>
                 </li>
                 <li v-if="importReadiness.needsConfigFile" class="config-note">
-                  <strong>Module Configurations</strong> for vessel_types:bc_types:
-                  {{ importReadiness.missingResources?.configs?.join(', ') }} and possibly CellML modules.
+                  <strong>Module Configurations</strong> for module_types:module_subtypes:
+                  {{ importReadiness.missingResources?.configs?.join(', ') }} and possibly CellML components.
                 </li>
               </ul>
               <br />
               <div v-if="importReadiness.needsConfigFile" class="config-note">
-                <strong>NOTE:</strong> CellML Module File(s) may be required after providing the configurations.
+                <strong>NOTE:</strong> CellML Component File(s) may be required after providing the configurations.
               </div>
-              <div v-if="importReadiness.hasModuleFileMismatch" class="mismatch-warning">
-                Warning: Some modules are not in the CellML files specified by their configurations.
+              <div v-if="importReadiness.hasComponentFileMismatch" class="mismatch-warning">
+                Warning: Some components are not in the CellML files specified by their configurations.
               </div>
             </template>
           </el-alert>
@@ -181,7 +181,7 @@ import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElDialog, ElForm, ElFormItem, ElButton, ElUpload, ElAlert, ElIcon, ElTag, ElPopover } from 'element-plus'
 import { Check, Warning, Upload, InfoFilled } from '@element-plus/icons-vue'
 
-import { useBuilderStore } from '../stores/builderStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import { useGtm } from '../composables/useGtm'
 import { notify } from '../utils/notify'
 import { IMPORT_KEYS, MAX_VISIBLE_TAGS } from '../utils/constants'
@@ -201,7 +201,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'confirm'])
 const { trackEvent } = useGtm()
-const builderStore = useBuilderStore()
+const libraryStore = useLibraryStore()
 
 // --- State Management ---
 const formState = reactive({})
@@ -235,9 +235,9 @@ const isFieldReady = (fieldKey) => {
     return !(importReadiness.value?.needsConfigFile ?? true)
   }
 
-  // CellML module field is ready if all required modules have been supplied
+  // CellML component field is ready if all required components have been supplied
   if (fieldKey === IMPORT_KEYS.CELLML_FILE) {
-    return !(importReadiness.value?.needsModuleFile ?? true)
+    return !(importReadiness.value?.needsComponentFile ?? true)
   }
 
   return true
@@ -260,7 +260,7 @@ const removeFile = (fieldKey, filename) => {
     fieldState.files.delete(filename)
 
     // Remove from staged files if applicable
-    stagedFiles.value.moduleFiles = stagedFiles.value.moduleFiles.filter(f => f.filename !== filename)
+    stagedFiles.value.componentFiles = stagedFiles.value.componentFiles.filter(f => f.filename !== filename)
     stagedFiles.value.configFiles = stagedFiles.value.configFiles.filter(f => f.filename !== filename)
 
     // Re-evaluate overall vessel dependencies
@@ -377,7 +377,7 @@ const getVesselPayload = () => {
 // Create a temporary store-like object for validation that includes staged files
 const createTemporaryStore = () => {
   // Create a deep copy of availableModules
-  const availableModules = detachReactivity(builderStore.availableModules)
+  const availableModules = detachReactivity(libraryStore.availableModules)
 
   // Apply staged config files
   stagedFiles.value.configFiles.forEach(({ filename, payload }) => {
@@ -462,8 +462,8 @@ const isFormValid = computed(() => {
 
 // --- Handlers ---
 async function parseFile(field, rawFile) {
-  if (field.requiresStore && builderStore) {
-    return field.parser(rawFile, builderStore)
+  if (field.requiresStore && libraryStore) {
+    return field.parser(rawFile, libraryStore)
   }
   return field.parser(rawFile)
 }
@@ -670,10 +670,10 @@ async function stageFile(field, parsedData, fileName) {
 
 const commitStagedFiles = () => {
   stagedFiles.value.moduleFiles.forEach(({ filename, payload }) => {
-    builderStore.addModuleFile(payload)
+    libraryStore.addModuleFile(payload)
   })
   stagedFiles.value.configFiles.forEach(({ filename, payload }) => {
-    builderStore.addConfigFile(payload, filename)
+    libraryStore.addConfigFile(payload, filename)
   })
 }
 
@@ -689,7 +689,7 @@ const handleConfirm = async () => {
   if (formState[IMPORT_KEYS.PARAMETER]) {
     for (const [filename, data] of formState[IMPORT_KEYS.PARAMETER].files) {
       if (data.isValid) {
-        builderStore.addParameterFile(filename, data.payload)
+        libraryStore.addParameterFile(filename, data.payload)
       }
     }
   }

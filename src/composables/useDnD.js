@@ -3,7 +3,7 @@ import { ref, shallowRef, watch } from 'vue'
 
 import { GHOST_MODULE_FILENAME, GHOST_NODE_TYPE } from '../utils/constants'
 import { getId, generateUniqueModuleName, attachNewNodeToFrame, findAnyNode } from '../utils/nodes'
-import { useBuilderStore } from '../stores/builderStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import { buildPortLabels } from '../services/import/buildPorts'
 import { extractVariablesFromModule } from '../utils/cellml'
 
@@ -24,7 +24,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
   const { draggedType, isDragOver, isDragging } = state
 
   const { addNodes, getNodes, onNodesInitialized, screenToFlowCoordinate, updateNode } = useVueFlow()
-  const builderStore = useBuilderStore()
+  const libraryStore = useLibraryStore()
 
   const isGhostSetupOpen = ref(false)
   const pendingGhostNodeId = ref(null)
@@ -94,7 +94,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
 
     pendingHistoryNodes.add(nodeId)
 
-    const modelString = builderStore.getModuleContent(sourceFile)
+    const modelString = libraryStore.getModuleContent(sourceFile)
     const variables = extractVariablesFromModule(modelString, componentName)
 
     const configIndex = moduleData.configIndex || 0
@@ -111,12 +111,12 @@ export default function useDragAndDrop(pendingHistoryNodes) {
         general_ports:[],
         variables_and_units: variables.map((v) => [v.name, v.units ?? 'dimensionless', 'access', 'variable']),
       }
-      builderStore.addConfigFile([config], sourceFile)
+      libraryStore.addConfigFile([config], sourceFile)
     }
 
     const portLabels = buildPortLabels(config)
 
-    builderStore.setVariableParameterValuesForInstance(
+    libraryStore.setVariableParameterValuesForInstance(
       finalName,
       variables,
       sourceFile,

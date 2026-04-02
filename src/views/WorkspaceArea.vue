@@ -260,19 +260,19 @@
 
   <EditParameterDialog v-model="editParameterDialogVisible" :nodeData="currentEditingNode" />
 
-  <SaveDialog v-model="saveDialogVisible" @confirm="onSaveConfirm" :default-name="builderStore.lastSaveName" />
+  <SaveDialog v-model="saveDialogVisible" @confirm="onSaveConfirm" :default-name="libraryStore.lastSaveName" />
 
   <SaveDialog
     v-model="exportDialogVisible"
     @confirm="onExportConfirm"
     :title="`Export for ${currentExportMode.label}`"
-    :default-name="builderStore.lastExportName"
+    :default-name="libraryStore.lastExportName"
     :suffix="currentExportMode.suffix"
   />
 
   <ModuleReplacementDialog
     v-model="replacementDialogVisible"
-    :modules="builderStore.availableModules"
+    :modules="libraryStore.availableModules"
     :node-id="currentEditingNode.nodeId"
     :port-options="currentEditingNode?.portOptions || []"
     :port-labels="currentEditingNode?.portLabels || []"
@@ -332,7 +332,7 @@ import CellMLIcon from '../components/icons/CellMLIcon.vue'
 import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 
-import { useBuilderStore } from '../stores/builderStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import useDragAndDrop from '../composables/useDnD'
 import { useLoadFromVesselArray } from '../composables/useLoadFromVesselArray'
@@ -633,7 +633,7 @@ const helperLineVertical = ref(null)
 const alignment = ref('edge')
 const importDropdownRef = ref(null)
 
-const builderStore = useBuilderStore()
+const libraryStore = useLibraryStore()
 
 const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
@@ -1142,7 +1142,7 @@ const screenshotDisabled = computed(() => nodes.value.length === 0 && vueFlowRef
 function updateNodesWithNewParameters() {
   nodes.value.forEach((node) => {
     if (node.type === 'moduleNode') {
-      builderStore.setVariableParameterValuesForInstance(
+      libraryStore.setVariableParameterValuesForInstance(
         node.data.name,
         node.data.variables,
         node.data.sourceFile,
@@ -1169,7 +1169,7 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
           sourceFile: filename,
         }))
       
-        builderStore.addModuleFile({
+        libraryStore.addModuleFile({
           filename,
           modules: modules,
           model: result.components.model,
@@ -1178,7 +1178,7 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
 
       // Register units with the store
       if (unitCount > 0) {
-        builderStore.addUnitsFile({
+        libraryStore.addUnitsFile({
           filename,
           model: result.units.model,
         })
@@ -1241,7 +1241,7 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
 
 const loadParametersData = async (content, filename, { notify: shouldNotify = true, trackEvents = true } = {}) => {
   try {
-    const added = builderStore.addParameterFile(filename, content)
+    const added = libraryStore.addParameterFile(filename, content)
 
     if (shouldNotify && added) {
       if (trackEvents) {
@@ -1284,7 +1284,7 @@ const loadParametersData = async (content, filename, { notify: shouldNotify = tr
 
 const loadConfigData = async (content, filename, { notify: shouldNotify = true } = {}) => {
   try {
-    const added = builderStore.addConfigFile(content, filename)
+    const added = libraryStore.addConfigFile(content, filename)
     if (shouldNotify && added > 0) {
       notify.success({
         title: 'Configurations Loaded',
@@ -1391,7 +1391,7 @@ async function onImportConfirm(importPayload, updateProgress) {
 const performExport = async () => {
   currentExportKey.value = currentExportMode.value.key
   
-  const baseName = builderStore.lastExportName || DEFAULT_FILE_NAME
+  const baseName = libraryStore.lastExportName || DEFAULT_FILE_NAME
   const fileTypes = currentExportKey.value === EXPORT_KEYS.CELLML 
     ? CELLML_FILE_TYPES 
     : ZIP_FILE_TYPES
@@ -1480,7 +1480,7 @@ async function handleCellMLSave(saveData) {
   const isForkOrRename = isRename || isNewFile
 
   // Get the original configuration to migrate (if it exists).
-  const originalModule = builderStore.getModulesModule(originalSourceFile, originalComponentName)
+  const originalModule = libraryStore.getModulesModule(originalSourceFile, originalComponentName)
 
   // Safety check: If we can't find the original, create a blank config
   let configToMigrate = {}
@@ -1493,7 +1493,7 @@ async function handleCellMLSave(saveData) {
   await loadCellMLData(code, sourceFile, { notify: false })
 
   // Retrieve the "Target" Module (The one we just loaded)
-  let targetModule = builderStore.getModulesModule(sourceFile, componentName)
+  let targetModule = libraryStore.getModulesModule(sourceFile, componentName)
 
   if (!targetModule) {
     console.warn(`Mismatch: Requested ${componentName}, but store didn't register it. Check component name extraction.`)
@@ -1841,7 +1841,7 @@ function onNodeContextMenu({ clientX, clientY, nodeId }) {
 }
 
 function createNewModuleAtPosition(clientX, clientY) {
-  const allModules = builderStore.availableModules
+  const allModules = libraryStore.availableModules
   const moduleFile = allModules.find((f) => f.modules?.some((m) => m.componentName === 'new_module'))
   const moduleEntry = moduleFile?.modules?.find((m) => m.componentName === 'new_module')
 
@@ -1869,14 +1869,14 @@ function handleAutoLayout() {
 }
 
 async function handleSaveWorkspace() {
-  const safeName = ensureExtension(builderStore.lastSaveName, '.json')
+  const safeName = ensureExtension(libraryStore.lastSaveName, '.json')
   const result = await saveFileHandle(safeName, JSON_FILE_TYPES)
   if (result.status) {
     if (result.handle) {
       const blob = createSaveBlob()
       try {
         writeFileHandle(result.handle, blob)
-        builderStore.setLastSaveName(result.handle.name)
+        libraryStore.setLastSaveName(result.handle.name)
         trackEvent('save_action', {
           category: 'Save',
           action: 'save_workflow',
@@ -1920,11 +1920,11 @@ async function onExportConfirm(fileName, handle) {
   })
 
   try {
-    const finalName = fileName || builderStore.lastExportName || DEFAULT_FILE_NAME
+    const finalName = fileName || libraryStore.lastExportName || DEFAULT_FILE_NAME
     
     const blob = caExport
-      ? await generateExportZip(finalName, nodes.value, edges.value, builderStore)
-      : generateFlattenedModel(nodes.value, edges.value, builderStore)
+      ? await generateExportZip(finalName, nodes.value, edges.value, libraryStore)
+      : generateFlattenedModel(nodes.value, edges.value, libraryStore)
     
     const result = await saveWithDialog(
       blob, 
@@ -1933,7 +1933,7 @@ async function onExportConfirm(fileName, handle) {
       currentExportMode.value.suffix
     )
     
-    builderStore.setLastExportName(result.savedName)
+    libraryStore.setLastExportName(result.savedName)
     
     notification.close()
 
@@ -2038,7 +2038,7 @@ function recomputeMissingCouplings() {
 function createSaveBlob() {
   const saveState = {
     flow: toObject(),
-    store: builderStore.getState(),
+    store: libraryStore.getState(),
   }
 
   const jsonString = JSON.stringify(saveState, null, 2)
@@ -2049,13 +2049,13 @@ function createSaveBlob() {
  * Collects all state and downloads it as a JSON file.
  */
 const onSaveConfirm = async (fileName) => {
-  const baseName = fileName || builderStore.lastSaveName || DEFAULT_FILE_NAME
+  const baseName = fileName || libraryStore.lastSaveName || DEFAULT_FILE_NAME
   const finalName = ensureExtension(baseName, '.json')
   const blob = createSaveBlob()
 
   legacyDownload(finalName, blob)
 
-  builderStore.setLastSaveName(fileName)
+  libraryStore.setLastSaveName(fileName)
   notify.success({ title: 'Workflow saved!' })
 }
 
@@ -2095,7 +2095,7 @@ function handleLoadWorkspace(file) {
       recomputeMissingCouplings()
 
       // Restore Pinia store state.
-      builderStore.loadState(loadedState.store)
+      libraryStore.loadState(loadedState.store)
 
       trackEvent('workflow_load_action', {
         category: 'Workflow',
@@ -2168,7 +2168,7 @@ const copySelection = async () => {
     const { sourceFile, componentName, configIndex } = node.data
     if (!sourceFile || !componentName) continue
 
-    const moduleFile = builderStore.availableModules.find((f) => f.filename === sourceFile)
+    const moduleFile = libraryStore.availableModules.find((f) => f.filename === sourceFile)
     if (!moduleFile) continue
 
     const component = moduleFile.modules.find((m) => m.name === componentName || m.componentName === componentName)
@@ -2236,11 +2236,11 @@ const pasteSelection = async (atMouse = false) => {
 
   if (sourceClipboard.storeSnapshot) {
     for (const entry of Object.values(sourceClipboard.storeSnapshot)) {
-      const existingFile = builderStore.availableModules.find((f) => f.filename === entry.filename)
+      const existingFile = libraryStore.availableModules.find((f) => f.filename === entry.filename)
 
       if (!existingFile) {
         // The whole file is absent 
-        builderStore.addModuleFile({
+        libraryStore.addModuleFile({
           filename: entry.filename,
           model: entry.model,
           modules: [{
@@ -2354,12 +2354,12 @@ const pasteSelection = async (atMouse = false) => {
     const { name, sourceFile, componentName, configIndex } = newNode.data
     if (!sourceFile || !componentName) return
 
-    const modelString = builderStore.getModuleContent(sourceFile)
+    const modelString = libraryStore.getModuleContent(sourceFile)
     const variables = extractVariablesFromModule(modelString, componentName)
     newNode.data.variables = variables
 
     const resolvedIndex = configIndex ?? 0
-    const targetModule = builderStore.getModulesModule(sourceFile, componentName)
+    const targetModule = libraryStore.getModulesModule(sourceFile, componentName)
 
     if (targetModule && 
     (!targetModule.configs?.[resolvedIndex]?.module_file?.length  ||
@@ -2370,10 +2370,10 @@ const pasteSelection = async (atMouse = false) => {
         module_type: componentName,
         variables_and_units: variables.map((v) => [v.name, v.units ?? 'dimensionless', 'access', 'variable']),
       }
-      builderStore.addConfigFile([syntheticConfig], sourceFile)
+      libraryStore.addConfigFile([syntheticConfig], sourceFile)
     }
 
-    builderStore.setVariableParameterValuesForInstance(
+    libraryStore.setVariableParameterValuesForInstance(
       name,
       variables,
       sourceFile,
@@ -2493,7 +2493,7 @@ async function fetchAndLoadResource(entry, resourceType) {
     } else if (resourceType === 'module config') {
       await loadConfigData(content, entry.name, false)
       // const jsonContent = JSON.parse(content)
-      // builderStore.addConfigFile(jsonContent, entry.name, false)
+      // libraryStore.addConfigFile(jsonContent, entry.name, false)
     } else if (resourceType === 'parameter file') {
       const parsed = await parseParametersFile(content)
       await loadParametersData(parsed, entry.name, { notify: false })
@@ -2596,7 +2596,7 @@ onMounted(async () => {
   }
 
   for (const [path, content] of Object.entries(moduleConfigs)) {
-    builderStore.addConfigFile(content.default, path.split('/').pop())
+    libraryStore.addConfigFile(content.default, path.split('/').pop())
   }
 })
 

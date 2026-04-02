@@ -1,7 +1,7 @@
 import { useVueFlow } from '@vue-flow/core'
 import { nextTick, ref } from 'vue'
 
-import { useBuilderStore } from '../stores/builderStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { validateWorkflowModules } from '../services/import/validateWorkflow'
 import { buildWorkflowGraph } from '../services/import/buildWorkflow'
@@ -16,7 +16,7 @@ import { useClearWorkspace } from '../utils/workspace'
 export function useLoadFromVesselArray() {
   const { nodes, edges, addNodes, addEdges, setViewport, onNodesInitialized, fitView, updateNodeInternals } =
     useVueFlow()
-  const store = useBuilderStore()
+  const store = useLibraryStore()
   const historyStore = useFlowHistoryStore()
   const { trackEvent } = useGtm()
   const { clearWorkspace } = useClearWorkspace()

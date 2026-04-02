@@ -4,7 +4,7 @@
  * Parses a CellML 1.x/2.x file and extracts:
  *   - The set of component names (excluding 'environment' and other excluded components)
  *   - The connections between components as edges
- *   - Per-component port configs ready for builderStore.addConfigFile
+ *   - Per-component port configs ready for libraryStore.addConfigFile
  *
  * One port per unique canonical variable per component (deduplicated by port_type).
  * One edge per unique component pair.

@@ -82,7 +82,7 @@ import ModuleList from './ModuleList.vue'
 import ModuleNode from './ModuleNode.vue'
 import GhostNode from './GhostNode.vue'
 import GhostSetupModal from './GhostSetupDialog.vue'
-import { useBuilderStore } from '../stores/builderStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import { useResizableAside } from '../composables/useResizableAside'
 import { useGtm } from '../composables/useGtm'
 import useDragAndDrop from '../composables/useDnD'
@@ -113,7 +113,7 @@ const { onDrop, isGhostSetupOpen, pendingGhostNodeId } =
 const { trackEvent } = useGtm()
 
 const { width: asideWidth, startResize } = useResizableAside(200, 150, 400)
-const builderStore = useBuilderStore()
+const libraryStore = useLibraryStore()
 
 const props = defineProps({
   // v-model for visibility
@@ -157,8 +157,8 @@ watch(
   () => props.modelValue,
   (newVal) => {
     newVal
-      ? builderStore.addModuleFile(GHOST_MODULE_DEFINITION)
-      : builderStore.removeModuleFile(GHOST_MODULE_FILENAME)
+      ? libraryStore.addModuleFile(GHOST_MODULE_DEFINITION)
+      : libraryStore.removeModuleFile(GHOST_MODULE_FILENAME)
   }
 )
 
