@@ -240,7 +240,7 @@ export function useLoadFromCellML() {
       await nextTick()
 
       // Build edges, resolving port couplings using ordinal indices
-      // (same logic as onConnect in BuilderView)
+      // (same logic as onConnect in WorkspaceArea)
       const srcCounts = new Map()
       const tgtCounts = new Map()
       const flowEdges = pendingEdgeData.flatMap((edge) => {

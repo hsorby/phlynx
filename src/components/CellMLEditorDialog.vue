@@ -176,9 +176,9 @@ const handleCancel = () => checkDirtyAndProceed(() => emit('update:modelValue', 
 //
 // Both scope: single and scope: all perform identical merge logic — the
 // component is written to USER_MODULES_FILE under whatever name is in the
-// editor. The only difference is which nodes get redirected in BuilderView:
-//   scope: single → only the editing node
-//   scope: all    → all nodes sharing originalSourceFile + originalComponentName
+// editor. The only difference is which nodes get redirected in Workspace:
+//   scope: single -> only the editing node
+//   scope: all    -> all nodes sharing originalSourceFile + originalComponentName
 
 const handleSave = async (source) => {
   if (source === 'key' && !isDirty.value) return

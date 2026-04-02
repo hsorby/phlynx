@@ -15,7 +15,7 @@
         <el-input v-else ref="inputRef" v-model="editingValue" @blur="saveEdit" @keyup.enter="saveEdit" @keyup.esc="cancelEdit"/>
       </div>
       <nav>
-        <router-link to="/">Workbench</router-link>
+        <router-link to="/">Workspace</router-link>
         <router-link to="/docs/" :class="{ 'force-active': isDocsActive }">User Guide</router-link>
         <router-link to="/about">About</router-link>
       </nav>
@@ -23,7 +23,7 @@
 
     <div class="view-container">
       <router-view v-slot="{ Component }">
-        <keep-alive include="BuilderView">
+        <keep-alive include="WorkspaceArea">
           <component :is="Component" />
         </keep-alive>
       </router-view>
