@@ -1,6 +1,6 @@
 import { useVueFlow } from '@vue-flow/core'
 import { FLOW_IDS, GHOST_NODE_TYPE } from '../../utils/constants'
-import { generateUniqueModuleName } from '../../utils/nodes'
+import { generateUniqueInstanceName } from '../../utils/nodes'
 
 // Helper to get the bounding width of the macro graph
 function getGraphWidth(nodes) {
@@ -96,7 +96,7 @@ export function useMacroGenerator() {
         // Calculate shift.
         const xOffset = i * (MACRO_WIDTH + MARGIN_X)
 
-        const finalName = generateUniqueModuleName({name: node.data.componentName}, namesSet)
+        const finalName = generateUniqueInstanceName({name: node.data.componentName}, namesSet)
         namesSet.add(finalName)
 
         newNodes.push({

@@ -25,7 +25,7 @@
         <el-input v-else ref="inputRef" v-model="editingName" size="small" @blur="saveEdit" @keyup.enter="saveEdit" />
       </div>
       <!-- non-editable label showing CellML component and source file (no white box) -->
-      <div v-if="data.label" class="module-label">{{ data.label }}</div>
+      <div v-if="data.label" class="instance-label">{{ data.label }}</div>
       <div class="button-group">
         <el-tooltip
           effect="dark"

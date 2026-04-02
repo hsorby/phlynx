@@ -2,7 +2,7 @@ import { useVueFlow } from '@vue-flow/core'
 import { ref, shallowRef, watch } from 'vue'
 
 import { GHOST_MODULE_FILENAME, GHOST_NODE_TYPE } from '../utils/constants'
-import { getId, generateUniqueModuleName, attachNewNodeToFrame, findAnyNode } from '../utils/nodes'
+import { getId, generateUniqueInstanceName, attachNewNodeToFrame, findAnyNode } from '../utils/nodes'
 import { useLibraryStore } from '../stores/libraryStore'
 import { buildPortLabels } from '../services/import/buildPorts'
 import { extractVariablesFromModule } from '../utils/cellml'

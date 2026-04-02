@@ -56,7 +56,7 @@
       <div ref="canvasEl" class="flow-canvas" @wheel.stop.prevent="onCanvasWheel">
         <div :style="{ height: canvasHeight + 'px', position: 'relative' }">
         <VueFlow
-          :id="FLOW_ID"
+          :id="FLOW_IDS.EDGE"
           :nodes="flowNodes"
           :edges="flowEdges"
           :nodes-draggable="false"

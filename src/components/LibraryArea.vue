@@ -17,17 +17,17 @@
       <template v-if="filteredModuleFiles.length > 0">
         <div
           v-for="file in filteredModuleFiles"
-          :key="file.collectionName"
+          :key="file.filename"
           class="mlc__group"
         >
           <!-- Group header -->
           <button
             class="mlc__group-header"
-            :class="{ 'is-open': activeCollapseNames.includes(file.collectionName) }"
-            @click="toggleGroup(file.collectionName)"
+            :class="{ 'is-open': activeCollapseNames.includes(file.filename) }"
+            @click="toggleGroup(file.filename)"
           >
             <el-icon class="mlc__group-chevron"><ArrowRight /></el-icon>
-            <span class="mlc__group-name"><span class="mlc__group-name-text">{{ displayName(file.collectionName) }}</span></span>
+            <span class="mlc__group-name"><span class="mlc__group-name-text">{{ displayName(file.filename) }}</span></span>
             <el-tag size="small" type="info" effect="plain" round class="mlc__group-count">
               {{ file.modules.length }}
             </el-tag>
@@ -35,7 +35,7 @@
 
           <!-- Module cards -->
           <transition name="slide">
-            <div v-show="activeCollapseNames.includes(file.collectionName)" class="mlc__group-body">
+            <div v-show="activeCollapseNames.includes(file.filename)" class="mlc__group-body">
               <el-card
                 v-for="module in file.modules"
                 :key="module.name"
@@ -88,7 +88,7 @@
                             size="small"
                             circle
                             :icon="View"
-                            @click.stop="openPreview(module, file.collectionName)"
+                            @click.stop="openPreview(module, file.filename)"
                           />
                         </el-tooltip>
                       </div>
@@ -213,7 +213,7 @@ watch(
         if (selectedConfigs[mod.name] === undefined) selectedConfigs[mod.name] = 0
       })
     })
-    activeCollapseNames.value = filterText.value ? files.map((f) => f.collectionName) : []
+    activeCollapseNames.value = filterText.value ? files.map((f) => f.filename) : []
   },
   { immediate: true, deep: true }
 )
@@ -222,8 +222,8 @@ watch(
   () => store.availableModules,
   (currentModuleFiles) => {
     for (const file of currentModuleFiles) {
-      if (!knownFileNames.value.has(file.collectionName)) {
-        knownFileNames.value.add(file.collectionName)
+      if (!knownFileNames.value.has(file.filename)) {
+        knownFileNames.value.add(file.filename)
       }
     }
   },
@@ -250,7 +250,7 @@ function openPreview(module, collectionName) {
   const configIndex = selectedConfigs[module.name] ?? 0
   previewTarget.value = {
     moduleName: module.name,
-    collectionName,
+    filename: collectionName,
     configIndex,
     configData: module.configs[configIndex],
   }

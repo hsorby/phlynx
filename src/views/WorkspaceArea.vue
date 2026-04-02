@@ -342,7 +342,7 @@ import { useResizableAside } from '../composables/useResizableAside'
 import { useGtm } from '../composables/useGtm'
 import LibraryArea from '../components/LibraryArea.vue'
 import Workbench from '../components/WorkbenchArea.vue'
-import instanceNode from '../components/InstanceNode.vue'
+import InstanceNode from '../components/InstanceNode.vue'
 import EditModuleDialog from '../components/EditModuleDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
@@ -372,7 +372,7 @@ import {
   ZIP_FILE_TYPES,
   DEFAULT_FILE_NAME,
 } from '../utils/constants'
-import { getId as getNextNodeId, generateUniqueModuleName } from '../utils/nodes'
+import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId } from '../utils/edges'
 import { getImportConfig, parseParametersFile } from '../utils/import'
 import { detachReactivity } from '../utils/reactivity'
@@ -1165,7 +1165,7 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
         }))
       
         libraryStore.addOrUpdateCollection({
-          collectionName: filename,
+          filename,
           modules: modules,
           model: result.components.model,
         })
@@ -1848,7 +1848,7 @@ function createNewModuleAtPosition(clientX, clientY) {
   const moduleData = {
     name: moduleEntry.name,
     componentName: moduleEntry.componentName,
-    sourceFile: moduleFile.collectionName,
+    sourceFile: moduleFile.filename,
     configs: moduleEntry.configs || null,
     configIndex: 0,
     ports: moduleEntry.ports || [],
@@ -2054,6 +2054,16 @@ const onSaveConfirm = async (fileName) => {
   notify.success({ title: 'Workflow saved!' })
 }
 
+function migrateWorkspace(flow) {
+  if (!flow?.nodes) return flow
+  return {
+    ...flow,
+    nodes: flow.nodes.map((node) =>
+      node.type === 'moduleNode' ? { ...node, type: 'instanceNode' } : node
+    ),
+  }
+}
+
 /**
  * Reads a JSON file and restores the application state.
  */
@@ -2064,7 +2074,7 @@ function handleLoadWorkspace(file) {
   reader.onload = async (e) => {
     try {
       const loadedState = JSON.parse(e.target.result)
-
+    
       // Validate the loaded file
       if (!loadedState.flow || !loadedState.store) {
         throw new Error('Invalid workflow file format.')
@@ -2077,9 +2087,8 @@ function handleLoadWorkspace(file) {
       // We use `setViewport` to apply zoom/pan.
       setViewport(loadedState.flow.viewport)
       // We directly set the reactive refs.
-      fromObject(loadedState.flow)
-      // nodes.value = loadedState.flow.nodes
-      // edges.value = loadedState.flow.edges
+      const migrated = migrateWorkspace(loadedState.flow)
+      fromObject(migrated)
 
       // Rebuild the edge index so the EdgeConnectionDialog subgraph is correct.
       rebuildNodeEdgeIndex()
@@ -2163,7 +2172,7 @@ const copySelection = async () => {
     const { sourceFile, componentName, configIndex } = node.data
     if (!sourceFile || !componentName) continue
 
-    const moduleFile = libraryStore.availableCollections.find((f) => f.collectionName === sourceFile)
+    const moduleFile = libraryStore.availableCollections.find((f) => f.filename === sourceFile)
     if (!moduleFile) continue
 
     const component = moduleFile.modules.find((m) => m.name === componentName || m.componentName === componentName)
@@ -2194,7 +2203,7 @@ const copySelection = async () => {
       componentName,
       configs: config !== undefined ? [detachReactivity(config)] : [],
       model: componentModel,
-      collectionName: moduleFile.collectionName,
+      filename: moduleFile.filename,
     }
   }
 
@@ -2231,12 +2240,12 @@ const pasteSelection = async (atMouse = false) => {
 
   if (sourceClipboard.storeSnapshot) {
     for (const entry of Object.values(sourceClipboard.storeSnapshot)) {
-      const existingFile = libraryStore.availableCollections.find((f) => f.collectionName === entry.collectionName)
+      const existingFile = libraryStore.availableCollections.find((f) => f.filename === entry.filename)
 
       if (!existingFile) {
         // The whole file is absent 
         libraryStore.addOrUpdateCollection({
-          collectionName: entry.collectionName,
+          filename: entry.filename,
           model: entry.model,
           modules: [{
             name: entry.componentName,
@@ -2303,7 +2312,7 @@ const pasteSelection = async (atMouse = false) => {
     idMap[node.id] = newId
     nodeIdSet.push(newId)
 
-    const finalName = generateUniqueModuleName(
+    const finalName = generateUniqueInstanceName(
       { name: node.data.componentName },
       namesSet
     )

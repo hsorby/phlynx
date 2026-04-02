@@ -192,26 +192,17 @@ export const useLibraryStore = defineStore('library', () => {
         return 
       }
 
-      let collection = availableCollections.value.find((f) => f.collectionName === config.component_file)
+      let collection = availableCollections.value.find((f) => f.filename === config.component_file)
 
       // SMELL: stub should only be associated with a module, not a whole collection.
       if (!collection) {
-        collection = {
-          collectionName: config.component_file,
-          modules: [],
-          isStub: true,
-        }
+        collection = { filename: config.component_file, modules: [], isStub: true, }
         availableCollections.value.push(collection)
       }
 
-      let module = collection.modules.find((m) => m.name === config.module_type || m.type === config.module_type)
-
+      let module = collection.modules.find((m) => m.name === config.component_type || m.type === config.component_type)
       if (!module) {
-        module = {
-          name: config.module_type,
-          componentName: config.module_type,
-          configs: [],
-        }
+        module = { name: config.component_type, componentName: config.component_type, configs: [], }
         collection.modules.push(module)
       }
 
@@ -242,7 +233,7 @@ export const useLibraryStore = defineStore('library', () => {
   }
 
   function addOrUpdateCollection(payload) {
-    const existingCollection = availableCollections.value.find((f) => f.collectionName === payload.collectionName)
+    const existingCollection = availableCollections.value.find((f) => f.filename === payload.filename)
 
     if (existingCollection) {
       // SMELL: collection shouldn't be a stub, only a module.
@@ -281,10 +272,10 @@ export const useLibraryStore = defineStore('library', () => {
 
   /**
    * Removes a collection and the associated modules from the list.
-   * @param {string} collectionName - The name of the collection to remove.
+   * @param {string} filename - The name of the collection to remove.
    */
-  function removeCollection(collectionName) {
-    const index = availableCollections.value.findIndex((f) => f.collectionName === collectionName)
+  function removeCollection(filename) {
+    const index = availableCollections.value.findIndex((f) => f.filename === filename)
     if (index !== -1) {
       availableCollections.value.splice(index, 1)
     }
@@ -306,11 +297,11 @@ export const useLibraryStore = defineStore('library', () => {
 
   /**
    * Checks if a collection is already loaded.
-   * @param {string} collectionName - The name of the collection to check.
+   * @param {string} filename - The name of the collection to check.
    * @returns {boolean} - True if the collection is loaded, false otherwise.
    */
-  function hasCollection(collectionName) {
-    return availableCollections.value.some((f) => f.collectionName === collectionName)
+  function hasCollection(filename) {
+    return availableCollections.value.some((f) => f.filename === filename)
   }
 
   // ---- GETTERS ----
@@ -318,8 +309,8 @@ export const useLibraryStore = defineStore('library', () => {
   /**
    * Returns the cellml content of a collection.
    */
-  function getModelByCollectionName(collectionName) {
-    const index = availableCollections.value.findIndex((f) => f.collectionName === collectionName)
+  function getModelByCollectionName(filename) {
+    const index = availableCollections.value.findIndex((f) => f.filename === filename)
     if (index !== -1) {
       return availableCollections.value[index].model
     }
@@ -329,8 +320,8 @@ export const useLibraryStore = defineStore('library', () => {
   /**
    * Returns modules associated with a componentName within the given collection file.
    */
-  function findModulesByComponentName(collectionName, componentName) {
-    const collection = collectionsByName.value.get(collectionName)
+  function findModulesByComponentName(filename, componentName) {
+    const collection = collectionsByName.value.get(filename)
     if (!collection) return null
 
     return collection.modules.find((m) => m.name === componentName) || null
@@ -381,7 +372,7 @@ export const useLibraryStore = defineStore('library', () => {
   const collectionsByName = computed(() => {
     const map = new Map()
     for (const collection of availableCollections.value) {
-      map.set(collection.collectionName, collection)
+      map.set(collection.filename, collection)
     }
     return map
   })
@@ -392,7 +383,7 @@ export const useLibraryStore = defineStore('library', () => {
       for (const module of collection.modules || []) {
         for (const config of module.configs || []) {
           const key = `${config.module_type}||${config.module_subtype}`
-          map.set(key, { config, module, collection: collection.collectionName })
+          map.set(key, { config, module, collection: collection.filename })
         }
       }
     }
