@@ -63,14 +63,14 @@
         </el-table-column>
 
         <!-- Multiport -->
-        <el-table-column label="Multiport" :width="editableData.portLabels.some(p => p.multiport === 'Multiply') ? 210 : 140">
+        <el-table-column label="Multiport" width="100">
           <template #default="scope">
-            <div style="display: flex; align-items: center; gap: 4px">
+            <div style="display: flex; flex-direction: column; gap: 5px">
               <el-select
                 v-model="scope.row.multiport"
                 size="small"
                 placeholder="Select"
-                style="flex: 0 0 auto; width: 100px"
+                style="width: 100%"
               >
                 <el-option
                   v-for="option in multiportOptions"
@@ -80,16 +80,19 @@
                   :disabled="option.value === 'Sum' && scope.row.option?.length > 1"
                 />
               </el-select>
-              <el-input-number
+              <div
                 v-if="scope.row.multiport === 'Multiply'"
-                v-model="scope.row.multiplyFactor"
-                :min="-Infinity"
-                :controls="false"
-                :width="30"
-                size="small"
-                placeholder="1"
-                style="flex: 1; max-width: 30"
-              />
+                style="display: flex; align-items: center; gap: 5px"
+              >
+                <span class="multiply-prefix">&times;</span>
+                <el-input-number
+                  v-model="scope.row.multiplyFactor"
+                  :controls="false"
+                  size="small"
+                  placeholder="1"
+                  style="width: 100%"
+                />
+              </div>
             </div>
           </template>
         </el-table-column>
@@ -350,5 +353,11 @@ function deletePortLabel(index) {
   margin-bottom: 12px;
   font-size: 16px;
   display: block;
+}
+
+.multiply-prefix {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-color-info);
 }
 </style>
