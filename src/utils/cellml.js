@@ -1,16 +1,87 @@
 import { isEmpty } from './variables.js'
-import { STANDARD_UNITS, AFFINE_UNIT_CONVERSIONS } from './constants.js'
+import { STANDARD_UNITS, 
+  AFFINE_UNIT_CONVERSIONS, 
+  CELLML_NS,
+  MATHML_NS, 
+  GLOBAL_PARAMETERS, 
+  MODEL_PARAMETERS,
+ } from './constants.js'
 
 let _libcellml = null
 
-// Define the Namespaces.
-const CELLML_NS = 'http://www.cellml.org/cellml/2.0#'
-const MATHML_NS = 'http://www.w3.org/1998/Math/MathML'
-const GLOBAL_PARAMETERS = 'parameters_global'
-const MODEL_PARAMETERS = 'parameters'
-
 export function initLibCellML(instance) {
   _libcellml = instance
+}
+
+/**
+ * Builds a Map from CellML element id -> variable name by parsing the raw CellML XML.
+ * Used to resolve annotation variable ids to human-readable names.
+ */
+export function buildVariableIdMap(cellmlString) {
+  const doc = new DOMParser().parseFromString(cellmlString, 'application/xml')
+  const map = new Map()
+  Array.from(doc.getElementsByTagNameNS(CELLML_NS, 'variable')).forEach((v) => {
+    const id   = v.getAttribute('id')
+    const name = v.getAttribute('name')
+    if (id && name) map.set(id, name)
+  })
+  return map
+}
+
+export function extractParametersFromCellML(cellmlString, filename) {
+  const doc = new DOMParser().parseFromString(cellmlString, 'application/xml')
+  const model = doc.getElementsByTagName('model')[0]
+  if (!model) return []
+
+  const params = []
+  for (const node of model.childNodes) {
+    if (node.nodeType !== Node.ELEMENT_NODE || node.localName !== 'component') continue
+    for (const variable of node.getElementsByTagName('variable')) {
+      const initialValue = variable.getAttribute('initial_value')
+      if (!initialValue || isNaN(parseFloat(initialValue))) continue
+      params.push({
+        variable_name:  variable.getAttribute('name'),
+        units:          variable.getAttribute('units'),
+        value:          initialValue,
+        data_reference: filename,
+      })
+    }
+  }
+  return params
+}
+
+export function inferPrimaryComponentName(cellmlString) {
+  const doc = new DOMParser().parseFromString(cellmlString, 'application/xml')
+  const model = doc.getElementsByTagName('model')[0]
+  if (!model) return null
+  for (const node of model.childNodes) {
+    if (node.nodeType === Node.ELEMENT_NODE && node.localName === 'component') {
+      return node.getAttribute('name')
+    }
+  }
+  return null
+}
+
+export function inferComponentNameFromConnections(cellmlString, paramsComponentName) {
+  const doc = new DOMParser().parseFromString(cellmlString, 'application/xml')
+
+  // CellML 2.0: component names on <map_components> child of <connection>
+  for (const mapComponents of doc.getElementsByTagName('map_components')) {
+    const c1 = mapComponents.getAttribute('component_1')
+    const c2 = mapComponents.getAttribute('component_2')
+    if (c2 === paramsComponentName) return c1
+    if (c1 === paramsComponentName) return c2
+  }
+
+  // CellML 1.x: component names directly on <connection>
+  for (const connection of doc.getElementsByTagName('connection')) {
+    const c1 = connection.getAttribute('component_1')
+    const c2 = connection.getAttribute('component_2')
+    if (c2 === paramsComponentName) return c1
+    if (c1 === paramsComponentName) return c2
+  }
+
+  return null
 }
 
 /**
@@ -269,6 +340,78 @@ function createAffineConversionComponent(model, v1, v2, v1CompName, v2CompName) 
   convComp.delete()
 
   return true
+}
+
+/**
+ * Creates (or appends to) a shared 'generated_multiplications' component that
+ * scales a source variable by a constant factor.
+ *
+ * Generated MathML pattern:
+ *   scaled_<sourceVarName> = factor * in_<sourceVarName>
+ *
+ * Does NOT wire the output variable to any target — the caller is responsible
+ * for that, which allows the scaled output to be fed into a summation component
+ * rather than directly to a target variable.
+ *
+ * @param {libcellml.Model}     model           - The model being built.
+ * @param {libcellml.Component} sourceComp      - Component owning the variable to scale.
+ * @param {string}              sourceVarName   - Name of the variable in sourceComp.
+ * @param {number}              factor          - Numeric scaling factor (e.g. 2).
+ * @returns {{ outputVarName: string }}         - Name of the scaled output variable
+ *                                                inside 'generated_multiplications'.
+ */
+function createMultiplyComponent(model, sourceComp, sourceVarName, factor) {
+  // Get or create the shared multiplications component
+  let mulComp = model.componentByName('generated_multiplications', true)
+  if (mulComp === null) {
+    mulComp = new _libcellml.Component()
+    mulComp.setName('generated_multiplications')
+    model.addComponent(mulComp)
+  }
+
+  // Determine units from the source variable
+  const sourceVar = sourceComp.variableByName(sourceVarName)
+  const sourceUnits = sourceVar.units()
+  const unitsName = sourceUnits.name() || 'dimensionless'
+  sourceUnits.delete()
+
+  // Input variable — wired to sourceComp
+  const inputVarName = nextAvailableVarName(mulComp, `in_${sourceVarName}`)
+  const inputVar = new _libcellml.Variable()
+  inputVar.setName(inputVarName)
+  inputVar.setUnitsByName(unitsName)
+  inputVar.setInterfaceTypeByString('public')
+  mulComp.addVariable(inputVar)
+  _libcellml.Variable.addEquivalence(inputVar, sourceVar)
+  inputVar.delete()
+  sourceVar.delete()
+
+  // Output variable — left unwired here; caller connects it to its destination
+  const outputVarName = nextAvailableVarName(mulComp, `scaled_${sourceVarName}`)
+  const outputVar = new _libcellml.Variable()
+  outputVar.setName(outputVarName)
+  outputVar.setUnitsByName(unitsName)
+  outputVar.setInterfaceTypeByString('public')
+  mulComp.addVariable(outputVar)
+  outputVar.delete()
+
+  // MathML: scaled_var = factor * in_var
+  const mathML = `<math xmlns="http://www.w3.org/1998/Math/MathML" xmlns:cellml="http://www.cellml.org/cellml/2.0#">
+    <apply>
+      <eq/>
+      <ci>${outputVarName}</ci>
+      <apply>
+        <times/>
+        <cn cellml:units="dimensionless">${factor}</cn>
+        <ci>${inputVarName}</ci>
+      </apply>
+    </apply>
+  </math>`
+
+  mulComp.appendMath(mathML)
+  mulComp.delete()
+
+  return { outputVarName }
 }
 
 function createSummationComponent(model, sourceComp, sourceVarName, targetComponentVarNameMap) {
@@ -821,6 +964,7 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
 
     const componentTrashCan = new Set()
     const multiPortSums = new Map()
+    const multiPortMultiplies = [] // Array of { sourceComp, sourceVarName, targetComp, targetVarName, factor }
     for (const edge of edges) {
       const sourceNode = edge.sourceNode
       const targetNode = edge.targetNode
@@ -839,11 +983,24 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
       for (const { sourcePortLabel: srcLabel, targetPortLabel: tgtLabel } of couplings) {
         const isSrcMultiportSum = srcLabel.multiport === 'Sum'
         const isTgtMultiportSum = tgtLabel.multiport === 'Sum'
+        const isSrcMultiportMultiply = srcLabel.multiport === 'Multiply'
 
         if (isSrcMultiportSum && isTgtMultiportSum) {
           throw new Error('Multi-port-sum to Multi-port-sum connections are not supported.')
+        } else if (isSrcMultiportMultiply) {
+          if (srcLabel.option?.length !== 1 || tgtLabel.option?.length !== 1) {
+            throw new Error('Multiport Multiply ports must each map exactly one variable.')
+          }
+          multiPortMultiplies.push({
+            sourceComp,
+            sourceVarName: srcLabel.option[0],
+            targetComp,
+            targetVarName: tgtLabel.option[0],
+            factor: Number(srcLabel.multiplyFactor ?? 1),
+            isTgtMultiportSum,
+            tgtLabel,
+          })
         } else if (isSrcMultiportSum || isTgtMultiportSum) {
-          // Accumulate multi-port-sum operands; resolved after all edges are processed
           const multiSumLabel = isSrcMultiportSum ? srcLabel : tgtLabel
           const multiSumComponent = isSrcMultiportSum ? sourceComp : targetComp
           const operandLabel = isSrcMultiportSum ? tgtLabel : srcLabel
@@ -859,7 +1016,7 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
           multiPortSums.get(multiKey).targets.push({
             component: operandComponent,
             label: operandLabel,
-            isTarget: !isSrcMultiportSum, 
+            isTarget: !isSrcMultiportSum,
           })
         } else {
           // Direct one-to-one variable equivalence
@@ -867,36 +1024,72 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
           for (let i = 0; i < minLength; i++) {
             const srcOption = srcLabel.option[i]
             const tgtOption = tgtLabel.option[i]
-
             if (srcOption && tgtOption) {
               const v1 = sourceComp.variableByName(srcOption)
               const v2 = targetComp.variableByName(tgtOption)
-
               if (v1 && v2) {
                 const handled = createAffineConversionComponent(model, v1, v2, sourceComp.name(), targetComp.name())
                 if (!handled) {
                   _libcellml.Variable.addEquivalence(v1, v2)
                 }
               }
-
               v1?.delete()
               v2?.delete()
             }
           }
         }
-      }
+      } 
     }
 
     // Handle Multi-Port-Sum Connections
+    const mulCompRefs = []
+    for (const mulData of multiPortMultiplies) {
+      const { sourceComp, sourceVarName, targetComp, targetVarName, factor, isTgtMultiportSum, tgtLabel } = mulData
+
+      const { outputVarName } = createMultiplyComponent(model, sourceComp, sourceVarName, factor)
+
+      if (isTgtMultiportSum) {
+        // The target has a Sum port: register the scaled output variable as a
+        // Sum operand so it gets added to the summation equation rather than
+        // equivalenced directly to the target.
+        const mulComp = model.componentByName('generated_multiplications', true)
+        mulCompRefs.push(mulComp) // keep alive until after Pass 2
+        const multiKey = targetComp.name() + '::' + tgtLabel.label
+        if (!multiPortSums.has(multiKey)) {
+          multiPortSums.set(multiKey, {
+            sourceComp: targetComp,
+            srcLabel: tgtLabel,
+            targets: [],
+          })
+        }
+        // The operand is the scaled output variable living in generated_multiplications
+        multiPortSums.get(multiKey).targets.push({
+          component: mulComp,
+          label: { option: [outputVarName] },
+        })
+      } else {
+        // Direct target: wire the scaled output straight to the target variable
+        const mulComp = model.componentByName('generated_multiplications', true)
+        const outputVar = mulComp.variableByName(outputVarName)
+        const targetVar = targetComp.variableByName(targetVarName)
+        if (outputVar && targetVar) {
+          _libcellml.Variable.addEquivalence(outputVar, targetVar)
+        }
+        outputVar && outputVar.delete()
+        targetVar && targetVar.delete()
+        mulComp.delete()
+      }
+    }
+
+    // Pass 2: Handle Sum connections (including any operands injected by Multiply above).
     for (const sumData of multiPortSums.values()) {
       const { sourceComp, srcLabel, targets } = sumData
 
-      // Create the Summation Component
       const sourceVarNames = srcLabel.option
       if (sourceVarNames.length !== 1) {
         throw new Error('Multi-port-sum source must have exactly one variable representing the summed input.')
       }
-      const sourceVarName = sourceVarNames[0] // Assuming single variable for source in multi-port-sum
+      const sourceVarName = sourceVarNames[0]
       const targetComponents = []
       for (const targetInfo of targets) {
         const { component, label, isTarget } = targetInfo
@@ -910,6 +1103,8 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
 
       createSummationComponent(model, sourceComp, sourceVarName, targetComponents)
     }
+
+    for (const ref of mulCompRefs) ref.delete()
 
     for (const comp of componentTrashCan) {
       comp && comp.delete()
