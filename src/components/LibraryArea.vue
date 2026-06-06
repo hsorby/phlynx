@@ -5,7 +5,7 @@
     <div class="mlc__search">
       <el-input
         v-model="filterText"
-        placeholder="Search modules…"
+        placeholder="Search Library…"
         clearable
         :prefix-icon="Search"
         size="default"
@@ -53,15 +53,6 @@
                 @click="selectable && handleSelect(module)"
               >
                 <div class="mlc__card-inner">
-                  <!-- Drag grip -->
-                  <span v-if="!selectable && !file.isStub" class="mlc__grip" aria-hidden="true">
-                    <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
-                      <circle cx="2.5" cy="2.5" r="1.5"/><circle cx="7.5" cy="2.5" r="1.5"/>
-                      <circle cx="2.5" cy="7"   r="1.5"/><circle cx="7.5" cy="7"   r="1.5"/>
-                      <circle cx="2.5" cy="11.5" r="1.5"/><circle cx="7.5" cy="11.5" r="1.5"/>
-                    </svg>
-                  </span>
-
                   <div class="mlc__card-body">
                     <!-- Name + actions row -->
                     <div class="mlc__card-header">
