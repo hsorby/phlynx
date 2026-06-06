@@ -114,6 +114,7 @@ export const useLibraryStore = defineStore('library', () => {
     return globalConstants.value.get(variableName)
   }
 
+  // SMELLY
   function getParameterValueForInstanceVariable(instanceVariable) {
     let results = []
     const paramKeys = availableVariableNameIdMap.value.get(instanceVariable)
@@ -199,9 +200,9 @@ export const useLibraryStore = defineStore('library', () => {
         availableCollections.value.push(collection)
       }
 
-      let module = collection.modules.find((m) => m.name === config.component_type || m.type === config.component_type)
+      let module = collection.modules.find((m) => m.name === config.component_type)
       if (!module) {
-        module = { name: config.component_type, componentName: config.component_type, configs: [], }
+        module = { name: config.component_type, configs: [], }
         collection.modules.push(module)
       }
 

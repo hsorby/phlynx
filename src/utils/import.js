@@ -8,7 +8,7 @@ export const checkModulesAreLoaded = (modulesRequired, libraryStore) => {
   const warnings = []
   const missingResources = {
     configs: new Set(),
-    moduleTypes: new Set(),
+    components: new Set(),
     componentFileIssues: new Map(),
   }
   const availableComponents = new Set()
@@ -29,7 +29,7 @@ export const checkModulesAreLoaded = (modulesRequired, libraryStore) => {
   // Get all available configs (module_type + module_subtype combinations)
   // and the component_type they point to
   const availableConfigs = new Map() // key: "module_type:module_subtype", value: config object with metadata
-  const moduleTypesInConfigs = new Set()
+  const componentTypesInConfigs = new Set()
 
   libraryStore.availableCollections.forEach((file) => {
     file.modules?.forEach((module) => {
@@ -39,8 +39,8 @@ export const checkModulesAreLoaded = (modulesRequired, libraryStore) => {
           // Store config with its associated file information
           availableConfigs.set(key, config)
 
-          if (config.module_type) {
-            moduleTypesInConfigs.add(config.module_type)
+          if (config.component_type) {
+            componentTypesInConfigs.add(config.component_type)
           }
         }
       })
@@ -64,23 +64,23 @@ export const checkModulesAreLoaded = (modulesRequired, libraryStore) => {
       missingConfigs.push(key)
       missingResources.configs.add(key)
     } else {
-      const moduleFileIssue = validateModuleFileAssociation(config, libraryStore)
+      const componentFileIssue = validateCollectionFileAssociation(config, libraryStore)
       
-      if (moduleFileIssue) {
+      if (componentFileIssue) {
         // Use composite key for automatic deduplication via Map
-        const issueKey = `${moduleFileIssue.config}:${moduleFileIssue.issue}`
-        missingResources.moduleFileIssues.set(issueKey, moduleFileIssue)
+        const issueKey = `${componentFileIssue.config}:${componentFileIssue.issue}`
+        missingResources.componentFileIssues.set(issueKey, componentFileIssue)
         
         // Add to appropriate missing resource category
-        if (moduleFileIssue.issue === 'missing_file' || moduleFileIssue.issue === 'stub_file') {
+        if (componentFileIssue.issue === 'missing_file' || componentFileIssue.issue === 'stub_file') {
           missingComponents.push(config.module_type)
-          missingResources.moduleTypes.add(config.module_type)
+          missingResources.components.add(config.module_type)
         }
       } else {
         // Only check for missing module if file association is valid
-        if (config.module_type && !availableCellMLModules.has(config.module_type)) {
-          missingComponents.push(config.module_type)
-          missingResources.moduleTypes.add(config.module_type)
+        if (config.module_type && !availableComponents.has(config.component_type)) {
+          missingComponents.push(config.component_type)
+          missingResources.components.add(config.module_type)
         }
       }
     }
@@ -95,9 +95,9 @@ export const checkModulesAreLoaded = (modulesRequired, libraryStore) => {
     warnings.push(`Missing CellML components: ${[...new Set(missingComponents)].join(', ')}`)
   }
 
-  if (missingResources.moduleFileIssues.size > 0) {
-    const issueMessages = [...missingResources.moduleFileIssues.values()].map(issue => issue.message)
-    warnings.push(`Module file issues: ${[...new Set(issueMessages)].join('; ')}`)
+  if (missingResources.componentFileIssues.size > 0) {
+    const issueMessages = [...missingResources.componentFileIssues.values()].map(issue => issue.message)
+    warnings.push(`Collection file issues: ${[...new Set(issueMessages)].join('; ')}`)
   }
 
   const needsConfigFile = missingConfigs.length > 0
@@ -105,7 +105,7 @@ export const checkModulesAreLoaded = (modulesRequired, libraryStore) => {
     [...missingResources.componentFileIssues.values()].some(issue => 
       issue.issue === 'missing_file' || issue.issue === 'stub_file'
     )
-  const hasModuleFileMismatch = [...missingResources.componentFileIssues.values()].some(issue =>
+  const hasCollectionFileMismatch = [...missingResources.componentFileIssues.values()].some(issue =>
     issue.issue === 'component_not_in_file'
   )
 
@@ -116,12 +116,12 @@ export const checkModulesAreLoaded = (modulesRequired, libraryStore) => {
     isComplete: errors.length === 0 && warnings.length === 0,
     missingResources: {
       configs: [...missingResources.configs],
-      moduleTypes: [...missingResources.moduleTypes],
-      componentFileIssues: groupComponentFileIssues([...missingResources.componentFileIssues.values()]),
+      components: [...missingResources.components],
+      componentFileIssues: groupCollectionFileIssues([...missingResources.componentFileIssues.values()]),
     },
     needsConfigFile,
     needsComponentFile,
-    hasComponentFileMismatch,
+    hasCollectionFileMismatch,
   }
 }
 
@@ -135,7 +135,7 @@ export const checkModulesAreLoaded = (modulesRequired, libraryStore) => {
  * @param {Object} libraryStore - The store containing availableCollections
  * @returns {Object|null} - Issue object if there's a problem, null if validation passes
  */
-function validateModuleFileAssociation(config, libraryStore) {
+function validateCollectionFileAssociation(config, libraryStore) {
   const { component_file, component_type, module_type, module_subtype } = config
   
   if (!component_file) {
@@ -149,12 +149,12 @@ function validateModuleFileAssociation(config, libraryStore) {
     }
   }
   
-  // Find the component file in available modules
-  const componentFile = libraryStore.availableCollections.find(
+  // Find the collection in available modules
+  const collection = libraryStore.availableCollections.find(
     f => f.filename === component_file
   )
   
-  if (!componentFile) {
+  if (!collection) {
     // The specified component file doesn't exist in the store
     return {
       config: `${module_type}:${module_subtype}`,
@@ -166,7 +166,7 @@ function validateModuleFileAssociation(config, libraryStore) {
   }
   
   // Check if it's just a stub (config was uploaded but component file wasn't)
-  if (componentFile.isStub) {
+  if (collection.isStub) {
     return {
       config: `${module_type}:${module_subtype}`,
       expectedFile: component_file,
@@ -177,13 +177,13 @@ function validateModuleFileAssociation(config, libraryStore) {
   }
   
   // Verify components come from the CellML file stated in the config
-  const componentExists = componentFile.components?.some(
+  const moduleExists = collection.modules?.some(
     c => (c.name === component_type || c.componentName === component_type)
   )
   
-  if (!componentExists) {
+  if (!moduleExists) {
     // The file exists but doesn't contain the expected component
-    const availableComponents = componentFile.components?.map(c => c.name || c.componentName).join(', ') || 'none'
+    const availableComponents = collection.modules?.map(c => c.name || c.componentName).join(', ') || 'none'
     return {
       config: `${module_type}:${module_subtype}`,
       expectedFile: component_file,
@@ -198,13 +198,13 @@ function validateModuleFileAssociation(config, libraryStore) {
 }
 
 /**
- * Groups component file issues by file AND issue type.
+ * Groups collection file issues by file AND issue type.
  * This ensures different issues (e.g., 'missing_file' vs 'component_not_in_file')
  * for the same file are reported separately.
- * * @param {Array} componentFileIssues - Array of issue objects
+ * @param {Array} componentFileIssues - Array of issue objects
  * @returns {Array} Grouped issues with consolidated messages
  */
-export function groupComponentFileIssues(componentFileIssues) {
+export function groupCollectionFileIssues(componentFileIssues) {
   if (!componentFileIssues || componentFileIssues.length === 0) {
     return []
   }
@@ -222,7 +222,7 @@ export function groupComponentFileIssues(componentFileIssues) {
         file,
         issue: issue.issue,
         configs: [],
-        moduleTypes: new Set(),
+        componentTypes: new Set(),
         // Generate a unique ID for UI loops
         uniqueKey: groupKey
       })
@@ -230,8 +230,8 @@ export function groupComponentFileIssues(componentFileIssues) {
     
     const group = issuesGrouped.get(groupKey)
     group.configs.push(issue.config)
-    if (issue.moduleType) {
-      group.moduleTypes.add(issue.moduleType)
+    if (issue.componentType) {
+      group.componentTypes.add(issue.componentType)
     }
   })
   
@@ -247,7 +247,7 @@ export function groupComponentFileIssues(componentFileIssues) {
         message = `Component file "${group.file}" needs to be uploaded`
         break
       case 'component_not_in_file':
-        message = `Component file "${group.file}" missing components: ${[...group.moduleTypes].join(', ')}`
+        message = `Component file "${group.file}" missing components: ${[...group.componentTypes].join(', ')}`
         break
       case 'no_file_specified':
         message = `Module config doesn't specify a component file`
@@ -263,7 +263,7 @@ export function groupComponentFileIssues(componentFileIssues) {
       issue: group.issue,
       message,
       configs: group.configs,
-      moduleTypes: [...group.moduleTypes],
+      componentTypes: [...group.componentTypes],
       uniqueKey: group.uniqueKey
     }
   })
@@ -316,19 +316,18 @@ const parseConfigJson = (file) => {
     reader.onload = (e) => {
       try {
         const parsed = JSON.parse(e.target.result)
-        if (
-          !(
-            parsed.length > 0 &&
-            'entrance_ports' in parsed[0] &&
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+          throw new Error('Config file must be a non-empty array of configuration objects.')
+        } else if (!('entrance_ports' in parsed[0] &&
             'exit_ports' in parsed[0] &&
             'general_ports' in parsed[0] &&
             'module_subtype' in parsed[0] &&
             'module_type' in parsed[0] &&
             'module_format' in parsed[0] &&
-            'module_file' in parsed[0] &&
+            'component_file' in parsed[0] &&
             'component_type' in parsed[0]
-          )
-        ) {
+          ))
+          {
           throw new Error('Invalid module configuration file format.')
         }
         resolve(parsed)
@@ -383,6 +382,7 @@ const parseCellML = (file) => {
         const content = e.target.result
         if (!isCellML(content)) {
           reject(new Error('Invalid CellML file.'))
+          return
         }
         resolve(content)
       } catch (err) {
@@ -432,7 +432,7 @@ export function createDynamicFields(validation) {
       label: IMPORT_LABELS.MODULE_CONFIG,
       required: true,
       accept: '.json',
-      parser: parseModuleJson,
+      parser: parseConfigJson,
       helpText: `Required Configurations: ${(validation.missingResources.configs || []).join(', ')}`,
       processUpload: 'config',
     })
