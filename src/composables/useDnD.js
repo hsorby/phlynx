@@ -5,7 +5,7 @@ import { GHOST_MODULE_FILENAME, GHOST_NODE_TYPE } from '../utils/constants'
 import { getId, generateUniqueInstanceName, attachNewNodeToFrame, findAnyNode } from '../utils/nodes'
 import { useLibraryStore } from '../stores/libraryStore'
 import { buildPortLabels } from '../services/import/buildPorts'
-import { extractVariablesFromModule } from '../utils/cellml'
+import { extractVariablesFromComponent } from '../utils/cellml'
 
 /**
  * In a real world scenario you'd want to avoid creating refs in a global scope like this as they might not be cleaned up properly.
@@ -95,7 +95,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
     pendingHistoryNodes.add(nodeId)
 
     const modelString = libraryStore.getModelByCollectionName(sourceFile)
-    const variables = extractVariablesFromModule(modelString, componentName)
+    const variables = extractVariablesFromComponent(modelString, componentName)
 
     const configIndex = moduleData.configIndex || 0
     let config = moduleData.configs?.[configIndex] ?? null
@@ -134,7 +134,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
         label,
         name: finalName,
         portLabels,
-        portOptions: moduleData.portOptions || [],
+        variables: moduleData.variables || [],
         ports: moduleData.ports || [],
         sourceFile: moduleData.sourceFile,
         variables,

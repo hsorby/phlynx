@@ -64,7 +64,7 @@ export function findAnyNode() {
 }
 
 /**
- * Puts new modules in the same reference frame if user imported using vessel array
+ * Puts new modules in the same reference frame if user imported using module array
  * containing x and y (z ignored for now).
  */
 export function attachNewNodeToFrame(position, existingNodeData) {

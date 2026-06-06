@@ -1,7 +1,7 @@
 import { buildPorts, buildPortLabels } from './buildPorts'
 import { getHandleId } from '../../utils/ports'
 import { SOURCE_PORT_TYPE, TARGET_PORT_TYPE } from '../../utils/constants'
-import { extractVariablesFromModule } from '../../utils/cellml'
+import { extractVariablesFromComponent } from '../../utils/cellml'
 import { resolvePortCouplings, checkAndClaimCouplings, buildUsedPortKeys } from '../../utils/edges'
 
 function buildNodes(libraryStore, vessels, progressCallback = null) {

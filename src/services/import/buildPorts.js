@@ -1,16 +1,16 @@
 import { SOURCE_PORT_TYPE, TARGET_PORT_TYPE } from "../../utils/constants"
 
-function parseVesselNames(vesselField) {
+function parseModuleNames(moduleField) {
   return Array.from(
-    new Set(vesselField?.trim().split(/\s+/).filter(Boolean) ?? [])
+    new Set(moduleField?.trim().split(/\s+/).filter(Boolean) ?? [])
   )
 }
 
-function buildPorts(vessel) {
+function buildPorts(module) {
   const ports = []
 
-  if (vessel.inp_vessels) {
-    const inputs = parseVesselNames(vessel.inp_vessels)
+  if (module.inp_modules) {
+    const inputs = parseModuleNames(module.inp_modules)
     inputs.forEach((name) => {
       ports.push({
         uid: crypto.randomUUID(),
@@ -21,8 +21,8 @@ function buildPorts(vessel) {
     })
   }
 
-  if (vessel.out_vessels) {
-    const outputs = parseVesselNames(vessel.out_vessels)
+  if (module.out_modules) {
+    const outputs = parseModuleNames(module.out_modules)
     outputs.forEach((name) => {
       ports.push({
         uid: crypto.randomUUID(),

@@ -12,11 +12,11 @@
       />
     </div>
 
-    <!-- Module groups -->
+    <!-- Collections -->
     <div ref="scrollEl" class="mlc__scroll">
-      <template v-if="filteredModuleFiles.length > 0">
+      <template v-if="filteredCollections.length > 0">
         <div
-          v-for="file in filteredModuleFiles"
+          v-for="file in filteredCollections"
           :key="file.filename"
           class="mlc__group"
         >
@@ -172,7 +172,7 @@ onBeforeUnmount(() => {
 
 // ─── Filtering ────────────────────────────────────────────────────────────────
 
-const filteredModuleFiles = computed(() => {
+const filteredCollections = computed(() => {
   const q = filterText.value.toLowerCase()
   if (!q) return store.availableCollections
 
@@ -206,7 +206,7 @@ function configLabel(config) {
 // ─── Watchers ─────────────────────────────────────────────────────────────────
 
 watch(
-  filteredModuleFiles,
+  filteredCollections,
   (files) => {
     files.forEach((file) => {
       file.modules.forEach((mod) => {
@@ -219,9 +219,9 @@ watch(
 )
 
 watch(
-  () => store.availableModules,
-  (currentModuleFiles) => {
-    for (const file of currentModuleFiles) {
+  () => store.availableCollections,
+  (currentCollections) => {
+    for (const file of currentCollections) {
       if (!knownFileNames.value.has(file.filename)) {
         knownFileNames.value.add(file.filename)
       }

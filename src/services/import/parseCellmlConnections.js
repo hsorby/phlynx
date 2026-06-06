@@ -235,8 +235,8 @@ export function parseCellMLConnections(cellmlContent, filename) {
     return {
       module_file: filename,
       module_type: compName,
-      vessel_type: compName,
-      BC_type: 'nn',
+      module_type: compName,
+      module_subtype: 'nn',
       entrance_ports: [],
       exit_ports: [],
       general_ports,

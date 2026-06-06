@@ -30,11 +30,10 @@ export const useLibraryStore = defineStore('library', () => {
   // --- STATE ---
   const availableCollections = ref([])
   const availableUnits = ref([])
-  const lastSaveName = ref('phlynx-project')
-  const lastExportName = ref('phlynx-export')
-
   const availableParameters = ref(new Map())
   const availableVariableNameIdMap = ref(new Map())
+  const lastSaveName = ref('phlynx-project')
+  const lastExportName = ref('phlynx-export')
   const globalConstants = ref(new Map())
 
   // --- DEBUG ---
@@ -175,7 +174,7 @@ export const useLibraryStore = defineStore('library', () => {
   }
 
   /**
-   * Adds configuration(s) to the appropriate module(s)
+   * Adds configuration(s) to the appropriate components
    */
   function addConfigFile(filename, payload) {
     const configs = payload

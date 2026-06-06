@@ -246,7 +246,7 @@
     </el-container>
   </el-container>
 
-  <EditModuleDialog
+  <EditInstanceDialog
     v-model="editDialogVisible"
     :initial-name="currentEditingNode.name"
     :node-id="currentEditingNode.nodeId"
@@ -322,7 +322,7 @@ import {
   Search,
   ArrowUp,
   ArrowDown,
-  Menu as IconVessel,
+  Menu as IconModuleArray,
   Operation as IconParameters,
   Setting as IconModuleConfig,
 } from '@element-plus/icons-vue'
@@ -335,7 +335,7 @@ import { MiniMap } from '@vue-flow/minimap'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import useDragAndDrop from '../composables/useDnD'
-import { useLoadFromVesselArray } from '../composables/useLoadFromVesselArray'
+import { useLoadFromModuleArray } from '../composables/useLoadFromModuleArray'
 import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
 import { useResizableAside } from '../composables/useResizableAside'
@@ -343,7 +343,7 @@ import { useGtm } from '../composables/useGtm'
 import LibraryArea from '../components/LibraryArea.vue'
 import Workbench from '../components/WorkbenchArea.vue'
 import InstanceNode from '../components/InstanceNode.vue'
-import EditModuleDialog from '../components/EditModuleDialog.vue'
+import EditInstanceDialog from '../components/EditInstanceDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
 import SaveDialog from '../components/SaveDialog.vue'
@@ -361,7 +361,7 @@ import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
 import { relayoutNodes } from '../services/layouts/physics'
-import { generateFlattenedModel, initLibCellML, processCellMLData, extractVariablesFromModule, createEditableModelFromSourceModelAndComponent } from '../utils/cellml'
+import { generateFlattenedModel, initLibCellML, processCellMLData, extractVariablesFromComponent, createEditableModelFromSourceModelAndComponent } from '../utils/cellml'
 import {
   edgeLineOptions,
   CELLML_FILE_TYPES,
@@ -617,7 +617,7 @@ const onDrop = async (event) => {
 }
 
 const historyStore = useFlowHistoryStore()
-const { loadFromVesselArray } = useLoadFromVesselArray()
+const { loadFromModuleArray } = useLoadFromModuleArray()
 const { loadFromCellML } = useLoadFromCellML()
 const { capture } = useScreenshot()
 const { trackEvent } = useGtm()
@@ -678,9 +678,9 @@ const somethingAvailable = computed(() => nodes.value.length > 0)
 
 const importOptions = computed(() => [
   {
-    key: IMPORT_KEYS.VESSEL,
-    label: 'Vessel Array',
-    icon: markRaw(IconVessel),
+    key: IMPORT_KEYS.MODULE_ARRAY,
+    label: 'Module Array',
+    icon: markRaw(IconModuleArray),
     disabled: false,
   },
   {
@@ -715,11 +715,12 @@ const exportOptions = computed(() => [
   {
     key: EXPORT_KEYS.CA,
     label: 'Circulatory Autogen',
-    icon: markRaw(IconVessel),
+    icon: markRaw(IconModuleArray),
     disabled: !somethingAvailable.value,
     suffix: '.zip',
   },
 ])
+
 const cellMlExportTooltip = computed(() => {
   const prefix = 'The CellML export option is disabled because '
   if (libcellml.status !== 'ready') {
@@ -1321,22 +1322,22 @@ const handleImportCommand = (option) => {
 }
 
 async function onImportConfirm(importPayload, updateProgress) {
-  if (currentImportMode.value.key === IMPORT_KEYS.VESSEL) {
+  if (currentImportMode.value.key === IMPORT_KEYS.MODULE_ARRAY) {
     const [[, data]] = importPayload
-    const vessels = data.payload
+    const modules = data.payload
 
-    if (!vessels || vessels.length === 0) {
+    if (!modules || modules.length === 0) {
       notify.warning({
         title: 'Import Aborted',
-        message: 'No vessel data provided',
+        message: 'No module data provided',
       })
       return
     }
 
     try {
-      await loadFromVesselArray({ vessels }, (current, total, statusMessage) => {
+      await loadFromModuleArray({ modules }, (current, total, statusMessage) => {
         if (updateProgress) {
-          updateProgress(`${statusMessage || 'Loading vessel array...'} (${current}/${total})`)
+          updateProgress(`${statusMessage || 'Loading module array...'} (${current}/${total})`)
         }
       })
       rebuildNodeEdgeIndex()
@@ -1580,6 +1581,7 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
       ),
     }))
 
+    // SMELL - why do we need variables and portOptions? These should be the same things?
     const newData = {
       ...detachReactivity(node.data),
       componentName: updatedData.componentName,
@@ -2183,7 +2185,7 @@ const copySelection = async () => {
       // Component already captured — add this config if it's a new one
       const config = component.configs?.[configIndex]
       if (config !== undefined && !storeSnapshot[key].configs.some(
-        (c) => c.BC_type === config.BC_type && c.vessel_type === config.vessel_type
+        (c) => c.module_subtype === config.module_subtype && c.mdoul_type === config.vessel_type
       )) {
         storeSnapshot[key].configs.push(detachReactivity(config))
       }
@@ -2270,7 +2272,7 @@ const pasteSelection = async (atMouse = false) => {
           if (!existingComponent.configs) existingComponent.configs = []
           for (const config of entry.configs) {
             const alreadyPresent = existingComponent.configs.some(
-              (c) => c.BC_type === config.BC_type && c.vessel_type === config.vessel_type
+              (c) => c.module_subtype === config.module_subtype && c.vessel_type === config.vessel_type
             )
             if (!alreadyPresent) {
               existingComponent.configs.push(config)
@@ -2359,7 +2361,7 @@ const pasteSelection = async (atMouse = false) => {
     if (!sourceFile || !componentName) return
 
     const modelString = libraryStore.getModelByCollectionName(sourceFile)
-    const variables = extractVariablesFromModule(modelString, componentName)
+    const variables = extractVariablesFromComponent(modelString, componentName)
     newNode.data.variables = variables
 
     const resolvedIndex = configIndex ?? 0

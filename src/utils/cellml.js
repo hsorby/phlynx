@@ -1199,7 +1199,7 @@ function isPossibleParameter(variable) {
 /**
  * Extracts unique variable names from a CellML model/component
  */
-export function extractVariablesFromModule(modelString, componentName, includeInitialisedVariables = false) {
+export function extractVariablesFromComponent(modelString, componentName, includeInitialisedVariables = false) {
   const garbageCollector = new Set() // To track created objects for cleanup
   try {
     const variables = new Set()

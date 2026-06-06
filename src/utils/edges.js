@@ -19,12 +19,12 @@
  * -------------------------------------
  * When a label appears more than once under the same portType (e.g. a heart
  * module with three entrance "vessel_port" slots), the Nth occurrence is
- * assigned to the Nth neighbour in the space-separated vessel list:
+ * assigned to the Nth neighbour in the space-separated module list:
  *
- *   out_vessels:  "a_0 a_1"          ← a_0 is index 0, a_1 is index 1
- *   exit vessel_ports: [slot0, slot1] ← slot0 couples to a_0, slot1 to a_1
+ *   out_modules:  "a_0 a_1"          <- a_0 is index 0, a_1 is index 1
+ *   exit vessel_ports: [slot0, slot1] <-  slot0 couples to a_0, slot1 to a_1
  *
- * The same logic applies on the target side via inp_vessels.
+ * The same logic applies on the target side via inp_modules.
  *
  * resolvePortCouplings therefore needs both indices so it can pick the correct
  * occurrence of each repeated label.
@@ -85,21 +85,21 @@ export function isSingleConnection(portLabel) {
  *
  * For each compatible (source portType, target portType, label) group, the
  * correct occurrence is selected by ordinal index:
- *   - sourceIndex: position of the target vessel in the source's out_vessels list
- *   - targetIndex: position of the source vessel in the target's inp_vessels list
+ *   - sourceIndex: position of the target module instance in the source's out_modules list
+ *   - targetIndex: position of the source module instance in the target's inp_modules list
  *
  * Within each (portType, label) group on a given side, occurrences are ordered
  * as they appear in portLabels (which mirrors the config file order). The Nth
  * occurrence is selected by index, clamped to the last slot if the index exceeds
- * the group size — matching the vessel array semantics.
+ * the group size — matching the module array semantics.
  *
  * For labels that appear only once (the common case), the index is irrelevant
  * and that single entry is always selected.
  *
  * @param {Array}  sourcePortLabels  node.data.portLabels of the source node
  * @param {Array}  targetPortLabels  node.data.portLabels of the target node
- * @param {number} sourceIndex  position of target in source's out_vessels (0-based)
- * @param {number} targetIndex  position of source in target's inp_vessels (0-based)
+ * @param {number} sourceIndex  position of target in source's out_modules (0-based)
+ * @param {number} targetIndex  position of source in target's inp_modules (0-based)
  * @returns {Array<{ sourcePortLabel: Object, targetPortLabel: Object }>}
  */
 export function resolvePortCouplings(

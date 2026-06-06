@@ -117,7 +117,7 @@ export const multiportOptions = [
 export const DEFAULT_FILE_NAME = 'phlynx-export'
 
 export const IMPORT_KEYS = {
-  VESSEL: 'vessel',
+  MODULE_ARRAY: 'moduleArray',
   MODULE_CONFIG: 'moduleConfig',
   CELLML_FILE: 'cellMLFile',
   PARAMETER: 'parameter',
@@ -125,7 +125,7 @@ export const IMPORT_KEYS = {
 }
 
 export const IMPORT_LABELS = {
-  VESSEL: 'Vessel Array (.csv)',
+  MODULE_ARRAY: 'Module Array (.csv)',
   MODULE_CONFIG: 'Module Configurations (.json)',
   CELLML_FILE: 'CellML File (.cellml or .xml)',
   PARAMETER: 'Parameters (.csv)',

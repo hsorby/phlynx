@@ -110,7 +110,7 @@
           </el-form-item>
         </div>
 
-        <div v-if="importReadiness && formState[IMPORT_KEYS.VESSEL]?.readiness" class="validation-status">
+        <div v-if="importReadiness && formState[IMPORT_KEYS.MODULE_ARRAY]?.readiness" class="validation-status">
           <el-alert
             v-if="importReadiness.isComplete"
             title="All Required Resources Available"
@@ -139,8 +139,8 @@
                       • {{ componentFileIssue.message }}
                     </div>
                   </div>
-                  <div v-else-if="importReadiness.missingResources?.moduleTypes?.length > 0" class="module-type-list">
-                    containing: {{ importReadiness.missingResources.moduleTypes.join(', ') }}
+                  <div v-else-if="importReadiness.missingResources?.componentTypes?.length > 0" class="component-type-list">
+                    containing: {{ importReadiness.missingResources.componentTypes.join(', ') }}
                   </div>
                 </li>
                 <li v-if="importReadiness.needsConfigFile" class="config-note">
@@ -185,7 +185,7 @@ import { useLibraryStore } from '../stores/libraryStore'
 import { useGtm } from '../composables/useGtm'
 import { notify } from '../utils/notify'
 import { IMPORT_KEYS, MAX_VISIBLE_TAGS } from '../utils/constants'
-import { createDynamicFields, validateVesselData } from '../utils/import'
+import { createDynamicFields, checkModulesAreLoaded } from '../utils/import'
 import { processCellMLData } from '../utils/cellml'
 import phlynxspinner from '/src/assets/phlynxspinner.svg?raw'
 import { detachReactivity } from '../utils/reactivity'
@@ -211,10 +211,10 @@ const importReadiness = ref(null)
 const isLoading = ref(false)
 const loadingText = ref('Loading...')
 const stagedFiles = ref({
-  moduleFiles: [], // { filename: string, payload: object }
+  componentFiles: [], // { filename: string, payload: object }
   configFiles: [], // { filename: string, payload: object }
 })
-const isVesselReset = ref(false)
+const isNewModuleArray = ref(false)
 
 // Checks if a field has valid files uploaded and all required information has been provided.
 const isFieldReady = (fieldKey) => {
@@ -225,8 +225,8 @@ const isFieldReady = (fieldKey) => {
   const filesAllValid = Array.from(fieldState.files.values()).every(file => file?.isValid)
   if (!filesAllValid) return false
 
-  // Vessel array field is ready if all its files are valid
-  if (fieldKey === IMPORT_KEYS.VESSEL) {
+  // Module array field is ready if all its files are valid
+  if (fieldKey === IMPORT_KEYS.MODULE_ARRAY) {
     return true
   }
 
@@ -263,15 +263,15 @@ const removeFile = (fieldKey, filename) => {
     stagedFiles.value.componentFiles = stagedFiles.value.componentFiles.filter(f => f.filename !== filename)
     stagedFiles.value.configFiles = stagedFiles.value.configFiles.filter(f => f.filename !== filename)
 
-    // Re-evaluate overall vessel dependencies
-    const vesselPayload = getVesselPayload()
-    if (vesselPayload) {
+    // Re-evaluate overall module dependencies
+    const modulesArrayPayload = getModulesArrayPayload()
+    if (modulesArrayPayload) {
       const temporaryStore = createTemporaryStore()
-      const newCompletionStatus = validateVesselData(vesselPayload, temporaryStore)
-      formState[IMPORT_KEYS.VESSEL].readiness = newCompletionStatus
-      updateVesselValidation(newCompletionStatus)
-    } else if (fieldKey === IMPORT_KEYS.VESSEL) {
-      // If the user deletes the vessel file, wipe completion status
+      const newCompletionStatus = checkModulesAreLoaded(modulesArrayPayload, temporaryStore)
+      formState[IMPORT_KEYS.MODULE_ARRAY].readiness = newCompletionStatus
+      updateDynamicFields(newCompletionStatus)
+    } else if (fieldKey === IMPORT_KEYS.MODULE_ARRAY) {
+      // If the user deletes the module array file, wipe completion status
       resetForm()
     }
   }
@@ -280,7 +280,7 @@ const removeFile = (fieldKey, filename) => {
 function resetFormState() {
   dynamicFields.value = []
   Object.keys(formState).forEach((key) => {
-    if (!(isVesselReset.value && key === IMPORT_KEYS.VESSEL)) {
+    if (!(isModuleArrayReset.value && key === IMPORT_KEYS.MODULE_ARRAY)) {
       formState[key] = createEmptyFieldState()
     }
   })
@@ -297,7 +297,7 @@ function initFormFromConfig(fields = []) {
 
 const unstageFiles = () => {
   stagedFiles.value = {
-    moduleFiles: [],
+    componentFiles: [],
     configFiles: [],
   }
 }
@@ -364,11 +364,11 @@ function createEmptyFieldState() {
   }
 }
 
-// Helper to extract vessel payload from the new Map structure
-const getVesselPayload = () => {
-  const vesselFiles = formState[IMPORT_KEYS.VESSEL]?.files
-  if (!vesselFiles || vesselFiles.size === 0) return null
-  for (const fileData of vesselFiles.values()) {
+// 
+const getModulesArrayPayload = () => {
+  const moduleFiles = formState[IMPORT_KEYS.MODULE_ARRAY]?.files
+  if (!moduleFiles || moduleFiles.size === 0) return null
+  for (const fileData of moduleFiles.values()) {
     if (fileData.payload) return fileData.payload
   }
   return null
@@ -410,7 +410,7 @@ const createTemporaryStore = () => {
         _loadedAt: new Date().toISOString(),
       }
       const existingConfigIndex = module.configs.findIndex(
-        (c) => c.BC_type === config.BC_type && c.vessel_type === config.vessel_type
+        (c) => c.module_subtype === config.module_subtype && c.module_type === config.module_type
       )
       if (existingConfigIndex !== -1) {
         module.configs[existingConfigIndex] = configWithMetadata
@@ -490,13 +490,13 @@ const handleFileChange = async (uploadFile, field) => {
     }
   }
 
-  if (field.key === IMPORT_KEYS.VESSEL) {
-    const vesselFileMap = formState[IMPORT_KEYS.VESSEL]?.files
+  if (field.key === IMPORT_KEYS.MODULE_ARRAY) {
+    const moduleArrayFileMap = formState[IMPORT_KEYS.MODULE_ARRAY]?.files
 
-    if (vesselFileMap && vesselFileMap.size > 0 && !vesselFileMap.has(rawFile.name)) {
-      isVesselReset.value = true
+    if (moduleArrayFileMap && moduleArrayFileMap.size > 0 && !moduleArrayFileMap.has(rawFile.name)) {
+      isModuleArrayReset.value = true
       resetForm()
-      isVesselReset.value = false
+      isModuleArrayReset.value = false
     }
   }
 
@@ -512,37 +512,37 @@ const handleFileChange = async (uploadFile, field) => {
     const warnings = parsed?.completionStatus?.warnings ?? []
     let completionStatus = parsed?.completionStatus ?? null
 
-    // Re-validate using local staged files if using vessel array
-    if (field.key === IMPORT_KEYS.VESSEL) {
+    // Recheck that modules are loaded using local staged files if using module array
+    if (field.key === IMPORT_KEYS.MODULE_ARRAY) {
       const temporaryStore = createTemporaryStore()
-      completionStatus = validateVesselData(data, temporaryStore)
+      completionStatus = checkModulesAreLoaded(data, temporaryStore)
     }
 
     state.files.get(filename).payload = data
     state.readiness = completionStatus
     state.warnings = warnings
 
-    // Specific logic for Dynamic Files (Configs/Modules)
+    // Specific logic for Dynamic Files (Configs/Components)
     if (field.processUpload) {
       await stageFile(field, parsed, filename)
-      // Re-validate vessel if needed
-      const vesselPayload = getVesselPayload()
-      if (vesselPayload) {
+      // Recheck that required modules are loaded if needed
+      const moduleArrayPayload = getModuleArrayPayload()
+      if (moduleArrayPayload) {
         const temporaryStore = createTemporaryStore()
-        const newCompletionStatus = validateVesselData(vesselPayload, temporaryStore)
+        const newCompletionStatus = checkModulesAreLoaded(moduleArrayPayload, temporaryStore)
         completionStatus = newCompletionStatus
       }
     }
 
-    // Vessel-specific validation
-    if (field.key === IMPORT_KEYS.VESSEL && completionStatus) {
-      await updateVesselValidation(completionStatus)
-    } else if (field.key !== IMPORT_KEYS.VESSEL) {
+    // Module array checking
+    if (field.key === IMPORT_KEYS.MODULE_ARRAY && completionStatus) {
+      await updateDynamicFields(completionStatus)
+    } else if (field.key !== IMPORT_KEYS.MODULE_ARRAY) {
       // For other fields:
-      const hasVesselPayload = !!getVesselPayload()
-      if (hasVesselPayload && completionStatus) {
-        await updateVesselValidation(completionStatus)
-      } else if (!hasVesselPayload) {
+      const hasModuleArrayPayload = !!getModuleArrayPayload()
+      if (hasModuleArrayPayload && completionStatus) {
+        await updateDynamicFields(completionStatus)
+      } else if (!hasModuleArrayPayload) {
         importReadiness.value = {
           isComplete: true,
           errors: [],
@@ -551,7 +551,7 @@ const handleFileChange = async (uploadFile, field) => {
       }
     }
 
-    // Surface warnings (notifications only once)
+    // Surface warnings 
     state.warnings.forEach(async (w) => {
       await nextTick()
       notify.warning({
@@ -579,7 +579,7 @@ const handleFileChange = async (uploadFile, field) => {
   }
 }
 
-async function updateVesselValidation(completionStatus) {
+async function updateDynamicFields(completionStatus) {
   importReadiness.value = completionStatus
   if (completionStatus.isComplete) {
     return
@@ -600,7 +600,7 @@ async function stageFile(field, parsedData, fileName) {
         ...item,
         sourceFile: fileName,
       }))
-      stagedFiles.value.moduleFiles.push({
+      stagedFiles.value.componentFiles.push({
         filename: fileName,
         payload: {
           filename: fileName,
@@ -616,30 +616,30 @@ async function stageFile(field, parsedData, fileName) {
     })
   }
 
-  // Re-validate the Vessel CSV with staged files to see if requirements are met
-  const vesselPayload = getVesselPayload()
-  if (vesselPayload?.data) {
+  // Recheck that the required modules are staged
+  const moduleArrayPayload = getModuleArrayPayload()
+  if (moduleArrayPayload?.data) {
     const temporaryStore = createTemporaryStore()
-    const newCompletionStatus = validateVesselData(vesselPayload.data, temporaryStore)
+    const newCompletionStatus = checkModulesAreLoaded(moduleArrayPayload.data, temporaryStore)
 
-    // Update state
-    formState[IMPORT_KEYS.VESSEL].readiness = newCompletionStatus
-    updateVesselValidation(newCompletionStatus)
+    // Update completion and form state
+    formState[IMPORT_KEYS.MODULE_ARRAY].readiness = newCompletionStatus
+    updateDynamicFields(newCompletionStatus)
 
-    // Specific check for CellML failures
+    // Specific check for CellML file issues
     if (field.processUpload === 'cellml') {
-      const moduleIssues = newCompletionStatus.missingResources.moduleFileIssues
+      const componentIssues = newCompletionStatus.missingResources.componentFileIssues
 
       // Look for issues related to the file we just uploaded
-      const relevantIssue = moduleIssues.find((issue) => issue.file === fileName)
+      const relevantIssue = componentIssues.find((issue) => issue.file === fileName)
 
       if (relevantIssue) {
         let errorMsg = `File "${fileName}" was staged, but has issues: `
 
-        if (relevantIssue.issue === 'module_not_in_file') {
-          errorMsg = `The file "${fileName}" does not contain the required modules: ${relevantIssue.moduleTypes.join(', ')}.`
+        if (relevantIssue.issue === 'component_not_in_file') {
+          errorMsg = `The file "${fileName}" does not contain the required components: ${relevantIssue.componentTypes.join(', ')}.`
         } else if (relevantIssue.issue === 'filename_mismatch') {
-          errorMsg = `The modules were found, but the file name must be exactly "${relevantIssue.expectedFile}" as defined in your config.`
+          errorMsg = `The components were found, but the file name must be exactly "${relevantIssue.expectedFile}" as defined in your config.`
         }
 
         notify.error({
@@ -647,10 +647,10 @@ async function stageFile(field, parsedData, fileName) {
           message: errorMsg,
           duration: 6000,
         })
-      } else if (newCompletionStatus.needsModuleFile) {
+      } else if (newCompletionStatus.needsComponentFile) {
         notify.warning({
           title: 'Partial Success',
-          message: `"${fileName}" is valid, but additional CellML modules are still required.`,
+          message: `"${fileName}" is valid, but additional CellML components are still required.`,
         })
       } else {
         notify.success({ title: 'CellML Ready', message: `${fileName} staged successfully.` })
@@ -892,17 +892,17 @@ defineExpose({
   margin-top: var(--el-spacing-mini, 4px);
 }
 
-.module-issue-item {
+.component-issue-item {
   font-size: var(--el-font-size-extra-small);
   margin: 2px 0;
   color: var(--el-color-warning);
 }
 
-.module-issue-item::first-letter {
+.component-issue-item::first-letter {
   color: var(--el-color-warning);
 }
 
-.module-type-list {
+.component-type-list {
   font-size: var(--el-font-size-extra-small);
   color: var(--el-text-color-secondary);
 }
