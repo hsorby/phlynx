@@ -1199,7 +1199,7 @@ function isPossibleParameter(variable) {
 /**
  * Extracts unique variable names from a CellML model/component
  */
-export function extractVariablesFromComponent(modelString, componentName, includeInitialisedVariables = false) {
+export function extractVariablesFromComponent(modelString, componentName, includeInitialisedVariables = true) {
   const garbageCollector = new Set() // To track created objects for cleanup
   try {
     const variables = new Set()
@@ -1208,10 +1208,9 @@ export function extractVariablesFromComponent(modelString, componentName, includ
       garbageCollector.add(parser)
       const model = parser.parseModel(modelString)
       garbageCollector.add(model)
-      // Iterate all components in the model,
-      // assumes flat model hierarchy.
-      const comp = model.componentByName(componentName, true)
+      const comp = model.componentByName(componentName, includeInitialisedVariables)
       garbageCollector.add(comp)
+      if (!comp) throw new Error(`Component '${componentName}' not found in file.`)
       for (let v = 0; v < comp.variableCount(); v++) {
         const variable = comp.variableByIndex(v)
         garbageCollector.add(variable)
