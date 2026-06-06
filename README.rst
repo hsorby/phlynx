@@ -6,7 +6,7 @@
 Physiome Links (PhLynx)
 =======================
 
-Physiome Links (PhLynx - pronounced "flinks") is a web-based graphical interface for coupling existing CellML modules into a single system model.
+Physiome Links (PhLynx - pronounced "flinks") is a web-based graphical interface for coupling existing CellML components into a single system model.
 Common use cases include generating coupled biophysical cell models and patient-specific blood and/or lymph flow networks.
 
 Getting Started
