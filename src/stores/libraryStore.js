@@ -381,10 +381,15 @@ export const useLibraryStore = defineStore('library', () => {
     const map = new Map()
     for (const collection of availableCollections.value) {
       for (const module of collection.modules || []) {
-        for (const config of module.configs || []) {
+        (module.configs || []).forEach((config, configIndex) => {
           const key = `${config.module_type}||${config.module_subtype}`
-          map.set(key, { config, module, collection: collection.filename })
-        }
+          map.set(key, { 
+            config, 
+            module, 
+            filename: collection.filename,
+            configIndex 
+          })
+        })
       }
     }
     return map

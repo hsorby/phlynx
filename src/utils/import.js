@@ -1,7 +1,7 @@
 import Papa from 'papaparse'
 
 import { IMPORT_KEYS, IMPORT_LABELS } from './constants'
-import { isCellML } from './cellml'
+import { isCellML, doesComponentExistInModel } from './cellml'
 
 export const checkModulesAreLoaded = (modulesRequired, libraryStore) => {
   const errors = []
@@ -71,16 +71,19 @@ export const checkModulesAreLoaded = (modulesRequired, libraryStore) => {
         const issueKey = `${componentFileIssue.config}:${componentFileIssue.issue}`
         missingResources.componentFileIssues.set(issueKey, componentFileIssue)
         
-        // Add to appropriate missing resource category
-        if (componentFileIssue.issue === 'missing_file' || componentFileIssue.issue === 'stub_file') {
-          missingComponents.push(config.module_type)
-          missingResources.components.add(config.module_type)
+        if (
+          componentFileIssue.issue === 'missing_file' ||
+          componentFileIssue.issue === 'stub_file' ||
+          componentFileIssue.issue === 'component_not_in_file'
+        ) {
+          missingComponents.push(config.component_type)
+          missingResources.components.add(config.component_type)
         }
       } else {
         // Only check for missing module if file association is valid
         if (config.module_type && !availableComponents.has(config.component_type)) {
           missingComponents.push(config.component_type)
-          missingResources.components.add(config.module_type)
+          missingResources.components.add(config.component_type)
         }
       }
     }
@@ -101,12 +104,16 @@ export const checkModulesAreLoaded = (modulesRequired, libraryStore) => {
   }
 
   const needsConfigFile = missingConfigs.length > 0
-  const needsComponentFile = missingComponents.length > 0 || 
-    [...missingResources.componentFileIssues.values()].some(issue => 
-      issue.issue === 'missing_file' || issue.issue === 'stub_file'
+  const needsComponentFile =
+    missingComponents.length > 0 ||
+    [...missingResources.componentFileIssues.values()].some(
+      (issue) =>
+        issue.issue === 'missing_file' ||
+        issue.issue === 'stub_file' ||
+        issue.issue === 'component_not_in_file'
     )
-  const hasCollectionFileMismatch = [...missingResources.componentFileIssues.values()].some(issue =>
-    issue.issue === 'component_not_in_file'
+  const hasCollectionFileMismatch = [...missingResources.componentFileIssues.values()].some(
+    (issue) => issue.issue === 'component_not_in_file'
   )
 
   return {
@@ -149,13 +156,13 @@ function validateCollectionFileAssociation(config, libraryStore) {
     }
   }
   
-  // Find the collection in available modules
+  // Find the collection in the library
   const collection = libraryStore.availableCollections.find(
     f => f.filename === component_file
   )
   
-  if (!collection) {
-    // The specified component file doesn't exist in the store
+  // Expected file is missing (or provided one is empty)
+  if (!collection || !collection.model) {
     return {
       config: `${module_type}:${module_subtype}`,
       expectedFile: component_file,
@@ -165,7 +172,7 @@ function validateCollectionFileAssociation(config, libraryStore) {
     }
   }
   
-  // Check if it's just a stub (config was uploaded but component file wasn't)
+  // Only config provided and still need component 
   if (collection.isStub) {
     return {
       config: `${module_type}:${module_subtype}`,
@@ -176,24 +183,17 @@ function validateCollectionFileAssociation(config, libraryStore) {
     }
   }
   
-  // Verify components come from the CellML file stated in the config
-  const moduleExists = collection.modules?.some(
-    c => (c.name === component_type || c.componentName === component_type)
-  )
-  
-  if (!moduleExists) {
-    // The file exists but doesn't contain the expected component
-    const availableComponents = collection.modules?.map(c => c.name || c.componentName).join(', ') || 'none'
+  if (!doesComponentExistInModel(collection.model, component_type)) {
     return {
       config: `${module_type}:${module_subtype}`,
       expectedFile: component_file,
       componentType: component_type,
       issue: 'component_not_in_file',
-      message: `Component "${component_type}" not found in "${component_file}" (has: ${availableComponents})`,
+      message: `Component "${component_type}" not found in "${component_file}"`,
     }
   }
-  
-  // All checks passed - the component comes from the correct file as specified in the config
+
+  // All checks passed
   return null
 }
 

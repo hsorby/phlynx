@@ -318,7 +318,7 @@ const syncDynamicFields = async (completionStatus) => {
 
 function createEmptyFieldState() {
   return {
-    files: new Map(), //  [key: filename, object: {isValid: boolean, payload: raw file contents} ]
+    files: new Map(), //  [ key: filename, object: {isValid: boolean, payload: raw file contents} ]
     readiness: null, // Selected files contain enough information to complete the import
     warnings: [],
   }
