@@ -249,10 +249,10 @@
   <EditInstanceDialog
     v-model="editDialogVisible"
     :initial-name="currentEditingNode.name"
+    :variable-options="currentEditingNode?.variables || []"
+    :initial-port-labels="currentEditingNode?.portLabels || []"
     :node-id="currentEditingNode.nodeId"
     :existing-names="allNodeNames"
-    :port-options="currentEditingNode?.portOptions || []"
-    :initial-port-labels="currentEditingNode?.portLabels || []"
     @confirm="onEditConfirm"
   />
 
