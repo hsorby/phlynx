@@ -212,7 +212,7 @@ function openCellMLEditDialog() {
     nodeId: props.id,
     name: props.data.name,
     sourceFile: props.data.sourceFile,
-    componentName: props.data.componentName,
+    componentType: props.data.componentType,
     configIndex: props.data.configIndex,
   })
 }
@@ -221,7 +221,7 @@ function openEditParameterDialog() {
   emit('open-parameter-editor-dialog', {
     nodeId: props.id,
     instanceName: props.data.name,
-    componentName: props.data.componentName,
+    componentType: props.data.componentType,
     sourceFile: props.data.sourceFile,
   })
 }
@@ -388,7 +388,7 @@ function saveEdit() {
       sanitisedName,
       props.data.variables,
       props.data.sourceFile,
-      props.data.componentName,
+      props.data.componentType,
       props.data.configIndex
     )
     updateNodeData(props.id, { variables: props.data.variables })

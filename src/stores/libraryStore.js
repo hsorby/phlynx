@@ -126,8 +126,8 @@ export const useLibraryStore = defineStore('library', () => {
   }
 
   // SMELLY 
-  function setParameterValuesForInstance(instanceName, variables, collectionFile, componentName, configIndex) {
-    const modules = findModulesByComponentName(collectionFile, componentName)
+  function setParameterValuesForInstance(instanceName, variables, collectionFile, componentType, configIndex) {
+    const modules = findModulesByComponentName(collectionFile, componentType)
     let variablesAndUnits = []
     if (modules?.configs && configIndex !== undefined && modules.configs[configIndex]) {
       variablesAndUnits = modules.configs[configIndex]?.variables_and_units ?? []
@@ -318,13 +318,13 @@ export const useLibraryStore = defineStore('library', () => {
   }
 
   /**
-   * Returns modules associated with a componentName within the given collection file.
+   * Returns modules associated with a componentType within the given collection file.
    */
-  function findModulesByComponentName(filename, componentName) {
+  function findModulesByComponentName(filename, componentType) {
     const collection = collectionsByName.value.get(filename)
     if (!collection) return null
 
-    return collection.modules.find((m) => m.name === componentName) || null
+    return collection.modules.find((m) => m.name === componentType) || null
   }
 
   function findConfigByName(moduleType, moduleSubtype) {
@@ -332,8 +332,8 @@ export const useLibraryStore = defineStore('library', () => {
     return configsByTypeAndSubtype.value.get(key) || null
   }
 
-  function findConfigByIndex(collection, componentName, configIndex) {
-    const modules = findModulesByComponentName(collection, componentName)
+  function findConfigByIndex(collection, componentType, configIndex) {
+    const modules = findModulesByComponentName(collection, componentType)
     return modules.configs[configIndex]
   }
 

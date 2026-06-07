@@ -47,7 +47,7 @@ export function useLoadFromModuleArray() {
           n.data.name,
           n.data.variables,
           n.data.sourceFile,
-          n.data.componentName,
+          n.data.componentType,
           n.data.configIndex
         )
         pendingNodeDataMap.set(n.id, n.data)

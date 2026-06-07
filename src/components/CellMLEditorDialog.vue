@@ -35,7 +35,7 @@
         <!-- "Apply to all" checkbox — only shown when sibling nodes exist -->
         <el-tooltip
           v-if="siblingCount > 0"
-          :content="`Also update ${siblingCount} other node${siblingCount !== 1 ? 's' : ''} using ${props.nodeData.componentName} from ${props.nodeData.sourceFile}`"
+          :content="`Also update ${siblingCount} other node${siblingCount !== 1 ? 's' : ''} using ${props.nodeData.componentType} from ${props.nodeData.sourceFile}`"
           placement="top"
           effect="light"
         >
@@ -82,7 +82,7 @@ const props = defineProps({
   nodeData: {
     type: Object,
     required: true,
-    // Expected: { nodeId, name, sourceFile, componentName, configIndex }
+    // Expected: { nodeId, name, sourceFile, componentType, configIndex }
   },
 })
 
@@ -107,21 +107,21 @@ const isDirty = computed(() => {
 })
 
 const dialogTitle = computed(() => {
-  return `Editing: ${props.nodeData.name} (${props.nodeData.componentName} - ${props.nodeData.sourceFile})`
+  return `Editing: ${props.nodeData.name} (${props.nodeData.componentType} - ${props.nodeData.sourceFile})`
 })
 
 /**
- * Count of other nodes sharing the same sourceFile AND componentName.
+ * Count of other nodes sharing the same sourceFile AND componentType.
  * Nodes from a different sourceFile are never included, even if the component
  * name happens to match.
  */
 const siblingCount = computed(() => {
-  if (!props.nodeData?.sourceFile || !props.nodeData?.componentName) return 0
+  if (!props.nodeData?.sourceFile || !props.nodeData?.componentType) return 0
   return nodes.value.filter(
     (n) =>
       n.id !== props.nodeData.nodeId &&
       n.data?.sourceFile === props.nodeData.sourceFile &&
-      n.data?.componentName === props.nodeData.componentName
+      n.data?.componentType === props.nodeData.componentType
   ).length
 })
 
@@ -137,7 +137,7 @@ watch(
       loading.value = true
       try {
         const modelString = await store.getModelByCollectionName(newData.sourceFile)
-        const { xml, errors } = createEditableModelFromSourceModelAndComponent(modelString, newData.componentName)
+        const { xml, errors } = createEditableModelFromSourceModelAndComponent(modelString, newData.componentType)
         if (errors.length > 0) {
           console.error('Errors while extracting component for editing:', errors)
           ElMessageBox.alert(
@@ -190,7 +190,7 @@ const handleSave = async (source) => {
   }
 
   const newName = componentNames[0].trim()
-  const currentName = props.nodeData.componentName
+  const currentName = props.nodeData.componentType
 
   try {
     // Determine whether to replace an existing UserModules entry or append.
@@ -241,7 +241,7 @@ const handleSave = async (source) => {
       nodeId: props.nodeData.nodeId,
       scope: applyToAll.value ? 'all' : 'single',
       code: mergedModelString,
-      componentName: newName,
+      componentType: newName,
       sourceFile: USER_MODULES_FILE,
       originalComponentName: currentName,
       originalSourceFile: props.nodeData.sourceFile,

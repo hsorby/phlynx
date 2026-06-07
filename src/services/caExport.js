@@ -187,7 +187,7 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore) {
 
       const config = libraryStore.findConfigByIndex(
         node.data.sourceFile,
-        node.data.componentName,
+        node.data.componentType,
         node.data.configIndex
       )
 

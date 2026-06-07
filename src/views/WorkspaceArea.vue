@@ -750,7 +750,7 @@ onConnect((connection) => {
   //                 (i.e. this is the Nth output being connected)
   //   targetIndex = how many edges already arrive at this target node
   //                 (i.e. this is the Nth input being connected)
-  // These mirror the positional semantics of out_vessels / inp_vessels.
+  // These mirror the positional semantics of out_modules / inp_modules.
   const sourceIndex = edges.value.filter((e) => e.source === connection.source).length
   const targetIndex = edges.value.filter((e) => e.target === connection.target).length
 
@@ -815,12 +815,12 @@ const handleSearchInput = () => {
 
   nodes.value.forEach((node) => {
     // Search in all relevant name fields
-    const componentName = node.data?.componentName?.toLowerCase() || ''
+    const componentType = node.data?.componentType?.toLowerCase() || ''
     const name = node.data?.name?.toLowerCase() || ''
     const label = node.data?.label?.toLowerCase() || ''
     const sourceFile = node.data?.sourceFile?.toLowerCase() || ''
 
-    if (componentName.includes(query) || name.includes(query) || label.includes(query) || sourceFile.includes(query)) {
+    if (componentType.includes(query) || name.includes(query) || label.includes(query) || sourceFile.includes(query)) {
       matches.add(node.id)
     }
   })
@@ -1142,7 +1142,7 @@ function updateNodesWithNewParameters() {
         node.data.name,
         node.data.variables,
         node.data.sourceFile,
-        node.data.componentName,
+        node.data.componentType,
         node.data.configIndex
       )
       updateNodeData(node.id, { variables: node.data.variables })
@@ -1469,9 +1469,9 @@ function filterConfig(config, validPortNames, validVariableNames, updatedModule)
  * 3. updating graph nodes to match new ports.
  */
 async function handleCellMLSave(saveData) {
-  const { sourceFile, componentName, originalSourceFile, originalComponentName, originalConfigIndex, code } = saveData
+  const { sourceFile, componentType, originalSourceFile, originalComponentName, originalConfigIndex, code } = saveData
 
-  const isRename = originalComponentName !== componentName
+  const isRename = originalComponentName !== componentType
   const isNewFile = originalSourceFile !== sourceFile
   const isForkOrRename = isRename || isNewFile
 
@@ -1489,10 +1489,10 @@ async function handleCellMLSave(saveData) {
   await loadCellMLData(code, sourceFile, { notify: false })
 
   // Retrieve the "Target" Module (The one we just loaded)
-  let targetModule = libraryStore.findModulesByComponentName(sourceFile, componentName)
+  let targetModule = libraryStore.findModulesByComponentName(sourceFile, componentType)
 
   if (!targetModule) {
-    console.warn(`Mismatch: Requested ${componentName}, but store didn't register it. Check component name extraction.`)
+    console.warn(`Mismatch: Requested ${componentType}, but store didn't register it. Check component name extraction.`)
     return
   }
 
@@ -1506,7 +1506,7 @@ async function handleCellMLSave(saveData) {
 
     // Update metadata to match new home.
     configToMigrate.module_file = sourceFile
-    configToMigrate.module_type = componentName
+    configToMigrate.module_type = componentType
 
     // Push as a new config.
     targetModule.configs.push(configToMigrate)
@@ -1548,7 +1548,7 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
     const isMatchingModule =
       updatedData.scope !== 'single' &&
       node.data.sourceFile === updatedData.originalSourceFile &&
-      node.data.componentName === updatedData.originalComponentName
+      node.data.componentType === updatedData.originalComponentName
 
     if (!isTargetNode && !isMatchingModule) return
 
@@ -1584,9 +1584,9 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
     // SMELL - why do we need variables and portOptions? These should be the same things?
     const newData = {
       ...detachReactivity(node.data),
-      componentName: updatedData.componentName,
+      componentType: updatedData.componentType,
       sourceFile: updatedData.sourceFile,
-      label: `${updatedData.componentName} — ${updatedData.sourceFile}`,
+      label: `${updatedData.componentType} — ${updatedData.sourceFile}`,
       portLabels: cleanLabels,
       portOptions: updatedModule?.portOptions || [],
       variables: cleanVariables,
@@ -1600,7 +1600,7 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
     title: 'Module Updated',
     message: `Updated ${updatedCount} node${
       updatedCount !== 1 ? 's' : ''
-    } to ${updatedData.componentName}.`,
+    } to ${updatedData.componentType}.`,
   })
 
   return validPortNames
@@ -1779,7 +1779,7 @@ async function onReplaceConfirm(updatedData) {
   const { nodeId, instanceId } = currentEditingNode.value 
   if (!nodeId) return
 
-  const compLabel = updatedData.componentName
+  const compLabel = updatedData.componentType
   const filePart = updatedData.sourceFile
   updatedData.label = filePart ? `${compLabel} — ${filePart}` : compLabel
 
@@ -1839,8 +1839,8 @@ function onNodeContextMenu({ clientX, clientY, nodeId }) {
 
 function createNewModuleAtPosition(clientX, clientY) {
   const allModules = libraryStore.availableCollections
-  const moduleFile = allModules.find((f) => f.modules?.some((m) => m.componentName === 'new_module'))
-  const moduleEntry = moduleFile?.modules?.find((m) => m.componentName === 'new_module')
+  const moduleFile = allModules.find((f) => f.modules?.some((m) => m.componentType === 'new_module'))
+  const moduleEntry = moduleFile?.modules?.find((m) => m.componentType === 'new_module')
 
   if (!moduleEntry) {
     notify.warning({ title: 'Module Not Found', message: 'new_module is not available.' })
@@ -1849,7 +1849,7 @@ function createNewModuleAtPosition(clientX, clientY) {
 
   const moduleData = {
     name: moduleEntry.name,
-    componentName: moduleEntry.componentName,
+    componentType: moduleEntry.componentType,
     sourceFile: moduleFile.filename,
     configs: moduleEntry.configs || null,
     configIndex: 0,
@@ -2171,21 +2171,21 @@ const copySelection = async () => {
   
   const storeSnapshot = {}
   for (const node of nodes) {
-    const { sourceFile, componentName, configIndex } = node.data
-    if (!sourceFile || !componentName) continue
+    const { sourceFile, componentType, configIndex } = node.data
+    if (!sourceFile || !componentType) continue
 
     const moduleFile = libraryStore.availableCollections.find((f) => f.filename === sourceFile)
     if (!moduleFile) continue
 
-    const component = moduleFile.modules.find((m) => m.name === componentName || m.componentName === componentName)
+    const component = moduleFile.modules.find((m) => m.name === componentType || m.componentType === componentType)
     if (!component) continue
 
-    const key = `${sourceFile}::${componentName}`
+    const key = `${sourceFile}::${componentType}`
     if (storeSnapshot[key]) {
       // Component already captured — add this config if it's a new one
       const config = component.configs?.[configIndex]
       if (config !== undefined && !storeSnapshot[key].configs.some(
-        (c) => c.module_subtype === config.module_subtype && c.mdoul_type === config.vessel_type
+        (c) => c.module_subtype === config.module_subtype && c.module_type === config.module_type
       )) {
         storeSnapshot[key].configs.push(detachReactivity(config))
       }
@@ -2196,13 +2196,13 @@ const copySelection = async () => {
 
     const { xml: componentModel } = createEditableModelFromSourceModelAndComponent(
       moduleFile.model,
-      componentName
+      componentType
     )
     if (!componentModel) continue
 
     storeSnapshot[key] = {
       sourceFile,
-      componentName,
+      componentType,
       configs: config !== undefined ? [detachReactivity(config)] : [],
       model: componentModel,
       filename: moduleFile.filename,
@@ -2250,21 +2250,21 @@ const pasteSelection = async (atMouse = false) => {
           filename: entry.filename,
           model: entry.model,
           modules: [{
-            name: entry.componentName,
-            componentName: entry.componentName,
+            name: entry.componentType,
+            componentType: entry.componentType,
             configs: entry.configs,
           }],
         })
       } else {
         // The file exists but this specific component or config may be missing
         const existingComponent = existingFile.modules.find(
-          (m) => m.name === entry.componentName || m.componentName === entry.componentName
+          (m) => m.name === entry.componentType || m.componentType === entry.componentType
         )
 
         if (!existingComponent) {
           existingFile.modules.push({
-            name: entry.componentName,
-            componentName: entry.componentName,
+            name: entry.componentType,
+            componentType: entry.componentType,
             configs: entry.configs,
           })
         } else {
@@ -2272,7 +2272,7 @@ const pasteSelection = async (atMouse = false) => {
           if (!existingComponent.configs) existingComponent.configs = []
           for (const config of entry.configs) {
             const alreadyPresent = existingComponent.configs.some(
-              (c) => c.module_subtype === config.module_subtype && c.vessel_type === config.vessel_type
+              (c) => c.module_subtype === config.module_subtype && c.module_type === config.module_type
             )
             if (!alreadyPresent) {
               existingComponent.configs.push(config)
@@ -2315,7 +2315,7 @@ const pasteSelection = async (atMouse = false) => {
     nodeIdSet.push(newId)
 
     const finalName = generateUniqueInstanceName(
-      { name: node.data.componentName },
+      { name: node.data.componentType },
       namesSet
     )
     namesSet.add(finalName)
@@ -2357,15 +2357,15 @@ const pasteSelection = async (atMouse = false) => {
   })
 
   newNodes.forEach((newNode) => {
-    const { name, sourceFile, componentName, configIndex } = newNode.data
-    if (!sourceFile || !componentName) return
+    const { name, sourceFile, componentType, configIndex } = newNode.data
+    if (!sourceFile || !componentType) return
 
     const modelString = libraryStore.getModelByCollectionName(sourceFile)
-    const variables = extractVariablesFromComponent(modelString, componentName)
+    const variables = extractVariablesFromComponent(modelString, componentType)
     newNode.data.variables = variables
 
     const resolvedIndex = configIndex ?? 0
-    const targetModule = libraryStore.findModulesByComponentName(sourceFile, componentName)
+    const targetModule = libraryStore.findModulesByComponentName(sourceFile, componentType)
 
     if (targetModule && 
     (!targetModule.configs?.[resolvedIndex]?.module_file?.length  ||
@@ -2373,7 +2373,7 @@ const pasteSelection = async (atMouse = false) => {
     !targetModule.configs?.[resolvedIndex]?.variables_and_units?.length)) {
       const syntheticConfig = {
         module_file: sourceFile,
-        module_type: componentName,
+        module_type: componentType,
         variables_and_units: variables.map((v) => [v.name, v.units ?? 'dimensionless', 'access', 'variable']),
       }
       libraryStore.addConfigFile(sourceFile, [syntheticConfig])
@@ -2383,7 +2383,7 @@ const pasteSelection = async (atMouse = false) => {
       name,
       variables,
       sourceFile,
-      componentName,
+      componentType,
       resolvedIndex
     )
   })

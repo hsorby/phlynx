@@ -78,7 +78,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
    * Returns the new node's id and type so the caller can handle any
    * post-creation logic (e.g. opening the ghost setup dialog).
    *
-   * @param {object} moduleData - The module descriptor (componentName, sourceFile, configs, etc.)
+   * @param {object} moduleData - The module descriptor (componentType, sourceFile, configs, etc.)
    * @param {{x: number, y: number}} position - Flow coordinates to place the node.
    * @returns {{ nodeId: string, nodeType: string }}
    */
@@ -87,15 +87,15 @@ export default function useDragAndDrop(pendingHistoryNodes) {
     const existingNames = new Set(getNodes.value.map((n) => n.data.name))
     const finalName = generateUniqueInstanceName(moduleData, existingNames)
 
-    const componentName = moduleData.componentName
+    const componentType = moduleData.componentType
     const nodeType = moduleData.sourceFile === GHOST_MODULE_FILENAME ? GHOST_NODE_TYPE : 'instanceNode'
     const sourceFile = moduleData.sourceFile
-    const label = sourceFile ? `${componentName} — ${sourceFile}` : componentName
+    const label = sourceFile ? `${componentType} — ${sourceFile}` : componentType
 
     pendingHistoryNodes.add(nodeId)
 
     const modelString = libraryStore.getModelByCollectionName(sourceFile)
-    const variables = extractVariablesFromComponent(modelString, componentName)
+    const variables = extractVariablesFromComponent(modelString, componentType)
 
     const configIndex = moduleData.configIndex || 0
     let config = moduleData.configs?.[configIndex] ?? null
@@ -105,7 +105,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
         module_type: finalName,
         module_subtype: 'phlynx',
         module_file: sourceFile,
-        component_type: componentName,
+        component_type: componentType,
         entrance_ports: [],
         exit_ports:[],       
         general_ports:[],
@@ -120,7 +120,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
       finalName,
       variables,
       sourceFile,
-      componentName,
+      componentType,
       configIndex
     )
 
@@ -129,7 +129,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
       type: nodeType,
       position,
       data: {
-        componentName: moduleData.componentName,
+        componentType: moduleData.componentType,
         configIndex: moduleData.configIndex,
         label,
         name: finalName,

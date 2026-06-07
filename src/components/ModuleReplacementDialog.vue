@@ -111,12 +111,12 @@ function handleConfirm() {
   trackEvent('module_replacement_action', {
     category: 'ModuleReplacement',
     action: 'confirm',
-    label: `Module: ${selectedModule.value.componentName}`, // useful context
+    label: `Module: ${selectedModule.value.componentType}`, // useful context
     file_type: 'json',
   })
 
   emit('confirm', {
-    componentName: selectedModule.value.componentName,
+    componentType: selectedModule.value.componentType,
     sourceFile: selectedModule.value.sourceFile,
     portLabels: finalPortLabels,
     portOptions: moduleVariables,

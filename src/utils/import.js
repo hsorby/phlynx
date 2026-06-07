@@ -19,7 +19,7 @@ export const checkModulesAreLoaded = (modulesRequired, libraryStore) => {
     }
 
     file.modules?.forEach((module) => {
-      const moduleName = module.name || module.componentName
+      const moduleName = module.name || module.componentType
       if (moduleName) {
         availableComponents.add(moduleName)
       }
@@ -145,8 +145,8 @@ export const checkModulesAreLoaded = (modulesRequired, libraryStore) => {
 function validateCollectionFileAssociation(config, libraryStore) {
   const { component_file, component_type, module_type, module_subtype } = config
   
+  // Config doesn't specify a component file
   if (!component_file) {
-    // Config doesn't specify a module file
     return {
       config: `${module_type}:${module_subtype}`,
       expectedFile: 'unknown',

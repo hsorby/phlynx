@@ -73,7 +73,7 @@ export function useLoadFromCellML() {
       }
 
       const componentDataByName = new Map(
-        cellmlResult.components.data.map((c) => [c.componentName, c])
+        cellmlResult.components.data.map((c) => [c.componentType, c])
       )
 
       const nodes = components.map((compName) => {
@@ -114,7 +114,7 @@ export function useLoadFromCellML() {
           position: { x: 100, y: 100 },
           style: { opacity: 0 },
           data: {
-            componentName: compName,
+            componentType: compName,
             configIndex: 0,
             label: `${compName} — ${filename}`,
             name: compName,

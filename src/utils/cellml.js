@@ -146,7 +146,7 @@ export function processCellMLData(cellmlString) {
       name: comp.name(),
       portOptions: options,
       ports: [],
-      componentName: comp.name(),
+      componentType: comp.name(),
       variables,
     })
     comp.delete()
@@ -888,7 +888,7 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
     // ---------------------------------
     for (const node of nodes) {
       const fileName = node.data?.sourceFile
-      const componentName = node.data?.componentName
+      const componentType = node.data?.componentType
 
       // Load and cache source model if not already done.
       if (!modelCache.has(fileName)) {
@@ -901,9 +901,9 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
       }
 
       const sourceModel = modelCache.get(fileName)
-      const originalComponent = sourceModel.componentByName(componentName, true)
+      const originalComponent = sourceModel.componentByName(componentType, true)
       if (!originalComponent) {
-        throw new Error(`Component '${componentName}' not found in '${fileName}'`)
+        throw new Error(`Component '${componentType}' not found in '${fileName}'`)
       }
 
       // Clone Component
@@ -1199,7 +1199,7 @@ function isPossibleParameter(variable) {
 /**
  * Extracts unique variable names from a CellML model/component
  */
-export function extractVariablesFromComponent(modelString, componentName, includeInitialisedVariables = true) {
+export function extractVariablesFromComponent(modelString, componentType, includeInitialisedVariables = true) {
   const garbageCollector = new Set() // To track created objects for cleanup
   try {
     const variables = new Set()
@@ -1208,9 +1208,9 @@ export function extractVariablesFromComponent(modelString, componentName, includ
       garbageCollector.add(parser)
       const model = parser.parseModel(modelString)
       garbageCollector.add(model)
-      const comp = model.componentByName(componentName, includeInitialisedVariables)
+      const comp = model.componentByName(componentType, includeInitialisedVariables)
       garbageCollector.add(comp)
-      if (!comp) throw new Error(`Component '${componentName}' not found in file.`)
+      if (!comp) throw new Error(`Component '${componentType}' not found in file.`)
       for (let v = 0; v < comp.variableCount(); v++) {
         const variable = comp.variableByIndex(v)
         garbageCollector.add(variable)
@@ -1256,8 +1256,8 @@ function hasParserError(parsedDocument) {
   return parsedDocument.getElementsByTagNameNS(parsererrorNS, 'parsererror').length > 0
 }
 
-export function createEditableModelFromSourceModelAndComponent(modelString, componentName) {
-  if (!modelString || !componentName) {
+export function createEditableModelFromSourceModelAndComponent(modelString, componentType) {
+  if (!modelString || !componentType) {
     return { xml: null, errors: ['Model or component name not provided'] }
   }
   const parser = new _libcellml.Parser(false)
@@ -1276,12 +1276,12 @@ export function createEditableModelFromSourceModelAndComponent(modelString, comp
   }
 
   const modelName = model.name() || 'UnnamedModel'
-  const component = model.componentByName(componentName, true)
+  const component = model.componentByName(componentType, true)
 
   if (!component) {
     model.delete()
     parser.delete()
-    return { xml: null, errors: [`Component '${componentName}' not found in model '${modelName}'`] }
+    return { xml: null, errors: [`Component '${componentType}' not found in model '${modelName}'`] }
   }
 
   const newModel = new _libcellml.Model()
@@ -1300,7 +1300,7 @@ export function createEditableModelFromSourceModelAndComponent(modelString, comp
     parser.delete()
     newModel.delete()
 
-    return { xml: null, errors: [`Error parsing MathML in '${modelName}' component '${componentName}'`] }
+    return { xml: null, errors: [`Error parsing MathML in '${modelName}' component '${componentType}'`] }
   }
 
   removeComments(doc)
@@ -1333,11 +1333,11 @@ export function createEditableModelFromSourceModelAndComponent(modelString, comp
   return { xml: newModelString, errors: [] }
 }
 
-export function doesComponentExistInModel(modelString, componentName) {
+export function doesComponentExistInModel(modelString, componentType) {
   if (modelString) {
     const parser = new _libcellml.Parser(false)
     const model = parser.parseModel(modelString)
-    const component = model.componentByName(componentName, true)
+    const component = model.componentByName(componentType, true)
     const hasComponent = component !== null
     if (component) component.delete()
     model.delete()
