@@ -983,7 +983,6 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
         const isTgtMultiportSum = tgtLabel.multiport === 'Sum'
         const isSrcMultiportMultiply = srcLabel.multiport === 'Multiply'
 
-        console.log('sourcelabel', srcLabel)
         if (isSrcMultiportSum && isTgtMultiportSum) {
           throw new Error('Multi-port-sum to Multi-port-sum connections are not supported.')
         } else if (isSrcMultiportMultiply) {
