@@ -983,17 +983,18 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
         const isTgtMultiportSum = tgtLabel.multiport === 'Sum'
         const isSrcMultiportMultiply = srcLabel.multiport === 'Multiply'
 
+        console.log('sourcelabel', srcLabel)
         if (isSrcMultiportSum && isTgtMultiportSum) {
           throw new Error('Multi-port-sum to Multi-port-sum connections are not supported.')
         } else if (isSrcMultiportMultiply) {
-          if (srcLabel.option?.length !== 1 || tgtLabel.option?.length !== 1) {
+          if (srcLabel.variables?.length !== 1 || tgtLabel.variables?.length !== 1) {
             throw new Error('Multiport Multiply ports must each map exactly one variable.')
           }
           multiPortMultiplies.push({
             sourceComp,
-            sourceVarName: srcLabel.option[0],
+            sourceVarName: srcLabel.variables[0],
             targetComp,
-            targetVarName: tgtLabel.option[0],
+            targetVarName: tgtLabel.variables[0],
             factor: Number(srcLabel.multiplyFactor ?? 1),
             isTgtMultiportSum,
             tgtLabel,
@@ -1018,13 +1019,13 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
           })
         } else {
           // Direct one-to-one variable equivalence
-          const minLength = Math.min(srcLabel.option.length, tgtLabel.option.length)
+          const minLength = Math.min(srcLabel.variables.length, tgtLabel.variables.length)
           for (let i = 0; i < minLength; i++) {
-            const srcOption = srcLabel.option[i]
-            const tgtOption = tgtLabel.option[i]
-            if (srcOption && tgtOption) {
-              const v1 = sourceComp.variableByName(srcOption)
-              const v2 = targetComp.variableByName(tgtOption)
+            const srcVariable = srcLabel.variables[i]
+            const tgtVariable = tgtLabel.variables[i]
+            if (srcVariable && tgtVariable) {
+              const v1 = sourceComp.variableByName(srcVariable)
+              const v2 = targetComp.variableByName(tgtVariable)
               if (v1 && v2) {
                 const handled = createAffineConversionComponent(model, v1, v2, sourceComp.name(), targetComp.name())
                 if (!handled) {
@@ -1063,7 +1064,7 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
         // The operand is the scaled output variable living in generated_multiplications
         multiPortSums.get(multiKey).targets.push({
           component: mulComp,
-          label: { option: [outputVarName] },
+          label: { variables: [outputVarName] },
         })
       } else {
         // Direct target: wire the scaled output straight to the target variable
@@ -1083,7 +1084,7 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
     for (const sumData of multiPortSums.values()) {
       const { sourceComp, srcLabel, targets } = sumData
 
-      const sourceVarNames = srcLabel.option
+      const sourceVarNames = srcLabel.variables
       if (sourceVarNames.length !== 1) {
         throw new Error('Multi-port-sum source must have exactly one variable representing the summed input.')
       }
@@ -1091,7 +1092,7 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
       const targetComponents = []
       for (const targetInfo of targets) {
         const { component, label, isTarget } = targetInfo
-        const targetVarNames = label.option
+        const targetVarNames = label.variables
         if (targetVarNames.length !== 1) {
           throw new Error('Multi-port-sum target must have exactly one variable to be summed.')
         }
