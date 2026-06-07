@@ -43,7 +43,7 @@
         <el-table-column label="Variable(s)" min-width="150">
           <template #default="scope">
             <el-select
-              v-model="scope.row.variable"
+              v-model="scope.row.variables"
               multiple
               collapse-tags
               collapse-tags-tooltip
@@ -56,7 +56,7 @@
                 :key="variable.name"
                 :label="variable.name"
                 :value="variable.name"
-                :disabled="isOptionDisabled(variable.name, scope.row.variable)"
+                :disabled="isOptionDisabled(variable.name, scope.row.variables)"
               />
             </el-select>
           </template>

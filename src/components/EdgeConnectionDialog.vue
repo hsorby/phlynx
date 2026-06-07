@@ -89,8 +89,8 @@
                   <el-option v-for="o in portTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
                 <el-input v-model="data.port.label" size="small" style="width:170px" @input="onPortConfigChange" />
-                <el-select v-model="data.port.option" multiple collapse-tags size="small" style="flex:1" @change="onPortConfigChange">
-                  <el-option v-for="o in sourceNode.data.portOptions" :key="o.name" :label="o.name" :value="o.name" />
+                <el-select v-model="data.port.variables" multiple collapse-tags size="small" style="flex:1" @change="onPortConfigChange">
+                  <el-option v-for="o in sourceNode.data.variables" :key="o.name" :label="o.name" :value="o.name" />
                 </el-select>
                 <el-select v-model="data.port.multiport" size="small" style="width:80px" @change="onPortConfigChange">
                   <el-option v-for="o in multiportOptions" :key="o.value" :label="o.label" :value="o.value" />
@@ -126,11 +126,21 @@
                   <el-option v-for="o in portTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
                 <el-input v-model="data.port.label" size="small" style="width:170px" @input="onPortConfigChange" />
-                <el-select v-model="data.port.option" multiple collapse-tags size="small" style="flex:1" @change="onPortConfigChange">
-                  <el-option v-for="o in targetNode.data.portOptions" :key="o.name" :label="o.name" :value="o.name" />
+                <el-select v-model="data.port.variables" multiple collapse-tags size="small" style="flex:1" @change="onPortConfigChange">
+                  <el-option 
+                    v-for="variable in targetNode.data.variables" 
+                    :key="variable.name"
+                    :label="variable.name"
+                    :value="variable.name" 
+                  />
                 </el-select>
                 <el-select v-model="data.port.multiport" size="small" style="width:80px" @change="onPortConfigChange">
-                  <el-option v-for="o in multiportOptions" :key="o.value" :label="o.label" :value="o.value" />
+                  <el-option 
+                    v-for="option in multiportOptions"
+                    :key="option.value"
+                    :label="option.label"
+                    :value="option.value"
+                  />
                 </el-select>
               </div>
             </div>
@@ -228,7 +238,7 @@ const props = defineProps({
   modelValue:  { type: Boolean, default: false },
   sourceNode:  Object,
   targetNode:  Object,
-  activeEdge:  Object,       
+  activeEdge:  Object,
   subgraph: Map,
 })
 

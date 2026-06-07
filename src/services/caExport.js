@@ -176,7 +176,7 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore) {
 
       // --- PARAMETER CLASSIFICATION FOR THIS NODE ---
       let variablesAndUnits = []
-      for (const variable of node.data.portOptions || []) {
+      for (const variable of node.data.variables || []) {
         variablesAndUnits.push([
           variable.name,
           variable.units || 'missing',

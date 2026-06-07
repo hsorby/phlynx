@@ -64,7 +64,7 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
-  portOptions: {
+  variables: {
     type: Array,
     default: () => [],
   },
@@ -97,7 +97,7 @@ function onModuleSelected(module) {
 }
 
 function handleConfirm() {
-  const moduleVariables = selectedModule.value.portOptions || []
+  const moduleVariables = selectedModule.value.variables || []
 
   const finalPortLabels = retainMatches.value
     ? moduleVariables
@@ -119,7 +119,7 @@ function handleConfirm() {
     componentType: selectedModule.value.componentType,
     sourceFile: selectedModule.value.sourceFile,
     portLabels: finalPortLabels,
-    portOptions: moduleVariables,
+    variables: moduleVariables,
   })
 
   closeDialog()

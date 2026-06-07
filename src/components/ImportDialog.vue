@@ -334,7 +334,6 @@ function resetFormState(keepModuleArray = false) {
   importReadiness.value = null
 }
 
-// 
 const getModuleArrayPayload = () => {
   const moduleFiles = formState[IMPORT_KEYS.MODULE_ARRAY]?.files
   if (!moduleFiles || moduleFiles.size === 0) return null

@@ -274,7 +274,7 @@
     v-model="replacementDialogVisible"
     :modules="libraryStore.availableModules"
     :node-id="currentEditingNode.nodeId"
-    :port-options="currentEditingNode?.portOptions || []"
+    :variables="currentEditingNode?.variables || []"
     :port-labels="currentEditingNode?.portLabels || []"
     @confirm="onReplaceConfirm"
   />
@@ -1534,7 +1534,7 @@ async function handleCellMLSave(saveData) {
  */
 function updateGraphNodesAndPorts(updatedData, updatedModule) {
   const validPortNames = new Set(
-    updatedModule?.portOptions?.map((p) => p.name) || []
+    updatedModule?.portLabels?.map((p) => p.name) || [] // not sure if portlabels or portoptions (e.g. variables)
   )
 
   const updatedModuleVariableMap = new Map(
@@ -1581,14 +1581,12 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
       ),
     }))
 
-    // SMELL - why do we need variables and portOptions? These should be the same things?
     const newData = {
       ...detachReactivity(node.data),
       componentType: updatedData.componentType,
       sourceFile: updatedData.sourceFile,
       label: `${updatedData.componentType} — ${updatedData.sourceFile}`,
       portLabels: cleanLabels,
-      portOptions: updatedModule?.portOptions || [],
       variables: cleanVariables,
     }
 
@@ -1828,7 +1826,7 @@ function onNodeContextMenu({ clientX, clientY, nodeId }) {
           nodeId,
           nodeData: node.data,
           name: node.data.name,
-          portOptions: node.data.portOptions,
+          variables: node.data.variables,
           portLabels: node.data.portLabels,
         })
       },
@@ -1854,7 +1852,7 @@ function createNewModuleAtPosition(clientX, clientY) {
     configs: moduleEntry.configs || null,
     configIndex: 0,
     ports: moduleEntry.ports || [],
-    portOptions: moduleEntry.portOptions || [],
+    variables: moduleEntry.variables || [],
   }
 
   const position = screenToFlowCoordinate({ x: clientX, y: clientY })

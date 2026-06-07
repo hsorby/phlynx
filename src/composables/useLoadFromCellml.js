@@ -79,7 +79,6 @@ export function useLoadFromCellML() {
       const nodes = components.map((compName) => {
         const compData = componentDataByName.get(compName) ?? {}
         const variables = compData.variables ?? []
-        const portOptions = compData.portOptions ?? []
 
         store.setParameterValuesForInstance(
           compName,
@@ -102,7 +101,7 @@ export function useLoadFromCellML() {
         const portLabels = rawPorts.map((p) => ({
           portType: 'general_ports',
           label: p.port_type,
-          option: p.variables ?? [],
+          variable: p.variables ?? [],
           multiport: edgeCount > 1 ? 'True' : 'None',
         }))
 
@@ -119,11 +118,10 @@ export function useLoadFromCellML() {
             label: `${compName} — ${filename}`,
             name: compName,
             portLabels,
-            portOptions,
+            variables,
             ports,
             hasPrescribedPosition: false,
             sourceFile: filename,
-            variables,
           },
         }
       })

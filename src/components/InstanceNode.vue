@@ -202,7 +202,7 @@ async function openEditDialog() {
     nodeId: props.id,
     ports: props.data.ports,
     name: props.data.name,
-    portOptions: props.data.portOptions,
+    variables: props.data.variables,
     portLabels: props.data.portLabels,
   })
 }
@@ -376,7 +376,7 @@ function saveEdit() {
   const nameExists = nodes.value.some((node) => node.id !== props.id && node.data && node.data.name === sanitisedName)
 
   if (nameExists) {
-    notify.error({ message: 'A module with this name already exists.' })
+    notify.error({ message: 'An instance with this name already exists.' })
     return
   }
 

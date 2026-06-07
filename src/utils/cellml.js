@@ -122,7 +122,6 @@ export function processCellMLData(cellmlString) {
   const componentData = []
   for (let i = 0; i < model.componentCount(); i++) {
     const comp = model.componentByIndex(i)
-    const options = []
     const variables = []
 
     for (let j = 0; j < comp.variableCount(); j++) {
@@ -133,7 +132,6 @@ export function processCellMLData(cellmlString) {
       ) {
         const units = varr.units()
         const entry = { name: varr.name(), units: units.name() }
-        options.push(entry)
         if (isPossibleParameter(varr)) {
           variables.push(entry)
         }
@@ -142,9 +140,9 @@ export function processCellMLData(cellmlString) {
       varr.delete()
     }
 
+    // smelly - name and componentType have the same content in multiple places.
     componentData.push({
       name: comp.name(),
-      portOptions: options,
       ports: [],
       componentType: comp.name(),
       variables,
