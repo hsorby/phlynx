@@ -19,7 +19,7 @@ export const checkModulesAreLoaded = (modulesRequired, libraryStore) => {
     }
 
     file.modules?.forEach((module) => {
-      const moduleName = module.name || module.componentType
+      const moduleName = module.name
       if (moduleName) {
         availableComponents.add(moduleName)
       }
@@ -241,16 +241,16 @@ export function groupCollectionFileIssues(componentFileIssues) {
     
     switch (group.issue) {
       case 'missing_file':
-        message = `Component file "${group.file}" not found`
+        message = `Component file "${group.file}" not found.`
         break
       case 'stub_file':
-        message = `Component file "${group.file}" needs to be uploaded`
+        message = `Component file "${group.file}" needs to be uploaded.`
         break
       case 'component_not_in_file':
-        message = `Component file "${group.file}" missing components: ${[...group.componentTypes].join(', ')}`
+        message = `Component file "${group.file}" missing components: ${[...group.componentTypes].join(', ')}.`
         break
       case 'no_file_specified':
-        message = `Module config doesn't specify a component file`
+        message = `Module config doesn't specify a component file.`
         break
       default:
         message = `Issue with "${group.file}"`
