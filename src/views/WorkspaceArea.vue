@@ -1469,7 +1469,7 @@ function filterConfig(config, validPortNames, validVariableNames, updatedModule)
  * 3. updating graph nodes to match new ports.
  */
 async function handleCellMLSave(saveData) {
-  const { componentFile, componentType, originalComponentFile, originalComponentName, originalConfigIndex, code } = saveData
+  const { componentFile, componentType, originalComponentFile, originalComponentName, originalConfigIndex, model } = saveData
 
   const isRename = originalComponentName !== componentType
   const isNewFile = originalComponentFile !== componentFile
@@ -1485,8 +1485,8 @@ async function handleCellMLSave(saveData) {
   }
 
   // Load the New Data into the Store
-  // This registers the module under the name found in 'code'.
-  await loadCellMLData(code, componentFile, { notify: false })
+  // This registers the module under the name found in 'model'.
+  await loadCellMLData(model, componentFile, { notify: false })
 
   // Retrieve the "Target" Module (The one we just loaded)
   let targetModule = libraryStore.findModulesByComponentName(componentFile, componentType)
@@ -2239,7 +2239,6 @@ const pasteSelection = async (atMouse = false) => {
 
   if (sourceClipboard.storeSnapshot) {
     for (const entry of Object.values(sourceClipboard.storeSnapshot)) {
-      
       if (!libraryStore.hasCollection(entry.componentFile)) {
         // The whole file is absent 
         libraryStore.addOrUpdateCollection({
@@ -2253,15 +2252,16 @@ const pasteSelection = async (atMouse = false) => {
         })
       } else {
         // The file exists but this specific component or config may be missing
-        const existingComponent = existingFile.modules.find(
-          (m) => m.name === entry.componentType || m.componentType === entry.componentType // SMELL
-        )
-
+        const existingComponent = libraryStore.findModulesByComponentName(entry.componentFile, entry.componentType)
         if (!existingComponent) {
-          existingFile.modules.push({
-            name: entry.componentType, // SMELL
-            componentType: entry.componentType,
-            configs: entry.configs,
+          libraryStore.addOrUpdateCollection({
+            componentFile: entry.componentFile,
+            model: entry.model,
+            modules: [{
+              name: entry.componentType, // SMELL
+              componentType: entry.componentType,
+              configs: entry.configs,
+            }],
           })
         } else {
           // Component exists but config is missing
