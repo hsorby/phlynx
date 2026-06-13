@@ -259,14 +259,14 @@ function isSingleConnection(portLabel) {
   return !portLabel.multiport || portLabel.multiport === 'None'
 }
 
-// Finds a port in a list by matching label, portType, and option.
+// Finds a port in a list by matching label, portType, and variables.
 // Used wherever a portLabel object needs to be resolved to a stamped local port.
 function findPortByLabel(ports, portLabel) {
   if (!portLabel) return null
   return ports.find(p =>
     p.label    === portLabel.label &&
     p.portType === portLabel.portType &&
-    JSON.stringify(p.option) === JSON.stringify(portLabel.option)
+    JSON.stringify(p.variables) === JSON.stringify(portLabel.variables)
   ) ?? null
 }
 
@@ -635,7 +635,7 @@ function evictForeignHandle(port, side) {
     const labelToCheck = side === 'source' ? c.sourcePortLabel : c.targetPortLabel
     return labelToCheck?.label === portLabel.label &&
            labelToCheck?.portType === portLabel.portType &&
-           JSON.stringify(labelToCheck?.option) === JSON.stringify(portLabel.option)
+           JSON.stringify(labelToCheck?.variables) === JSON.stringify(portLabel.variables)
   })
 
   const partnerPortLabel = side === 'source' ? coupling?.targetPortLabel : coupling?.sourcePortLabel
@@ -855,9 +855,9 @@ function rehomeForeignHandle(oldPort, partnerPortLabel, edgeId, side) {
   if (!sibling) return
 
   const newPortLabel = {
-    label:     oldPort.label,
-    portType:  oldPort.portType,
-    option:    oldPort.option,
+    label: oldPort.label,
+    portType: oldPort.portType,
+    variables: oldPort.variables,
     multiport: oldPort.multiport,
   }
 
@@ -1053,8 +1053,8 @@ function activateGhost(side, inferFrom = null) {
   const entry = {
     _uid: uid,
     portType: portType,
-    label:    inferFrom?.label    ?? '',
-    option:   [],           
+    label: inferFrom?.label ?? '',
+    variables: [],           
     multiport: inferFrom?.multiport ?? 'None',
   }
   if (side === 'source') {
@@ -1178,8 +1178,8 @@ function buildPayload() {
       const sp = srcByUid(c.srcUid)
       const tp = tgtByUid(c.tgtUid)
       return {
-        sourcePortLabel: { portType: sp.portType, label: sp.label, option: sp.option, multiport: sp.multiport },
-        targetPortLabel: { portType: tp.portType, label: tp.label, option: tp.option, multiport: tp.multiport }
+        sourcePortLabel: { portType: sp.portType, label: sp.label, variables: sp.variables, multiport: sp.multiport },
+        targetPortLabel: { portType: tp.portType, label: tp.label, variables: tp.variables, multiport: tp.multiport }
       }
     }),
     foreignCouplings,

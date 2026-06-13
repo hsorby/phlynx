@@ -1576,7 +1576,7 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
     // Clean port labels
     const cleanLabels = (node.data.portLabels || []).map((labelObj) => ({
       ...labelObj,
-      variables: (labelObj.variables || []).filter((opt) =>
+      option: (labelObj.option || []).filter((opt) =>
         validPortNames.has(opt)
       ),
     }))
@@ -1592,6 +1592,9 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
 
     updatedCount++
     updateNodeData(node.id, newData)
+    // Recompute couplings now that this node's portLabels have changed.
+    // findNode will return the updated data because updateNodeData is synchronous.
+    recomputeEdgeCouplings(node.id)
   })
 
   notify.success({
@@ -1608,6 +1611,58 @@ function onOpenMacroBuilderDialog() {
   macroBuilderDialogVisible.value = true
 }
 
+/**
+ * Recomputes couplings on every edge touching a given node, using the node's
+ * current portLabels. Call this after any operation that changes portLabels on
+ * one or more nodes (CellML save, rename, in-place replace, port label edit).
+ *
+ * Ordinal indices are derived from each edge's position in the filtered list,
+ * not from a count of other edges, so repeated same-label slots resolve correctly.
+ */
+function recomputeEdgeCouplings(nodeId) {
+  const outgoing = edges.value.filter((e) => e.source === nodeId)
+  outgoing.forEach((edge) => {
+    const sourceNode = findNode(edge.source)
+    const targetNode = findNode(edge.target)
+    if (!sourceNode || !targetNode) return
+
+    const sourceIndex = outgoing.indexOf(edge)
+    const edgesIntoTarget = edges.value.filter((e) => e.target === edge.target)
+    const targetIndex = edgesIntoTarget.indexOf(edge)
+
+    edge.data = {
+      ...edge.data,
+      couplings: resolvePortCouplings(
+        sourceNode.data.portLabels ?? [],
+        targetNode.data.portLabels ?? [],
+        sourceIndex,
+        targetIndex
+      ),
+    }
+  })
+
+  const incoming = edges.value.filter((e) => e.target === nodeId)
+  incoming.forEach((edge) => {
+    const sourceNode = findNode(edge.source)
+    const targetNode = findNode(edge.target)
+    if (!sourceNode || !targetNode) return
+
+    const edgesFromSource = edges.value.filter((e) => e.source === edge.source)
+    const sourceIndex = edgesFromSource.indexOf(edge)
+    const targetIndex = incoming.indexOf(edge)
+
+    edge.data = {
+      ...edge.data,
+      couplings: resolvePortCouplings(
+        sourceNode.data.portLabels ?? [],
+        targetNode.data.portLabels ?? [],
+        sourceIndex,
+        targetIndex
+      ),
+    }
+  })
+}
+
 async function onEditConfirm(updatedData) {
   const { nodeId, instanceId } = currentEditingNode.value
   if (!nodeId) return
@@ -1617,40 +1672,7 @@ async function onEditConfirm(updatedData) {
 
   updateNodeData(nodeId, updatedData)
 
-  // Recompute couplings on every edge connected to this node
-  const updatedPortLabels = updatedData.portLabels ?? []
-
-  const outgoing = edges.value.filter((e) => e.source === nodeId)
-  outgoing.forEach((edge, sourceIndex) => {
-    const targetNode = findNode(edge.target)
-    if (!targetNode) return
-    const targetIndex = edges.value.filter((e) => e.target === edge.target && e !== edge).length
-    edge.data = {
-      ...edge.data,
-      couplings: resolvePortCouplings(
-        updatedPortLabels,
-        targetNode.data.portLabels ?? [],
-        sourceIndex,
-        targetIndex
-      ),
-    }
-  })
-
-  const incoming = edges.value.filter((e) => e.target === nodeId)
-  incoming.forEach((edge, targetIndex) => {
-    const sourceNode = findNode(edge.source)
-    if (!sourceNode) return
-    const sourceIndex = edges.value.filter((e) => e.source === edge.source && e !== edge).length
-    edge.data = {
-      ...edge.data,
-      couplings: resolvePortCouplings(
-        sourceNode.data.portLabels ?? [],
-        updatedPortLabels,
-        sourceIndex,
-        targetIndex
-      ),
-    }
-  })
+  recomputeEdgeCouplings(nodeId)
 }
 
 const nodeRefs = ref({})
