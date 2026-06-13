@@ -73,7 +73,7 @@ A JSON file defining the interface between CellML modules and the solver. It con
 | :--- | :--- |
 | `module_type` | Corresponds to the `module_type` in the module array. |
 | `module_subtype` | Corresponds to the `module_subtype` in the module array (Module sub-type). |
-| `module_file` | The filename of the source `.cellml` file. |
+| `component_file` | The filename of the source `.cellml` file. |
 | `component_type` | The component name within the source `.cellml` file. |
 | `entrance_ports` | Port definitions for when this module receives input (connected as an `out_module`). Maps internal variables (e.g., `v_in`) to the source module's variables. |
 | `exit_ports` | Port definitions for when this module provides output (connected as an `inp_module`). |
