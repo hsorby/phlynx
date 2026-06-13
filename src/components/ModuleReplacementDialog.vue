@@ -19,11 +19,11 @@
 
         <div v-if="selectedModule" class="selected-module">
           <div class="selected-name">
-            {{ selectedModule.name || selectedModule.filename }}
+            {{ selectedModule.name || selectedModule.componentFile }}
           </div>
 
           <div class="selected-file">
-            {{ selectedModule.sourceFile || '' }}
+            {{ selectedModule.componentFile || '' }}
           </div>
         </div>
 
@@ -117,7 +117,7 @@ function handleConfirm() {
 
   emit('confirm', {
     componentType: selectedModule.value.componentType,
-    sourceFile: selectedModule.value.sourceFile,
+    componentFile: selectedModule.value.componentFile,
     portLabels: finalPortLabels,
     variables: moduleVariables,
   })

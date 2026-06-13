@@ -46,7 +46,7 @@ export function useLoadFromModuleArray() {
         store.setParameterValuesForInstance(
           n.data.name,
           n.data.variables,
-          n.data.sourceFile,
+          n.data.componentFile,
           n.data.componentType,
           n.data.configIndex
         )

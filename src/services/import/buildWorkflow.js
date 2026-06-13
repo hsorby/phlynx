@@ -20,7 +20,7 @@ function buildNodes(libraryStore, instances, progressCallback = null) {
       )
       // Return a placeholder node - SMELL - this is v different from configData structure
       return {
-        id: instance.name,
+        id: instance.name, // SMELL
         type: 'instanceNode',
         position: { x: 100, y: 100 },
         data: {
@@ -34,16 +34,16 @@ function buildNodes(libraryStore, instances, progressCallback = null) {
       }
     }
 
-    const { config, configIndex, module, filename } = configData
-    const modelString = libraryStore.getModelByCollectionName(filename)
+    const { config, configIndex, module, componentFile } = configData
+    const model = libraryStore.getModelByCollectionName(componentFile)
 
     const componentType = config?.component_type
-    const variables = extractVariablesFromComponent(modelString, componentType)
+    const variables = extractVariablesFromComponent(model, componentType)
 
     libraryStore.setParameterValuesForInstance(
       instance.name,
       variables,
-      filename,
+      componentFile,
       componentType,
       configIndex
     )
@@ -70,13 +70,13 @@ function buildNodes(libraryStore, instances, progressCallback = null) {
       data: {
         componentType: componentType,
         configIndex: configIndex,
-        label: `${config.component_type} — ${filename}`,
+        label: `${config.component_type} — ${componentFile}`,
         name: instance.name,
         portLabels: buildPortLabels(config),
-        variables: module.variables || [],
+        variables: variables,
         ports: buildPorts(instance, config),
         hasPrescribedPosition: hasPosition,
-        sourceFile: filename,
+        componentFile: componentFile,
       },
     }
   })

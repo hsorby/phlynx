@@ -48,22 +48,22 @@ export function useLoadFromCellML() {
   let layoutCompleteResolve = null
   let layoutCompleteReject = null
 
-  const loadFromCellML = async (cellmlContent, filename) => {
+  const loadFromCellML = async (cellmlContent, componentFile) => {
     try {
       await clearWorkspace()
 
       const { components, edges, configs } =
-        parseCellMLConnections(cellmlContent, filename)
+        parseCellMLConnections(cellmlContent, componentFile)
 
       if (components.length === 0) {
         notify.info({
           title: 'No Connections Found',
-          message: `${filename} contains no inter-component connections to visualise.`,
+          message: `${componentFile} contains no inter-component connections to visualise.`,
         })
         return
       }
 
-      store.addConfigFile(configs, filename)
+      store.addConfigFile(configs, componentFile)
 
       const cellmlResult = processCellMLData(cellmlContent)
       if (cellmlResult.type !== 'success') {
@@ -83,13 +83,13 @@ export function useLoadFromCellML() {
         store.setParameterValuesForInstance(
           compName,
           variables,
-          filename,
+          componentFile,
           compName,
           0
         )
 
         const moduleConfig =
-          store.findConfigByIndex(filename, compName, 0) ?? {}
+          store.findConfigByIndex(componentFile, compName, 0) ?? {}
 
         const rawPorts = moduleConfig.general_ports ?? []
 
@@ -114,14 +114,14 @@ export function useLoadFromCellML() {
           style: { opacity: 0 },
           data: {
             componentType: compName,
-            configIndex: 0,
-            label: `${compName} — ${filename}`,
-            name: compName,
+            configIndex: 0, 
+            label: `${compName} — ${componentFile}`,
+            name: compName, // SMELL
             portLabels,
             variables,
             ports,
             hasPrescribedPosition: false,
-            sourceFile: filename,
+            componentFile: componentFile,
           },
         }
       })

@@ -186,9 +186,9 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore) {
       }
 
       const config = libraryStore.findConfigByIndex(
-        node.data.sourceFile,
+        node.data.componentFile,
         node.data.componentType,
-        node.data.configIndex
+        node.data.configIndex,
       )
 
       const moduleConfigKey = `${config.module_type}|${config.module_subtype}`;
@@ -197,7 +197,7 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore) {
           module_type: config.module_type,
           module_subtype: config.module_subtype,
           module_format: config.module_format,
-          module_file: config.module_file,
+          component_file: config.component_file,
           component_type: config.component_type,
           entrance_ports: portsByType.entrance_ports || [],
           exit_ports: portsByType.exit_ports || [],

@@ -818,9 +818,9 @@ const handleSearchInput = () => {
     const componentType = node.data?.componentType?.toLowerCase() || ''
     const name = node.data?.name?.toLowerCase() || ''
     const label = node.data?.label?.toLowerCase() || ''
-    const sourceFile = node.data?.sourceFile?.toLowerCase() || ''
+    const componentFile = node.data?.componentFile?.toLowerCase() || ''
 
-    if (componentType.includes(query) || name.includes(query) || label.includes(query) || sourceFile.includes(query)) {
+    if (componentType.includes(query) || name.includes(query) || label.includes(query) || componentFile.includes(query)) {
       matches.add(node.id)
     }
   })
@@ -1141,7 +1141,7 @@ function updateNodesWithNewParameters() {
       libraryStore.setParameterValuesForInstance(
         node.data.name,
         node.data.variables,
-        node.data.sourceFile,
+        node.data.componentFile,
         node.data.componentType,
         node.data.configIndex
       )
@@ -1150,23 +1150,23 @@ function updateNodesWithNewParameters() {
   })
 }
 
-const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackEvents = true } = {}) => {
+const loadCellMLData = (content, componentFile, { notify: shouldNotify = true, trackEvents = true } = {}) => {
   return new Promise((resolve) => {
     const result = processCellMLData(content)
 
     if (result.type === 'success') {
-      const moduleCount = result.components.data.length
+      const componentCount = result.components.data.length
       const unitCount = result.units.count
 
       // Register components (modules) with the store
-      if (moduleCount > 0) {
+      if (componentCount > 0) {
         const modules = result.components.data.map((item) => ({
           ...item,
-          sourceFile: filename,
+          componentFile: componentFile,
         }))
       
         libraryStore.addOrUpdateCollection({
-          filename,
+          componentFile: componentFile,
           modules: modules,
           model: result.components.model,
         })
@@ -1175,7 +1175,7 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
       // Register units with the store
       if (unitCount > 0) {
         libraryStore.addUnitsFile({
-          filename,
+          componentFile: componentFile,
           model: result.units.model,
         })
       }
@@ -1190,30 +1190,30 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
       }
 
       if (shouldNotify) {
-        if (moduleCount > 0 && unitCount > 0) {
+        if (componentCount > 0 && unitCount > 0) {
           notify.success({
             title: 'CellML File Loaded',
-            message: `Loaded ${moduleCount} module${moduleCount !== 1 ? 's' : ''} and ${unitCount} unit${unitCount !== 1 ? 's' : ''} from ${filename}.`,
+            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} and ${unitCount} unit${unitCount !== 1 ? 's' : ''} from ${componentFile}.`,
           })
-        } else if (moduleCount > 0) {
+        } else if (componentCount > 0) {
           notify.success({
-            title: 'CellML Modules Loaded',
-            message: `Loaded ${moduleCount} module${moduleCount !== 1 ? 's' : ''} from ${filename}.`,
+            title: 'CellML Components Loaded',
+            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} from ${componentFile}.`,
           })
         } else if (unitCount > 0) {
           notify.success({
             title: 'CellML Units Loaded',
-            message: `Loaded ${unitCount} unit${unitCount !== 1 ? 's' : ''} from ${filename}.`,
+            message: `Loaded ${unitCount} unit${unitCount !== 1 ? 's' : ''} from ${componentFile}.`,
           })
         } else {
           notify.info({
             title: 'CellML File Loaded',
-            message: `${filename} contained no modules or unit definitions.`,
+            message: `${componentFile} contained no components or unit definitions.`,
           })
         }
       }
 
-      resolve({ ok: true, moduleCount: result.components.data.length, unitCount: result.units.count })
+      resolve({ ok: true, componentCount: componentCount, unitCount: unitCount })
     } else {
       if (trackEvents) {
         trackEvent('cellml_load_action', {
@@ -1226,11 +1226,11 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
       if (shouldNotify) {
         notify.error({
           title: 'CellML Load Error',
-          message: `${result.issues.length} issue${result.issues.length !== 1 ? 's' : ''} found in ${filename}.`,
+          message: `${result.issues.length} issue${result.issues.length !== 1 ? 's' : ''} found in ${componentFile}.`,
         })
       }
       console.error('CellML import issues:', result.issues)
-      resolve({ ok: false, moduleCount: 0, unitCount: 0 })
+      resolve({ ok: false, componentCount: 0, unitCount: 0 })
     }
   })
 }
@@ -1469,14 +1469,14 @@ function filterConfig(config, validPortNames, validVariableNames, updatedModule)
  * 3. updating graph nodes to match new ports.
  */
 async function handleCellMLSave(saveData) {
-  const { sourceFile, componentType, originalSourceFile, originalComponentName, originalConfigIndex, code } = saveData
+  const { componentFile, componentType, originalComponentFile, originalComponentName, originalConfigIndex, code } = saveData
 
   const isRename = originalComponentName !== componentType
-  const isNewFile = originalSourceFile !== sourceFile
+  const isNewFile = originalComponentFile !== componentFile
   const isForkOrRename = isRename || isNewFile
 
   // Get the original configuration to migrate (if it exists).
-  const originalModule = libraryStore.findModulesByComponentName(originalSourceFile, originalComponentName)
+  const originalModule = libraryStore.findModulesByComponentName(originalComponentFile, originalComponentName)
 
   // Safety check: If we can't find the original, create a blank config
   let configToMigrate = {}
@@ -1486,10 +1486,10 @@ async function handleCellMLSave(saveData) {
 
   // Load the New Data into the Store
   // This registers the module under the name found in 'code'.
-  await loadCellMLData(code, sourceFile, { notify: false })
+  await loadCellMLData(code, componentFile, { notify: false })
 
   // Retrieve the "Target" Module (The one we just loaded)
-  let targetModule = libraryStore.findModulesByComponentName(sourceFile, componentType)
+  let targetModule = libraryStore.findModulesByComponentName(componentFile, componentType)
 
   if (!targetModule) {
     console.warn(`Mismatch: Requested ${componentType}, but store didn't register it. Check component name extraction.`)
@@ -1505,8 +1505,8 @@ async function handleCellMLSave(saveData) {
     // CASE A: Fork or Rename -> We add a NEW config entry.
 
     // Update metadata to match new home.
-    configToMigrate.module_file = sourceFile
-    configToMigrate.module_type = componentType
+    configToMigrate.component_file = componentFile
+    configToMigrate.component_type = componentType
 
     // Push as a new config.
     targetModule.configs.push(configToMigrate)
@@ -1547,7 +1547,7 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
     const isTargetNode = node.id === updatedData.nodeId
     const isMatchingModule =
       updatedData.scope !== 'single' &&
-      node.data.sourceFile === updatedData.originalSourceFile &&
+      node.data.componentFile === updatedData.originalComponentFile &&
       node.data.componentType === updatedData.originalComponentName
 
     if (!isTargetNode && !isMatchingModule) return
@@ -1584,8 +1584,8 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
     const newData = {
       ...detachReactivity(node.data),
       componentType: updatedData.componentType,
-      sourceFile: updatedData.sourceFile,
-      label: `${updatedData.componentType} — ${updatedData.sourceFile}`,
+      componentFile: updatedData.componentFile,
+      label: `${updatedData.componentType} — ${updatedData.componentFile}`,
       portLabels: cleanLabels,
       variables: cleanVariables,
     }
@@ -1778,7 +1778,7 @@ async function onReplaceConfirm(updatedData) {
   if (!nodeId) return
 
   const compLabel = updatedData.componentType
-  const filePart = updatedData.sourceFile
+  const filePart = updatedData.componentFile
   updatedData.label = filePart ? `${compLabel} — ${filePart}` : compLabel
 
   const targetInstance = instanceId || FLOW_IDS.MAIN    
@@ -1848,7 +1848,7 @@ function createNewModuleAtPosition(clientX, clientY) {
   const moduleData = {
     name: moduleEntry.name,
     componentType: moduleEntry.componentType,
-    sourceFile: moduleFile.filename,
+    componentFile: moduleFile.componentFile,
     configs: moduleEntry.configs || null,
     configIndex: 0,
     ports: moduleEntry.ports || [],
@@ -2169,19 +2169,19 @@ const copySelection = async () => {
   
   const storeSnapshot = {}
   for (const node of nodes) {
-    const { sourceFile, componentType, configIndex } = node.data
-    if (!sourceFile || !componentType) continue
+    const { componentFile, componentType, configIndex } = node.data
+    if (!componentFile || !componentType) continue
 
-    const moduleFile = libraryStore.availableCollections.find((f) => f.filename === sourceFile)
-    if (!moduleFile) continue
+    if (!libraryStore.hasCollection(componentFile)) continue
+    const model = libraryStore.getModelByCollectionName(componentFile)
 
-    const component = moduleFile.modules.find((m) => m.name === componentType || m.componentType === componentType)
-    if (!component) continue
+    const modules = libraryStore.findModulesByComponentName(componentFile, componentType)
+    if (!modules || modules.length === 0) continue
 
-    const key = `${sourceFile}::${componentType}`
+    const key = `${componentFile}::${componentType}`
     if (storeSnapshot[key]) {
-      // Component already captured — add this config if it's a new one
-      const config = component.configs?.[configIndex]
+      // SMELL - data structure is wrong - config index should be on modules (modules[configIndex].config)
+      const config = modules.configs?.[configIndex]
       if (config !== undefined && !storeSnapshot[key].configs.some(
         (c) => c.module_subtype === config.module_subtype && c.module_type === config.module_type
       )) {
@@ -2190,20 +2190,19 @@ const copySelection = async () => {
       continue
     }
 
-    const config = component.configs?.[configIndex]
+    const config = modules.configs?.[configIndex]
 
     const { xml: componentModel } = createEditableModelFromSourceModelAndComponent(
-      moduleFile.model,
+      model,
       componentType
     )
     if (!componentModel) continue
 
     storeSnapshot[key] = {
-      sourceFile,
+      componentFile,
       componentType,
       configs: config !== undefined ? [detachReactivity(config)] : [],
       model: componentModel,
-      filename: moduleFile.filename,
     }
   }
 
@@ -2240,15 +2239,14 @@ const pasteSelection = async (atMouse = false) => {
 
   if (sourceClipboard.storeSnapshot) {
     for (const entry of Object.values(sourceClipboard.storeSnapshot)) {
-      const existingFile = libraryStore.availableCollections.find((f) => f.filename === entry.filename)
-
-      if (!existingFile) {
+      
+      if (!libraryStore.hasCollection(entry.componentFile)) {
         // The whole file is absent 
         libraryStore.addOrUpdateCollection({
-          filename: entry.filename,
+          componentFile: entry.componentFile,
           model: entry.model,
           modules: [{
-            name: entry.componentType,
+            name: entry.componentType, // SMELL
             componentType: entry.componentType,
             configs: entry.configs,
           }],
@@ -2256,12 +2254,12 @@ const pasteSelection = async (atMouse = false) => {
       } else {
         // The file exists but this specific component or config may be missing
         const existingComponent = existingFile.modules.find(
-          (m) => m.name === entry.componentType || m.componentType === entry.componentType
+          (m) => m.name === entry.componentType || m.componentType === entry.componentType // SMELL
         )
 
         if (!existingComponent) {
           existingFile.modules.push({
-            name: entry.componentType,
+            name: entry.componentType, // SMELL
             componentType: entry.componentType,
             configs: entry.configs,
           })
@@ -2355,32 +2353,32 @@ const pasteSelection = async (atMouse = false) => {
   })
 
   newNodes.forEach((newNode) => {
-    const { name, sourceFile, componentType, configIndex } = newNode.data
-    if (!sourceFile || !componentType) return
+    const { name, componentFile, componentType, configIndex } = newNode.data
+    if (!componentFile || !componentType) return
 
-    const modelString = libraryStore.getModelByCollectionName(sourceFile)
-    const variables = extractVariablesFromComponent(modelString, componentType)
+    const model = libraryStore.getModelByCollectionName(componentFile)
+    const variables = extractVariablesFromComponent(model, componentType)
     newNode.data.variables = variables
 
     const resolvedIndex = configIndex ?? 0
-    const targetModule = libraryStore.findModulesByComponentName(sourceFile, componentType)
+    const targetModule = libraryStore.findModulesByComponentName(componentFile, componentType)
 
     if (targetModule && 
-    (!targetModule.configs?.[resolvedIndex]?.module_file?.length  ||
-    !targetModule.configs?.[resolvedIndex]?.module_type?.length ||
+    (!targetModule.configs?.[resolvedIndex]?.component_file?.length  ||
+    !targetModule.configs?.[resolvedIndex]?.component_type?.length ||
     !targetModule.configs?.[resolvedIndex]?.variables_and_units?.length)) {
       const syntheticConfig = {
-        module_file: sourceFile,
-        module_type: componentType,
+        component_file: componentFile,
+        component_type: componentType,
         variables_and_units: variables.map((v) => [v.name, v.units ?? 'dimensionless', 'access', 'variable']),
       }
-      libraryStore.addConfigFile(sourceFile, [syntheticConfig])
+      libraryStore.addConfigFile(componentFile, [syntheticConfig])
     }
 
     libraryStore.setParameterValuesForInstance(
-      name,
+      name, // SMELL - instance?
       variables,
-      sourceFile,
+      componentFile,
       componentType,
       resolvedIndex
     )

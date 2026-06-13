@@ -16,38 +16,38 @@
     <div ref="scrollEl" class="mlc__scroll">
       <template v-if="filteredCollections.length > 0">
         <div
-          v-for="file in filteredCollections"
-          :key="file.filename"
+          v-for="collection in filteredCollections"
+          :key="collection.componentFile"
           class="mlc__group"
         >
           <!-- Group header -->
           <button
             class="mlc__group-header"
-            :class="{ 'is-open': activeCollapseNames.includes(file.filename) }"
-            @click="toggleGroup(file.filename)"
+            :class="{ 'is-open': activeCollapseNames.includes(collection.componentFile) }"
+            @click="toggleGroup(collection.componentFile)"
           >
             <el-icon class="mlc__group-chevron"><ArrowRight /></el-icon>
-            <span class="mlc__group-name"><span class="mlc__group-name-text">{{ displayName(file.filename) }}</span></span>
+            <span class="mlc__group-name"><span class="mlc__group-name-text">{{ displayName(collection.componentFile) }}</span></span>
             <el-tag size="small" type="info" effect="plain" round class="mlc__group-count">
-              {{ file.modules.length }}
+              {{ collection.modules.length }}
             </el-tag>
           </button>
 
           <!-- Module cards -->
           <transition name="slide">
-            <div v-show="activeCollapseNames.includes(file.filename)" class="mlc__group-body">
+            <div v-show="activeCollapseNames.includes(collection.componentFile)" class="mlc__group-body">
               <el-card
-                v-for="module in file.modules"
+                v-for="module in collection.modules"
                 :key="module.name"
                 class="mlc__card"
                 :class="{
                   'mlc__card--selectable': selectable,
-                  'mlc__card--stub': file.isStub,
-                  'mlc__card--draggable': !selectable && !file.isStub,
+                  'mlc__card--stub': collection.isStub,
+                  'mlc__card--draggable': !selectable && !collection.isStub,
                 }"
                 shadow="never"
                 :body-style="{ padding: '0' }"
-                :draggable="!selectable && !file.isStub"
+                :draggable="!selectable && !collection.isStub"
                 @dragstart="handleDragStart($event, module)"
                 @dragend="handleDragEnd"
                 @click="selectable && handleSelect(module)"
@@ -79,7 +79,7 @@
                             size="small"
                             circle
                             :icon="View"
-                            @click.stop="openPreview(module, file.filename)"
+                            @click.stop="openPreview(module, collection.componentFile)"
                           />
                         </el-tooltip>
                       </div>
@@ -143,7 +143,7 @@ const { onDragStart } = useDragAndDrop()
 
 const filterText = ref('')
 const activeCollapseNames = ref([])
-const knownFileNames = ref(new Set())
+const knownComponentFiles = ref(new Set())
 const selectedConfigs = reactive({})
 const showPreview = ref(false)
 const previewTarget = ref(null)
@@ -177,16 +177,16 @@ const filteredCollections = computed(() => {
 
 // ─── Accordion ───────────────────────────────────────────────────────────────
 
-function toggleGroup(filename) {
-  const idx = activeCollapseNames.value.indexOf(filename)
-  if (idx === -1) activeCollapseNames.value.push(filename)
+function toggleGroup(componentFile) {
+  const idx = activeCollapseNames.value.indexOf(componentFile)
+  if (idx === -1) activeCollapseNames.value.push(componentFile)
   else activeCollapseNames.value.splice(idx, 1)
 }
 
 // ─── Config helpers ───────────────────────────────────────────────────────────
 
-function displayName(filename) {
-  return filename.replace(/\.cellml$/i, '').replaceAll('_', ' ')
+function displayName(componentFile) {
+  return componentFile.replace(/\.cellml$/i, '').replaceAll('_', ' ')
 }
 
 function configLabel(config) {
@@ -198,13 +198,13 @@ function configLabel(config) {
 
 watch(
   filteredCollections,
-  (files) => {
-    files.forEach((file) => {
-      file.modules.forEach((mod) => {
-        if (selectedConfigs[mod.name] === undefined) selectedConfigs[mod.name] = 0
+  (collections) => {
+    collections.forEach((collection) => {
+      collection.modules.forEach((module) => {
+        if (selectedConfigs[module.name] === undefined) selectedConfigs[module.name] = 0
       })
     })
-    activeCollapseNames.value = filterText.value ? files.map((f) => f.filename) : []
+    activeCollapseNames.value = filterText.value ? collections.map((c) => c.componentFile) : []
   },
   { immediate: true, deep: true }
 )
@@ -213,8 +213,8 @@ watch(
   () => store.availableCollections,
   (currentCollections) => {
     for (const file of currentCollections) {
-      if (!knownFileNames.value.has(file.filename)) {
-        knownFileNames.value.add(file.filename)
+      if (!knownComponentFiles.value.has(file.componentFile)) {
+        knownComponentFiles.value.add(file.componentFile)
       }
     }
   },
@@ -237,11 +237,11 @@ function handleDragEnd() {
 
 // ─── Preview ──────────────────────────────────────────────────────────────────
 
-function openPreview(module, collectionName) {
+function openPreview(module, componentFile) {
   const configIndex = selectedConfigs[module.name] ?? 0
   previewTarget.value = {
     moduleName: module.name,
-    filename: collectionName,
+    componentFile: componentFile,
     configIndex,
     configData: module.configs[configIndex],
   }

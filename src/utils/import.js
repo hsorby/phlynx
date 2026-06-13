@@ -158,7 +158,7 @@ function validateCollectionFileAssociation(config, libraryStore) {
   
   // Find the collection in the library
   const collection = libraryStore.availableCollections.find(
-    f => f.filename === component_file
+    f => f.componentFile === component_file
   )
   
   // Expected file is missing (or provided one is empty)
@@ -209,7 +209,7 @@ export function groupCollectionFileIssues(componentFileIssues) {
     return []
   }
 
-  // key: "filename:issueType"
+  // key: "file:issueType"
   const issuesGrouped = new Map()
   
   componentFileIssues.forEach(issue => {

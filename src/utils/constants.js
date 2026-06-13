@@ -97,7 +97,7 @@ export const GHOST_MODULE_DEFINITION = {
     {
       name: 'Ghost',
       componentType: 'ghost',
-      sourceFile: GHOST_MODULE_FILENAME,
+      componentFile: GHOST_MODULE_FILENAME,
     },
   ],
 }

@@ -350,10 +350,10 @@ const createTemporaryStore = () => {
   // Apply staged config files
   for (const { filename, payload: configs } of stagedFiles.value.configFiles) {
     for (const config of configs) {
-      let collection = availableCollections.find((f) => f.filename === config.component_file)
+      let collection = availableCollections.find((f) => f.componentFile === config.component_file)
       if (!collection) {
         collection = {
-          filename: config.component_file,
+          componentFile: config.component_file,
           modules: [],
           isStub: true,
         }
@@ -429,8 +429,7 @@ const createTemporaryStore = () => {
   return { availableCollections }
 }
 
-const recheckReadiness = () => {
-  const moduleArrayPayload = getModuleArrayPayload()
+const recheckReadiness = (moduleArrayPayload) => {
   if (!moduleArrayPayload) return null
 
   const temporaryStore = createTemporaryStore()
@@ -515,8 +514,7 @@ const handleFileChange = async (uploadFile, field) => {
   try {
     const parsed = await parseFile(field, rawFile)
 
-    // Normalise parser output
-    const data = parsed?.data ?? parsed
+    const data = parsed?.data ?? parsed // SMELLLLLLL
     const warnings = parsed?.completionStatus?.warnings ?? []
 
     state.files.get(filename).payload = data
@@ -532,9 +530,8 @@ const handleFileChange = async (uploadFile, field) => {
 
     // Update readiness and UI ---
     const moduleArrayPayload = getModuleArrayPayload()
-
     if (moduleArrayPayload) {
-      const status = recheckReadiness()
+      const status = recheckReadiness(moduleArrayPayload)
 
       if (status && !status.isComplete) {
         await syncDynamicFields(status)
@@ -605,46 +602,46 @@ function validateCellMLFilename(rawFile) {
   return true
 }
 
-async function stageValidatedFile(field, parsedData, fileName) {
+async function stageValidatedFile(field, parsedData, filename) {
   if (!field.processUpload) return
-
-  const data = parsedData.data || parsedData
+  
+  const data = parsedData
 
   if (field.processUpload === 'cellml') {
     const result = processCellMLData(data)
     if (result.type === 'success') {
       const augmentedModules = result.components?.data.map((item) => ({
         ...item,
-        sourceFile: fileName,
+        componentFile: filename,
       }))
-      stagedFiles.value.componentFiles.push({
-        filename: fileName,
+        stagedFiles.value.componentFiles.push({
+        componentFile: filename,
         payload: {
-          filename: fileName,
+          componentFile: filename,
           modules: augmentedModules,
           model: result.components?.model,
         },
-      })
+      })      
     }
   } else if (field.processUpload === 'config') {
     stagedFiles.value.configFiles.push({
-      filename: fileName,
+      filename: filename,
       payload: data,
     })
   }
 }
 
-function notifyAfterStaging(field, fileName, status) {
+function notifyAfterStaging(field, filename, status) {
   if (!status) return
 
   if (field.processUpload === 'cellml') {
     const componentIssues = status.missingResources?.componentFileIssues ?? []
-    const relevantIssue = componentIssues.find((issue) => issue.file === fileName)
+    const relevantIssue = componentIssues.find((issue) => issue.file === filename)
 
     if (relevantIssue) {
-      let errorMsg = `File "${fileName}" was staged, but has issues.`
+      let errorMsg = `File "${filename}" was staged but has issues.`
       if (relevantIssue.issue === 'component_not_in_file') {
-        errorMsg = `"${fileName}" does not contain the required components: ${relevantIssue.componentTypes.join(', ')}.`
+        errorMsg = `"${filename}" does not contain the required components: ${relevantIssue.componentTypes.join(', ')}.`
       } else if (relevantIssue.issue === 'filename_mismatch') {
         errorMsg = `The components were found, but the file name must be exactly "${relevantIssue.expectedFile}" as defined in your config.`
       }
@@ -656,19 +653,19 @@ function notifyAfterStaging(field, fileName, status) {
     } else if (status.needsComponentFile) {
       notify.warning({
         title: 'Partial Success',
-        message: `"${fileName}" is valid, but additional CellML components are still required.`,
+        message: `"${filename}" is valid, but additional CellML components are still required.`,
       })
     } else {
       notify.success({ 
         title: 'CellML Ready',
-        message: `${fileName} staged successfully.`,
+        message: `${filename} staged successfully.`,
       })
     }
   } else if (field.processUpload === 'config') {
     if (status.needsConfigFile) {
       notify.warning({
         title: 'Config Staged',
-        message: `"${fileName}" added, but more configurations are still missing.`,
+        message: `"${filename}" added, but more configurations are still missing.`,
       })
     } else {
       notify.success({ 

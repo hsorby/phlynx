@@ -211,7 +211,7 @@ function openCellMLEditDialog() {
   emit('open-cellml-editor-dialog', {
     nodeId: props.id,
     name: props.data.name,
-    sourceFile: props.data.sourceFile,
+    componentFile: props.data.componentFile,
     componentType: props.data.componentType,
     configIndex: props.data.configIndex,
   })
@@ -222,7 +222,7 @@ function openEditParameterDialog() {
     nodeId: props.id,
     instanceName: props.data.name,
     componentType: props.data.componentType,
-    sourceFile: props.data.sourceFile,
+    componentFile: props.data.componentFile,
   })
 }
 
@@ -232,7 +232,7 @@ const domainTypeClass = computed(() => {
 
 const isMissingParameters = computed(() => {
   const name = props.data?.name
-  if (!name) return true // If there's no source file, it's "missing" parameters
+  if (!name) return true // If there's no component file, it's "missing" parameters
 
   for (const variable of props.data.variables || []) {
     if (isEditableVariableType(variable.type)) {
@@ -387,7 +387,7 @@ function saveEdit() {
     libraryStore.setParameterValuesForInstance(
       sanitisedName,
       props.data.variables,
-      props.data.sourceFile,
+      props.data.componentFile,
       props.data.componentType,
       props.data.configIndex
     )

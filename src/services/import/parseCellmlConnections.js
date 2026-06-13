@@ -52,14 +52,14 @@ function getOwnedVariables(compElement) {
  * Parse the raw CellML XML string and return structured graph data.
  *
  * @param {string} cellmlContent - Raw XML string
- * @param {string} filename - The filename (used as module_file in configs)
+ * @param {string} filename - The filename (used as component_file in configs)
  * @returns {{
  *   components: string[],
  *   edges: Array<{ source: string, target: string }>,
  *   configs: Array<object>
  * }}
  */
-export function parseCellMLConnections(cellmlContent, filename) {
+export function parseCellMLConnections(cellmlContent, componentFile) {
   const parser = new DOMParser()
   const doc = parser.parseFromString(cellmlContent, 'application/xml')
 
@@ -233,9 +233,9 @@ export function parseCellMLConnections(cellmlContent, filename) {
     }
 
     return {
-      module_file: filename,
-      module_type: compName,
-      module_type: compName,
+      component_file: componentFile,
+      component_type: compName,
+      module_type: compName, // SMELL 
       module_subtype: 'nn',
       entrance_ports: [],
       exit_ports: [],

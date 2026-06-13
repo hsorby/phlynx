@@ -782,20 +782,17 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
   const parameterComponent = new _libcellml.Component()
 
   // --- Helper State ---
-  const modelCache = new Map() // Key: sourceFileName, Value: libcellml.Model
-  const nodeComponentMap = new Map() // Key: NodeID, Value: libcellml.Component
-  const unitsLibraryCache = new Map() // Key: filename, Value: libcellml.Model
-  const unitsImportSourceMap = new Map() // Key: filename, Value: libcellml.ImportSource
+  const modelCache = new Map()            // Key: componentFile,  Value: libcellml.Model
+  const nodeComponentMap = new Map()      // Key: NodeID,         Value: libcellml.Component
+  const unitsLibraryCache = new Map()     // Key: componentFile,  Value: libcellml.Model
+  const unitsImportSourceMap = new Map()  // Key: componentFile,  Value: libcellml.ImportSource
 
   const globalVariables = libraryStore.globalVariables
 
-  // ------------------------------
-  // HELPER: Reusable Unit Importer
-  // ------------------------------
   const ensureUnitImported = (unitsName) => {
     // Safety Checks
     if (!unitsName) return
-    // If it's already in the model (or is a standard unit like 'volt'), skip.
+
     if (model.hasUnitsByName(unitsName) || isStandardUnit(unitsName)) return
 
     // Mask affine units from the validator using the base unit they're offset from
@@ -813,10 +810,9 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
     let found = false
 
     for (const entry of libraryStore.availableUnits) {
-      // Lazy Load: Parse library only if not already cached
+      // Parse library only if not already cached
       if (!unitsLibraryCache.has(entry.filename)) {
         const libModel = parser.parseModel(entry.model)
-        // Check for parse errors (optional but recommended)
         if (parser.errorCount() === 0) {
           unitsLibraryCache.set(entry.filename, libModel)
         } else {
@@ -850,12 +846,10 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
         importedUnits.setImportSource(importSource)
 
         model.addUnits(importedUnits)
-
-        // Cleanup the JS wrapper (C++ object is now owned by 'model')
         importedUnits.delete()
 
         found = true
-        break // Stop searching other libraries
+        break 
       }
     }
 
@@ -885,7 +879,7 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
     // Process Nodes (Create Components)
     // ---------------------------------
     for (const node of nodes) {
-      const fileName = node.data?.sourceFile
+      const fileName = node.data?.componentFile
       const componentType = node.data?.componentType
 
       // Load and cache source model if not already done.
