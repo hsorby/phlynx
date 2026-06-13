@@ -1576,7 +1576,7 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
     // Clean port labels
     const cleanLabels = (node.data.portLabels || []).map((labelObj) => ({
       ...labelObj,
-      option: (labelObj.option || []).filter((opt) =>
+      variables: (labelObj.variables || []).filter((opt) =>
         validPortNames.has(opt)
       ),
     }))
@@ -1732,9 +1732,6 @@ function onEdgeDoubleClick({ edge }) {
 
   if (!sourceNode || !targetNode) return
 
-  // Pass deep-cloned snapshots so the dialog has a stable, non-reactive view
-  // of the node data. Live refs mutated by updateNodeData during confirm would
-  // otherwise change the dialog's bound props mid-flight.
   edgeDialogSubgraph.value = buildEdgeSubgraph(edge)
   edgeDialogSourceNode.value = detachReactivity(sourceNode)
   edgeDialogTargetNode.value = detachReactivity(targetNode)
