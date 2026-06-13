@@ -811,10 +811,10 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
 
     for (const entry of libraryStore.availableUnits) {
       // Parse library only if not already cached
-      if (!unitsLibraryCache.has(entry.filename)) {
+      if (!unitsLibraryCache.has(entry.componentFile)) {
         const libModel = parser.parseModel(entry.model)
         if (parser.errorCount() === 0) {
-          unitsLibraryCache.set(entry.filename, libModel)
+          unitsLibraryCache.set(entry.componentFile, libModel)
         } else {
           libModel.delete()
           handleLoggerErrors(parser, `Parser found ${parser.errorCount()} errors:`)
@@ -822,24 +822,24 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
         }
       }
 
-      const libModel = unitsLibraryCache.get(entry.filename)
+      const libModel = unitsLibraryCache.get(entry.componentFile)
 
       // Check if this library has the unit we need
       if (libModel.hasUnitsByName(unitsName)) {
         // Ensure we have an ImportSource for this file
-        if (!unitsImportSourceMap.has(entry.filename)) {
+        if (!unitsImportSourceMap.has(entry.componentFile)) {
           const importSource = new _libcellml.ImportSource()
-          importSource.setUrl(entry.filename)
+          importSource.setUrl(entry.componentFile)
           importSource.setModel(libModel)
 
           // Register model with importer so it doesn't try to load from disk
-          importer.addModel(libModel, entry.filename)
+          importer.addModel(libModel, entry.componentFile)
 
-          unitsImportSourceMap.set(entry.filename, importSource)
+          unitsImportSourceMap.set(entry.componentFile, importSource)
         }
 
         // Create the Units object in our main model
-        const importSource = unitsImportSourceMap.get(entry.filename)
+        const importSource = unitsImportSourceMap.get(entry.componentFile)
         const importedUnits = new _libcellml.Units()
         importedUnits.setName(unitsName)
         importedUnits.setImportReference(unitsName)

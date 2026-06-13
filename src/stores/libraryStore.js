@@ -385,7 +385,7 @@ export const useLibraryStore = defineStore('library', () => {
           map.set(key, { 
             config, 
             module, 
-            configIndex 
+            configIndex,
             componentFile: collection.componentFile,
           })
         })
