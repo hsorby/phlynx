@@ -256,7 +256,11 @@
     @confirm="onEditConfirm"
   />
 
-  <CellMLEditorDialog v-model="cellMLEditorDialogVisible" :nodeData="currentEditingNode" @save="handleCellMLSave" />
+  <CellMLEditorDialog 
+    v-model="cellMLEditorDialogVisible"
+    :nodeData="currentEditingNode"
+    @save="handleCellMLSave"
+  />
 
   <EditParameterDialog v-model="editParameterDialogVisible" :nodeData="currentEditingNode" />
 
@@ -1469,14 +1473,15 @@ function filterConfig(config, validPortNames, validVariableNames, updatedModule)
  * 3. updating graph nodes to match new ports.
  */
 async function handleCellMLSave(saveData) {
-  const { componentFile, componentType, originalComponentFile, originalComponentName, originalConfigIndex, model } = saveData
 
-  const isRename = originalComponentName !== componentType
+  const { componentFile, componentType, originalComponentFile, originalComponentType, originalConfigIndex, model } = saveData
+
+  const isRename = originalComponentType !== componentType
   const isNewFile = originalComponentFile !== componentFile
   const isForkOrRename = isRename || isNewFile
 
   // Get the original configuration to migrate (if it exists).
-  const originalModule = libraryStore.findModulesByComponentName(originalComponentFile, originalComponentName)
+  const originalModule = libraryStore.findModulesByComponentName(originalComponentFile, originalComponentType)
 
   // Safety check: If we can't find the original, create a blank config
   let configToMigrate = {}
@@ -1548,7 +1553,7 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
     const isMatchingModule =
       updatedData.scope !== 'single' &&
       node.data.componentFile === updatedData.originalComponentFile &&
-      node.data.componentType === updatedData.originalComponentName
+      node.data.componentType === updatedData.originalComponentType
 
     if (!isTargetNode && !isMatchingModule) return
 
@@ -2277,7 +2282,7 @@ const pasteSelection = async (atMouse = false) => {
             componentFile: entry.componentFile,
             model: entry.model,
             modules: [{
-              name: entry.componentType, // SMELL
+              name: entry.componentType, // SMELL - currently duplicate info
               componentType: entry.componentType,
               configs: entry.configs,
             }],
