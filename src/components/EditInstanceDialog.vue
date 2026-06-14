@@ -56,7 +56,7 @@
                 :key="variable.name"
                 :label="variable.name"
                 :value="variable.name"
-                :disabled="isOptionDisabled(variable.name, scope.row.variables)"
+                :disabled="isVariableDisabled(variable.name, scope.row.variables)"
               />
             </el-select>
           </template>
@@ -177,7 +177,7 @@ const emit = defineEmits([
 
 const editableData = reactive({
   name: '',
-  portLabels: [], // Will hold objects like { option: 'var_a', label: 'label_1' }
+  portLabels: [], // Will hold objects like { variable: 'var_a', label: 'label_1' }
 })
 
 const multiportOptions = [
@@ -319,10 +319,10 @@ const usedVariables = computed(() => {
   )
 })
 
-function isOptionDisabled(optionName, currentSelection) {
+function isVariableDisabled(variableName, currentSelection) {
   // Disable if:
   // 1. It's in the usedVariables Set
-  // 2. And it's NOT an option this row already has selected
+  // 2. And it's NOT an variable this row already has selected
 
   // FIXME: Disabling for now as circ auto configs have multiple ports with same variable options, and this logic would prevent that. We can revisit if we want to enforce unique variable options across ports in the future.
   // return (usedVariables.value.has(optionName) && currentSelection.includes(optionName) === false)

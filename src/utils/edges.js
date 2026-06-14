@@ -240,7 +240,7 @@ function groupByTypeAndLabel(portLabels, allowedTypes) {
  * The slotIndex is the position of this portLabel within its (portType, label) group.
  */
 function portKey(nodeId, portLabel) {
-  // The portLabel object itself is unique per slot — we use its option array
+  // The portLabel object itself is unique per slot — we use its variables array
   // serialised as a tiebreaker to distinguish same-label slots on the same node.
-  return `${nodeId}:${portLabel.portType}:${portLabel.label}:${JSON.stringify(portLabel.option ?? [])}`
+  return `${nodeId}:${portLabel.portType}:${portLabel.label}:${JSON.stringify(portLabel.variables ?? [])}`
 }

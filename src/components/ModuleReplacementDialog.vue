@@ -102,8 +102,8 @@ function handleConfirm() {
   const finalPortLabels = retainMatches.value
     ? moduleVariables
         .map((newPort) => {
-          const match = props.portLabels.find((oldPort) => oldPort.option === newPort.name)
-          return match ? { option: newPort.name, label: match.label } : null
+          const match = props.portLabels.find((oldPort) => oldPort.variables === newPort.name)
+          return match ? { variables: newPort.name, label: match.label } : null
         })
         .filter(Boolean)
     : []

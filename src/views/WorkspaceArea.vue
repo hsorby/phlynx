@@ -1576,7 +1576,7 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
     // Clean port labels
     const cleanLabels = (node.data.portLabels || []).map((labelObj) => ({
       ...labelObj,
-      option: (labelObj.option || []).filter((opt) =>
+      variables: (labelObj.variables || []).filter((opt) =>
         validPortNames.has(opt)
       ),
     }))

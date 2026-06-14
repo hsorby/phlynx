@@ -161,7 +161,7 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore) {
 
             const portEntry = {
               port_type: currentPortLabel,
-              variables: info.option || [],
+              variables: info.variables || [],
             }
 
             const allowedValues = ['True', 'Sum']
