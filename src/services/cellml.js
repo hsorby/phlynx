@@ -21,14 +21,12 @@ export async function createCellMLDataFragment(cellmlBlob, fileName) {
   const internalName = fileName ? (fileName.endsWith('.cellml') ? fileName : `${fileName}.cellml`) : 'model.cellml'
   zip.file(internalName, cellmlBlob)
 
-  const sizeInKB1 = (cellmlBlob.size / 1024).toFixed(2)
-
   const zipBlob = await zip.generateAsync({
     type: 'blob',
     compression: 'DEFLATE',
     compressionOptions: { level: 9 },
   })
-  const sizeInKB = (zipBlob.size / 1024).toFixed(2)
+
   const base64String = await blobToBase64(zipBlob)
 
   const dataUri = `data:application/x.vnd.zip-cellml+zip;base64,${base64String}`

@@ -1,9 +1,9 @@
 <template>
-  <el-dialog :model-value="modelValue" title="Edit Module" width="800px" teleported @closed="resetForm"
+  <el-dialog :model-value="modelValue" title="Edit Module Instance" width="800px" teleported @closed="resetForm"
     @update:model-value="closeDialog" @mousedown.stop @wheel.stop>
     <el-form :model="editableData" label-position="left" @submit.prevent="handleConfirm">
-      <el-form-item label="Module Name">
-        <el-input v-model="editableData.name" placeholder="Enter module name" />
+      <el-form-item label="Instance Name">
+        <el-input v-model="editableData.name" placeholder="Enter instance name" />
       </el-form-item>
 
      <el-divider />
@@ -43,7 +43,7 @@
         <el-table-column label="Variable(s)" min-width="150">
           <template #default="scope">
             <el-select
-              v-model="scope.row.option"
+              v-model="scope.row.variables"
               multiple
               collapse-tags
               collapse-tags-tooltip
@@ -52,11 +52,11 @@
               style="width: 100%"
             >
               <el-option
-                v-for="option in props.portOptions"
-                :key="option.name"
-                :label="option.name"
-                :value="option.name"
-                :disabled="isOptionDisabled(option.name, scope.row.option)"
+                v-for="variable in props.variableOptions"
+                :key="variable.name"
+                :label="variable.name"
+                :value="variable.name"
+                :disabled="isVariableDisabled(variable.name, scope.row.variables)"
               />
             </el-select>
           </template>
@@ -140,7 +140,7 @@ import { ElDialog, ElForm, ElFormItem, ElInput, ElButton, ElInputNumber } from '
 import { Delete, Plus } from '@element-plus/icons-vue'
 import { useGtm } from '../composables/useGtm'
 import { notify } from '../utils/notify'
-import { sanitiseModuleName } from '../utils/nodes'
+import { sanitiseName } from '../utils/nodes'
 import { detachReactivity } from '../utils/reactivity'
 
 const props = defineProps({
@@ -152,7 +152,7 @@ const props = defineProps({
     type: String,
     default: '',
   },
-  portOptions: {
+  variableOptions: {
     type: Array,
     default: () => [],
   },
@@ -177,7 +177,7 @@ const emit = defineEmits([
 
 const editableData = reactive({
   name: '',
-  portLabels: [], // Will hold objects like { option: 'var_a', label: 'label_1' }
+  portLabels: [], // Will hold objects like { variable: 'var_a', label: 'label_1' }
 })
 
 const multiportOptions = [
@@ -227,13 +227,13 @@ function closeDialog() {
 
 function handleConfirm() {
   if (!editableData.name || !editableData.name.trim()) {
-    notify.error({ message: 'Module name cannot be empty.' })
+    notify.error({ message: 'Instance name cannot be empty.' })
     return
   }
 
-  const sanitisedName = sanitiseModuleName(editableData.name)
+  const sanitisedName = sanitiseName(editableData.name)
   if (!sanitisedName) {
-    notify.error({ message: 'Module name is not valid.' })
+    notify.error({ message: 'Instance name is invalid.' })
     return
   }
   editableData.name = sanitisedName
@@ -243,17 +243,18 @@ function handleConfirm() {
   )
   
   if (nameExists) {
-    notify.error({ message: 'A module with this name already exists.' })
+    notify.error({ message: 'An instance with this name already exists.' })
     return
   }
 
   const finalPortLabels = editableData.portLabels.filter(
-    (p) => p.option && p.label && p.label.trim()
+    (p) => p.variable && p.label && p.label.trim()
   )
 
   const invalidFactor = finalPortLabels.find(
     (p) => p.multiport === 'Multiply' && (p.multiplyFactor === null || p.multiplyFactor === undefined || p.multiplyFactor === 0)
   )
+  
   if (invalidFactor) {
     notify.error({ message: `Port "${invalidFactor.label}" has Multiply selected but the scale factor is missing or zero.` })
     return
@@ -286,10 +287,10 @@ watch(
 )
 
 watch(
-  () => editableData.portLabels.map(p => p.option),
-  (newOptions) => {
-    newOptions.forEach((opt, i) => {
-      if (opt?.length > 1 && editableData.portLabels[i].multiport === 'Sum') {
+  () => editableData.portLabels.map(p => p.variable),
+  (newVariables) => {
+    newVariables.forEach((varName, i) => {
+      if (varName?.length > 1 && editableData.portLabels[i].multiport === 'Sum') {
         editableData.portLabels[i].multiport = 'None'
       }
     })
@@ -309,29 +310,29 @@ watch(
   { deep: true }
 )
 
-const usedOptions = computed(() => {
+const usedVariables = computed(() => {
   return new Set(
     editableData.portLabels
-      .map((p) => p.option)
+      .map((p) => p.variable)
       .filter(Boolean)
       .flat()
   )
 })
 
-function isOptionDisabled(optionName, currentSelection) {
+function isVariableDisabled(variableName, currentSelection) {
   // Disable if:
-  // 1. It's in the usedOptions Set
-  // 2. And it's NOT an option this row already has selected
+  // 1. It's in the usedVariables Set
+  // 2. And it's NOT an variable this row already has selected
 
   // FIXME: Disabling for now as circ auto configs have multiple ports with same variable options, and this logic would prevent that. We can revisit if we want to enforce unique variable options across ports in the future.
-  // return (usedOptions.value.has(optionName) && currentSelection.includes(optionName) === false)
+  // return (usedVariables.value.has(optionName) && currentSelection.includes(optionName) === false)
   return false
 }
 
 function addPortLabel() {
   editableData.portLabels.push({
     portType: 'general_ports',
-    option: '',
+    variable: '',
     label: '',
     multiport: 'None',
     multiplyFactor: 1,

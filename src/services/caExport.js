@@ -105,10 +105,10 @@ function checkSharedPorts(nodes, edges) {
  * @param {string} fileName - The name for the exported files.
  * @param {Array} nodes - The array of nodes from Vue Flow.
  * @param {Array} edges - The array of edges from Vue Flow.
- * @param {Object} builderStore - The Pinia builder store.
+ * @param {Object} libraryStore - The Pinia builder store.
  * @returns {Promise<Blob>} A promise that resolves with the zip file blob.
  */
-export async function generateExportZip(fileName, nodes, edges, builderStore) {
+export async function generateExportZip(fileName, nodes, edges, libraryStore) {
   try {
     const zip = new JSZip()
 
@@ -121,29 +121,29 @@ export async function generateExportZip(fileName, nodes, edges, builderStore) {
     }
 
     const uniqueModuleConfigs = new Map();
-    let vessel_array = []
+    let module_array = []
     let allParameters = new Set()
 
     // --- 1. PROCESS NODES FOR CONFIG AND TOPOLOGY ---
     for (const node of nodes) {
-      const inp_vessels = []
-      const out_vessels = []
+      const inp_modules = []
+      const out_modules = []
 
       // Identify incoming and outgoing connections
       for (const edge of edges) {
         if (edge.target === node.id) {
           const sourceNodeName = nodeNameMap.get(edge.source)
-          if (sourceNodeName) inp_vessels.push(sourceNodeName)
+          if (sourceNodeName) inp_modules.push(sourceNodeName)
         }
         if (edge.source === node.id) {
           const targetNodeName = nodeNameMap.get(edge.target)
-          if (targetNodeName) out_vessels.push(targetNodeName)
+          if (targetNodeName) out_modules.push(targetNodeName)
         }
       }
 
       // Process Ports
-      const allConnectedVesselNames = new Set([...inp_vessels, ...out_vessels])
-      const connectedNodeObjects = Array.from(allConnectedVesselNames)
+      const allConnectedModuleNames = new Set([...inp_modules, ...out_modules])
+      const connectedNodeObjects = Array.from(allConnectedModuleNames)
         .map((name) => nodeNameObjMap.get(name))
         .filter(Boolean)
 
@@ -161,7 +161,7 @@ export async function generateExportZip(fileName, nodes, edges, builderStore) {
 
             const portEntry = {
               port_type: currentPortLabel,
-              variables: info.option || [],
+              variables: info.variables || [],
             }
 
             const allowedValues = ['True', 'Sum']
@@ -176,7 +176,7 @@ export async function generateExportZip(fileName, nodes, edges, builderStore) {
 
       // --- PARAMETER CLASSIFICATION FOR THIS NODE ---
       let variablesAndUnits = []
-      for (const variable of node.data.portOptions || []) {
+      for (const variable of node.data.variables || []) {
         variablesAndUnits.push([
           variable.name,
           variable.units || 'missing',
@@ -185,20 +185,20 @@ export async function generateExportZip(fileName, nodes, edges, builderStore) {
         ])
       }
 
-      const config = builderStore.getModuleConfigFromConfigIndex(
-        node.data.sourceFile,
-        node.data.componentName,
-        node.data.configIndex
+      const config = libraryStore.findConfigByIndex(
+        node.data.componentFile,
+        node.data.componentType,
+        node.data.configIndex,
       )
 
-      const moduleConfigKey = `${config.vessel_type}|${config.BC_type}`;
+      const moduleConfigKey = `${config.module_type}|${config.module_subtype}`;
       if (!uniqueModuleConfigs.has(moduleConfigKey)) {
         uniqueModuleConfigs.set(moduleConfigKey, {
-          vessel_type: config.vessel_type,
-          BC_type: config.BC_type,
-          module_format: config.module_format,
-          module_file: config.module_file,
           module_type: config.module_type,
+          module_subtype: config.module_subtype,
+          module_format: config.module_format,
+          component_file: config.component_file,
+          component_type: config.component_type,
           entrance_ports: portsByType.entrance_ports || [],
           exit_ports: portsByType.exit_ports || [],
           general_ports: portsByType.general_ports || [],
@@ -206,12 +206,12 @@ export async function generateExportZip(fileName, nodes, edges, builderStore) {
         });
       }
 
-      vessel_array.push({
+      module_array.push({
         name: node.data.name,
-        BC_type: config.BC_type,
-        vessel_type: config.vessel_type,
-        inp_vessels: inp_vessels.join(' '),
-        out_vessels: out_vessels.join(' '),
+        module_subtype: config.module_subtype,
+        module_type: config.module_type,
+        inp_modules: inp_modules.join(' '),
+        out_modules: out_modules.join(' '),
       })
 
       // Collect parameters for this node's module
@@ -231,7 +231,7 @@ export async function generateExportZip(fileName, nodes, edges, builderStore) {
     const module_config = Array.from(uniqueModuleConfigs.values());
 
     // --- 2. CONSOLIDATE PARAMETER FILES INTO ONE CSV ---
-    const globalConstants = builderStore.getGlobalVariables()
+    const globalConstants = libraryStore.globalVariables
 
     for (const variable of globalConstants) {
       allParameters.add(JSON.stringify({
@@ -245,7 +245,7 @@ export async function generateExportZip(fileName, nodes, edges, builderStore) {
 
     // --- 3. FINALIZING AND COMPRESSING ZIP ---
     zip.file(`${fileName}_module_config.json`, JSON.stringify(module_config, null, 2))
-    zip.file(`${fileName}_vessel_array.csv`, Papa.unparse(vessel_array))
+    zip.file(`${fileName}_module_array.csv`, Papa.unparse(module_array))
     zip.file(`${fileName}_parameters.csv`, Papa.unparse(consolidatedParameters))
 
     const zipBlob = await zip.generateAsync({

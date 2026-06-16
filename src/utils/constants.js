@@ -92,12 +92,12 @@ export const MAX_VISIBLE_TAGS = 1
 export const GHOST_NODE_TYPE = 'ghostNode'
 export const GHOST_MODULE_FILENAME = 'ghostModule.cellml'
 export const GHOST_MODULE_DEFINITION = {
-  filename: GHOST_MODULE_FILENAME,
+  collectionName: GHOST_MODULE_FILENAME,
   modules: [
     {
       name: 'Ghost',
-      componentName: 'ghost',
-      sourceFile: GHOST_MODULE_FILENAME,
+      componentType: 'ghost',
+      componentFile: GHOST_MODULE_FILENAME,
     },
   ],
 }
@@ -117,7 +117,7 @@ export const multiportOptions = [
 export const DEFAULT_FILE_NAME = 'phlynx-export'
 
 export const IMPORT_KEYS = {
-  VESSEL: 'vessel',
+  MODULE_ARRAY: 'moduleArray',
   MODULE_CONFIG: 'moduleConfig',
   CELLML_FILE: 'cellMLFile',
   PARAMETER: 'parameter',
@@ -125,7 +125,7 @@ export const IMPORT_KEYS = {
 }
 
 export const IMPORT_LABELS = {
-  VESSEL: 'Vessel Array (.csv)',
+  MODULE_ARRAY: 'Module Array (.csv)',
   MODULE_CONFIG: 'Module Configurations (.json)',
   CELLML_FILE: 'CellML File (.cellml or .xml)',
   PARAMETER: 'Parameters (.csv)',

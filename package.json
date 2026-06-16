@@ -1,6 +1,6 @@
 {
   "name": "phlynx",
-  "description": "A web-based graphical interface for coupling existing CellML modules into a single system model.",
+  "description": "A web-based graphical interface for coupling existing CellML components into a single system model.",
   "author": {
     "name": "Hugh Sorby",
     "email": "h.sorby@auckland.ac.nz"

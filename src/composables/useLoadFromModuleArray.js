@@ -1,7 +1,7 @@
 import { useVueFlow } from '@vue-flow/core'
 import { nextTick, ref } from 'vue'
 
-import { useBuilderStore } from '../stores/builderStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { validateWorkflowModules } from '../services/import/validateWorkflow'
 import { buildWorkflowGraph } from '../services/import/buildWorkflow'
@@ -13,10 +13,10 @@ import { notify } from '../utils/notify'
 import { useGtm } from './useGtm'
 import { useClearWorkspace } from '../utils/workspace' 
 
-export function useLoadFromVesselArray() {
+export function useLoadFromModuleArray() {
   const { nodes, edges, addNodes, addEdges, setViewport, onNodesInitialized, fitView, updateNodeInternals } =
     useVueFlow()
-  const store = useBuilderStore()
+  const store = useLibraryStore()
   const historyStore = useFlowHistoryStore()
   const { trackEvent } = useGtm()
   const { clearWorkspace } = useClearWorkspace()
@@ -28,33 +28,33 @@ export function useLoadFromVesselArray() {
   let layoutCompleteResolve = null
   let layoutCompleteReject = null
 
-  const loadFromVesselArray = async (configData, progressCallback = null) => {
+  const loadFromModuleArray = async (configData, progressCallback = null) => {
     try {
       await clearWorkspace()
 
       pendingProgressCallback = progressCallback
 
       if (progressCallback) {
-        progressCallback(0, configData.vessels.length, 'Building graph...')
+        progressCallback(0, configData.modules.length, 'Building graph...')
       }
 
-      const result = buildWorkflowGraph(store, configData.vessels, progressCallback)
+      const result = buildWorkflowGraph(store, configData.modules, progressCallback)
 
       pendingEdges = result.edges
       pendingNodeDataMap.clear()
       result.nodes.forEach((n) => {
-        store.setVariableParameterValuesForInstance(
+        store.setParameterValuesForInstance(
           n.data.name,
           n.data.variables,
-          n.data.sourceFile,
-          n.data.componentName,
+          n.data.componentFile,
+          n.data.componentType,
           n.data.configIndex
         )
         pendingNodeDataMap.set(n.id, n.data)
       })
 
       if (progressCallback) {
-        progressCallback(configData.vessels.length, configData.vessels.length, 'Graph built, calculating layout...')
+        progressCallback(configData.modules.length, configData.modules.length, 'Graph built, calculating layout...')
       }
 
       // Create a promise that will resolve when layout is complete
@@ -71,16 +71,16 @@ export function useLoadFromVesselArray() {
 
       trackEvent('workflow_load_action', {
         category: 'Workflow',
-        action: 'load_from_vessel_array',
-        label: `Vessels: ${configData.vessels.length}`,
-        file_type: 'vessel_array',
+        action: 'load_from_module_array',
+        label: `Modules: ${configData.modules.length}`,
+        file_type: 'module_array',
       })
     } catch (error) {
       trackEvent('workflow_load_action', {
         category: 'Workflow',
-        action: 'load_from_vessel_array',
+        action: 'load_from_module_array',
         label: `Error: ${error.message}`,
-        file_type: 'vessel_array',
+        file_type: 'module_array',
       })
       notify.error({ message: `Failed to load workflow: ${error.message}` })
       layoutPending.value = false
@@ -99,7 +99,7 @@ export function useLoadFromVesselArray() {
     const rejectFunc = layoutCompleteReject
 
     try {
-      // If position is not declared in vessel array file,
+      // If position is not declared in module array file,
       // Run Layout (Calculates positions & sorts port arrays).
       // Could make this choice configurable later.
       if (callback) {
@@ -162,5 +162,5 @@ export function useLoadFromVesselArray() {
     }
   })
 
-  return { loadFromVesselArray }
+  return { loadFromModuleArray }
 }

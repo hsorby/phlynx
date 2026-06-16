@@ -154,7 +154,7 @@
     <el-container style="flex-grow: 1; min-height: 0">
       <el-aside :width="asideWidth + 'px'" class="module-aside">
         <h4 style="margin-top: 0">Available Modules</h4>
-        <ModuleList />
+        <LibraryArea />
       </el-aside>
 
       <div class="resize-handle" @mousedown="startResize">
@@ -223,8 +223,8 @@
                 <CameraFilled />
               </ControlButton>
             </Controls>
-            <template #node-moduleNode="props">
-              <ModuleNode
+            <template #node-instanceNode="props">
+              <InstanceNode
                 :id="props.id"
                 :data="props.data"
                 :selected="props.selected"
@@ -246,35 +246,39 @@
     </el-container>
   </el-container>
 
-  <EditModuleDialog
+  <EditInstanceDialog
     v-model="editDialogVisible"
     :initial-name="currentEditingNode.name"
+    :variable-options="currentEditingNode?.variables || []"
+    :initial-port-labels="currentEditingNode?.portLabels || []"
     :node-id="currentEditingNode.nodeId"
     :existing-names="allNodeNames"
-    :port-options="currentEditingNode?.portOptions || []"
-    :initial-port-labels="currentEditingNode?.portLabels || []"
     @confirm="onEditConfirm"
   />
 
-  <CellMLEditorDialog v-model="cellMLEditorDialogVisible" :nodeData="currentEditingNode" @save="handleCellMLSave" />
+  <CellMLEditorDialog 
+    v-model="cellMLEditorDialogVisible"
+    :nodeData="currentEditingNode"
+    @save="handleCellMLSave"
+  />
 
   <EditParameterDialog v-model="editParameterDialogVisible" :nodeData="currentEditingNode" />
 
-  <SaveDialog v-model="saveDialogVisible" @confirm="onSaveConfirm" :default-name="builderStore.lastSaveName" />
+  <SaveDialog v-model="saveDialogVisible" @confirm="onSaveConfirm" :default-name="libraryStore.lastSaveName" />
 
   <SaveDialog
     v-model="exportDialogVisible"
     @confirm="onExportConfirm"
     :title="`Export for ${currentExportMode.label}`"
-    :default-name="builderStore.lastExportName"
+    :default-name="libraryStore.lastExportName"
     :suffix="currentExportMode.suffix"
   />
 
   <ModuleReplacementDialog
     v-model="replacementDialogVisible"
-    :modules="builderStore.availableModules"
+    :modules="libraryStore.availableModules"
     :node-id="currentEditingNode.nodeId"
-    :port-options="currentEditingNode?.portOptions || []"
+    :variables="currentEditingNode?.variables || []"
     :port-labels="currentEditingNode?.portLabels || []"
     @confirm="onReplaceConfirm"
   />
@@ -309,7 +313,7 @@
 // This is to help when building a production build with minification
 // for the Keep-Alive functionality.
 export default {
-  name: 'BuilderView',
+  name: 'WorkspaceArea',
 }
 </script>
 
@@ -322,7 +326,7 @@ import {
   Search,
   ArrowUp,
   ArrowDown,
-  Menu as IconVessel,
+  Menu as IconModuleArray,
   Operation as IconParameters,
   Setting as IconModuleConfig,
 } from '@element-plus/icons-vue'
@@ -332,18 +336,18 @@ import CellMLIcon from '../components/icons/CellMLIcon.vue'
 import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 
-import { useBuilderStore } from '../stores/builderStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import useDragAndDrop from '../composables/useDnD'
-import { useLoadFromVesselArray } from '../composables/useLoadFromVesselArray'
+import { useLoadFromModuleArray } from '../composables/useLoadFromModuleArray'
 import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
 import { useResizableAside } from '../composables/useResizableAside'
 import { useGtm } from '../composables/useGtm'
-import ModuleList from '../components/ModuleList.vue'
+import LibraryArea from '../components/LibraryArea.vue'
 import Workbench from '../components/WorkbenchArea.vue'
-import ModuleNode from '../components/ModuleNode.vue'
-import EditModuleDialog from '../components/EditModuleDialog.vue'
+import InstanceNode from '../components/InstanceNode.vue'
+import EditInstanceDialog from '../components/EditInstanceDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
 import SaveDialog from '../components/SaveDialog.vue'
@@ -361,7 +365,7 @@ import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
 import { relayoutNodes } from '../services/layouts/physics'
-import { generateFlattenedModel, initLibCellML, processCellMLData, extractVariablesFromModule, createEditableModelFromSourceModelAndComponent } from '../utils/cellml'
+import { generateFlattenedModel, initLibCellML, processCellMLData, extractVariablesFromComponent, createEditableModelFromSourceModelAndComponent } from '../utils/cellml'
 import {
   edgeLineOptions,
   CELLML_FILE_TYPES,
@@ -372,7 +376,7 @@ import {
   ZIP_FILE_TYPES,
   DEFAULT_FILE_NAME,
 } from '../utils/constants'
-import { getId as getNextNodeId, generateUniqueModuleName } from '../utils/nodes'
+import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId } from '../utils/edges'
 import { getImportConfig, parseParametersFile } from '../utils/import'
 import { detachReactivity } from '../utils/reactivity'
@@ -386,11 +390,6 @@ import {
 } from '../utils/save'
 import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import EditParameterDialog from '../components/EditParameterDialog.vue'
-
-// import testModuleBGContent from '../assets/bg_modules.cellml?raw'
-// import testModuleColonContent from '../assets/colon_FTU_modules.cellml?raw'
-// import testModuleNewColonContent from '../assets/colon_FTU_modules_new.cellml?raw'
-// import testParamertersCSV from '../assets/colon_FTU_parameters.csv?raw'
 
 const {
   addEdges,
@@ -420,7 +419,7 @@ const { processMacroGeneration } = useMacroGenerator()
 
 const pendingHistoryNodes = new Set()
 
-const { onDragOver: onDragOverModule, onDrop: onDropModule, onDragLeave, isDragOver, createModuleNode } = useDragAndDrop(pendingHistoryNodes)
+const { onDragOver: onDragOverModule, onDrop: onDropModule, onDragLeave, isDragOver, createInstanceNode } = useDragAndDrop(pendingHistoryNodes)
 
 /**
  * Shared multi-file notification helper.
@@ -622,7 +621,7 @@ const onDrop = async (event) => {
 }
 
 const historyStore = useFlowHistoryStore()
-const { loadFromVesselArray } = useLoadFromVesselArray()
+const { loadFromModuleArray } = useLoadFromModuleArray()
 const { loadFromCellML } = useLoadFromCellML()
 const { capture } = useScreenshot()
 const { trackEvent } = useGtm()
@@ -633,7 +632,7 @@ const helperLineVertical = ref(null)
 const alignment = ref('edge')
 const importDropdownRef = ref(null)
 
-const builderStore = useBuilderStore()
+const libraryStore = useLibraryStore()
 
 const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
@@ -683,9 +682,9 @@ const somethingAvailable = computed(() => nodes.value.length > 0)
 
 const importOptions = computed(() => [
   {
-    key: IMPORT_KEYS.VESSEL,
-    label: 'Vessel Array',
-    icon: markRaw(IconVessel),
+    key: IMPORT_KEYS.MODULE_ARRAY,
+    label: 'Module Array',
+    icon: markRaw(IconModuleArray),
     disabled: false,
   },
   {
@@ -720,11 +719,12 @@ const exportOptions = computed(() => [
   {
     key: EXPORT_KEYS.CA,
     label: 'Circulatory Autogen',
-    icon: markRaw(IconVessel),
+    icon: markRaw(IconModuleArray),
     disabled: !somethingAvailable.value,
     suffix: '.zip',
   },
 ])
+
 const cellMlExportTooltip = computed(() => {
   const prefix = 'The CellML export option is disabled because '
   if (libcellml.status !== 'ready') {
@@ -754,7 +754,7 @@ onConnect((connection) => {
   //                 (i.e. this is the Nth output being connected)
   //   targetIndex = how many edges already arrive at this target node
   //                 (i.e. this is the Nth input being connected)
-  // These mirror the positional semantics of out_vessels / inp_vessels.
+  // These mirror the positional semantics of out_modules / inp_modules.
   const sourceIndex = edges.value.filter((e) => e.source === connection.source).length
   const targetIndex = edges.value.filter((e) => e.target === connection.target).length
 
@@ -819,12 +819,12 @@ const handleSearchInput = () => {
 
   nodes.value.forEach((node) => {
     // Search in all relevant name fields
-    const componentName = node.data?.componentName?.toLowerCase() || ''
+    const componentType = node.data?.componentType?.toLowerCase() || ''
     const name = node.data?.name?.toLowerCase() || ''
     const label = node.data?.label?.toLowerCase() || ''
-    const sourceFile = node.data?.sourceFile?.toLowerCase() || ''
+    const componentFile = node.data?.componentFile?.toLowerCase() || ''
 
-    if (componentName.includes(query) || name.includes(query) || label.includes(query) || sourceFile.includes(query)) {
+    if (componentType.includes(query) || name.includes(query) || label.includes(query) || componentFile.includes(query)) {
       matches.add(node.id)
     }
   })
@@ -1141,12 +1141,12 @@ const screenshotDisabled = computed(() => nodes.value.length === 0 && vueFlowRef
 
 function updateNodesWithNewParameters() {
   nodes.value.forEach((node) => {
-    if (node.type === 'moduleNode') {
-      builderStore.setVariableParameterValuesForInstance(
+    if (node.type === 'instanceNode') {
+      libraryStore.setParameterValuesForInstance(
         node.data.name,
         node.data.variables,
-        node.data.sourceFile,
-        node.data.componentName,
+        node.data.componentFile,
+        node.data.componentType,
         node.data.configIndex
       )
       updateNodeData(node.id, { variables: node.data.variables })
@@ -1154,23 +1154,23 @@ function updateNodesWithNewParameters() {
   })
 }
 
-const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackEvents = true } = {}) => {
+const loadCellMLData = (content, componentFile, { notify: shouldNotify = true, trackEvents = true } = {}) => {
   return new Promise((resolve) => {
     const result = processCellMLData(content)
 
     if (result.type === 'success') {
-      const moduleCount = result.components.data.length
+      const componentCount = result.components.data.length
       const unitCount = result.units.count
 
       // Register components (modules) with the store
-      if (moduleCount > 0) {
+      if (componentCount > 0) {
         const modules = result.components.data.map((item) => ({
           ...item,
-          sourceFile: filename,
+          componentFile: componentFile,
         }))
       
-        builderStore.addModuleFile({
-          filename,
+        libraryStore.addOrUpdateCollection({
+          componentFile: componentFile,
           modules: modules,
           model: result.components.model,
         })
@@ -1178,8 +1178,8 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
 
       // Register units with the store
       if (unitCount > 0) {
-        builderStore.addUnitsFile({
-          filename,
+        libraryStore.addUnitsFile({
+          componentFile: componentFile,
           model: result.units.model,
         })
       }
@@ -1194,30 +1194,30 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
       }
 
       if (shouldNotify) {
-        if (moduleCount > 0 && unitCount > 0) {
+        if (componentCount > 0 && unitCount > 0) {
           notify.success({
             title: 'CellML File Loaded',
-            message: `Loaded ${moduleCount} module${moduleCount !== 1 ? 's' : ''} and ${unitCount} unit${unitCount !== 1 ? 's' : ''} from ${filename}.`,
+            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} and ${unitCount} unit${unitCount !== 1 ? 's' : ''} from ${componentFile}.`,
           })
-        } else if (moduleCount > 0) {
+        } else if (componentCount > 0) {
           notify.success({
-            title: 'CellML Modules Loaded',
-            message: `Loaded ${moduleCount} module${moduleCount !== 1 ? 's' : ''} from ${filename}.`,
+            title: 'CellML Components Loaded',
+            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} from ${componentFile}.`,
           })
         } else if (unitCount > 0) {
           notify.success({
             title: 'CellML Units Loaded',
-            message: `Loaded ${unitCount} unit${unitCount !== 1 ? 's' : ''} from ${filename}.`,
+            message: `Loaded ${unitCount} unit${unitCount !== 1 ? 's' : ''} from ${componentFile}.`,
           })
         } else {
           notify.info({
             title: 'CellML File Loaded',
-            message: `${filename} contained no modules or unit definitions.`,
+            message: `${componentFile} contained no components or unit definitions.`,
           })
         }
       }
 
-      resolve({ ok: true, moduleCount: result.components.data.length, unitCount: result.units.count })
+      resolve({ ok: true, componentCount: componentCount, unitCount: unitCount })
     } else {
       if (trackEvents) {
         trackEvent('cellml_load_action', {
@@ -1230,18 +1230,18 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
       if (shouldNotify) {
         notify.error({
           title: 'CellML Load Error',
-          message: `${result.issues.length} issue${result.issues.length !== 1 ? 's' : ''} found in ${filename}.`,
+          message: `${result.issues.length} issue${result.issues.length !== 1 ? 's' : ''} found in ${componentFile}.`,
         })
       }
       console.error('CellML import issues:', result.issues)
-      resolve({ ok: false, moduleCount: 0, unitCount: 0 })
+      resolve({ ok: false, componentCount: 0, unitCount: 0 })
     }
   })
 }
 
 const loadParametersData = async (content, filename, { notify: shouldNotify = true, trackEvents = true } = {}) => {
   try {
-    const added = builderStore.addParameterFile(filename, content)
+    const added = libraryStore.addParameterFile(filename, content)
 
     if (shouldNotify && added) {
       if (trackEvents) {
@@ -1284,7 +1284,7 @@ const loadParametersData = async (content, filename, { notify: shouldNotify = tr
 
 const loadConfigData = async (content, filename, { notify: shouldNotify = true } = {}) => {
   try {
-    const added = builderStore.addConfigFile(content, filename)
+    const added = libraryStore.addConfigFile(filename, content)
     if (shouldNotify && added > 0) {
       notify.success({
         title: 'Configurations Loaded',
@@ -1326,22 +1326,22 @@ const handleImportCommand = (option) => {
 }
 
 async function onImportConfirm(importPayload, updateProgress) {
-  if (currentImportMode.value.key === IMPORT_KEYS.VESSEL) {
+  if (currentImportMode.value.key === IMPORT_KEYS.MODULE_ARRAY) {
     const [[, data]] = importPayload
-    const vessels = data.payload
+    const modules = data.payload
 
-    if (!vessels || vessels.length === 0) {
+    if (!modules || modules.length === 0) {
       notify.warning({
         title: 'Import Aborted',
-        message: 'No vessel data provided',
+        message: 'No module data provided',
       })
       return
     }
 
     try {
-      await loadFromVesselArray({ vessels }, (current, total, statusMessage) => {
+      await loadFromModuleArray({ modules }, (current, total, statusMessage) => {
         if (updateProgress) {
-          updateProgress(`${statusMessage || 'Loading vessel array...'} (${current}/${total})`)
+          updateProgress(`${statusMessage || 'Loading module array...'} (${current}/${total})`)
         }
       })
       rebuildNodeEdgeIndex()
@@ -1391,7 +1391,7 @@ async function onImportConfirm(importPayload, updateProgress) {
 const performExport = async () => {
   currentExportKey.value = currentExportMode.value.key
   
-  const baseName = builderStore.lastExportName || DEFAULT_FILE_NAME
+  const baseName = libraryStore.lastExportName || DEFAULT_FILE_NAME
   const fileTypes = currentExportKey.value === EXPORT_KEYS.CELLML 
     ? CELLML_FILE_TYPES 
     : ZIP_FILE_TYPES
@@ -1473,14 +1473,15 @@ function filterConfig(config, validPortNames, validVariableNames, updatedModule)
  * 3. updating graph nodes to match new ports.
  */
 async function handleCellMLSave(saveData) {
-  const { sourceFile, componentName, originalSourceFile, originalComponentName, originalConfigIndex, code } = saveData
 
-  const isRename = originalComponentName !== componentName
-  const isNewFile = originalSourceFile !== sourceFile
+  const { componentFile, componentType, originalComponentFile, originalComponentType, originalConfigIndex, model } = saveData
+
+  const isRename = originalComponentType !== componentType
+  const isNewFile = originalComponentFile !== componentFile
   const isForkOrRename = isRename || isNewFile
 
   // Get the original configuration to migrate (if it exists).
-  const originalModule = builderStore.getModulesModule(originalSourceFile, originalComponentName)
+  const originalModule = libraryStore.findModulesByComponentName(originalComponentFile, originalComponentType)
 
   // Safety check: If we can't find the original, create a blank config
   let configToMigrate = {}
@@ -1489,14 +1490,14 @@ async function handleCellMLSave(saveData) {
   }
 
   // Load the New Data into the Store
-  // This registers the module under the name found in 'code'.
-  await loadCellMLData(code, sourceFile, { notify: false })
+  // This registers the module under the name found in 'model'.
+  await loadCellMLData(model, componentFile, { notify: false })
 
   // Retrieve the "Target" Module (The one we just loaded)
-  let targetModule = builderStore.getModulesModule(sourceFile, componentName)
+  let targetModule = libraryStore.findModulesByComponentName(componentFile, componentType)
 
   if (!targetModule) {
-    console.warn(`Mismatch: Requested ${componentName}, but store didn't register it. Check component name extraction.`)
+    console.warn(`Mismatch: Requested ${componentType}, but store didn't register it. Check component name extraction.`)
     return
   }
 
@@ -1509,8 +1510,8 @@ async function handleCellMLSave(saveData) {
     // CASE A: Fork or Rename -> We add a NEW config entry.
 
     // Update metadata to match new home.
-    configToMigrate.module_file = sourceFile
-    configToMigrate.module_type = componentName
+    configToMigrate.component_file = componentFile
+    configToMigrate.component_type = componentType
 
     // Push as a new config.
     targetModule.configs.push(configToMigrate)
@@ -1538,7 +1539,7 @@ async function handleCellMLSave(saveData) {
  */
 function updateGraphNodesAndPorts(updatedData, updatedModule) {
   const validPortNames = new Set(
-    updatedModule?.portOptions?.map((p) => p.name) || []
+    updatedModule?.portLabels?.map((p) => p.name) || [] // not sure if portlabels or portoptions (e.g. variables)
   )
 
   const updatedModuleVariableMap = new Map(
@@ -1551,8 +1552,8 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
     const isTargetNode = node.id === updatedData.nodeId
     const isMatchingModule =
       updatedData.scope !== 'single' &&
-      node.data.sourceFile === updatedData.originalSourceFile &&
-      node.data.componentName === updatedData.originalComponentName
+      node.data.componentFile === updatedData.originalComponentFile &&
+      node.data.componentType === updatedData.originalComponentType
 
     if (!isTargetNode && !isMatchingModule) return
 
@@ -1580,30 +1581,32 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
     // Clean port labels
     const cleanLabels = (node.data.portLabels || []).map((labelObj) => ({
       ...labelObj,
-      option: (labelObj.option || []).filter((opt) =>
+      variables: (labelObj.variables || []).filter((opt) =>
         validPortNames.has(opt)
       ),
     }))
 
     const newData = {
       ...detachReactivity(node.data),
-      componentName: updatedData.componentName,
-      sourceFile: updatedData.sourceFile,
-      label: `${updatedData.componentName} — ${updatedData.sourceFile}`,
+      componentType: updatedData.componentType,
+      componentFile: updatedData.componentFile,
+      label: `${updatedData.componentType} — ${updatedData.componentFile}`,
       portLabels: cleanLabels,
-      portOptions: updatedModule?.portOptions || [],
       variables: cleanVariables,
     }
 
     updatedCount++
     updateNodeData(node.id, newData)
+    // Recompute couplings now that this node's portLabels have changed.
+    // findNode will return the updated data because updateNodeData is synchronous.
+    recomputeEdgeCouplings(node.id)
   })
 
   notify.success({
     title: 'Module Updated',
     message: `Updated ${updatedCount} node${
       updatedCount !== 1 ? 's' : ''
-    } to ${updatedData.componentName}.`,
+    } to ${updatedData.componentType}.`,
   })
 
   return validPortNames
@@ -1611,6 +1614,58 @@ function updateGraphNodesAndPorts(updatedData, updatedModule) {
 
 function onOpenMacroBuilderDialog() {
   macroBuilderDialogVisible.value = true
+}
+
+/**
+ * Recomputes couplings on every edge touching a given node, using the node's
+ * current portLabels. Call this after any operation that changes portLabels on
+ * one or more nodes (CellML save, rename, in-place replace, port label edit).
+ *
+ * Ordinal indices are derived from each edge's position in the filtered list,
+ * not from a count of other edges, so repeated same-label slots resolve correctly.
+ */
+function recomputeEdgeCouplings(nodeId) {
+  const outgoing = edges.value.filter((e) => e.source === nodeId)
+  outgoing.forEach((edge) => {
+    const sourceNode = findNode(edge.source)
+    const targetNode = findNode(edge.target)
+    if (!sourceNode || !targetNode) return
+
+    const sourceIndex = outgoing.indexOf(edge)
+    const edgesIntoTarget = edges.value.filter((e) => e.target === edge.target)
+    const targetIndex = edgesIntoTarget.indexOf(edge)
+
+    edge.data = {
+      ...edge.data,
+      couplings: resolvePortCouplings(
+        sourceNode.data.portLabels ?? [],
+        targetNode.data.portLabels ?? [],
+        sourceIndex,
+        targetIndex
+      ),
+    }
+  })
+
+  const incoming = edges.value.filter((e) => e.target === nodeId)
+  incoming.forEach((edge) => {
+    const sourceNode = findNode(edge.source)
+    const targetNode = findNode(edge.target)
+    if (!sourceNode || !targetNode) return
+
+    const edgesFromSource = edges.value.filter((e) => e.source === edge.source)
+    const sourceIndex = edgesFromSource.indexOf(edge)
+    const targetIndex = incoming.indexOf(edge)
+
+    edge.data = {
+      ...edge.data,
+      couplings: resolvePortCouplings(
+        sourceNode.data.portLabels ?? [],
+        targetNode.data.portLabels ?? [],
+        sourceIndex,
+        targetIndex
+      ),
+    }
+  })
 }
 
 async function onEditConfirm(updatedData) {
@@ -1622,40 +1677,7 @@ async function onEditConfirm(updatedData) {
 
   updateNodeData(nodeId, updatedData)
 
-  // Recompute couplings on every edge connected to this node
-  const updatedPortLabels = updatedData.portLabels ?? []
-
-  const outgoing = edges.value.filter((e) => e.source === nodeId)
-  outgoing.forEach((edge, sourceIndex) => {
-    const targetNode = findNode(edge.target)
-    if (!targetNode) return
-    const targetIndex = edges.value.filter((e) => e.target === edge.target && e !== edge).length
-    edge.data = {
-      ...edge.data,
-      couplings: resolvePortCouplings(
-        updatedPortLabels,
-        targetNode.data.portLabels ?? [],
-        sourceIndex,
-        targetIndex
-      ),
-    }
-  })
-
-  const incoming = edges.value.filter((e) => e.target === nodeId)
-  incoming.forEach((edge, targetIndex) => {
-    const sourceNode = findNode(edge.source)
-    if (!sourceNode) return
-    const sourceIndex = edges.value.filter((e) => e.source === edge.source && e !== edge).length
-    edge.data = {
-      ...edge.data,
-      couplings: resolvePortCouplings(
-        sourceNode.data.portLabels ?? [],
-        updatedPortLabels,
-        sourceIndex,
-        targetIndex
-      ),
-    }
-  })
+  recomputeEdgeCouplings(nodeId)
 }
 
 const nodeRefs = ref({})
@@ -1737,9 +1759,6 @@ function onEdgeDoubleClick({ edge }) {
 
   if (!sourceNode || !targetNode) return
 
-  // Pass deep-cloned snapshots so the dialog has a stable, non-reactive view
-  // of the node data. Live refs mutated by updateNodeData during confirm would
-  // otherwise change the dialog's bound props mid-flight.
   edgeDialogSubgraph.value = buildEdgeSubgraph(edge)
   edgeDialogSourceNode.value = detachReactivity(sourceNode)
   edgeDialogTargetNode.value = detachReactivity(targetNode)
@@ -1782,8 +1801,8 @@ async function onReplaceConfirm(updatedData) {
   const { nodeId, instanceId } = currentEditingNode.value 
   if (!nodeId) return
 
-  const compLabel = updatedData.componentName
-  const filePart = updatedData.sourceFile
+  const compLabel = updatedData.componentType
+  const filePart = updatedData.componentFile
   updatedData.label = filePart ? `${compLabel} — ${filePart}` : compLabel
 
   const targetInstance = instanceId || FLOW_IDS.MAIN    
@@ -1831,7 +1850,7 @@ function onNodeContextMenu({ clientX, clientY, nodeId }) {
           nodeId,
           nodeData: node.data,
           name: node.data.name,
-          portOptions: node.data.portOptions,
+          variables: node.data.variables,
           portLabels: node.data.portLabels,
         })
       },
@@ -1841,9 +1860,9 @@ function onNodeContextMenu({ clientX, clientY, nodeId }) {
 }
 
 function createNewModuleAtPosition(clientX, clientY) {
-  const allModules = builderStore.availableModules
-  const moduleFile = allModules.find((f) => f.modules?.some((m) => m.componentName === 'new_module'))
-  const moduleEntry = moduleFile?.modules?.find((m) => m.componentName === 'new_module')
+  const allModules = libraryStore.availableCollections
+  const moduleFile = allModules.find((f) => f.modules?.some((m) => m.componentType === 'new_module'))
+  const moduleEntry = moduleFile?.modules?.find((m) => m.componentType === 'new_module')
 
   if (!moduleEntry) {
     notify.warning({ title: 'Module Not Found', message: 'new_module is not available.' })
@@ -1852,16 +1871,16 @@ function createNewModuleAtPosition(clientX, clientY) {
 
   const moduleData = {
     name: moduleEntry.name,
-    componentName: moduleEntry.componentName,
-    sourceFile: moduleFile.filename,
+    componentType: moduleEntry.componentType,
+    componentFile: moduleFile.componentFile,
     configs: moduleEntry.configs || null,
     configIndex: 0,
     ports: moduleEntry.ports || [],
-    portOptions: moduleEntry.portOptions || [],
+    variables: moduleEntry.variables || [],
   }
 
   const position = screenToFlowCoordinate({ x: clientX, y: clientY })
-  createModuleNode(moduleData, position)
+  createInstanceNode(moduleData, position)
 }
 
 function handleAutoLayout() {
@@ -1869,14 +1888,14 @@ function handleAutoLayout() {
 }
 
 async function handleSaveWorkspace() {
-  const safeName = ensureExtension(builderStore.lastSaveName, '.json')
+  const safeName = ensureExtension(libraryStore.lastSaveName, '.json')
   const result = await saveFileHandle(safeName, JSON_FILE_TYPES)
   if (result.status) {
     if (result.handle) {
       const blob = createSaveBlob()
       try {
         writeFileHandle(result.handle, blob)
-        builderStore.setLastSaveName(result.handle.name)
+        libraryStore.setLastSaveName(result.handle.name)
         trackEvent('save_action', {
           category: 'Save',
           action: 'save_workflow',
@@ -1920,11 +1939,11 @@ async function onExportConfirm(fileName, handle) {
   })
 
   try {
-    const finalName = fileName || builderStore.lastExportName || DEFAULT_FILE_NAME
+    const finalName = fileName || libraryStore.lastExportName || DEFAULT_FILE_NAME
     
     const blob = caExport
-      ? await generateExportZip(finalName, nodes.value, edges.value, builderStore)
-      : generateFlattenedModel(nodes.value, edges.value, builderStore)
+      ? await generateExportZip(finalName, nodes.value, edges.value, libraryStore)
+      : generateFlattenedModel(nodes.value, edges.value, libraryStore)
     
     const result = await saveWithDialog(
       blob, 
@@ -1933,7 +1952,7 @@ async function onExportConfirm(fileName, handle) {
       currentExportMode.value.suffix
     )
     
-    builderStore.setLastExportName(result.savedName)
+    libraryStore.setLastExportName(result.savedName)
     
     notification.close()
 
@@ -2038,7 +2057,7 @@ function recomputeMissingCouplings() {
 function createSaveBlob() {
   const saveState = {
     flow: toObject(),
-    store: builderStore.getState(),
+    store: libraryStore.getState(),
   }
 
   const jsonString = JSON.stringify(saveState, null, 2)
@@ -2049,14 +2068,24 @@ function createSaveBlob() {
  * Collects all state and downloads it as a JSON file.
  */
 const onSaveConfirm = async (fileName) => {
-  const baseName = fileName || builderStore.lastSaveName || DEFAULT_FILE_NAME
+  const baseName = fileName || libraryStore.lastSaveName || DEFAULT_FILE_NAME
   const finalName = ensureExtension(baseName, '.json')
   const blob = createSaveBlob()
 
   legacyDownload(finalName, blob)
 
-  builderStore.setLastSaveName(fileName)
+  libraryStore.setLastSaveName(fileName)
   notify.success({ title: 'Workflow saved!' })
+}
+
+function migrateWorkspace(flow) {
+  if (!flow?.nodes) return flow
+  return {
+    ...flow,
+    nodes: flow.nodes.map((node) =>
+      node.type === 'moduleNode' ? { ...node, type: 'instanceNode' } : node
+    ),
+  }
 }
 
 /**
@@ -2069,7 +2098,7 @@ function handleLoadWorkspace(file) {
   reader.onload = async (e) => {
     try {
       const loadedState = JSON.parse(e.target.result)
-
+    
       // Validate the loaded file
       if (!loadedState.flow || !loadedState.store) {
         throw new Error('Invalid workflow file format.')
@@ -2082,9 +2111,8 @@ function handleLoadWorkspace(file) {
       // We use `setViewport` to apply zoom/pan.
       setViewport(loadedState.flow.viewport)
       // We directly set the reactive refs.
-      fromObject(loadedState.flow)
-      // nodes.value = loadedState.flow.nodes
-      // edges.value = loadedState.flow.edges
+      const migrated = migrateWorkspace(loadedState.flow)
+      fromObject(migrated)
 
       // Rebuild the edge index so the EdgeConnectionDialog subgraph is correct.
       rebuildNodeEdgeIndex()
@@ -2095,7 +2123,7 @@ function handleLoadWorkspace(file) {
       recomputeMissingCouplings()
 
       // Restore Pinia store state.
-      builderStore.loadState(loadedState.store)
+      libraryStore.loadState(loadedState.store)
 
       trackEvent('workflow_load_action', {
         category: 'Workflow',
@@ -2165,41 +2193,40 @@ const copySelection = async () => {
   
   const storeSnapshot = {}
   for (const node of nodes) {
-    const { sourceFile, componentName, configIndex } = node.data
-    if (!sourceFile || !componentName) continue
+    const { componentFile, componentType, configIndex } = node.data
+    if (!componentFile || !componentType) continue
 
-    const moduleFile = builderStore.availableModules.find((f) => f.filename === sourceFile)
-    if (!moduleFile) continue
+    if (!libraryStore.hasCollection(componentFile)) continue
+    const model = libraryStore.getModelByCollectionName(componentFile)
 
-    const component = moduleFile.modules.find((m) => m.name === componentName || m.componentName === componentName)
-    if (!component) continue
+    const modules = libraryStore.findModulesByComponentName(componentFile, componentType)
+    if (!modules || modules.length === 0) continue
 
-    const key = `${sourceFile}::${componentName}`
+    const key = `${componentFile}::${componentType}`
     if (storeSnapshot[key]) {
-      // Component already captured — add this config if it's a new one
-      const config = component.configs?.[configIndex]
+      // SMELL - data structure is wrong - config index should be on modules (modules[configIndex].config)
+      const config = modules.configs?.[configIndex]
       if (config !== undefined && !storeSnapshot[key].configs.some(
-        (c) => c.BC_type === config.BC_type && c.vessel_type === config.vessel_type
+        (c) => c.module_subtype === config.module_subtype && c.module_type === config.module_type
       )) {
         storeSnapshot[key].configs.push(detachReactivity(config))
       }
       continue
     }
 
-    const config = component.configs?.[configIndex]
+    const config = modules.configs?.[configIndex]
 
     const { xml: componentModel } = createEditableModelFromSourceModelAndComponent(
-      moduleFile.model,
-      componentName
+      model,
+      componentType
     )
     if (!componentModel) continue
 
     storeSnapshot[key] = {
-      sourceFile,
-      componentName,
+      componentFile,
+      componentType,
       configs: config !== undefined ? [detachReactivity(config)] : [],
       model: componentModel,
-      filename: moduleFile.filename,
     }
   }
 
@@ -2236,37 +2263,36 @@ const pasteSelection = async (atMouse = false) => {
 
   if (sourceClipboard.storeSnapshot) {
     for (const entry of Object.values(sourceClipboard.storeSnapshot)) {
-      const existingFile = builderStore.availableModules.find((f) => f.filename === entry.filename)
-
-      if (!existingFile) {
+      if (!libraryStore.hasCollection(entry.componentFile)) {
         // The whole file is absent 
-        builderStore.addModuleFile({
-          filename: entry.filename,
+        libraryStore.addOrUpdateCollection({
+          componentFile: entry.componentFile,
           model: entry.model,
           modules: [{
-            name: entry.componentName,
-            componentName: entry.componentName,
+            name: entry.componentType, // SMELL
+            componentType: entry.componentType,
             configs: entry.configs,
           }],
         })
       } else {
         // The file exists but this specific component or config may be missing
-        const existingComponent = existingFile.modules.find(
-          (m) => m.name === entry.componentName || m.componentName === entry.componentName
-        )
-
+        const existingComponent = libraryStore.findModulesByComponentName(entry.componentFile, entry.componentType)
         if (!existingComponent) {
-          existingFile.modules.push({
-            name: entry.componentName,
-            componentName: entry.componentName,
-            configs: entry.configs,
+          libraryStore.addOrUpdateCollection({
+            componentFile: entry.componentFile,
+            model: entry.model,
+            modules: [{
+              name: entry.componentType, // SMELL - currently duplicate info
+              componentType: entry.componentType,
+              configs: entry.configs,
+            }],
           })
         } else {
           // Component exists but config is missing
           if (!existingComponent.configs) existingComponent.configs = []
           for (const config of entry.configs) {
             const alreadyPresent = existingComponent.configs.some(
-              (c) => c.BC_type === config.BC_type && c.vessel_type === config.vessel_type
+              (c) => c.module_subtype === config.module_subtype && c.module_type === config.module_type
             )
             if (!alreadyPresent) {
               existingComponent.configs.push(config)
@@ -2308,8 +2334,8 @@ const pasteSelection = async (atMouse = false) => {
     idMap[node.id] = newId
     nodeIdSet.push(newId)
 
-    const finalName = generateUniqueModuleName(
-      { name: node.data.componentName },
+    const finalName = generateUniqueInstanceName(
+      { name: node.data.componentType },
       namesSet
     )
     namesSet.add(finalName)
@@ -2351,33 +2377,33 @@ const pasteSelection = async (atMouse = false) => {
   })
 
   newNodes.forEach((newNode) => {
-    const { name, sourceFile, componentName, configIndex } = newNode.data
-    if (!sourceFile || !componentName) return
+    const { name, componentFile, componentType, configIndex } = newNode.data
+    if (!componentFile || !componentType) return
 
-    const modelString = builderStore.getModuleContent(sourceFile)
-    const variables = extractVariablesFromModule(modelString, componentName)
+    const model = libraryStore.getModelByCollectionName(componentFile)
+    const variables = extractVariablesFromComponent(model, componentType)
     newNode.data.variables = variables
 
     const resolvedIndex = configIndex ?? 0
-    const targetModule = builderStore.getModulesModule(sourceFile, componentName)
+    const targetModule = libraryStore.findModulesByComponentName(componentFile, componentType)
 
     if (targetModule && 
-    (!targetModule.configs?.[resolvedIndex]?.module_file?.length  ||
-    !targetModule.configs?.[resolvedIndex]?.module_type?.length ||
+    (!targetModule.configs?.[resolvedIndex]?.component_file?.length  ||
+    !targetModule.configs?.[resolvedIndex]?.component_type?.length ||
     !targetModule.configs?.[resolvedIndex]?.variables_and_units?.length)) {
       const syntheticConfig = {
-        module_file: sourceFile,
-        module_type: componentName,
+        component_file: componentFile,
+        component_type: componentType,
         variables_and_units: variables.map((v) => [v.name, v.units ?? 'dimensionless', 'access', 'variable']),
       }
-      builderStore.addConfigFile([syntheticConfig], sourceFile)
+      libraryStore.addConfigFile(componentFile, [syntheticConfig])
     }
 
-    builderStore.setVariableParameterValuesForInstance(
-      name,
+    libraryStore.setParameterValuesForInstance(
+      name, // SMELL - instance?
       variables,
-      sourceFile,
-      componentName,
+      componentFile,
+      componentType,
       resolvedIndex
     )
   })
@@ -2493,7 +2519,7 @@ async function fetchAndLoadResource(entry, resourceType) {
     } else if (resourceType === 'module config') {
       await loadConfigData(content, entry.name, false)
       // const jsonContent = JSON.parse(content)
-      // builderStore.addConfigFile(jsonContent, entry.name, false)
+      // libraryStore.addConfigFile(jsonContent, entry.name, false)
     } else if (resourceType === 'parameter file') {
       const parsed = await parseParametersFile(content)
       await loadParametersData(parsed, entry.name, { notify: false })
@@ -2596,7 +2622,7 @@ onMounted(async () => {
   }
 
   for (const [path, content] of Object.entries(moduleConfigs)) {
-    builderStore.addConfigFile(content.default, path.split('/').pop())
+    libraryStore.addConfigFile(path.split('/').pop(), content.default)
   }
 })
 

@@ -56,7 +56,7 @@
       <div ref="canvasEl" class="flow-canvas" @wheel.stop.prevent="onCanvasWheel">
         <div :style="{ height: canvasHeight + 'px', position: 'relative' }">
         <VueFlow
-          :id="FLOW_ID"
+          :id="FLOW_IDS.EDGE"
           :nodes="flowNodes"
           :edges="flowEdges"
           :nodes-draggable="false"
@@ -89,8 +89,8 @@
                   <el-option v-for="o in portTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
                 <el-input v-model="data.port.label" size="small" style="width:170px" @input="onPortConfigChange" />
-                <el-select v-model="data.port.option" multiple collapse-tags size="small" style="flex:1" @change="onPortConfigChange">
-                  <el-option v-for="o in sourceNode.data.portOptions" :key="o.name" :label="o.name" :value="o.name" />
+                <el-select v-model="data.port.variables" multiple collapse-tags size="small" style="flex:1" @change="onPortConfigChange">
+                  <el-option v-for="o in sourceNode.data.variables" :key="o.name" :label="o.name" :value="o.name" />
                 </el-select>
                 <el-select v-model="data.port.multiport" size="small" style="width:80px" @change="onPortConfigChange">
                   <el-option v-for="o in multiportOptions" :key="o.value" :label="o.label" :value="o.value" />
@@ -126,11 +126,21 @@
                   <el-option v-for="o in portTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
                 <el-input v-model="data.port.label" size="small" style="width:170px" @input="onPortConfigChange" />
-                <el-select v-model="data.port.option" multiple collapse-tags size="small" style="flex:1" @change="onPortConfigChange">
-                  <el-option v-for="o in targetNode.data.portOptions" :key="o.name" :label="o.name" :value="o.name" />
+                <el-select v-model="data.port.variables" multiple collapse-tags size="small" style="flex:1" @change="onPortConfigChange">
+                  <el-option 
+                    v-for="variable in targetNode.data.variables" 
+                    :key="variable.name"
+                    :label="variable.name"
+                    :value="variable.name" 
+                  />
                 </el-select>
                 <el-select v-model="data.port.multiport" size="small" style="width:80px" @change="onPortConfigChange">
-                  <el-option v-for="o in multiportOptions" :key="o.value" :label="o.label" :value="o.value" />
+                  <el-option 
+                    v-for="option in multiportOptions"
+                    :key="option.value"
+                    :label="option.label"
+                    :value="option.value"
+                  />
                 </el-select>
               </div>
             </div>
@@ -228,7 +238,7 @@ const props = defineProps({
   modelValue:  { type: Boolean, default: false },
   sourceNode:  Object,
   targetNode:  Object,
-  activeEdge:  Object,       
+  activeEdge:  Object,
   subgraph: Map,
 })
 
@@ -249,14 +259,14 @@ function isSingleConnection(portLabel) {
   return !portLabel.multiport || portLabel.multiport === 'None'
 }
 
-// Finds a port in a list by matching label, portType, and option.
+// Finds a port in a list by matching label, portType, and variables.
 // Used wherever a portLabel object needs to be resolved to a stamped local port.
 function findPortByLabel(ports, portLabel) {
   if (!portLabel) return null
   return ports.find(p =>
     p.label    === portLabel.label &&
     p.portType === portLabel.portType &&
-    JSON.stringify(p.option) === JSON.stringify(portLabel.option)
+    JSON.stringify(p.variables) === JSON.stringify(portLabel.variables)
   ) ?? null
 }
 
@@ -625,7 +635,7 @@ function evictForeignHandle(port, side) {
     const labelToCheck = side === 'source' ? c.sourcePortLabel : c.targetPortLabel
     return labelToCheck?.label === portLabel.label &&
            labelToCheck?.portType === portLabel.portType &&
-           JSON.stringify(labelToCheck?.option) === JSON.stringify(portLabel.option)
+           JSON.stringify(labelToCheck?.variables) === JSON.stringify(portLabel.variables)
   })
 
   const partnerPortLabel = side === 'source' ? coupling?.targetPortLabel : coupling?.sourcePortLabel
@@ -845,9 +855,9 @@ function rehomeForeignHandle(oldPort, partnerPortLabel, edgeId, side) {
   if (!sibling) return
 
   const newPortLabel = {
-    label:     oldPort.label,
-    portType:  oldPort.portType,
-    option:    oldPort.option,
+    label: oldPort.label,
+    portType: oldPort.portType,
+    variables: oldPort.variables,
     multiport: oldPort.multiport,
   }
 
@@ -1043,8 +1053,8 @@ function activateGhost(side, inferFrom = null) {
   const entry = {
     _uid: uid,
     portType: portType,
-    label:    inferFrom?.label    ?? '',
-    option:   [],           
+    label: inferFrom?.label ?? '',
+    variables: [],           
     multiport: inferFrom?.multiport ?? 'None',
   }
   if (side === 'source') {
@@ -1168,8 +1178,8 @@ function buildPayload() {
       const sp = srcByUid(c.srcUid)
       const tp = tgtByUid(c.tgtUid)
       return {
-        sourcePortLabel: { portType: sp.portType, label: sp.label, option: sp.option, multiport: sp.multiport },
-        targetPortLabel: { portType: tp.portType, label: tp.label, option: tp.option, multiport: tp.multiport }
+        sourcePortLabel: { portType: sp.portType, label: sp.label, variables: sp.variables, multiport: sp.multiport },
+        targetPortLabel: { portType: tp.portType, label: tp.label, variables: tp.variables, multiport: tp.multiport }
       }
     }),
     foreignCouplings,

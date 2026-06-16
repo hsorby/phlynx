@@ -122,7 +122,6 @@ export function processCellMLData(cellmlString) {
   const componentData = []
   for (let i = 0; i < model.componentCount(); i++) {
     const comp = model.componentByIndex(i)
-    const options = []
     const variables = []
 
     for (let j = 0; j < comp.variableCount(); j++) {
@@ -133,7 +132,6 @@ export function processCellMLData(cellmlString) {
       ) {
         const units = varr.units()
         const entry = { name: varr.name(), units: units.name() }
-        options.push(entry)
         if (isPossibleParameter(varr)) {
           variables.push(entry)
         }
@@ -142,11 +140,11 @@ export function processCellMLData(cellmlString) {
       varr.delete()
     }
 
+    // smelly - name and componentType have the same content in multiple places.
     componentData.push({
       name: comp.name(),
-      portOptions: options,
       ports: [],
-      componentName: comp.name(),
+      componentType: comp.name(),
       variables,
     })
     comp.delete()
@@ -768,7 +766,7 @@ function stripCelsiusToArbitraryUnit(xmlString) {
   return serializer.serializeToString(doc)
 }
 
-export function generateFlattenedModel(nodes, edges, builderStore) {
+export function generateFlattenedModel(nodes, edges, libraryStore) {
   const appVersion = __APP_VERSION__ || '0.0.0'
 
   // Initialize core objects
@@ -784,20 +782,17 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
   const parameterComponent = new _libcellml.Component()
 
   // --- Helper State ---
-  const modelCache = new Map() // Key: sourceFileName, Value: libcellml.Model
-  const nodeComponentMap = new Map() // Key: NodeID, Value: libcellml.Component
-  const unitsLibraryCache = new Map() // Key: filename, Value: libcellml.Model
-  const unitsImportSourceMap = new Map() // Key: filename, Value: libcellml.ImportSource
+  const modelCache = new Map()            // Key: componentFile,  Value: libcellml.Model
+  const nodeComponentMap = new Map()      // Key: NodeID,         Value: libcellml.Component
+  const unitsLibraryCache = new Map()     // Key: componentFile,  Value: libcellml.Model
+  const unitsImportSourceMap = new Map()  // Key: componentFile,  Value: libcellml.ImportSource
 
-  const globalVariables = builderStore.getGlobalVariables()
+  const globalVariables = libraryStore.globalVariables
 
-  // ------------------------------
-  // HELPER: Reusable Unit Importer
-  // ------------------------------
   const ensureUnitImported = (unitsName) => {
     // Safety Checks
     if (!unitsName) return
-    // If it's already in the model (or is a standard unit like 'volt'), skip.
+
     if (model.hasUnitsByName(unitsName) || isStandardUnit(unitsName)) return
 
     // Mask affine units from the validator using the base unit they're offset from
@@ -814,13 +809,12 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
     // Search available libraries.
     let found = false
 
-    for (const entry of builderStore.availableUnits) {
-      // Lazy Load: Parse library only if not already cached
-      if (!unitsLibraryCache.has(entry.filename)) {
+    for (const entry of libraryStore.availableUnits) {
+      // Parse library only if not already cached
+      if (!unitsLibraryCache.has(entry.componentFile)) {
         const libModel = parser.parseModel(entry.model)
-        // Check for parse errors (optional but recommended)
         if (parser.errorCount() === 0) {
-          unitsLibraryCache.set(entry.filename, libModel)
+          unitsLibraryCache.set(entry.componentFile, libModel)
         } else {
           libModel.delete()
           handleLoggerErrors(parser, `Parser found ${parser.errorCount()} errors:`)
@@ -828,36 +822,34 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
         }
       }
 
-      const libModel = unitsLibraryCache.get(entry.filename)
+      const libModel = unitsLibraryCache.get(entry.componentFile)
 
       // Check if this library has the unit we need
       if (libModel.hasUnitsByName(unitsName)) {
         // Ensure we have an ImportSource for this file
-        if (!unitsImportSourceMap.has(entry.filename)) {
+        if (!unitsImportSourceMap.has(entry.componentFile)) {
           const importSource = new _libcellml.ImportSource()
-          importSource.setUrl(entry.filename)
+          importSource.setUrl(entry.componentFile)
           importSource.setModel(libModel)
 
           // Register model with importer so it doesn't try to load from disk
-          importer.addModel(libModel, entry.filename)
+          importer.addModel(libModel, entry.componentFile)
 
-          unitsImportSourceMap.set(entry.filename, importSource)
+          unitsImportSourceMap.set(entry.componentFile, importSource)
         }
 
         // Create the Units object in our main model
-        const importSource = unitsImportSourceMap.get(entry.filename)
+        const importSource = unitsImportSourceMap.get(entry.componentFile)
         const importedUnits = new _libcellml.Units()
         importedUnits.setName(unitsName)
         importedUnits.setImportReference(unitsName)
         importedUnits.setImportSource(importSource)
 
         model.addUnits(importedUnits)
-
-        // Cleanup the JS wrapper (C++ object is now owned by 'model')
         importedUnits.delete()
 
         found = true
-        break // Stop searching other libraries
+        break 
       }
     }
 
@@ -887,13 +879,13 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
     // Process Nodes (Create Components)
     // ---------------------------------
     for (const node of nodes) {
-      const fileName = node.data?.sourceFile
-      const componentName = node.data?.componentName
+      const fileName = node.data?.componentFile
+      const componentType = node.data?.componentType
 
       // Load and cache source model if not already done.
       if (!modelCache.has(fileName)) {
-        if (!builderStore.hasModuleFile(fileName)) throw new Error(`Missing file: ${fileName}`)
-        const parsedModel = parser.parseModel(builderStore.getModuleContent(fileName))
+        if (!libraryStore.hasCollection(fileName)) throw new Error(`Missing file: ${fileName}`)
+        const parsedModel = parser.parseModel(libraryStore.getModelByCollectionName(fileName))
         if (parser.errorCount() > 0) {
           handleLoggerErrors(parser, `Error parsing ${fileName} [${parser.errorCount()} errors]:`)
         }
@@ -901,9 +893,9 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
       }
 
       const sourceModel = modelCache.get(fileName)
-      const originalComponent = sourceModel.componentByName(componentName, true)
+      const originalComponent = sourceModel.componentByName(componentType, true)
       if (!originalComponent) {
-        throw new Error(`Component '${componentName}' not found in '${fileName}'`)
+        throw new Error(`Component '${componentType}' not found in '${fileName}'`)
       }
 
       // Clone Component
@@ -988,14 +980,14 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
         if (isSrcMultiportSum && isTgtMultiportSum) {
           throw new Error('Multi-port-sum to Multi-port-sum connections are not supported.')
         } else if (isSrcMultiportMultiply) {
-          if (srcLabel.option?.length !== 1 || tgtLabel.option?.length !== 1) {
+          if (srcLabel.variables?.length !== 1 || tgtLabel.variables?.length !== 1) {
             throw new Error('Multiport Multiply ports must each map exactly one variable.')
           }
           multiPortMultiplies.push({
             sourceComp,
-            sourceVarName: srcLabel.option[0],
+            sourceVarName: srcLabel.variables[0],
             targetComp,
-            targetVarName: tgtLabel.option[0],
+            targetVarName: tgtLabel.variables[0],
             factor: Number(srcLabel.multiplyFactor ?? 1),
             isTgtMultiportSum,
             tgtLabel,
@@ -1020,13 +1012,13 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
           })
         } else {
           // Direct one-to-one variable equivalence
-          const minLength = Math.min(srcLabel.option.length, tgtLabel.option.length)
+          const minLength = Math.min(srcLabel.variables.length, tgtLabel.variables.length)
           for (let i = 0; i < minLength; i++) {
-            const srcOption = srcLabel.option[i]
-            const tgtOption = tgtLabel.option[i]
-            if (srcOption && tgtOption) {
-              const v1 = sourceComp.variableByName(srcOption)
-              const v2 = targetComp.variableByName(tgtOption)
+            const srcVariable = srcLabel.variables[i]
+            const tgtVariable = tgtLabel.variables[i]
+            if (srcVariable && tgtVariable) {
+              const v1 = sourceComp.variableByName(srcVariable)
+              const v2 = targetComp.variableByName(tgtVariable)
               if (v1 && v2) {
                 const handled = createAffineConversionComponent(model, v1, v2, sourceComp.name(), targetComp.name())
                 if (!handled) {
@@ -1065,7 +1057,7 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
         // The operand is the scaled output variable living in generated_multiplications
         multiPortSums.get(multiKey).targets.push({
           component: mulComp,
-          label: { option: [outputVarName] },
+          label: { variables: [outputVarName] },
         })
       } else {
         // Direct target: wire the scaled output straight to the target variable
@@ -1085,7 +1077,7 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
     for (const sumData of multiPortSums.values()) {
       const { sourceComp, srcLabel, targets } = sumData
 
-      const sourceVarNames = srcLabel.option
+      const sourceVarNames = srcLabel.variables
       if (sourceVarNames.length !== 1) {
         throw new Error('Multi-port-sum source must have exactly one variable representing the summed input.')
       }
@@ -1093,7 +1085,7 @@ export function generateFlattenedModel(nodes, edges, builderStore) {
       const targetComponents = []
       for (const targetInfo of targets) {
         const { component, label, isTarget } = targetInfo
-        const targetVarNames = label.option
+        const targetVarNames = label.variables
         if (targetVarNames.length !== 1) {
           throw new Error('Multi-port-sum target must have exactly one variable to be summed.')
         }
@@ -1199,7 +1191,7 @@ function isPossibleParameter(variable) {
 /**
  * Extracts unique variable names from a CellML model/component
  */
-export function extractVariablesFromModule(modelString, componentName, includeInitialisedVariables = false) {
+export function extractVariablesFromComponent(modelString, componentType, includeInitialisedVariables = true) {
   const garbageCollector = new Set() // To track created objects for cleanup
   try {
     const variables = new Set()
@@ -1208,10 +1200,9 @@ export function extractVariablesFromModule(modelString, componentName, includeIn
       garbageCollector.add(parser)
       const model = parser.parseModel(modelString)
       garbageCollector.add(model)
-      // Iterate all components in the model,
-      // assumes flat model hierarchy.
-      const comp = model.componentByName(componentName, true)
+      const comp = model.componentByName(componentType, includeInitialisedVariables)
       garbageCollector.add(comp)
+      if (!comp) throw new Error(`Component '${componentType}' not found in file.`)
       for (let v = 0; v < comp.variableCount(); v++) {
         const variable = comp.variableByIndex(v)
         garbageCollector.add(variable)
@@ -1257,8 +1248,8 @@ function hasParserError(parsedDocument) {
   return parsedDocument.getElementsByTagNameNS(parsererrorNS, 'parsererror').length > 0
 }
 
-export function createEditableModelFromSourceModelAndComponent(modelString, componentName) {
-  if (!modelString || !componentName) {
+export function createEditableModelFromSourceModelAndComponent(modelString, componentType) {
+  if (!modelString || !componentType) {
     return { xml: null, errors: ['Model or component name not provided'] }
   }
   const parser = new _libcellml.Parser(false)
@@ -1277,12 +1268,12 @@ export function createEditableModelFromSourceModelAndComponent(modelString, comp
   }
 
   const modelName = model.name() || 'UnnamedModel'
-  const component = model.componentByName(componentName, true)
+  const component = model.componentByName(componentType, true)
 
   if (!component) {
     model.delete()
     parser.delete()
-    return { xml: null, errors: [`Component '${componentName}' not found in model '${modelName}'`] }
+    return { xml: null, errors: [`Component '${componentType}' not found in model '${modelName}'`] }
   }
 
   const newModel = new _libcellml.Model()
@@ -1301,7 +1292,7 @@ export function createEditableModelFromSourceModelAndComponent(modelString, comp
     parser.delete()
     newModel.delete()
 
-    return { xml: null, errors: [`Error parsing MathML in '${modelName}' component '${componentName}'`] }
+    return { xml: null, errors: [`Error parsing MathML in '${modelName}' component '${componentType}'`] }
   }
 
   removeComments(doc)
@@ -1334,11 +1325,11 @@ export function createEditableModelFromSourceModelAndComponent(modelString, comp
   return { xml: newModelString, errors: [] }
 }
 
-export function doesComponentExistInModel(modelString, componentName) {
+export function doesComponentExistInModel(modelString, componentType) {
   if (modelString) {
     const parser = new _libcellml.Parser(false)
     const model = parser.parseModel(modelString)
-    const component = model.componentByName(componentName, true)
+    const component = model.componentByName(componentType, true)
     const hasComponent = component !== null
     if (component) component.delete()
     model.delete()

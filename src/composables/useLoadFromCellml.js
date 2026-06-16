@@ -1,7 +1,7 @@
 import { useVueFlow } from '@vue-flow/core'
 import { nextTick, ref } from 'vue'
 
-import { useBuilderStore } from '../stores/builderStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { runFcoseLayout } from '../services/layouts/cytoscape'
 import { useClearWorkspace } from '../utils/workspace'
@@ -38,7 +38,7 @@ export function useLoadFromCellML() {
     updateNodeData,
   } = useVueFlow()
 
-  const store = useBuilderStore()
+  const store = useLibraryStore()
   const historyStore = useFlowHistoryStore()
   const { trackEvent } = useGtm()
   const { clearWorkspace } = useClearWorkspace()
@@ -48,22 +48,22 @@ export function useLoadFromCellML() {
   let layoutCompleteResolve = null
   let layoutCompleteReject = null
 
-  const loadFromCellML = async (cellmlContent, filename) => {
+  const loadFromCellML = async (cellmlContent, componentFile) => {
     try {
       await clearWorkspace()
 
       const { components, edges, configs } =
-        parseCellMLConnections(cellmlContent, filename)
+        parseCellMLConnections(cellmlContent, componentFile)
 
       if (components.length === 0) {
         notify.info({
           title: 'No Connections Found',
-          message: `${filename} contains no inter-component connections to visualise.`,
+          message: `${componentFile} contains no inter-component connections to visualise.`,
         })
         return
       }
 
-      store.addConfigFile(configs, filename)
+      store.addConfigFile(configs, componentFile)
 
       const cellmlResult = processCellMLData(cellmlContent)
       if (cellmlResult.type !== 'success') {
@@ -73,24 +73,23 @@ export function useLoadFromCellML() {
       }
 
       const componentDataByName = new Map(
-        cellmlResult.components.data.map((c) => [c.componentName, c])
+        cellmlResult.components.data.map((c) => [c.componentType, c])
       )
 
       const nodes = components.map((compName) => {
         const compData = componentDataByName.get(compName) ?? {}
         const variables = compData.variables ?? []
-        const portOptions = compData.portOptions ?? []
 
-        store.setVariableParameterValuesForInstance(
+        store.setParameterValuesForInstance(
           compName,
           variables,
-          filename,
+          componentFile,
           compName,
           0
         )
 
         const moduleConfig =
-          store.getModuleConfigFromConfigIndex(filename, compName, 0) ?? {}
+          store.findConfigByIndex(componentFile, compName, 0) ?? {}
 
         const rawPorts = moduleConfig.general_ports ?? []
 
@@ -102,7 +101,7 @@ export function useLoadFromCellML() {
         const portLabels = rawPorts.map((p) => ({
           portType: 'general_ports',
           label: p.port_type,
-          option: p.variables ?? [],
+          variable: p.variables ?? [],
           multiport: edgeCount > 1 ? 'True' : 'None',
         }))
 
@@ -110,20 +109,19 @@ export function useLoadFromCellML() {
 
         return {
           id: compName,
-          type: 'moduleNode',
+          type: 'instanceNode',
           position: { x: 100, y: 100 },
           style: { opacity: 0 },
           data: {
-            componentName: compName,
-            configIndex: 0,
-            label: `${compName} — ${filename}`,
-            name: compName,
+            componentType: compName,
+            configIndex: 0, 
+            label: `${compName} — ${componentFile}`,
+            name: compName, // SMELL
             portLabels,
-            portOptions,
+            variables,
             ports,
             hasPrescribedPosition: false,
-            sourceFile: filename,
-            variables,
+            componentFile: componentFile,
           },
         }
       })
@@ -240,7 +238,7 @@ export function useLoadFromCellML() {
       await nextTick()
 
       // Build edges, resolving port couplings using ordinal indices
-      // (same logic as onConnect in BuilderView)
+      // (same logic as onConnect in WorkspaceArea)
       const srcCounts = new Map()
       const tgtCounts = new Map()
       const flowEdges = pendingEdgeData.flatMap((edge) => {

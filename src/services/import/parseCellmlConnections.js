@@ -4,7 +4,7 @@
  * Parses a CellML 1.x/2.x file and extracts:
  *   - The set of component names (excluding 'environment' and other excluded components)
  *   - The connections between components as edges
- *   - Per-component port configs ready for builderStore.addConfigFile
+ *   - Per-component port configs ready for libraryStore.addConfigFile
  *
  * One port per unique canonical variable per component (deduplicated by port_type).
  * One edge per unique component pair.
@@ -52,14 +52,14 @@ function getOwnedVariables(compElement) {
  * Parse the raw CellML XML string and return structured graph data.
  *
  * @param {string} cellmlContent - Raw XML string
- * @param {string} filename - The filename (used as module_file in configs)
+ * @param {string} filename - The filename (used as component_file in configs)
  * @returns {{
  *   components: string[],
  *   edges: Array<{ source: string, target: string }>,
  *   configs: Array<object>
  * }}
  */
-export function parseCellMLConnections(cellmlContent, filename) {
+export function parseCellMLConnections(cellmlContent, componentFile) {
   const parser = new DOMParser()
   const doc = parser.parseFromString(cellmlContent, 'application/xml')
 
@@ -233,10 +233,10 @@ export function parseCellMLConnections(cellmlContent, filename) {
     }
 
     return {
-      module_file: filename,
-      module_type: compName,
-      vessel_type: compName,
-      BC_type: 'nn',
+      component_file: componentFile,
+      component_type: compName,
+      module_type: compName, // SMELL 
+      module_subtype: 'nn',
       entrance_ports: [],
       exit_ports: [],
       general_ports,

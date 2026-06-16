@@ -1,12 +1,12 @@
 import { useVueFlow } from '@vue-flow/core'
 import { nextTick } from 'vue'
 import { useFlowHistoryStore } from '../stores/historyStore'
-import { useBuilderStore } from '../stores/builderStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import { FLOW_IDS } from './constants'
 
 export function useClearWorkspace() {
     const historyStore = useFlowHistoryStore()
-    const builderStore = useBuilderStore()
+    const libraryStore = useLibraryStore()
     const {
         nodes,
         edges,
@@ -15,7 +15,7 @@ export function useClearWorkspace() {
 
     const clearWorkspace = async () => {
         historyStore.clear()
-        builderStore.clearGlobalConstants()
+        libraryStore.clearGlobalConstants()
         nodes.value = []
         edges.value = []
         setViewport({ x: 0, y: 0, zoom: 1 })

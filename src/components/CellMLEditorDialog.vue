@@ -13,9 +13,9 @@
 
       <div v-else class="editor-wrapper">
         <CellMLTextEditor
-          :model-value="currentCode"
+          :model-value="currentModel"
           :regenerate-on-change="modelValue"
-          @update:code="currentCode = $event"
+          @update:code="currentModel = $event"
           @save="handleSave('key')"
         />
       </div>
@@ -35,7 +35,7 @@
         <!-- "Apply to all" checkbox — only shown when sibling nodes exist -->
         <el-tooltip
           v-if="siblingCount > 0"
-          :content="`Also update ${siblingCount} other node${siblingCount !== 1 ? 's' : ''} using ${props.nodeData.componentName} from ${props.nodeData.sourceFile}`"
+          :content="`Also update ${siblingCount} other node${siblingCount !== 1 ? 's' : ''} using ${props.nodeData.componentType} from ${props.nodeData.componentFile}`"
           placement="top"
           effect="light"
         >
@@ -63,7 +63,7 @@ import { computed, ref, watch } from 'vue'
 import { ElButton, ElCheckbox, ElDialog, ElMessageBox, ElTag, ElTooltip } from 'element-plus'
 import { useVueFlow } from '@vue-flow/core'
 import CellMLTextEditor from './CellMLTextEditor.vue'
-import { useBuilderStore } from '../stores/builderStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import { useGtm } from '../composables/useGtm'
 import { USER_MODULES_FILE } from '../utils/constants'
 import {
@@ -82,46 +82,46 @@ const props = defineProps({
   nodeData: {
     type: Object,
     required: true,
-    // Expected: { nodeId, name, sourceFile, componentName, configIndex }
+    // Expected: { nodeId, instanceName, componentFile, componentType, configIndex }
   },
 })
 
 const emit = defineEmits(['update:modelValue', 'save'])
 
-const store = useBuilderStore()
+const store = useLibraryStore()
 const { trackEvent } = useGtm()
 const { nodes } = useVueFlow()
 
 const loading = ref(false)
-const currentCode = ref('')
-const originalCode = ref('')
+const currentModel = ref('')
+const originalModel = ref('')
 const applyToAll = ref(false)
 
 const isInternalModule = computed(() => {
-  const sourceFile = props.nodeData.sourceFile
-  return !!sourceFile && sourceFile !== USER_MODULES_FILE
+  const componentFile = props.nodeData.componentFile
+  return !!componentFile && componentFile !== USER_MODULES_FILE
 })
 
 const isDirty = computed(() => {
-  return !areModelsEquivalent(originalCode.value, currentCode.value)
+  return !areModelsEquivalent(originalModel.value, currentModel.value)
 })
 
 const dialogTitle = computed(() => {
-  return `Editing: ${props.nodeData.name} (${props.nodeData.componentName} - ${props.nodeData.sourceFile})`
+  return `Editing: ${props.nodeData.instanceName} (${props.nodeData.componentType} - ${props.nodeData.componentFile})`
 })
 
 /**
- * Count of other nodes sharing the same sourceFile AND componentName.
- * Nodes from a different sourceFile are never included, even if the component
+ * Count of other nodes sharing the same componentFile AND componentType.
+ * Nodes from a different componentFile are never included, even if the component
  * name happens to match.
  */
 const siblingCount = computed(() => {
-  if (!props.nodeData?.sourceFile || !props.nodeData?.componentName) return 0
+  if (!props.nodeData?.componentFile || !props.nodeData?.componentType) return 0
   return nodes.value.filter(
     (n) =>
       n.id !== props.nodeData.nodeId &&
-      n.data?.sourceFile === props.nodeData.sourceFile &&
-      n.data?.componentName === props.nodeData.componentName
+      n.data?.componentFile === props.nodeData.componentFile &&
+      n.data?.componentType === props.nodeData.componentType
   ).length
 })
 
@@ -136,8 +136,8 @@ watch(
     if (newData && props.modelValue) {
       loading.value = true
       try {
-        const modelString = await store.getModuleContent(newData.sourceFile)
-        const { xml, errors } = createEditableModelFromSourceModelAndComponent(modelString, newData.componentName)
+        const model = await store.getModelByCollectionName(newData.componentFile) 
+        const { xml, errors } = createEditableModelFromSourceModelAndComponent(model, newData.componentType)
         if (errors.length > 0) {
           console.error('Errors while extracting component for editing:', errors)
           ElMessageBox.alert(
@@ -146,8 +146,8 @@ watch(
             { type: 'error' }
           )
         } else {
-          currentCode.value = xml
-          originalCode.value = xml
+          currentModel.value = xml
+          originalModel.value = xml
         }
       } catch (e) {
         console.error('Failed to load source', e)
@@ -176,21 +176,21 @@ const handleCancel = () => checkDirtyAndProceed(() => emit('update:modelValue', 
 //
 // Both scope: single and scope: all perform identical merge logic — the
 // component is written to USER_MODULES_FILE under whatever name is in the
-// editor. The only difference is which nodes get redirected in BuilderView:
-//   scope: single → only the editing node
-//   scope: all    → all nodes sharing originalSourceFile + originalComponentName
+// editor. The only difference is which nodes get redirected in Workspace:
+//   scope: single -> only the editing node
+//   scope: all    -> all nodes sharing originalComponentFile + originalComponentName
 
 const handleSave = async (source) => {
   if (source === 'key' && !isDirty.value) return
 
-  const componentNames = getModelComponentNames(currentCode.value)
+  const componentNames = getModelComponentNames(currentModel.value)
   if (!componentNames || componentNames.length === 0) {
-    ElMessageBox.alert('Could not find a valid component name in the code.', 'Parse Error', { type: 'error' })
+    ElMessageBox.alert('Could not find a valid component name in the model.', 'Parse Error', { type: 'error' })
     return
   }
 
   const newName = componentNames[0].trim()
-  const currentName = props.nodeData.componentName
+  const currentName = props.nodeData.componentType
 
   try {
     // Determine whether to replace an existing UserModules entry or append.
@@ -204,11 +204,11 @@ const handleSave = async (source) => {
     const hasSiblings = siblingCount.value > 0
     const isAppending = isInternalModule.value || (!applyToAll.value && hasSiblings)
 
-    const existingModelString = await store.getModuleContent(USER_MODULES_FILE)
+    const existingModel = await store.getModelByCollectionName(USER_MODULES_FILE)
 
     // Block if the name is already taken by a different component.
     // Updating in place (newName === currentName and we own it) is always allowed.
-    const nameExists = doesComponentExistInModel(existingModelString, newName)
+    const nameExists = doesComponentExistInModel(existingModel, newName)
     const isUpdatingInPlace = nameExists && newName === currentName && !isAppending
 
     if (nameExists && !isUpdatingInPlace) {
@@ -222,13 +222,13 @@ const handleSave = async (source) => {
 
     const oldNameForMerge = isAppending ? undefined : currentName
 
-    const mergedModelString = mergeModelComponents(
-      existingModelString,
-      currentCode.value,
+    const mergedModel = mergeModelComponents(
+      existingModel,
+      currentModel.value,
       newName,
       oldNameForMerge
     )
-    if (!mergedModelString) throw new Error('Merge operation returned empty string.')
+    if (!mergedModel) throw new Error('Merge operation returned empty string.')
 
     trackEvent('editor_action', {
       category: 'Editor',
@@ -240,11 +240,11 @@ const handleSave = async (source) => {
     emit('save', {
       nodeId: props.nodeData.nodeId,
       scope: applyToAll.value ? 'all' : 'single',
-      code: mergedModelString,
-      componentName: newName,
-      sourceFile: USER_MODULES_FILE,
-      originalComponentName: currentName,
-      originalSourceFile: props.nodeData.sourceFile,
+      model: mergedModel,
+      componentType: newName,
+      componentFile: USER_MODULES_FILE,
+      originalComponentType: currentName,
+      originalComponentFile: props.nodeData.componentFile,
       originalConfigIndex: props.nodeData.configIndex,
     })
 
