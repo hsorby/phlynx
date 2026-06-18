@@ -217,26 +217,23 @@ export const useLibraryStore = defineStore('library', () => {
     return totalAdded
   }
 
-  function addOrUpdateCollection(payload) {
-    const existingCollection = availableCollections.value.find((f) => f.componentFile === payload.componentFile)
-
-    if (existingCollection) {
-      // SMELL: collection shouldn't be a stub, only a module.
-      if (existingCollection.isStub) {
-        delete existingCollection.isStub
+  function addMath(filename, components) {
+    components.forEach((component) => {
+      const mathRef = `${filename}:${component.name}`
+      if (!(availableMath.value.has(mathRef))){
+        availableMath.value.set(mathRef, component.math)
+        updateStubStatus(mathRef)
       }
+    })
+  }
 
-      if (existingCollection.modules) {
-        payload.modules.forEach((newMod) => {
-          const oldMod = existingCollection.modules.find((m) => m.name === newMod.name)
-          if (oldMod && oldMod.configs && oldMod.configs.length > 0) {
-            newMod.configs = oldMod.configs
-          }
-        })
-      }
+  function updateStubStatus(mathRef) {
+    if (availableMath.value.has(mathRef)) {
+      currentStubs.value.get(mathRef)?.forEach((stubRef) => {
+        delete availableModules.value.get(stubRef).isStub
+      })
+      currentStubs.value.delete(mathRef)
     }
-
-    addOrUpdateFile(availableCollections, payload)
   }
 
   function loadState(state) {
@@ -394,6 +391,8 @@ export const useLibraryStore = defineStore('library', () => {
   return {
     // State
     availableCollections,
+    availableMath,
+    availableModules,
     availableUnits,
     lastExportName,
     lastSaveName,
@@ -408,7 +407,7 @@ export const useLibraryStore = defineStore('library', () => {
 
     // Actions
     addConfigFile,
-    addOrUpdateCollection,
+    addMath,
     addParameterFile,
     addUnitsFile,
     assignGlobalConstant,
