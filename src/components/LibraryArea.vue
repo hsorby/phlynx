@@ -27,7 +27,7 @@
             @click="toggleGroup(collection.componentFile)"
           >
             <el-icon class="mlc__group-chevron"><ArrowRight /></el-icon>
-            <span class="mlc__group-name"><span class="mlc__group-name-text">{{ displayName(collection.componentFile) }}</span></span>
+            <span class="mlc__group-name"><span class="mlc__group-name-text">{{ collection.label }}</span></span>
             <el-tag size="small" type="info" effect="plain" round class="mlc__group-count">
               {{ collection.modules.length }}
             </el-tag>
@@ -38,16 +38,16 @@
             <div v-show="activeCollapseNames.includes(collection.componentFile)" class="mlc__group-body">
               <el-card
                 v-for="module in collection.modules"
-                :key="module.name"
+                :key="module.id"
                 class="mlc__card"
                 :class="{
                   'mlc__card--selectable': selectable,
-                  'mlc__card--stub': collection.isStub,
-                  'mlc__card--draggable': !selectable && !collection.isStub,
+                  'mlc__card--stub': module.isStub,
+                  'mlc__card--draggable': !selectable && !module.isStub,
                 }"
                 shadow="never"
                 :body-style="{ padding: '0' }"
-                :draggable="!selectable && !collection.isStub"
+                :draggable="!selectable && !module.isStub"
                 @dragstart="handleDragStart($event, module)"
                 @dragend="handleDragEnd"
                 @click="selectable && handleSelect(module)"
@@ -79,7 +79,7 @@
                             size="small"
                             circle
                             :icon="View"
-                            @click.stop="openPreview(module, collection.componentFile)"
+                            @click.stop="openPreview(module, module.componentFile)"
                           />
                         </el-tooltip>
                       </div>
@@ -92,7 +92,7 @@
                       @click.stop
                     >
                       <el-select
-                        v-model="selectedConfigs[module.name]"
+                        v-model="selectedConfigs[module.id]"
                         size="small"
                         class="mlc__config-select"
                       >
@@ -110,15 +110,17 @@
             </div>
           </transition>
         </div>
-      </template>
+      </template> 
 
       <!-- Empty state -->
       <el-empty
         v-else
         :description="filterText ? `No modules match '${filterText}'` : 'No modules found'"
         :image-size="72"
-      />
-    </div>
+      /> 
+    </div> 
+
+    <el-button type="info" @click="onDebug"> Debug </el-button>
 
     <ModulePreviewDialog v-model="showPreview" :module-data="previewTarget" />
   </div>
@@ -127,7 +129,7 @@
 <script setup>
 import { computed, ref, watch, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { View, Search, ArrowRight } from '@element-plus/icons-vue'
-import { useLibraryStore } from '../stores/libraryStore'
+import { useLibraryViewStore } from '../stores/libraryViewStore'
 import useDragAndDrop from '../composables/useDnD'
 import ModulePreviewDialog from './ModulePreviewDialog.vue'
 import { TOOLTIP_AUTO_CLOSE } from '../utils/constants'
@@ -138,12 +140,11 @@ const props = defineProps({
 
 const emit = defineEmits(['select'])
 
-const store = useLibraryStore()
+const view = useLibraryViewStore()
 const { onDragStart } = useDragAndDrop()
 
 const filterText = ref('')
 const activeCollapseNames = ref([])
-const knownComponentFiles = ref(new Set())
 const selectedConfigs = reactive({})
 const showPreview = ref(false)
 const previewTarget = ref(null)
@@ -157,22 +158,23 @@ function blockScroll(e) {
 onMounted(() => {
   scrollEl.value?.addEventListener('wheel', blockScroll, { passive: false })
 })
+
 onBeforeUnmount(() => {
   scrollEl.value?.removeEventListener('wheel', blockScroll)
 })
 
 // ─── Filtering ────────────────────────────────────────────────────────────────
 
+function onDebug() {
+  console.log(view.groups)
+}
+
 const filteredCollections = computed(() => {
   const q = filterText.value.toLowerCase()
-  if (!q) return store.availableCollections
-
-  return store.availableCollections
-    .map((collection) => ({
-      ...collection,
-      modules: collection.modules.filter((m) => m.name.toLowerCase().includes(q)),
-    }))
-    .filter((collection) => collection.modules.length > 0)
+  if (!q) return view.groups
+  return view.groups
+    .map((g) => ({ ...g, modules: g.modules.filter((m) => m.name.toLowerCase().includes(q)) }))
+    .filter((g) => g.modules.length > 0)
 })
 
 // ─── Accordion ───────────────────────────────────────────────────────────────
@@ -185,41 +187,25 @@ function toggleGroup(componentFile) {
 
 // ─── Config helpers ───────────────────────────────────────────────────────────
 
-function displayName(componentFile) {
-  return componentFile.replace(/\.cellml$/i, '').replaceAll('_', ' ')
-}
-
 function configLabel(config) {
   if (!config) return ''
-  return [config.module_type, config.module_subtype].filter(Boolean).join(' – ')
+  return [config.module_type, config.module_subtype].filter(Boolean).join(' - ')
 }
 
 // ─── Watchers ─────────────────────────────────────────────────────────────────
 
-watch(
-  filteredCollections,
-  (collections) => {
-    collections.forEach((collection) => {
-      collection.modules.forEach((module) => {
-        if (selectedConfigs[module.name] === undefined) selectedConfigs[module.name] = 0
-      })
-    })
-    activeCollapseNames.value = filterText.value ? collections.map((c) => c.componentFile) : []
-  },
-  { immediate: true, deep: true }
-)
-
-watch(
-  () => store.availableCollections,
-  (currentCollections) => {
-    for (const file of currentCollections) {
-      if (!knownComponentFiles.value.has(file.componentFile)) {
-        knownComponentFiles.value.add(file.componentFile)
-      }
-    }
-  },
-  { deep: true }
-)
+// watch(
+//   filteredCollections,
+//   (collections) => {
+//     collections.forEach((collection) => {
+//       collection.modules.forEach((module) => {
+//         if (selectedConfigs[module.id] === undefined) selectedConfigs[module.id] = 0
+//       })
+//     })
+//     activeCollapseNames.value = filterText.value ? collections.map((c) => c.componentFile) : []
+//   },
+//   { immediate: true, deep: true }
+// )
 
 // ─── Drag & Drop ──────────────────────────────────────────────────────────────
 
@@ -227,7 +213,7 @@ function handleDragStart(event, module) {
   if (props.selectable) return
   isDragging.value = true
   event.dataTransfer.effectAllowed = 'copy'
-  const configIndex = selectedConfigs[module.name] ?? 0
+  const configIndex = selectedConfigs[module.id] ?? 0
   onDragStart(event, { ...module, configIndex })
 }
 
@@ -238,7 +224,7 @@ function handleDragEnd() {
 // ─── Preview ──────────────────────────────────────────────────────────────────
 
 function openPreview(module, componentFile) {
-  const configIndex = selectedConfigs[module.name] ?? 0
+  const configIndex = selectedConfigs[module.id] ?? 0
   previewTarget.value = {
     moduleName: module.name,
     componentFile: componentFile,

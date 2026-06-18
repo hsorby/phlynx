@@ -274,14 +274,14 @@
     :suffix="currentExportMode.suffix"
   />
 
-  <ModuleReplacementDialog
+  <!-- <ModuleReplacementDialog
     v-model="replacementDialogVisible"
     :modules="libraryStore.availableModules"
     :node-id="currentEditingNode.nodeId"
     :variables="currentEditingNode?.variables || []"
     :port-labels="currentEditingNode?.portLabels || []"
     @confirm="onReplaceConfirm"
-  />
+  /> -->
 
   <MacroBuilderDialog
     v-model="macroBuilderDialogVisible"
@@ -1382,12 +1382,12 @@ async function onImportConfirm(importPayload, updateProgress) {
 
 const performExport = async () => {
   currentExportKey.value = currentExportMode.value.key
-  
+
   const baseName = libraryStore.lastExportName || DEFAULT_FILE_NAME
-  const fileTypes = currentExportKey.value === EXPORT_KEYS.CELLML 
-    ? CELLML_FILE_TYPES 
+  const fileTypes = currentExportKey.value === EXPORT_KEYS.CELLML
+    ? CELLML_FILE_TYPES
     : ZIP_FILE_TYPES
-  
+
   // Get handle first
   const result = await getFileHandle(baseName, fileTypes, currentExportMode.value.suffix)
   if (result.success && result.handle) {
@@ -1782,38 +1782,39 @@ function onEdgeConnectionConfirm({ sourceNodeId, targetNodeId, sourcePortLabels,
   }
 }
 
-function onOpenReplacementDialog(eventPayload) {
-  currentEditingNode.value = {
-    ...eventPayload,
-  }
-  replacementDialogVisible.value = true
-}
+// function onOpenReplacementDialog(eventPayload) {
+//   currentEditingNode.value = {
+//     ...eventPayload,
+//   }
+//   replacementDialogVisible.value = true
+// }
 
-async function onReplaceConfirm(updatedData) {
-  const { nodeId, instanceId } = currentEditingNode.value 
-  if (!nodeId) return
+// async function onReplaceConfirm(updatedData) {
+//   const { nodeId, instanceId } = currentEditingNode.value 
+//   if (!nodeId) return
 
-  const compLabel = updatedData.componentType
-  const filePart = updatedData.componentFile
-  updatedData.label = filePart ? `${compLabel} — ${filePart}` : compLabel
+//   const compLabel = updatedData.componentType
+//   const filePart = updatedData.componentFile
+//   updatedData.label = filePart ? `${compLabel} — ${filePart}` : compLabel
 
-  const targetInstance = instanceId || FLOW_IDS.MAIN    
-  const { updateNodeData } = useVueFlow(targetInstance) 
-  updateNodeData(nodeId, updatedData)
-  replacementDialogVisible.value = false
-}
+//   const targetInstance = instanceId || FLOW_IDS.MAIN    
+//   const { updateNodeData } = useVueFlow(targetInstance) 
+//   updateNodeData(nodeId, updatedData)
+//   replacementDialogVisible.value = false
+// }
+
 const contextMenuRef = ref(null)
 
 const paneContextMenuItems = [
   {
     label: 'Create Module',
-    action: () => createNewModuleAtPosition(mousePosition.value.x, mousePosition.value.y),
+    action: () => createNewInstanceAtPosition(mousePosition.value.x, mousePosition.value.y),
   },
   {
     label: 'Select All',
     action: () => selectAllNodes(),
   },
-  { 
+  {
     label: 'Fit View',
     action: () => fitView(),
   },
@@ -1831,48 +1832,31 @@ function onPaneContextMenu(event) {
   contextMenuRef.value.open(event.clientX, event.clientY)
 }
 
-function onNodeContextMenu({ clientX, clientY, nodeId }) {
-  contextMenuItems.value = [
-    {
-      label: 'Replace Module',
-      action: () => {
-        const node = findNode(nodeId)
-        if (!node) return
-        onOpenReplacementDialog({
-          nodeId,
-          nodeData: node.data,
-          name: node.data.name,
-          variables: node.data.variables,
-          portLabels: node.data.portLabels,
-        })
-      },
-    },
-  ]
-  contextMenuRef.value.open(clientX, clientY)
-}
+// function onNodeContextMenu({ clientX, clientY, nodeId }) {
+//   contextMenuItems.value = [
+//     {
+//       label: 'Replace Module',
+//       action: () => {
+//         const node = findNode(nodeId)
+//         if (!node) return
+//         onOpenReplacementDialog({
+//           nodeId,
+//           nodeData: node.data,
+//           name: node.data.name,
+//           variables: node.data.variables,
+//           portLabels: node.data.portLabels,
+//         })
+//       },
+//     },
+//   ]
+//   contextMenuRef.value.open(clientX, clientY)
+// }
 
-function createNewModuleAtPosition(clientX, clientY) {
-  const allModules = libraryStore.availableCollections
-  const moduleFile = allModules.find((f) => f.modules?.some((m) => m.componentType === 'new_module'))
-  const moduleEntry = moduleFile?.modules?.find((m) => m.componentType === 'new_module')
-
-  if (!moduleEntry) {
-    notify.warning({ title: 'Module Not Found', message: 'new_module is not available.' })
-    return
-  }
-
-  const moduleData = {
-    name: moduleEntry.name,
-    componentType: moduleEntry.componentType,
-    componentFile: moduleFile.componentFile,
-    configs: moduleEntry.configs || null,
-    configIndex: 0,
-    ports: moduleEntry.ports || [],
-    variables: moduleEntry.variables || [],
-  }
+function createNewInstanceAtPosition(clientX, clientY) {
+  const module = libraryStore.availableModules.get(NEW_INSTANCE_REF)
 
   const position = screenToFlowCoordinate({ x: clientX, y: clientY })
-  createInstanceNode(moduleData, position)
+  createInstanceNode(module, position)
 }
 
 function handleAutoLayout() {
@@ -1927,25 +1911,25 @@ async function onExportConfirm(fileName, handle) {
   const notification = notify.info({
     title: 'Exporting...',
     message: message,
-    duration: 0, 
+    duration: 0,
   })
 
   try {
     const finalName = fileName || libraryStore.lastExportName || DEFAULT_FILE_NAME
-    
+
     const blob = caExport
       ? await generateExportZip(finalName, nodes.value, edges.value, libraryStore)
       : generateFlattenedModel(nodes.value, edges.value, libraryStore)
-    
+
     const result = await saveWithDialog(
-      blob, 
-      handle, 
+      blob,
+      handle,
       finalName,
       currentExportMode.value.suffix
     )
-    
+
     libraryStore.setLastExportName(result.savedName)
-    
+
     notification.close()
 
     let exportMessage = ''
@@ -2015,7 +1999,7 @@ function recomputeMissingCouplings() {
 
   // Track inbound/outbound ordinal counts per node, matching buildEdges semantics.
   const sourceOutCount = new Map()
-  const targetInCount  = new Map()
+  const targetInCount = new Map()
 
   for (const edge of edges.value) {
     if (edge.data?.couplings?.length) continue  // already has valid couplings
@@ -2025,7 +2009,7 @@ function recomputeMissingCouplings() {
     if (!sourceNode || !targetNode) continue
 
     const sourceIndex = sourceOutCount.get(edge.source) ?? 0
-    const targetIndex = targetInCount.get(edge.target)  ?? 0
+    const targetIndex = targetInCount.get(edge.target) ?? 0
 
     const couplings = resolvePortCouplings(
       sourceNode.data.portLabels ?? [],
@@ -2039,7 +2023,7 @@ function recomputeMissingCouplings() {
     }
 
     sourceOutCount.set(edge.source, sourceIndex + 1)
-    targetInCount.set(edge.target,  targetIndex  + 1)
+    targetInCount.set(edge.target, targetIndex + 1)
   }
 }
 
@@ -2090,7 +2074,7 @@ function handleLoadWorkspace(file) {
   reader.onload = async (e) => {
     try {
       const loadedState = JSON.parse(e.target.result)
-    
+
       // Validate the loaded file
       if (!loadedState.flow || !loadedState.store) {
         throw new Error('Invalid workflow file format.')
@@ -2181,8 +2165,8 @@ const copySelection = async () => {
   const nodes = getSelectedNodes.value
   const edges = getSelectedEdges.value
 
-  if (nodes.length === 0) return  
-  
+  if (nodes.length === 0) return
+
   const storeSnapshot = {}
   for (const node of nodes) {
     const { componentFile, componentType, configIndex } = node.data
@@ -2208,7 +2192,7 @@ const copySelection = async () => {
 
     const config = modules.configs?.[configIndex]
 
-    const { xml: componentModel } = createEditableModelFromSourceModelAndComponent(
+    const { xml: componentModel } = extractComponentsFromCellmlString(
       model,
       componentType
     )
@@ -2373,16 +2357,16 @@ const pasteSelection = async (atMouse = false) => {
     if (!componentFile || !componentType) return
 
     const model = libraryStore.getModelByCollectionName(componentFile)
-    const variables = extractVariablesFromComponent(model, componentType)
+    const variables = extractVariablesFromMath(model)
     newNode.data.variables = variables
 
     const resolvedIndex = configIndex ?? 0
     const targetModule = libraryStore.findModulesByComponentName(componentFile, componentType)
 
-    if (targetModule && 
-    (!targetModule.configs?.[resolvedIndex]?.component_file?.length  ||
-    !targetModule.configs?.[resolvedIndex]?.component_type?.length ||
-    !targetModule.configs?.[resolvedIndex]?.variables_and_units?.length)) {
+    if (targetModule &&
+      (!targetModule.configs?.[resolvedIndex]?.component_file?.length ||
+        !targetModule.configs?.[resolvedIndex]?.component_type?.length ||
+        !targetModule.configs?.[resolvedIndex]?.variables_and_units?.length)) {
       const syntheticConfig = {
         component_file: componentFile,
         component_type: componentType,
