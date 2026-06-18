@@ -349,7 +349,7 @@ import Workbench from '../components/WorkbenchArea.vue'
 import InstanceNode from '../components/InstanceNode.vue'
 import EditInstanceDialog from '../components/EditInstanceDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
-import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
+// import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
 import SaveDialog from '../components/SaveDialog.vue'
 import MacroBuilderDialog from '../components/MacroBuilderDialog.vue'
 import EdgeConnectionDialog from '../components/EdgeConnectionDialog.vue'
@@ -365,7 +365,7 @@ import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
 import { relayoutNodes } from '../services/layouts/physics'
-import { generateFlattenedModel, initLibCellML, processCellMLData, extractVariablesFromComponent, createEditableModelFromSourceModelAndComponent } from '../utils/cellml'
+import { generateFlattenedModel, initLibCellML, processCellMLData, extractVariablesFromMath, extractComponentsFromCellmlString } from '../utils/cellml'
 import {
   edgeLineOptions,
   CELLML_FILE_TYPES,
@@ -375,13 +375,14 @@ import {
   JSON_FILE_TYPES,
   ZIP_FILE_TYPES,
   DEFAULT_FILE_NAME,
+  NEW_INSTANCE_REF
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId } from '../utils/edges'
 import { getImportConfig, parseParametersFile } from '../utils/import'
 import { detachReactivity } from '../utils/reactivity'
 import {
-  saveFileHandle, 
+  saveFileHandle,
   saveWithDialog,
   getFileHandle,
   writeFileHandle,
@@ -642,7 +643,7 @@ const cellMLEditorDialogVisible = ref(false)
 const saveDialogVisible = ref(false)
 const importDialogVisible = ref(false)
 const exportDialogVisible = ref(false)
-const replacementDialogVisible = ref(false)
+// const replacementDialogVisible = ref(false)
 const macroBuilderDialogVisible = ref(false)
 const edgeConnectionDialogVisible = ref(false)
 const edgeDialogSourceNode = ref(null)
@@ -651,8 +652,8 @@ const edgeDialogActiveEdge = ref(null)
 const edgeDialogSubgraph = ref(null)
 const currentEditingNode = ref({
   nodeId: '',
-  instanceId: '',
-  ports: [],
+  module: new Map(),
+  parameters: [],
   name: '',
 })
 const importDialogRef = ref(null)
@@ -1154,32 +1155,23 @@ function updateNodesWithNewParameters() {
   })
 }
 
-const loadCellMLData = (content, componentFile, { notify: shouldNotify = true, trackEvents = true } = {}) => {
+const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackEvents = true } = {}) => {
   return new Promise((resolve) => {
     const result = processCellMLData(content)
 
     if (result.type === 'success') {
-      const componentCount = result.components.data.length
+      const componentCount = result.components?.length ?? 0
       const unitCount = result.units.count
 
-      // Register components (modules) with the store
+      // Register math with the store
       if (componentCount > 0) {
-        const modules = result.components.data.map((item) => ({
-          ...item,
-          componentFile: componentFile,
-        }))
-      
-        libraryStore.addOrUpdateCollection({
-          componentFile: componentFile,
-          modules: modules,
-          model: result.components.model,
-        })
+        libraryStore.addMath(filename, result.components)
       }
 
       // Register units with the store
       if (unitCount > 0) {
         libraryStore.addUnitsFile({
-          componentFile: componentFile,
+          componentFile: filename, // SMELL - why do we care where a unit file comes from?
           model: result.units.model,
         })
       }
@@ -1188,7 +1180,7 @@ const loadCellMLData = (content, componentFile, { notify: shouldNotify = true, t
         trackEvent('cellml_load_action', {
           category: 'CellML',
           action: 'load_cellml_file',
-          label: `Modules: ${result.components.data.length}, Units: ${result.units.count}`,
+          label: `Modules: ${componentCount}, Units: ${unitCount}`,
           file_type: 'cellml',
         })
       }
@@ -1197,22 +1189,22 @@ const loadCellMLData = (content, componentFile, { notify: shouldNotify = true, t
         if (componentCount > 0 && unitCount > 0) {
           notify.success({
             title: 'CellML File Loaded',
-            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} and ${unitCount} unit${unitCount !== 1 ? 's' : ''} from ${componentFile}.`,
+            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} and ${unitCount} unit${unitCount !== 1 ? 's' : ''} from ${filename}.`,
           })
         } else if (componentCount > 0) {
           notify.success({
             title: 'CellML Components Loaded',
-            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} from ${componentFile}.`,
+            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} from ${filename}.`,
           })
         } else if (unitCount > 0) {
           notify.success({
             title: 'CellML Units Loaded',
-            message: `Loaded ${unitCount} unit${unitCount !== 1 ? 's' : ''} from ${componentFile}.`,
+            message: `Loaded ${unitCount} unit${unitCount !== 1 ? 's' : ''} from ${filename}.`,
           })
         } else {
           notify.info({
             title: 'CellML File Loaded',
-            message: `${componentFile} contained no components or unit definitions.`,
+            message: `${filename} contained no components or unit definitions.`,
           })
         }
       }
@@ -1230,7 +1222,7 @@ const loadCellMLData = (content, componentFile, { notify: shouldNotify = true, t
       if (shouldNotify) {
         notify.error({
           title: 'CellML Load Error',
-          message: `${result.issues.length} issue${result.issues.length !== 1 ? 's' : ''} found in ${componentFile}.`,
+          message: `${result.issues.length} issue${result.issues.length !== 1 ? 's' : ''} found in ${filename}.`,
         })
       }
       console.error('CellML import issues:', result.issues)
