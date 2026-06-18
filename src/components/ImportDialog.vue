@@ -678,7 +678,7 @@ function notifyAfterStaging(field, filename, status) {
 
 const commitStagedFiles = () => {
   for (const { payload } of stagedFiles.value.componentFiles) {
-    libraryStore.addOrUpdateCollection(payload)
+    libraryStore.addMathFile(payload)
   }
   for (const { filename, payload } of stagedFiles.value.configFiles) {
     libraryStore.addConfigFile(filename, payload)

@@ -1,7 +1,7 @@
 import { buildPorts, buildPortLabels } from './buildPorts'
 import { getHandleId } from '../../utils/ports'
 import { SOURCE_PORT_TYPE, TARGET_PORT_TYPE } from '../../utils/constants'
-import { extractVariablesFromComponent } from '../../utils/cellml'
+import { extractVariablesFromMath } from '../../utils/cellml'
 import { resolvePortCouplings, checkAndClaimCouplings, buildUsedPortKeys } from '../../utils/edges'
 
 function buildNodes(libraryStore, instances, progressCallback = null) {
@@ -38,7 +38,7 @@ function buildNodes(libraryStore, instances, progressCallback = null) {
     const model = libraryStore.getModelByCollectionName(componentFile)
 
     const componentType = config?.component_type
-    const variables = extractVariablesFromComponent(model, componentType)
+    const variables = extractVariablesFromMath(model)
 
     libraryStore.setParameterValuesForInstance(
       instance.name,
