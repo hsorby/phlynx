@@ -119,36 +119,7 @@ export function processCellMLData(cellmlString) {
   parser.delete()
 
   // --- Extract components ---
-  const componentData = []
-  for (let i = 0; i < model.componentCount(); i++) {
-    const comp = model.componentByIndex(i)
-    const variables = []
-
-    for (let j = 0; j < comp.variableCount(); j++) {
-      const varr = comp.variableByIndex(j)
-      if (
-        varr.hasInterfaceType(_libcellml.Variable.InterfaceType.PUBLIC) ||
-        varr.hasInterfaceType(_libcellml.Variable.InterfaceType.PUBLIC_AND_PRIVATE)
-      ) {
-        const units = varr.units()
-        const entry = { name: varr.name(), units: units.name() }
-        if (isPossibleParameter(varr)) {
-          variables.push(entry)
-        }
-        units.delete()
-      }
-      varr.delete()
-    }
-
-    // smelly - name and componentType have the same content in multiple places.
-    componentData.push({
-      name: comp.name(),
-      ports: [],
-      componentType: comp.name(),
-      variables,
-    })
-    comp.delete()
-  }
+  const components = extractComponentsFromCellmlString(cellmlString)
 
   // --- Extract units into a stripped model ---
   const unitsModel = new _libcellml.Model()
@@ -172,10 +143,7 @@ export function processCellMLData(cellmlString) {
 
   return {
     type: 'success',
-    components: {
-      data: componentData,
-      model: cellmlString,
-    },
+    components: components.xml,
     units: {
       model: unitsModelString,
       count: unitsCount,
@@ -1191,18 +1159,19 @@ function isPossibleParameter(variable) {
 /**
  * Extracts unique variable names from a CellML model/component
  */
-export function extractVariablesFromComponent(modelString, componentType, includeInitialisedVariables = true) {
+export function extractVariablesFromMath(math, includeInitialisedVariables = true) {
   const garbageCollector = new Set() // To track created objects for cleanup
   try {
     const variables = new Set()
-    if (modelString) {
+    if (math) {
       const parser = new _libcellml.Parser(false)
       garbageCollector.add(parser)
-      const model = parser.parseModel(modelString)
+      const model = parser.parseModel(math)
       garbageCollector.add(model)
-      const comp = model.componentByName(componentType, includeInitialisedVariables)
+      if ((model.componentCount() > 1)) throw new Error(`More than one component detected in ${model.modelName()}.`)
+      const comp = model.componentByIndex(0)
       garbageCollector.add(comp)
-      if (!comp) throw new Error(`Component '${componentType}' not found in file.`)
+      if (!comp) throw new Error(`No component found in file.`)
       for (let v = 0; v < comp.variableCount(); v++) {
         const variable = comp.variableByIndex(v)
         garbageCollector.add(variable)
@@ -1248,12 +1217,12 @@ function hasParserError(parsedDocument) {
   return parsedDocument.getElementsByTagNameNS(parsererrorNS, 'parsererror').length > 0
 }
 
-export function createEditableModelFromSourceModelAndComponent(modelString, componentType) {
-  if (!modelString || !componentType) {
-    return { xml: null, errors: ['Model or component name not provided'] }
+export function extractComponentsFromCellmlString(cellmlString) {
+  if (!cellmlString) {
+    return { xml: null, errors: ['CellML string not provided'] }
   }
   const parser = new _libcellml.Parser(false)
-  const model = parser.parseModel(modelString)
+  const model = parser.parseModel(cellmlString)
 
   if (!model || parser.errorCount() > 0) {
     const errors = []
@@ -1268,68 +1237,77 @@ export function createEditableModelFromSourceModelAndComponent(modelString, comp
   }
 
   const modelName = model.name() || 'UnnamedModel'
-  const component = model.componentByName(componentType, true)
 
-  if (!component) {
-    model.delete()
-    parser.delete()
-    return { xml: null, errors: [`Component '${componentType}' not found in model '${modelName}'`] }
-  }
-
-  const newModel = new _libcellml.Model()
-  newModel.setName('EditModel')
-  const compClone = component.clone()
-  newModel.addComponent(compClone)
-
-  const xmlParser = new DOMParser()
-  // Remove comments from MathML, maybe libCellML can't handle them?
-  const wrappedMathML = `<root>${compClone.math()}</root>`
-  const doc = xmlParser.parseFromString(wrappedMathML, 'application/xml')
-  if (!doc || hasParserError(doc)) {
-    component.delete()
-    compClone.delete()
-    model.delete()
-    parser.delete()
-    newModel.delete()
-
-    return { xml: null, errors: [`Error parsing MathML in '${modelName}' component '${componentType}'`] }
-  }
-
-  removeComments(doc)
-
-  const mathNodes = doc.querySelectorAll('math')
-  let cleanMathML = ''
-  if (mathNodes.length > 0) {
-    const serializer = new XMLSerializer()
-    const primaryMath = mathNodes[0]
-    for (let i = 1; i < mathNodes.length; i++) {
-      const siblingMath = mathNodes[i]
-      while (siblingMath.firstChild) {
-        primaryMath.appendChild(siblingMath.firstChild)
-      }
-    }
-    cleanMathML = serializer.serializeToString(primaryMath)
-    compClone.setMath(cleanMathML)
-  }
-
+  const extractedComponents = []
   const printer = new _libcellml.Printer()
-  const newModelString = printer.printModel(newModel, false)
+  const xmlParser = new DOMParser()
+  const serializer = new XMLSerializer()
 
-  component.delete()
-  compClone.delete()
-  model.delete()
-  parser.delete()
-  printer.delete()
-  newModel.delete()
+  if (model.componentCount() > 0) {
+    for (let i = 0; i < model.componentCount(); i++) {
+      const component = model.componentByIndex(i)
+      const newModel = new _libcellml.Model()
+      newModel.setName('extractedComponent')
+      const compClone = component.clone()
+      newModel.addComponent(compClone)
 
-  return { xml: newModelString, errors: [] }
+      // Remove comments from MathML, libCellML can't handle them
+      const wrappedMathML = `<root>${compClone.math()}</root>`
+      const doc = xmlParser.parseFromString(wrappedMathML, 'application/xml')
+      if (!doc || hasParserError(doc)) {
+        console.log('why?')
+        const componentName = component.name()
+        component.delete()
+        compClone.delete()
+        model.delete()
+        parser.delete()
+        newModel.delete()
+        return { xml: null, errors: [`Error parsing MathML in '${modelName}' component '${componentName}'`] }
+      }
+      removeComments(doc)
+
+      const mathNodes = doc.querySelectorAll('math')
+
+      let cleanMathML = ''
+      if (mathNodes.length > 0) {
+        const primaryMath = mathNodes[0]
+        for (let i = 1; i < mathNodes.length; i++) {
+          const siblingMath = mathNodes[i]
+          while (siblingMath.firstChild) {
+            primaryMath.appendChild(siblingMath.firstChild)
+          }
+        }
+        cleanMathML = serializer.serializeToString(primaryMath)
+        compClone.setMath(cleanMathML)
+      }
+
+      extractedComponents.push({
+        name: component.name(), 
+        math: printer.printModel(newModel, false),
+        variables: extractVariablesFromMath(printer.printModel(newModel, false)),
+      })
+
+      component.delete()
+      compClone.delete()
+      newModel.delete()
+    }
+    model.delete()
+    parser.delete()
+    printer.delete()
+  } else {
+    model.delete()
+    parser.delete()
+    return { xml: null, errors: [`No components found in '${modelName}'`] }
+  }
+
+  return { xml: extractedComponents, errors: [] }
 }
 
-export function doesComponentExistInModel(modelString, componentType) {
-  if (modelString) {
+export function doesComponentExistInModel(cellmlString, componentName) {
+  if (cellmlString) {
     const parser = new _libcellml.Parser(false)
-    const model = parser.parseModel(modelString)
-    const component = model.componentByName(componentType, true)
+    const model = parser.parseModel(cellmlString)
+    const component = model.componentByName(componentName, true)
     const hasComponent = component !== null
     if (component) component.delete()
     model.delete()
