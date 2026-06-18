@@ -24,7 +24,7 @@
         </span>
         <el-input v-else ref="inputRef" v-model="editingName" size="small" @blur="saveEdit" @keyup.enter="saveEdit" />
       </div>
-      <!-- non-editable label showing CellML component and source file (no white box) -->
+
       <div v-if="data.label" class="instance-label">{{ data.label }}</div>
       <div class="button-group">
         <el-tooltip
@@ -42,13 +42,9 @@
               <el-dropdown-menu>
                 <el-dropdown-item command="membrane">Membrane</el-dropdown-item>
                 <el-dropdown-item command="process">Process</el-dropdown-item>
-                <el-dropdown-item command="compartment"
-                  >Compartment</el-dropdown-item
-                >
+                <el-dropdown-item command="compartment">Compartment</el-dropdown-item>
                 <el-dropdown-item command="protein">Protein</el-dropdown-item>
-                <el-dropdown-item command="undefined" divided
-                  >Reset to Default</el-dropdown-item
-                >
+                <el-dropdown-item command="undefined" divided>Reset to Default</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -211,9 +207,7 @@ function openCellMLEditDialog() {
   emit('open-cellml-editor-dialog', {
     nodeId: props.id,
     name: props.data.name,
-    componentFile: props.data.componentFile,
-    componentType: props.data.componentType,
-    configIndex: props.data.configIndex,
+    mathRef: props.data.module.mathRef,
   })
 }
 
