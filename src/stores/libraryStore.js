@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
 import { isEditableVariableType } from '../utils/variables'
+import { normaliseConfig } from '../utils/config'
 
 function mergeIntoStore(newModules, target) {
   const moduleMap = new Map(target.map((mod) => [mod.componentFile, mod]))
@@ -28,8 +29,11 @@ function mergeIn(sourceMap, targetMap) {
 // 'library' is the store's ID
 export const useLibraryStore = defineStore('library', () => {
   // --- STATE ---
-  const availableCollections = ref([])
+  const availableCollections = ref(new Map())
+  const availableModules = ref(new Map())
+  const availableMath = ref(new Map())
   const availableUnits = ref([])
+  const currentStubs = ref(new Map())
   const availableParameters = ref(new Map())
   const availableVariableNameIdMap = ref(new Map())
   const lastSaveName = ref('phlynx-project')
@@ -175,10 +179,9 @@ export const useLibraryStore = defineStore('library', () => {
   }
 
   /**
-   * Adds configuration(s) to the appropriate components
+   * Extract module definitions from config file
    */
-  function addConfigFile(filename, payload) {
-    const configs = payload
+  function addConfigFile(filename, configs) {
     let totalAdded = 0
 
     if (!configs || !Array.isArray(configs)) {
@@ -187,46 +190,30 @@ export const useLibraryStore = defineStore('library', () => {
 
     configs.forEach((config) => {
       if (!config.component_file || typeof config.component_file !== 'string') {
-        return 
+        return totalAdded
       }
 
-      let collection = availableCollections.value.find((f) => f.componentFile === config.component_file)
+      const module = normaliseConfig(config)
+      const moduleRef = module.id
 
-      // SMELL: stub should only be associated with a module, not a whole collection.
-      if (!collection) {
-        collection = { componentFile: config.component_file, modules: [], isStub: true, }
-        availableCollections.value.push(collection)
+      if(!(availableMath.value.has(module.mathRef))) {
+        module.isStub = true
+        if (!currentStubs.value.has(module.mathRef)) {
+          currentStubs.value.set(module.mathRef, [])
+        }
+        currentStubs.value.get(module.mathRef).push(moduleRef)
       }
 
-      let module = collection.modules.find((m) => m.name === config.component_type)
-      if (!module) {
-        module = { name: config.component_type, configs: [], }
-        collection.modules.push(module)
-      }
+      if(!(availableModules.value.has(moduleRef))) {
+        availableModules.value.set(moduleRef, module)
+        if (!availableCollections.value.has(config.component_file)) {
+          availableCollections.value.set(config.component_file, [])
+        }
+        availableCollections.value.get(config.component_file).push(moduleRef)
+      } 
 
-      if (!module.configs) {
-        module.configs = []
-      }
-
-      const existingConfigIndex = module.configs.findIndex(
-        (c) => c.module_subtype === config.module_subtype && c.module_type === config.module_type
-      )
-
-      // SMELL - do we need this?
-      const configWithMetadata = {
-        ...config,
-        _sourceFile: filename,
-        _loadedAt: new Date().toISOString(),
-      }
-
-      if (existingConfigIndex !== -1) {
-        module.configs[existingConfigIndex] = configWithMetadata
-      } else {
-        module.configs.push(configWithMetadata)
-        totalAdded++
-      }
+      totalAdded++
     })
-
     return totalAdded
   }
 
