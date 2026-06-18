@@ -68,7 +68,7 @@ import { useGtm } from '../composables/useGtm'
 import { USER_MODULES_FILE } from '../utils/constants'
 import {
   areModelsEquivalent,
-  createEditableModelFromSourceModelAndComponent,
+  extractComponentsFromCellmlString,
   doesComponentExistInModel,
   getModelComponentNames,
   mergeModelComponents,
@@ -82,7 +82,7 @@ const props = defineProps({
   nodeData: {
     type: Object,
     required: true,
-    // Expected: { nodeId, instanceName, componentFile, componentType, configIndex }
+    // Expected: { nodeId, name, mathRef }
   },
 })
 
@@ -97,8 +97,15 @@ const currentModel = ref('')
 const originalModel = ref('')
 const applyToAll = ref(false)
 
+const componentFile = computed(() => {
+  return props.nodeData?.mathRef?.split(":")[0]
+})
+
+const componentName = computed(() => {
+  return props.nodeData?.mathRef?.split(":")[1]
+})
+
 const isInternalModule = computed(() => {
-  const componentFile = props.nodeData.componentFile
   return !!componentFile && componentFile !== USER_MODULES_FILE
 })
 
@@ -107,7 +114,7 @@ const isDirty = computed(() => {
 })
 
 const dialogTitle = computed(() => {
-  return `Editing: ${props.nodeData.instanceName} (${props.nodeData.componentType} - ${props.nodeData.componentFile})`
+  return `Editing: ${props.nodeData.name} (${componentName.value} - ${componentFile.value})`
 })
 
 /**
@@ -116,12 +123,12 @@ const dialogTitle = computed(() => {
  * name happens to match.
  */
 const siblingCount = computed(() => {
-  if (!props.nodeData?.componentFile || !props.nodeData?.componentType) return 0
+  if (!componentName.value || !componentFile.value) return 0
+
   return nodes.value.filter(
     (n) =>
       n.id !== props.nodeData.nodeId &&
-      n.data?.componentFile === props.nodeData.componentFile &&
-      n.data?.componentType === props.nodeData.componentType
+      n.data?.module?.mathRef === props.nodeData.mathRef
   ).length
 })
 
@@ -133,22 +140,12 @@ watch(() => props.nodeData, () => { applyToAll.value = false })
 watch(
   () => props.nodeData,
   async (newData) => {
-    if (newData && props.modelValue) {
+    if (newData && props.nodeData) {
       loading.value = true
       try {
-        const model = await store.getModelByCollectionName(newData.componentFile) 
-        const { xml, errors } = createEditableModelFromSourceModelAndComponent(model, newData.componentType)
-        if (errors.length > 0) {
-          console.error('Errors while extracting component for editing:', errors)
-          ElMessageBox.alert(
-            `Failed to load the CellML source for editing.\n\nError${errors.length === 1 ? '' : 's'}:\n- ${errors.join('\n- ')}\n\nPlease create an issue if the problem persists.`,
-            'Load Error',
-            { type: 'error' }
-          )
-        } else {
-          currentModel.value = xml
-          originalModel.value = xml
-        }
+        const math = await store.availableMath.get(newData.mathRef) 
+        currentModel.value = math
+        originalModel.value = math
       } catch (e) {
         console.error('Failed to load source', e)
       } finally {
