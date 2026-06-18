@@ -257,10 +257,7 @@ export const useLibraryStore = defineStore('library', () => {
    * @param {string} componentFile - The componentFile to remove.
    */
   function removeCollection(componentFile) {
-    const index = availableCollections.value.findIndex((f) => f.componentFile === componentFile)
-    if (index !== -1) {
-      availableCollections.value.splice(index, 1)
-    }
+    delete availableCollections.value.get(componentFile)
   }
 
   /**
