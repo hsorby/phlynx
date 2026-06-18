@@ -5,7 +5,7 @@ import { GHOST_MODULE_FILENAME, GHOST_NODE_TYPE } from '../utils/constants'
 import { getId, generateUniqueInstanceName, attachNewNodeToFrame, findAnyNode } from '../utils/nodes'
 import { useLibraryStore } from '../stores/libraryStore'
 import { buildPortLabels } from '../services/import/buildPorts'
-import { extractVariablesFromComponent } from '../utils/cellml'
+import { extractVariablesFromMath } from '../utils/cellml'
 
 /**
  * In a real world scenario you'd want to avoid creating refs in a global scope like this as they might not be cleaned up properly.
@@ -35,7 +35,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
 
   function onDragStart(event, module) {
     if (event.dataTransfer) {
-      event.dataTransfer.setData('application/vueflow', module.name)
+      event.dataTransfer.setData('application/vueflow', module.id)
       event.dataTransfer.effectAllowed = 'move'
     }
 
@@ -78,66 +78,48 @@ export default function useDragAndDrop(pendingHistoryNodes) {
    * Returns the new node's id and type so the caller can handle any
    * post-creation logic (e.g. opening the ghost setup dialog).
    *
-   * @param {object} moduleData - The module descriptor (componentType, componentFile, configs, etc.)
+   * @param {object} moduleData - The module descriptor (ports, mathRef, variables)
    * @param {{x: number, y: number}} position - Flow coordinates to place the node.
    * @returns {{ nodeId: string, nodeType: string }}
    */
   function createInstanceNode(moduleData, position) {
-    const nodeId = getId(getNodes.value.map((n) => n.id))
-    const existingNames = new Set(getNodes.value.map((n) => n.data.name))
-    const finalName = generateUniqueInstanceName(moduleData, existingNames)
-
-    const componentType = moduleData.componentType
-    const nodeType = moduleData.componentFile === GHOST_MODULE_FILENAME ? GHOST_NODE_TYPE : 'instanceNode'
-    const componentFile = moduleData.componentFile
-    const label = componentFile ? `${componentType} — ${componentFile}` : componentType
-
-    pendingHistoryNodes.add(nodeId)
-
-    const model = libraryStore.getModelByCollectionName(componentFile)
-    const variables = extractVariablesFromComponent(model, componentType)
-
-    const configIndex = moduleData.configIndex || 0
-    let config = moduleData.configs?.[configIndex] ?? null
-
-    if (!config) {
-      config = {
-        module_type: finalName,
-        module_subtype: 'phlynx',
-        component_file: componentFile,
-        component_type: componentType,
-        entrance_ports: [],
-        exit_ports:[],       
-        general_ports:[],
-        variables_and_units: variables.map((v) => [v.name, v.units ?? 'dimensionless', 'access', 'variable']),
-      }
-      libraryStore.addConfigFile(componentFile, [config])
+    const instanceData = {
+      name: moduleData.id.includes(":") ? moduleData.id.split(":")[0] : moduleData.id,
+      module: moduleData,
+      parameters: [],
     }
 
-    const portLabels = buildPortLabels(config)
+    const nodeId = getId(getNodes.value.map((n) => n.id))
+    pendingHistoryNodes.add(nodeId)
 
-    libraryStore.setParameterValuesForInstance(
-      finalName,
-      variables,
-      componentFile,
-      componentType,
-      configIndex
-    )
+    const existingNames = new Set(getNodes.value.map((n) => n.data.name))
+    const finalName = generateUniqueInstanceName(instanceData, existingNames)
+
+    const componentFile = instanceData.module.mathRef.split(":")[0]
+    const componentName = instanceData.module.mathRef.split(":")[1]
+    const nodeType = componentFile === GHOST_MODULE_FILENAME ? GHOST_NODE_TYPE : 'instanceNode'
+
+    const math = libraryStore.availableMath.get(`${componentFile}:${componentName}`)
+
+    // const portLabels = buildPortLabels(instanceData) - don't think this is needed anymore
+
+    // libraryStore.setParameterValuesForInstance(
+    //   finalName,
+    //   variables,
+    //   componentFile,
+    //   componentType,
+    //   configIndex
+    // )
 
     const newNode = {
       id: nodeId,
       type: nodeType,
       position,
       data: {
-        componentType: moduleData.componentType,
-        configIndex: moduleData.configIndex,
-        label,
         name: finalName,
-        portLabels,
-        variables: moduleData.variables || [],
-        ports: moduleData.ports || [],
-        componentFile: moduleData.componentFile,
-        variables,
+        label: componentFile ? `${componentName} — ${componentFile}` : componentName, // SMELL - label could be a computed value?
+        module: instanceData.module,
+        parameters: instanceData.parameters,
       },
     }
 
@@ -184,6 +166,11 @@ export default function useDragAndDrop(pendingHistoryNodes) {
       x: event.clientX,
       y: event.clientY,
     })
+    
+    const instanceData = {
+      module: moduleData,
+
+    }
 
     const { nodeId, nodeType } = createInstanceNode(moduleData, position)
 
