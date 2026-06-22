@@ -160,7 +160,7 @@ import { Delete, Edit, Key, Place, WarningFilled, Operation } from '@element-plu
 import CellMLIcon from './icons/CellMLIcon.vue'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
-import { getHandleId, getHandleStyle, portPosition } from '../utils/ports'
+import { getHandleId, getHandleStyle, portPosition } from '../utils/portHandles.js'
 import { sanitiseName } from '../utils/nodes'
 import { notify } from '../utils/notify'
 import { isEditableVariableType, isEmpty } from '../utils/variables'
