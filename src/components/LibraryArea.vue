@@ -56,20 +56,22 @@
                   <div class="mlc__card-body">
                     <!-- Name + actions row -->
                     <div class="mlc__card-header">
-                      <span class="mlc__card-name">{{ module.name }}</span>
+                      <!-- SMELL - need better name... probably dynamic property? -->
+                      <span class="mlc__card-name">{{ module.id }}</span>
                       <div class="mlc__card-actions">
+                        <!-- SMELL - might need something here if we do the grouping? -->
                         <el-tag
-                          v-if="module.configs && module.configs.length > 1"
                           size="small"
                           type="primary"
                           effect="light"
                           round
                           class="mlc__badge"
                         >
-                          {{ module.configs.length }} configs
+                          <!-- SMELL - need to reinstate nested grouping to have this be a dynamically calculated value -->
+                          {{ 1 }} configs 
                         </el-tag>
                         <el-tooltip
-                          v-if="module.configs && module.configs.length >= 1"
+                          v-if="module.id"
                           content="Preview configuration"
                           placement="top"
                           :auto-close="TOOLTIP_AUTO_CLOSE"
@@ -79,7 +81,7 @@
                             size="small"
                             circle
                             :icon="View"
-                            @click.stop="openPreview(module, module.componentFile)"
+                            @click.stop="openPreview(module)"
                           />
                         </el-tooltip>
                       </div>
@@ -223,13 +225,11 @@ function handleDragEnd() {
 
 // ─── Preview ──────────────────────────────────────────────────────────────────
 
-function openPreview(module, componentFile) {
-  const configIndex = selectedConfigs[module.id] ?? 0
+function openPreview(module) {
   previewTarget.value = {
-    moduleName: module.name,
-    componentFile: componentFile,
-    configIndex,
-    configData: module.configs[configIndex],
+    id: module.id,
+    ports: module.ports,
+    variables: module.variables,
   }
   showPreview.value = true
 }
