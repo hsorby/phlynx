@@ -1,4 +1,4 @@
-import { portTypeOptions } from "./constants"
+import { PORT_TYPE_OPTIONS } from "./constants"
 
 export function normaliseConfig(config) {
   return {
@@ -12,23 +12,23 @@ export function normaliseConfig(config) {
 function normalisePorts(config) {
   const ports = []
 
-  for (const [configKey, portType] of Object.entries(portTypeOptions)) {
-    const list = config[configKey] || []
+  // SMELL - option.value isn't the most intuitive thing to read
+  PORT_TYPE_OPTIONS.forEach((option) => {
+    const list = config?.[option.value] || []
     for (const p of list) {
       ports.push({
-        port_type: portType,
-        label: p.port_type,
+        port_type: option.value,
+        label: p.port_type, // SMELL - holdover from strange naming in circulatory autogen
         variables: p.variables || [],
         multiport_type: parseMultiport(p.multi_port),
       })
     }
-  }
-
+  })
   return ports
 }
 
-function normaliseVariables(list = []) {
-  return list.map(([name, unit, access, type]) => ({
+function normaliseVariables(RawVariablesAndUnits = []) {
+  return RawVariablesAndUnits.map(([name, unit, access, type]) => ({
     name,
     unit,
     access,

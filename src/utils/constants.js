@@ -103,7 +103,7 @@ export const GHOST_MODULE_DEFINITION = {
   ],
 }
 
-export const portTypeOptions = [
+export const PORT_TYPE_OPTIONS = [
   { value: 'general_ports',  label: 'G' },
   { value: 'entrance_ports', label: 'I' },
   { value: 'exit_ports',     label: 'O' },  

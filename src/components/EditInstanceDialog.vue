@@ -19,7 +19,7 @@
           <template #default="scope">
             <el-select v-model="scope.row.portType" size="small">
               <el-option
-                v-for="option in portTypeOptions"
+                v-for="option in PORT_TYPE_OPTIONS"
                 :key="option.value"
                 :label="option.label"
                 :value="option.value"
@@ -142,6 +142,7 @@ import { useGtm } from '../composables/useGtm'
 import { notify } from '../utils/notify'
 import { sanitiseName } from '../utils/nodes'
 import { detachReactivity } from '../utils/reactivity'
+import { PORT_TYPE_OPTIONS, multiportOptions } from '../utils/constants'
 
 const props = defineProps({
   modelValue: {
@@ -179,40 +180,6 @@ const editableData = reactive({
   name: '',
   portLabels: [], // Will hold objects like { variable: 'var_a', label: 'label_1' }
 })
-
-const multiportOptions = [
-  {
-    value: 'True',
-    label: 'True',
-  },
-  {
-    value: 'Sum',
-    label: 'Sum',
-  },
-  {
-    value: 'Multiply',
-    label: 'Multiply',
-  },
-  {
-    value: 'None',
-    label: 'None',
-  },
-]
-
-const portTypeOptions = [
-  {
-    value: 'general_ports',
-    label: 'G',
-  },
-  {
-    value: 'entrance_ports',
-    label: 'I',
-  },
-  {
-    value: 'exit_ports',
-    label: 'O',
-  },
-]
 
 const { trackEvent } = useGtm()
 

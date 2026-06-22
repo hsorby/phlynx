@@ -86,7 +86,7 @@
             >
               <div class="port-controls" @mousedown.stop>
                 <el-select v-model="data.port.portType" size="small" style="width:64px" @change="onPortConfigChange">
-                  <el-option v-for="o in portTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
+                  <el-option v-for="o in PORT_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
                 <el-input v-model="data.port.label" size="small" style="width:170px" @input="onPortConfigChange" />
                 <el-select v-model="data.port.variables" multiple collapse-tags size="small" style="flex:1" @change="onPortConfigChange">
@@ -123,7 +123,7 @@
                 <span class="drag-handle" @mousedown.stop="startDrag($event, data.port._uid, 'target')">⠿</span>
                 <el-button type="danger" :icon="Delete" circle plain size="small" @click="deletePort(data.port._uid, 'target')" />
                 <el-select v-model="data.port.portType" size="small" style="width:64px" @change="onPortConfigChange">
-                  <el-option v-for="o in portTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
+                  <el-option v-for="o in PORT_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
                 <el-input v-model="data.port.label" size="small" style="width:170px" @input="onPortConfigChange" />
                 <el-select v-model="data.port.variables" multiple collapse-tags size="small" style="flex:1" @change="onPortConfigChange">
@@ -227,7 +227,7 @@ import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import { VueFlow, Position, Handle, useVueFlow } from '@vue-flow/core'
 import { FLOW_IDS, ROW_H, NODE_W, MID_GAP, PAD, 
-  portTypeOptions, multiportOptions, TARGET_COMPATIBLE,
+  PORT_TYPE_OPTIONS, multiportOptions, TARGET_COMPATIBLE,
   AUTOSCROLL_SPEED, AUTOSCROLL_ZONE,
  } from '../utils/constants'
 import { detachReactivity } from '../utils/reactivity'
