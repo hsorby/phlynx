@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="visible" :title="`Preview: ${moduleData?.id}`" width="800px" append-to-body>
+  <el-dialog v-model="visible" :title="`Preview: ${moduleData?.moduleRef}`" width="800px" append-to-body>
     <el-tabs v-if="moduleData" v-model="activeTab" type="border-card">
       <el-tab-pane label="Variables & Units" name="variables">
         <el-table :data="moduleData?.variables" height="400" stripe>
@@ -60,7 +60,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 
 const props = defineProps({
   modelValue: Boolean,
-  moduleData: Object, // { id, variables, ports }
+  moduleData: Object, // { moduleRef, variables, ports }
 })
 
 const emit = defineEmits(['update:modelValue'])

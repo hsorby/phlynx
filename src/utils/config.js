@@ -2,7 +2,7 @@ import { PORT_TYPE_OPTIONS } from "./constants"
 
 export function normaliseConfig(config) {
   return {
-    id: `${config.module_type}:${config.module_subtype}`,
+    moduleRef: `${config.module_type}:${config.module_subtype}`,
     mathRef: `${config.component_file}:${config.component_type}`,
     ports: normalisePorts(config),
     variables: normaliseVariables(config.variables_and_units),

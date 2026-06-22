@@ -38,7 +38,7 @@
             <div v-show="activeCollapseNames.includes(collection.componentFile)" class="mlc__group-body">
               <el-card
                 v-for="module in collection.modules"
-                :key="module.id"
+                :key="module.moduleRef"
                 class="mlc__card"
                 :class="{
                   'mlc__card--selectable': selectable,
@@ -57,7 +57,7 @@
                     <!-- Name + actions row -->
                     <div class="mlc__card-header">
                       <!-- SMELL - need better name... probably dynamic property? -->
-                      <span class="mlc__card-name">{{ module.id }}</span>
+                      <span class="mlc__card-name">{{ module.moduleRef }}</span>
                       <div class="mlc__card-actions">
                         <!-- SMELL - might need something here if we do the grouping? -->
                         <el-tag
@@ -71,7 +71,7 @@
                           {{ 1 }} configs 
                         </el-tag>
                         <el-tooltip
-                          v-if="module.id"
+                          v-if="module.moduleRef"
                           content="Preview configuration"
                           placement="top"
                           :auto-close="TOOLTIP_AUTO_CLOSE"
@@ -94,7 +94,7 @@
                       @click.stop
                     >
                       <el-select
-                        v-model="selectedConfigs[module.id]"
+                        v-model="selectedConfigs[module.moduleRef]"
                         size="small"
                         class="mlc__config-select"
                       >
@@ -132,6 +132,7 @@
 import { computed, ref, watch, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { View, Search, ArrowRight } from '@element-plus/icons-vue'
 import { useLibraryViewStore } from '../stores/libraryViewStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import useDragAndDrop from '../composables/useDnD'
 import ModulePreviewDialog from './ModulePreviewDialog.vue'
 import { TOOLTIP_AUTO_CLOSE } from '../utils/constants'
@@ -215,7 +216,7 @@ function handleDragStart(event, module) {
   if (props.selectable) return
   isDragging.value = true
   event.dataTransfer.effectAllowed = 'copy'
-  const configIndex = selectedConfigs[module.id] ?? 0
+  const configIndex = selectedConfigs[module.moduleRef] ?? 0
   onDragStart(event, { ...module, configIndex })
 }
 
@@ -227,7 +228,7 @@ function handleDragEnd() {
 
 function openPreview(module) {
   previewTarget.value = {
-    id: module.id,
+    moduleRef: module.moduleRef,
     ports: module.ports,
     variables: module.variables,
   }

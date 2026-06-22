@@ -33,7 +33,6 @@ export const useLibraryStore = defineStore('library', () => {
   const availableModules = ref(new Map())
   const availableMath = ref(new Map())
   const availableUnits = ref([])
-  const currentStubs = ref(new Map())
   const availableParameters = ref(new Map())
   const availableVariableNameIdMap = ref(new Map())
   const lastSaveName = ref('phlynx-project')
@@ -55,11 +54,10 @@ export const useLibraryStore = defineStore('library', () => {
 
   // --- ACTIONS ---
   function normaliseValue(val) {
-    if (!val || val === '-') return val // Ignore placeholders
+    if (!val || val === '-') return val 
 
     const num = parseFloat(val)
 
-    // If it's not a number, return original string (e.g. text values)
     if (isNaN(num)) return val
 
     return String(num)
@@ -166,21 +164,6 @@ export const useLibraryStore = defineStore('library', () => {
     lastExportName.value = name
   }
 
-  function addOrUpdateFile(collection, payload) {
-    const existingFile = collection.value.find((f) => f.componentFile === payload.componentFile)
-
-    if (existingFile) {
-      // Replace existing file's data
-      Object.assign(existingFile, payload)
-    } else {
-      // Add new file to the list
-      collection.value.push(payload)
-    }
-  }
-
-  /**
-   * Extract module definitions from config file
-   */
   function addConfigFile(filename, configs) {
     let totalAdded = 0
 
@@ -194,46 +177,88 @@ export const useLibraryStore = defineStore('library', () => {
       }
 
       const module = normaliseConfig(config)
-      const moduleRef = module.id
-
-      if(!(availableMath.value.has(module.mathRef))) {
-        module.isStub = true
-        if (!currentStubs.value.has(module.mathRef)) {
-          currentStubs.value.set(module.mathRef, [])
-        }
-        currentStubs.value.get(module.mathRef).push(moduleRef)
-      }
-
-      if(!(availableModules.value.has(moduleRef))) {
-        availableModules.value.set(moduleRef, module)
-        if (!availableCollections.value.has(config.component_file)) {
-          availableCollections.value.set(config.component_file, [])
-        }
-        availableCollections.value.get(config.component_file).push(moduleRef)
-      } 
-
+      addModule(module)
       totalAdded++
     })
     return totalAdded
   }
 
-  function addMath(filename, components) {
+  function addModule(module) {
+    if(!(availableMath.value.has(module.mathRef))) {
+      module.isStub = true
+    }
+
+    if(!(availableModules.value.has(module.moduleRef))) {
+      availableModules.value.set(module.moduleRef, module)
+    } 
+
+    // SMELL - still only really using cellml file origin, but now extensible if we include other metadata
+    updateCollections(module.mathRef, module.moduleRef)
+  }
+
+  function ensureSet(key) {
+    if (!availableCollections.value.has(key)) {
+      availableCollections.value.set(key, new Set())
+    }
+    return availableCollections.value.get(key)
+  }
+
+  function updateCollections(tag, moduleRef) {
+    ensureSet(tag).add(moduleRef)
+  }
+
+  function addMathFile(filename, components) {
     components.forEach((component) => {
       const mathRef = `${filename}:${component.name}`
-      if (!(availableMath.value.has(mathRef))){
-        availableMath.value.set(mathRef, component.math)
-        updateStubStatus(mathRef)
-      }
+      addMath(mathRef, component.math)
     })
   }
 
-  function updateStubStatus(mathRef) {
-    if (availableMath.value.has(mathRef)) {
-      currentStubs.value.get(mathRef)?.forEach((stubRef) => {
-        delete availableModules.value.get(stubRef).isStub
-      })
-      currentStubs.value.delete(mathRef)
+  function addMath(mathRef, math, isOverwrite = true) {
+    if (!availableMath.value.has(mathRef) || isOverwrite) {
+      availableMath.value.set(mathRef, math)
+      updateStubStatus(mathRef)
     }
+  }
+
+  // Move one moduleRef from one mathRef's Set to another
+  function moveModule(moduleRef, fromMathRef, toMathRef) {
+    const fromSet = availableCollections.value.get(fromMathRef)
+    if (!fromSet?.has(moduleRef)) return
+
+    fromSet.delete(moduleRef)
+    if (fromSet.size === 0) availableCollections.value.delete(fromMathRef)
+
+    ensureSet(toMathRef).add(moduleRef)
+  }
+
+  // Replace a mathRef key, carrying its entire Set over
+  function updateMathRef(oldMathRef, newMathRef) {
+    if (!availableCollections.value.has(oldMathRef)) return
+
+    const existingSet = availableCollections.value.get(oldMathRef)
+    availableCollections.value.delete(oldMathRef)
+    availableCollections.value.set(newMathRef, existingSet)
+  }
+
+  // Remove a specific moduleRef from a mathRef's Set
+  function removeModule(mathRef, moduleRef) {
+    const set = availableCollections.value.get(mathRef)
+    if (!set) return
+
+    set.delete(moduleRef)
+    if (set.size === 0) availableCollections.value.delete(mathRef)
+  }
+
+  function updateStubStatus(mathRef) {
+    if (!availableMath.value.has(mathRef)) return
+
+    availableCollections.value.get(mathRef)?.forEach((moduleRef) => {
+      const module = availableModules.value.get(moduleRef)
+      if (module && module.isStub) {
+        delete module.isStub
+      }
+    })
   }
 
   function loadState(state) {
@@ -252,19 +277,10 @@ export const useLibraryStore = defineStore('library', () => {
     lastExportName.value = state.lastExportName || 'phlynx-export'
   }
 
-  /**
-   * Removes a componentFile and the associated modules from the list.
-   * @param {string} componentFile - The componentFile to remove.
-   */
   function removeCollection(componentFile) {
     delete availableCollections.value.get(componentFile)
   }
 
-  /**
-   * Adds a new units file and its model.
-   * If the units file already exists it will be replaced.
-   * @param {*} payload
-   */
   function addUnitsFile(payload) {
     const existingFile = availableUnits.value.find((f) => f.componentFile === payload.componentFile) // SMELL - units files also called component files
     if (existingFile) {
@@ -274,51 +290,7 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
-  /**
-   * Checks if a collection is already loaded.
-   * @param {string} filename - The name of the collection to check.
-   * @returns {boolean} - True if the collection is loaded, false otherwise.
-   */
-  function hasCollection(filename) {
-    return availableCollections.value.some((f) => f.componentFile === filename)
-  }
-
   // ---- GETTERS ----
-
-  /**
-   * Returns the cellml content of a collection.
-   */
-  function getModelByCollectionName(filename) {
-    const index = availableCollections.value.findIndex((f) => f.componentFile === filename)
-    if (index !== -1) {
-      return availableCollections.value[index].model
-    }
-    return ''
-  }
-
-  /**
-   * Returns modules associated with a componentType within the given collection file.
-   */
-  function findModulesByComponentName(componentFile, componentType) {
-    if (!hasCollection(componentFile)) return null
-    const collection = collectionsByName.value.get(componentFile)
-
-    return collection.modules.find((m) => m.name === componentType) || null
-  }
-
-  function findConfigByName(moduleType, moduleSubtype) {
-    const key = `${moduleType}||${moduleSubtype}`
-    return configsByTypeAndSubtype.value.get(key) || null
-  }
-
-  function findConfigByIndex(componentFile, componentType, configIndex) {
-    const modules = findModulesByComponentName(componentFile, componentType)
-    return modules.configs[configIndex]
-  }
-
-  function findConfigsForModule(moduleName) {
-    return configsByModuleName.value.get(moduleName) || []
-  }
 
   function getState() {
     return {
@@ -334,57 +306,6 @@ export const useLibraryStore = defineStore('library', () => {
 
   const globalVariables = computed(() => globalConstants.value)
 
-  const allModules = computed(() => 
-    availableCollections.value.flatMap((collection => collection.modules || []))
-  )
-
-  // SMELL - what do we mean by name?
-  const modulesByName = computed(() => {
-    const map = new Map()
-    for (const collection of availableCollections.value) {
-      for (const module of collection.modules || []) {
-        map.set(module.name, module)
-      }
-    }
-    return map
-  })
-
-  const collectionsByName = computed(() => {
-    const map = new Map()
-    for (const collection of availableCollections.value) {
-      map.set(collection.componentFile, collection)
-    }
-    return map
-  })
-
-  const configsByTypeAndSubtype = computed(() => {
-    const map = new Map()
-    for (const collection of availableCollections.value) {
-      for (const module of collection.modules || []) {
-        (module.configs || []).forEach((config, configIndex) => {
-          const key = `${config.module_type}||${config.module_subtype}`
-          map.set(key, { 
-            config, 
-            module, 
-            configIndex,
-            componentFile: collection.componentFile,
-          })
-        })
-      }
-    }
-    return map
-  })
-
-  const configsByModuleName = computed(() => {
-    const map = new Map()
-
-    for (const module of allModules.value) {
-      map.set(module.name, module.configs || [])
-    }
-
-    return map
-  })
-
   return {
     // State
     availableCollections,
@@ -395,15 +316,11 @@ export const useLibraryStore = defineStore('library', () => {
     lastSaveName,
 
     // Derived State
-    collectionsByName,
-    modulesByName,
-    configsByTypeAndSubtype,
-    configsByModuleName,
-    allModules,
     globalVariables,
 
     // Actions
     addConfigFile,
+    addMathFile,
     addMath,
     addParameterFile,
     addUnitsFile,
@@ -417,14 +334,8 @@ export const useLibraryStore = defineStore('library', () => {
 
     // Query
     getGlobalConstant,
-    getModelByCollectionName,
-    findModulesByComponentName,
-    findConfigByName,
-    findConfigByIndex,
-    findConfigsForModule,
     getParameterValueForInstanceVariable,
     getState,
-    hasCollection,
 
     // Debug
     listCollections,

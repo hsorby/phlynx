@@ -82,7 +82,7 @@ const props = defineProps({
   nodeData: {
     type: Object,
     required: true,
-    // Expected: { nodeId, name, mathRef }
+    // Expected: { nodeId, name, mathRef, moduleRef }
   },
 })
 

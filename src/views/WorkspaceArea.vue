@@ -248,10 +248,10 @@
 
   <EditInstanceDialog
     v-model="editDialogVisible"
-    :initial-name="currentEditingNode.name"
+    :initial-name="currentEditingNode?.name"
     :variable-options="currentEditingNode?.variables || []"
     :initial-port-labels="currentEditingNode?.portLabels || []"
-    :node-id="currentEditingNode.nodeId"
+    :node-id="currentEditingNode?.nodeId"
     :existing-names="allNodeNames"
     @confirm="onEditConfirm"
   />
@@ -650,14 +650,14 @@ const edgeDialogSourceNode = ref(null)
 const edgeDialogTargetNode = ref(null)
 const edgeDialogActiveEdge = ref(null)
 const edgeDialogSubgraph = ref(null)
-const currentEditingNode = ref({
-  nodeId: '',
-  module: new Map(),
-  parameters: [],
-  name: '',
-})
 const importDialogRef = ref(null)
 
+const currentEditingNode = ref({
+  name: 'emptyNode',
+  variables: [],
+  nodeId: 'emptyNode',
+  portLabels: [],
+})
 const currentImportMode = ref(null)
 const currentImportConfig = ref({})
 
@@ -1123,6 +1123,7 @@ const onEdgeChange = (changes) => {
       redo: () => addEdges(edgesToRestore),
     })
   }
+
   if (removeChanges.length) {
     const edgesToRestore = removeChanges.map((change) => change.edge)
     const idsToRemove = removeChanges.map((change) => change.edge.id)
@@ -1131,6 +1132,7 @@ const onEdgeChange = (changes) => {
       redo: () => removeEdges(idsToRemove),
     })
   }
+  
   if (selectChanges.length) {
     historyStore.addCommand(createSelectCommand(selectChanges, findEdge))
   }
@@ -1165,7 +1167,7 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
 
       // Register math with the store
       if (componentCount > 0) {
-        libraryStore.addMath(filename, result.components)
+        libraryStore.addMathFile(filename, result.components)
       }
 
       // Register units with the store
@@ -1466,9 +1468,9 @@ function filterConfig(config, validPortNames, validVariableNames, updatedModule)
  */
 async function handleCellMLSave(saveData) {
 
-  const { componentFile, componentType, originalComponentFile, originalComponentType, originalConfigIndex, model } = saveData
+  const { componentFile, componentName, originalComponentFile, originalComponentName, originalConfigIndex, model } = saveData
 
-  const isRename = originalComponentType !== componentType
+  const isRename = originalComponentName !== componentName
   const isNewFile = originalComponentFile !== componentFile
   const isForkOrRename = isRename || isNewFile
 
@@ -1503,7 +1505,7 @@ async function handleCellMLSave(saveData) {
 
     // Update metadata to match new home.
     configToMigrate.component_file = componentFile
-    configToMigrate.component_type = componentType
+    configToMigrate.component_type = componentName
 
     // Push as a new config.
     targetModule.configs.push(configToMigrate)
@@ -1526,8 +1528,7 @@ async function handleCellMLSave(saveData) {
 }
 
 /**
- * Helper: Updates the visual nodes on the graph.
- * Separated from data fetching for clarity.
+ * Helper: Updates the instances in the workspace.
  */
 function updateGraphNodesAndPorts(updatedData, updatedModule) {
   const validPortNames = new Set(

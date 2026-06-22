@@ -208,6 +208,7 @@ function openCellMLEditDialog() {
     nodeId: props.id,
     name: props.data.name,
     mathRef: props.data.module.mathRef,
+    moduleRef: props.data.module.moduleRef,
   })
 }
 

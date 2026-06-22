@@ -35,7 +35,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
 
   function onDragStart(event, module) {
     if (event.dataTransfer) {
-      event.dataTransfer.setData('application/vueflow', module.id)
+      event.dataTransfer.setData('application/vueflow', module.moduleRef)
       event.dataTransfer.effectAllowed = 'move'
     }
 
@@ -84,7 +84,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
    */
   function createInstanceNode(moduleData, position) {
     const instanceData = {
-      name: moduleData.id.includes(":") ? moduleData.id.split(":")[0] : moduleData.id,
+      name: moduleData.moduleRef.includes(":") ? moduleData.moduleRef.split(":")[0] : moduleData.moduleRef,
       module: moduleData,
       parameters: [],
     }

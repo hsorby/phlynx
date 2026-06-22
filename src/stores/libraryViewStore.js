@@ -3,18 +3,22 @@ import { computed, ref } from 'vue'
 import { useLibraryStore } from './libraryStore'
 import { hasAll, hasAny } from '../utils/sets'
 
+function parseMathRef(mathRef) {
+  const [componentFile, componentName] = mathRef.split(':')
+  return { componentFile, componentName }
+}
+
+function parseModuleRef(moduleRef) {
+  const [moduleType, moduleSubtype] = moduleRef.split(':')
+  return { moduleType, moduleSubtype }
+}
+
 export const useLibraryViewStore = defineStore('libraryView', () => {
   const library = useLibraryStore()
 
-  function tagsFor(module, componentFile) {
-    return new Set(module.tags ?? [componentFile])
-  }
-
-  const categories = ref([])
-
   const groups = computed(() => {
     const result = []
-    for (const [componentFile, moduleRefs] of library.availableCollections) {
+    for (const [mathRef, moduleRefs] of library.availableCollections) {
       const modules = []
       for (const ref of moduleRefs) {
         const module = library.availableModules.get(ref)
@@ -23,17 +27,13 @@ export const useLibraryViewStore = defineStore('libraryView', () => {
         }
       }
       result.push({
-        componentFile,
-        label: componentFile,
+        mathRef,
+        label: mathRef,
         modules
       })
     }
     return result
   })
 
-  function setCategories(defs) {
-    categories.value = defs
-  }
-
-  return { categories, groups, setCategories }
+  return { groups }
 })
