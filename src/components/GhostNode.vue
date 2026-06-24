@@ -25,7 +25,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useVueFlow, Handle } from '@vue-flow/core'
-import { getHandleId, getHandleStyle, portPosition } from '../utils/portHandles'
+import { getHandleId, getHandleStyle, handlePosition } from '../utils/handles'
 
 const props = defineProps(['id', 'data'])
 const { findNode } = useVueFlow()

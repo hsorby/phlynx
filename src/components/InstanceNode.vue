@@ -58,7 +58,7 @@
             :show-after="300"
             :auto-close="1200"
         >
-          <el-dropdown trigger="click" @command="addPort({ side: $event })">
+          <el-dropdown trigger="click" @command="addHandle({ side: $event })">
           
             <el-button size="small" circle class="instance-button">
               <el-icon><Place /></el-icon>
@@ -127,24 +127,24 @@
       </div>
     </el-card>
 
-    <template v-for="port in data.ports" :key="port.uid" class="port">
-      <el-tooltip class="box-item" effect="dark" :content="port.name" placement="bottom" :show-after="1000">
+    <template v-for="handle in data.handles" :key="handle.uid" class="handle">
+      <el-tooltip class="box-item" effect="dark" :content="handle.name" placement="bottom" :show-after="1000">
         <Handle
-          :id="getHandleId(port)"
-          :ref="'handle_' + port.side + '_' + port.uid"
-          :position="portPosition(port.side)"
-          :style="getHandleStyle(port, data.ports)"
-          class="port-handle"
+          :id="getHandleId(handle)"
+          :ref="'handle_' + handle.side + '_' + handle.uid"
+          :position="handlePosition(handle.side)"
+          :style="getHandleStyle(handle, data.handles)"
+          class="handle"
         />
         <template #content>
           <el-button
-            class="delete-port-btn"
+            class="delete-handle-btn"
             type="danger"
             :icon="Delete"
             circle
             plain
             size="small"
-            @click.stop="removePort(port.uid)"
+            @click.stop="removeHandle(handle.uid)"
           />
         </template>
       </el-tooltip>
@@ -160,7 +160,7 @@ import { Delete, Edit, Key, Place, WarningFilled, Operation } from '@element-plu
 import CellMLIcon from './icons/CellMLIcon.vue'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
-import { getHandleId, getHandleStyle, portPosition } from '../utils/portHandles.js'
+import { getHandleId, getHandleStyle, handlePosition } from '../utils/handles.js'
 import { sanitiseName } from '../utils/nodes'
 import { notify } from '../utils/notify'
 import { isEditableVariableType, isEmpty } from '../utils/variables'
@@ -172,10 +172,6 @@ const historyStore = useFlowHistoryStore()
 const libraryStore = useLibraryStore()
 
 const props = defineProps({
-  data: {
-    type: Object,
-    required: true,
-  },
   id: {
     type: String,
     required: true,
@@ -184,6 +180,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  data: {
+    type: Object,
+    required: true,
+  }, // {handles, module, parameters, id, name}
 })
 
 const emit = defineEmits([
@@ -196,10 +196,9 @@ const emit = defineEmits([
 async function openEditDialog() {
   emit('open-edit-dialog', {
     nodeId: props.id,
-    ports: props.data.ports,
+    handles: props.data.handles,
     name: props.data.name,
-    variables: props.data.variables,
-    portLabels: props.data.portLabels,
+    module: props.data.module,
   })
 }
 
@@ -215,9 +214,8 @@ function openCellMLEditDialog() {
 function openEditParameterDialog() {
   emit('open-parameter-editor-dialog', {
     nodeId: props.id,
-    instanceName: props.data.name,
-    componentType: props.data.componentType,
-    componentFile: props.data.componentFile,
+    name: props.data.name,
+    mathRef: props.data.module.mathRef
   })
 }
 
@@ -241,7 +239,6 @@ const isMissingParameters = computed(() => {
       }
     }
   }
-
   return false
 })
 
@@ -250,21 +247,19 @@ function handleSetDomainType(typeCommand) {
   updateNodeData(props.id, { domainType: newType })
 }
 
-const applyPorts = async (portsToSet) => {
-  updateNodeData(props.id, { ports: portsToSet })
-
-  // Changing ports adds/removes handles, so we MUST refresh internals
+const applyHandles = async (handlesToSet) => {
+  updateNodeData(props.id, { handles: handlesToSet })
   await nextTick()
   updateNodeInternals(props.id)
 }
 
-async function removePort(portIdToRemove) {
-  const oldPorts = detachReactivity(props.data.ports)
+async function removeHandle(handleIdToRemove) {
+  const oldHandles = detachReactivity(props.data.handles)
 
-  const port = oldPorts.find((p) => p.uid === portIdToRemove)
-  if (!port) return
+  const handle = oldHandles.find((p) => p.uid === handleIdToRemove)
+  if (!handle) return
 
-  const handleId = getHandleId(port)
+  const handleId = getHandleId(handle)
 
   // Find all edges connected to this specific port handle.
   // We need to snapshot these edge objects so we can restore them later
@@ -276,15 +271,15 @@ async function removePort(portIdToRemove) {
 
   const edgesSnapshot = connectedEdges.map((edge) => detachReactivity(edge))
 
-  // Define New Ports (for Redo)
-  const newPorts = props.data.ports.filter((p) => p.uid !== portIdToRemove)
+  // Define New Handles (for Redo)
+  const newHandles = props.data.handles.filter((h) => h.uid !== handleIdToRemove)
 
   // Add Composite Command to History
   historyStore.executeAndAddCommand({
-    type: 'remove-port',
+    type: 'remove-handle',
     undo: async () => {
-      // Restore the port first (so the handle exists in the DOM).
-      await applyPorts(oldPorts)
+      // Restore the handle first (so the handle exists in the DOM).
+      await applyHandles(oldHandles)
 
       // Then, restore the edges.
       if (edgesSnapshot.length > 0) {
@@ -298,53 +293,45 @@ async function removePort(portIdToRemove) {
       }
 
       // Then, remove the port
-      await applyPorts(newPorts)
+      await applyHandles(newHandles)
     },
   })
 }
 
-const addPort = async (portToAdd) => {
-  const oldPorts = [...props.data.ports]
-  // create stable node id
+const addHandle = async (handleToAdd) => {
+  const oldHandles = [...props.data.handles]
+
   const newPort = {
-    ...portToAdd,
+    ...handleToAdd,
     uid: crypto.randomUUID(),
   }
 
-  // Create a new array with the old ports + the new one
-  const newPorts = [...props.data.ports, newPort]
+  const newHandles = [...props.data.handles, newPort]
 
-  // Tell Vue Flow to update this node's data
-  // This will cause the component to re-render
-  await applyPorts(newPorts)
+  await applyHandles(newHandles)
 
   historyStore.addCommand({
-    type: 'add-port',
+    type: 'add-handle',
     undo: async () => {
-      applyPorts(oldPorts)
+      applyHandles(oldHandles)
     },
     redo: async () => {
-      applyPorts(newPorts)
+      applyHandles(newHandles)
     },
   })
 }
 
 const isEditing = ref(false)
 const editingName = ref('')
-const inputRef = ref(null) // This is a template ref for the input
+const inputRef = ref(null) 
 
-// This function is triggered by the double-click
 async function startEditing(event) {
-  // Don't allow click-through to the flow pane
   event.stopPropagation()
 
   isEditing.value = true
   editingName.value = props.data.name
 
-  // Wait for Vue to re-render and show the input
   await nextTick()
-
-  // Focus the input
   inputRef.value?.focus()
 }
 
@@ -427,10 +414,6 @@ function openContextMenu(event) {
   top: 0px;
   right: 0px;
   z-index: 10;
-  /* Ensure it sits above other card content */
-
-  /* Optional: Add a white background circle so the icon pops 
-     if it overlaps a border or busy background */
   background-color: white;
   border-radius: 50%;
   width: 20px;

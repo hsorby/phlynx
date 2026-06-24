@@ -87,6 +87,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
       name: moduleData.moduleRef.includes(":") ? moduleData.moduleRef.split(":")[0] : moduleData.moduleRef,
       module: moduleData,
       parameters: [],
+      handles: [],
     }
 
     const nodeId = getId(getNodes.value.map((n) => n.id))
@@ -120,6 +121,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
         label: componentFile ? `${componentName} — ${componentFile}` : componentName, // SMELL - label could be a computed value?
         module: instanceData.module,
         parameters: instanceData.parameters,
+        handles: instanceData.handles,
       },
     }
 

@@ -10,7 +10,7 @@ import { useGtm } from './useGtm'
 import { processCellMLData } from '../utils/cellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
 import { resolvePortCouplings } from '../utils/edges'
-import { getHandleId } from '../utils/portHandles'
+import { getHandleId } from '../utils/handles'
 import { SOURCE_PORT_TYPE } from '../utils/constants'
 
 function getHandleName(edge) {

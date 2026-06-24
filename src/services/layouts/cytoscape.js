@@ -1,5 +1,5 @@
 import fcose from 'cytoscape-fcose'
-import { getHandleId } from '../../utils/portHandles'
+import { getHandleId } from '../../utils/handles'
 const cytoscapePromise = import('cytoscape')
 
 export async function runFcoseLayout(nodes, edges) {
