@@ -22,7 +22,7 @@ function createPorts(edges, nodeName) {
     .filter(e => e.source === nodeName || e.target === nodeName)
     .map(e => ({
       uid: crypto.randomUUID(),
-      port_type: SOURCE_PORT_TYPE,
+      portType: SOURCE_PORT_TYPE,
       side: 'left',
       name: getHandleName(e),
     }))

@@ -229,7 +229,7 @@
                 :data="props.data"
                 :selected="props.selected"
                 :class="getNodeClass(props)"
-                @open-edit-dialog="onOpenEditDialog"
+                @open-port-editor-dialog="onOpenPortEditorDialog"
                 @open-cellml-editor-dialog="onOpenCellMLEditorDialog"
                 @open-parameter-editor-dialog="onOpenParameterEditorDialog"
                 @open-replacement-dialog="onOpenReplacementDialog"
@@ -246,14 +246,15 @@
     </el-container>
   </el-container>
 
-  <EditInstanceDialog
-    v-model="editDialogVisible"
-    :initial-name="currentEditingNode?.name"
-    :variable-options="currentEditingNode?.variables || []"
-    :initial-port-labels="currentEditingNode?.portLabels || []"
+  <PortEditorDialog
+    v-model="portEditorDialogVisible"
     :node-id="currentEditingNode?.nodeId"
+    :initial-name="currentEditingNode?.name"
+    :variables="currentEditingNode?.module?.variables"
+    :initial-ports="currentEditingNode?.module?.ports"
+    :test="currentEditingNode"
     :existing-names="allNodeNames"
-    @confirm="onEditConfirm"
+    @confirm="onEditPortConfirm"
   />
 
   <CellMLEditorDialog 
@@ -262,9 +263,16 @@
     @save="handleCellMLSave"
   />
 
-  <EditParameterDialog v-model="editParameterDialogVisible" :nodeData="currentEditingNode" />
+  <EditParameterDialog 
+    v-model="editParameterDialogVisible"
+    :nodeData="currentEditingNode"
+  />
 
-  <SaveDialog v-model="saveDialogVisible" @confirm="onSaveConfirm" :default-name="libraryStore.lastSaveName" />
+  <SaveDialog
+    v-model="saveDialogVisible"
+    @confirm="onSaveConfirm"
+    :default-name="libraryStore.lastSaveName"
+  />
 
   <SaveDialog
     v-model="exportDialogVisible"
@@ -286,7 +294,7 @@
   <MacroBuilderDialog
     v-model="macroBuilderDialogVisible"
     @generate="onMacroBuilderGenerate"
-    @edit-node="onOpenEditDialog"
+    @edit-node="onOpenPortEditorDialog"
   />
 
   <ImportDialog
@@ -347,7 +355,6 @@ import { useGtm } from '../composables/useGtm'
 import LibraryArea from '../components/LibraryArea.vue'
 import Workbench from '../components/WorkbenchArea.vue'
 import InstanceNode from '../components/InstanceNode.vue'
-import EditInstanceDialog from '../components/EditInstanceDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 // import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
 import SaveDialog from '../components/SaveDialog.vue'
@@ -391,6 +398,7 @@ import {
 } from '../utils/save'
 import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import EditParameterDialog from '../components/EditParameterDialog.vue'
+import PortEditorDialog from '../components/PortEditorDialog.vue'
 
 const {
   addEdges,
@@ -638,7 +646,7 @@ const libraryStore = useLibraryStore()
 const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
 const editParameterDialogVisible = ref(false)
-const editDialogVisible = ref(false)
+const portEditorDialogVisible = ref(false)
 const cellMLEditorDialogVisible = ref(false)
 const saveDialogVisible = ref(false)
 const importDialogVisible = ref(false)
@@ -653,9 +661,9 @@ const edgeDialogSubgraph = ref(null)
 const importDialogRef = ref(null)
 
 const currentEditingNode = ref({
-  name: 'emptyNode',
+  name: '',
   variables: [],
-  nodeId: 'emptyNode',
+  nodeId: '',
   portLabels: [],
 })
 const currentImportMode = ref(null)
@@ -1409,11 +1417,11 @@ const handleExportCommand = (option) => {
   performExport(option)
 }
 
-function onOpenEditDialog(eventPayload) {
+function onOpenPortEditorDialog(eventPayload) {
   currentEditingNode.value = {
     ...eventPayload,
   }
-  editDialogVisible.value = true
+  portEditorDialogVisible.value = true
 }
 
 function onOpenCellMLEditorDialog(eventPayload) {
@@ -1661,14 +1669,16 @@ function recomputeEdgeCouplings(nodeId) {
   })
 }
 
-async function onEditConfirm(updatedData) {
+async function onEditPortConfirm(updatedData) {
   const { nodeId, instanceId } = currentEditingNode.value
   if (!nodeId) return
 
+  // smell - is this because of the macro edit tool...?
   const targetInstance = instanceId || FLOW_IDS.MAIN
   const { updateNodeData } = useVueFlow(targetInstance)
 
   updateNodeData(nodeId, updatedData)
+  currentEditingNode.value.module.ports = updatedData.ports // SMELL - the updateNodeData only works on structures that are one level deep
 
   recomputeEdgeCouplings(nodeId)
 }

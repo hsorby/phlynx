@@ -17,10 +17,10 @@ function normalisePorts(config) {
     const list = config?.[option.value] || []
     for (const p of list) {
       ports.push({
-        port_type: option.value,
+        portType: option.value,
         label: p.port_type, // SMELL - holdover from strange naming in circulatory autogen
         variables: p.variables || [],
-        multiport_type: parseMultiport(p.multi_port),
+        multiportType: parseMultiport(p.multi_port),
       })
     }
   })

@@ -85,7 +85,7 @@
           <el-button
             size="small"
             circle
-            @click="openEditDialog"
+            @click="openEditPortDialog"
             class="instance-button"
           >
             <el-icon><Edit /></el-icon>
@@ -183,18 +183,18 @@ const props = defineProps({
   data: {
     type: Object,
     required: true,
-  }, // {handles, module, parameters, id, name}
+  }, // { handles, module, parameters, id, name }
 })
 
 const emit = defineEmits([
   'open-cellml-editor-dialog',
-  'open-edit-dialog',
+  'open-port-editor-dialog',
   'open-parameter-editor-dialog',
   'open-context-menu',
 ])
 
-async function openEditDialog() {
-  emit('open-edit-dialog', {
+async function openEditPortDialog() {
+  emit('open-port-editor-dialog', {
     nodeId: props.id,
     handles: props.data.handles,
     name: props.data.name,
@@ -202,7 +202,7 @@ async function openEditDialog() {
   })
 }
 
-function openCellMLEditDialog() {
+function openEditCellMLDialog() {
   emit('open-cellml-editor-dialog', {
     nodeId: props.id,
     name: props.data.name,

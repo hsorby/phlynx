@@ -1255,7 +1255,6 @@ export function extractComponentsFromCellmlString(cellmlString) {
       const wrappedMathML = `<root>${compClone.math()}</root>`
       const doc = xmlParser.parseFromString(wrappedMathML, 'application/xml')
       if (!doc || hasParserError(doc)) {
-        console.log('why?')
         const componentName = component.name()
         component.delete()
         compClone.delete()

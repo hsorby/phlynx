@@ -218,7 +218,7 @@ export function parseCellMLConnections(cellmlContent, componentFile) {
 
           if (!acc.some((p) => p.port_type === portLabel)) {
             acc.push({
-              port_type: portLabel,
+              portType: portLabel,
               variables: [localVar],
             })
           }

@@ -25,7 +25,7 @@
         >
           <el-table-column prop="type" label="Type" width="200" sortable>
             <template #default="{ row }">
-              <strong>{{ row.port_type }}</strong>
+              <strong>{{ row.portType }}</strong>
             </template>
           </el-table-column>
 
@@ -42,7 +42,7 @@
 
           <el-table-column prop="multiport" label="Multiport" width="100">
             <template #default="{ row }">
-              {{ row.multiport_type }}
+              {{ row.multiportType }}
             </template>
           </el-table-column>
         </el-table>
