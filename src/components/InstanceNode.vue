@@ -116,7 +116,7 @@
           <el-button
             size="small"
             circle
-            @click="openCellMLEditDialog"
+            @click="openEditCellmlDialog"
             class="instance-button"
             :show-after="300"
             :auto-close="1200"
@@ -202,7 +202,7 @@ async function openEditPortDialog() {
   })
 }
 
-function openEditCellMLDialog() {
+function openEditCellmlDialog() {
   emit('open-cellml-editor-dialog', {
     nodeId: props.id,
     name: props.data.name,
