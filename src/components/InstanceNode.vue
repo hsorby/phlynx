@@ -25,7 +25,7 @@
         <el-input v-else ref="inputRef" v-model="editingName" size="small" @blur="saveEdit" @keyup.enter="saveEdit" />
       </div>
 
-      <div v-if="data.label" class="instance-label">{{ data.label }}</div>
+      <div class="instance-label">{{ instanceLabel }}</div>
       <div class="button-group">
         <el-tooltip
           effect="dark"
@@ -206,27 +206,28 @@ function openEditCellmlDialog() {
   emit('open-cellml-editor-dialog', {
     nodeId: props.id,
     name: props.data.name,
-    mathRef: props.data.module.mathRef,
-    moduleRef: props.data.module.moduleRef,
+    mathRef: props.data.mathRef,
+    moduleRef: props.data.moduleRef,
   })
 }
 
 function openEditParameterDialog() {
   emit('open-parameter-editor-dialog', {
     nodeId: props.id,
-    name: props.data.name,
-    mathRef: props.data.module.mathRef
+    variables: props.data.variables,
+    mathRef: props.data.mathRef,
   })
 }
+
+const instanceLabel = computed(() => {
+  return `${props.data.mathRef.split(':')[1]} [${props.data.mathRef.split(':')[0]}]`
+})
 
 const domainTypeClass = computed(() => {
   return props.data.domainType ? `domain-type-${props.data.domainType}` : 'domain-type-default'
 })
 
 const isMissingParameters = computed(() => {
-  const name = props.data?.name
-  if (!name) return true // If there's no component file, it's "missing" parameters
-
   for (const variable of props.data.variables || []) {
     if (isEditableVariableType(variable.type)) {
       if (variable.type === 'global_constant') {
@@ -234,7 +235,7 @@ const isMissingParameters = computed(() => {
         if (isEmpty(globalConstant?.value)) {
           return true
         }
-      } else if (isEmpty(variable.value)) {
+      } else if (isEditableVariableType(variable.type) && isEmpty(variable.value)) {
         return true
       }
     }

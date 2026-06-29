@@ -30,6 +30,7 @@ function normalisePorts(config) {
 function normaliseVariables(RawVariablesAndUnits = []) {
   return RawVariablesAndUnits.map(([name, unit, access, type]) => ({
     name,
+    value: null,
     unit,
     access,
     type,

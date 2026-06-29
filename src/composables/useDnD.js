@@ -83,34 +83,16 @@ export default function useDragAndDrop(pendingHistoryNodes) {
    * @returns {{ nodeId: string, nodeType: string }}
    */
   function createInstanceNode(moduleData, position) {
-    const instanceData = {
-      name: moduleData.moduleRef.includes(":") ? moduleData.moduleRef.split(":")[0] : moduleData.moduleRef,
-      module: moduleData,
-      parameters: [],
-      handles: [],
-    }
-
     const nodeId = getId(getNodes.value.map((n) => n.id))
     pendingHistoryNodes.add(nodeId)
 
     const existingNames = new Set(getNodes.value.map((n) => n.data.name))
-    const finalName = generateUniqueInstanceName(instanceData, existingNames)
+    const instanceName = moduleData.moduleRef.includes(":") ? moduleData.moduleRef.split(":")[0] : moduleData.moduleRef
+    const finalName = generateUniqueInstanceName(instanceName, existingNames)
 
-    const componentFile = instanceData.module.mathRef.split(":")[0]
-    const componentName = instanceData.module.mathRef.split(":")[1]
+    const componentFile = moduleData.mathRef.split(":")[0]
+    const componentName = moduleData.mathRef.split(":")[1]
     const nodeType = componentFile === GHOST_MODULE_FILENAME ? GHOST_NODE_TYPE : 'instanceNode'
-
-    const math = libraryStore.availableMath.get(`${componentFile}:${componentName}`)
-
-    // const portLabels = buildPortLabels(instanceData) - don't think this is needed anymore
-
-    // libraryStore.setParameterValuesForInstance(
-    //   finalName,
-    //   variables,
-    //   componentFile,
-    //   componentType,
-    //   configIndex
-    // )
 
     const newNode = {
       id: nodeId,
@@ -118,10 +100,11 @@ export default function useDragAndDrop(pendingHistoryNodes) {
       position,
       data: {
         name: finalName,
-        label: componentFile ? `${componentName} — ${componentFile}` : componentName, // SMELL - label could be a computed value?
-        module: instanceData.module,
-        parameters: instanceData.parameters,
-        handles: instanceData.handles,
+        mathRef: moduleData.mathRef,
+        moduleRef: moduleData.moduleRef,
+        variables: moduleData.variables,
+        ports: moduleData.ports,
+        handles: [],
       },
     }
 

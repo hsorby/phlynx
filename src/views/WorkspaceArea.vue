@@ -263,9 +263,11 @@
     @save="handleCellMLSave"
   />
 
-  <EditParameterDialog 
-    v-model="editParameterDialogVisible"
-    :nodeData="currentEditingNode"
+  <ParameterEditorDialog 
+    v-model="parameterEditorDialogVisible"
+    :node-id="currentEditingNode?.nodeId"
+    :variables="currentEditingNode?.variables"
+    @save="handleParameterSave"
   />
 
   <SaveDialog
@@ -397,7 +399,7 @@ import {
   legacyDownload
 } from '../utils/save'
 import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
-import EditParameterDialog from '../components/EditParameterDialog.vue'
+import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
 import PortEditorDialog from '../components/PortEditorDialog.vue'
 
 const {
@@ -645,7 +647,7 @@ const libraryStore = useLibraryStore()
 
 const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
-const editParameterDialogVisible = ref(false)
+const parameterEditorDialogVisible = ref(false)
 const portEditorDialogVisible = ref(false)
 const cellMLEditorDialogVisible = ref(false)
 const saveDialogVisible = ref(false)
@@ -1435,7 +1437,7 @@ function onOpenParameterEditorDialog(eventPayload) {
   currentEditingNode.value = {
     ...eventPayload,
   }
-  editParameterDialogVisible.value = true
+  parameterEditorDialogVisible.value = true
 }
 
 function filterConfig(config, validPortNames, validVariableNames, updatedModule) {
@@ -1528,11 +1530,9 @@ async function handleCellMLSave(saveData) {
   // Propagate Changes (Update Nodes and Filter Configs).
   const validPortNames = updateGraphNodesAndPorts(saveData, targetModule)
 
-  // Clean the Config (Remove ports that no longer exist).
-  // Now that we have the valid ports from the new CellML, clean the config.
-  const activeConfig = targetModule.configs[targetModule.configIndex]
-  const validVariableNames = new Set((targetModule?.variables || []).map((v) => v.name))
-  filterConfig(activeConfig, validPortNames, validVariableNames, targetModule)
+async function handleParameterSave(saveData) {
+  const { nodeId, variables } = saveData
+  updateNodeData(nodeId, { variables })
 }
 
 /**

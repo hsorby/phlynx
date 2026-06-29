@@ -33,7 +33,6 @@ export const useLibraryStore = defineStore('library', () => {
   const availableModules = ref(new Map())
   const availableMath = ref(new Map())
   const availableUnits = ref([])
-  const availableParameters = ref(new Map())
   const availableVariableNameIdMap = ref(new Map())
   const lastSaveName = ref('phlynx-project')
   const lastExportName = ref('phlynx-export')
@@ -63,47 +62,6 @@ export const useLibraryStore = defineStore('library', () => {
     return String(num)
   }
 
-  function createParameterKey(parameter) {
-    return `${parameter.variable_name.trim()}||${parameter.units.trim()}||${normaliseValue(
-      parameter.value.trim()
-    )}||${parameter.data_reference.trim()}`
-  }
-
-  // SMELL - should parameters even be in the library store?
-  function addParameterFile(filename, data) {
-    if (!data || !Array.isArray(data)) return false
-
-    for (const param of data) {
-      const key = createParameterKey(param)
-      if (availableParameters.value.has(key)) {
-        availableParameters.value.get(key).count += 1
-        availableParameters.value.get(key).source.push(filename)
-        continue
-      }
-
-      const trimmedVariableName = param.variable_name.trim()
-      if (trimmedVariableName === '' || trimmedVariableName === '#') {
-        continue
-      }
-
-      const newParameterSet = {
-        data_reference: param.data_reference.trim(),
-        variable_name: trimmedVariableName,
-        units: param.units.trim(),
-        value: normaliseValue(param.value.trim()),
-        source: [filename],
-        count: 1,
-        id: 'id_' + availableParameters.value.size,
-      }
-      availableParameters.value.set(key, newParameterSet)
-      if (!availableVariableNameIdMap.value.has(trimmedVariableName)) {
-        availableVariableNameIdMap.value.set(trimmedVariableName, [])
-      }
-      availableVariableNameIdMap.value.get(trimmedVariableName).push(key)
-    }
-    return true
-  }
-
   function clearGlobalConstants() {
     globalConstants.value.clear()
   }
@@ -114,44 +72,6 @@ export const useLibraryStore = defineStore('library', () => {
 
   function getGlobalConstant(variableName) {
     return globalConstants.value.get(variableName)
-  }
-
-  // SMELLY
-  function getParameterValueForInstanceVariable(instanceVariable) {
-    let results = []
-    const paramKeys = availableVariableNameIdMap.value.get(instanceVariable)
-    if (paramKeys) {
-      results = paramKeys.map((key) => availableParameters.value.get(key))
-    }
-
-    return results
-  }
-
-  // SMELLY 
-  function setParameterValuesForInstance(instanceName, variables, collectionFile, componentType, configIndex) {
-    const modules = findModulesByComponentName(collectionFile, componentType)
-    let variablesAndUnits = []
-    if (modules?.configs && configIndex !== undefined && modules.configs[configIndex]) {
-      variablesAndUnits = modules.configs[configIndex]?.variables_and_units ?? []
-    }
-    const configMap = new Map(variablesAndUnits.map((arr) => [arr[0], arr]))
-    for (const variable of variables) {
-      const configEntry = configMap.get(variable.name)
-      // Default to 'variable' if not found in config
-      const variableType = configEntry ? configEntry[3] : 'variable'
-      variable.type = variableType
-      if (isEditableVariableType(variableType)) {
-        const lookupName = variable.name + (variableType === 'global_constant' ? '' : '_' + instanceName)
-        const parameterValues = getParameterValueForInstanceVariable(lookupName)
-        if (parameterValues.length === 1 && parameterValues[0].units === variable.units) {
-          if (variableType === 'global_constant') {
-            assignGlobalConstant(variable.name, parameterValues[0].value, parameterValues[0].units)
-          } else {
-            variable.value = parameterValues[0].value
-          }
-        }
-      }
-    }
   }
 
   // --- SETTERS ---
@@ -295,7 +215,6 @@ export const useLibraryStore = defineStore('library', () => {
   function getState() {
     return {
       availableCollections: availableCollections.value,
-      availableParameters: Array.from(availableParameters.value.entries()),
       availableUnits: availableUnits.value,
       availableVariableNameIdMap: Array.from(availableVariableNameIdMap.value.entries()),
       globalConstants: Array.from(globalConstants.value.entries()),
@@ -322,7 +241,6 @@ export const useLibraryStore = defineStore('library', () => {
     addConfigFile,
     addMathFile,
     addMath,
-    addParameterFile,
     addUnitsFile,
     assignGlobalConstant,
     clearGlobalConstants,
@@ -330,11 +248,9 @@ export const useLibraryStore = defineStore('library', () => {
     removeCollection,
     setLastExportName,
     setLastSaveName,
-    setParameterValuesForInstance,
 
     // Query
     getGlobalConstant,
-    getParameterValueForInstanceVariable,
     getState,
 
     // Debug

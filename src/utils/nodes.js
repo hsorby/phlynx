@@ -10,12 +10,12 @@ const { getNodes } = useVueFlow(FLOW_IDS.MAIN)
  * @param {*} existingNames - A set of existing names to check against.
  * @returns {string} A unique instance name.
  */
-export function generateUniqueInstanceName(instanceData, existingNames) {
-  let finalName = instanceData.name
+export function generateUniqueInstanceName(currentName, existingNames) {
+  let finalName = currentName
   let counter = 1
 
   while (existingNames.has(finalName)) {
-    finalName = `${instanceData.name}_${counter}`
+    finalName = `${currentName}_${counter}`
     counter++
   }
 
