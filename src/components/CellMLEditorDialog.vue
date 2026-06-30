@@ -19,15 +19,6 @@
           @save="handleSave('key')"
         />
       </div>
-
-      <div class="status-bar">
-        <span v-if="isInternalModule" class="tag internal">
-          <i class="icon-lock"></i> Read-Only Source (Internal)
-        </span>
-        <span v-else class="tag user">
-          <i class="icon-user"></i> Editable Source (User Workspace)
-        </span>
-      </div>
     </div>
 
     <template #footer>
@@ -35,7 +26,7 @@
         <!-- "Apply to all" checkbox — only shown when sibling nodes exist -->
         <el-tooltip
           v-if="siblingCount > 0"
-          :content="`Also update ${siblingCount} other node${siblingCount !== 1 ? 's' : ''} using ${props.nodeData.componentType} from ${props.nodeData.componentFile}`"
+          :content="`Also update ${siblingCount} other node${siblingCount !== 1 ? 's' : ''} using ${componentName} from ${componentFile}`"
           placement="top"
           effect="light"
         >
@@ -79,8 +70,20 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  nodeData: {
-    type: Object,
+  nodeId: {
+    type: String,
+    required: true,
+  },
+  name: {
+    type: String,
+    default: '',
+  },
+  mathRef: {
+    type: String,
+    required: true,
+  },
+  variables: {
+    type: Array,
     required: true,
     // Expected: { nodeId, name, mathRef, moduleRef }
   },
@@ -98,15 +101,11 @@ const originalModel = ref('')
 const applyToAll = ref(false)
 
 const componentFile = computed(() => {
-  return props.nodeData?.mathRef?.split(":")[0]
+  return props.mathRef?.split(":")[0]
 })
 
 const componentName = computed(() => {
-  return props.nodeData?.mathRef?.split(":")[1]
-})
-
-const isInternalModule = computed(() => {
-  return !!componentFile && componentFile !== USER_MODULES_FILE
+  return props.mathRef?.split(":")[1]
 })
 
 const isDirty = computed(() => {
@@ -114,7 +113,7 @@ const isDirty = computed(() => {
 })
 
 const dialogTitle = computed(() => {
-  return `Editing: ${props.nodeData.name} (${componentName.value} - ${componentFile.value})`
+  return `Editing: ${props.name} (${componentName.value} - ${componentFile.value})`
 })
 
 /**
@@ -123,27 +122,32 @@ const dialogTitle = computed(() => {
  * name happens to match.
  */
 const siblingCount = computed(() => {
+  return siblings.value.length
+})
+
+const siblings = computed(() => {
   if (!componentName.value || !componentFile.value) return 0
 
-  return nodes.value.filter(
-    (n) =>
-      n.id !== props.nodeData.nodeId &&
-      n.data?.module?.mathRef === props.nodeData.mathRef
-  ).length
+  return nodes.value
+    .filter((n) =>
+      n.id !== props.nodeId &&
+      n.data?.mathRef === props.mathRef
+    )
+    .map((n) => n.id)
 })
 
 // Reset checkbox when dialog opens for a new node.
-watch(() => props.nodeData, () => { applyToAll.value = false })
+watch(() => props.modelValue, () => { applyToAll.value = false })
 
 // ── Load content when dialog opens ──────────────────────────────────────────
 
 watch(
-  () => props.nodeData,
-  async (newData) => {
-    if (newData && props.nodeData) {
+  () => props.modelValue,
+  async (isOpen) => {
+    if (isOpen && props.mathRef) {
       loading.value = true
       try {
-        const math = await store.availableMath.get(newData.mathRef) 
+        const math = await store.availableMath.get(props.mathRef) 
         currentModel.value = math
         originalModel.value = math
       } catch (e) {
@@ -152,8 +156,7 @@ watch(
         loading.value = false
       }
     }
-  },
-  { deep: true }
+  }
 )
 
 const checkDirtyAndProceed = (confirmAction) => {
@@ -185,64 +188,39 @@ const handleSave = async (source) => {
     ElMessageBox.alert('Could not find a valid component name in the model.', 'Parse Error', { type: 'error' })
     return
   }
-
-  const newName = componentNames[0].trim()
-  const currentName = props.nodeData.componentType
+  const newComponentName = componentNames[0].trim()
+  const newMathRef = `${componentFile.value}:${newComponentName}`
 
   try {
-    // Determine whether to replace an existing UserModules entry or append.
-    //
-    // We must not replace when other nodes still point to currentName:
-    //   - Internal modules: always appending (first write to UserModules).
-    //   - scope 'single' with siblings: other nodes depend on currentName,
-    //     so we append newName alongside it rather than removing currentName.
-    //   - scope 'single' with no siblings: safe to replace in place.
-    //   - scope 'all': replace in place, all nodes will be redirected to newName.
-    const hasSiblings = siblingCount.value > 0
-    const isAppending = isInternalModule.value || (!applyToAll.value && hasSiblings)
-
-    const existingModel = await store.getModelByCollectionName(USER_MODULES_FILE)
-
-    // Block if the name is already taken by a different component.
-    // Updating in place (newName === currentName and we own it) is always allowed.
-    const nameExists = doesComponentExistInModel(existingModel, newName)
-    const isUpdatingInPlace = nameExists && newName === currentName && !isAppending
-
-    if (nameExists && !isUpdatingInPlace) {
-      ElMessageBox.alert(
-        `A component named "${newName}" already exists in User Modules. Please rename the component in the editor before saving.`,
+    const mathRefExists = store.availableMath.has(newMathRef)
+    if (mathRefExists) {
+      ElMessageBox.alert( 
+        `Name clash detected, please rename the component in the editor before saving.`,
         'Name Conflict',
         { type: 'error' }
       )
       return
+    } else {
+      store.addMath(newMathRef, currentModel.value)
     }
 
-    const oldNameForMerge = isAppending ? undefined : currentName
-
-    const mergedModel = mergeModelComponents(
-      existingModel,
-      currentModel.value,
-      newName,
-      oldNameForMerge
-    )
-    if (!mergedModel) throw new Error('Merge operation returned empty string.')
+    //   - scope 'single' with siblings: create new mathRef and update current instance
+    //   - scope 'all': update math at mathRef and update mathRef (if needed)
+    const updateAll = (siblingCount.value > 0 && applyToAll.value) || siblingCount.value === 0
 
     trackEvent('editor_action', {
       category: 'Editor',
-      action: applyToAll.value ? 'save_all' : 'save_single',
-      label: newName,
+      action: updateAll ? 'save_all' : 'save_single',
+      label: newComponentName,
       file_type: 'cellml',
     })
 
     emit('save', {
-      nodeId: props.nodeData.nodeId,
-      scope: applyToAll.value ? 'all' : 'single',
-      model: mergedModel,
-      componentType: newName,
-      componentFile: USER_MODULES_FILE,
-      originalComponentType: currentName,
-      originalComponentFile: props.nodeData.componentFile,
-      originalConfigIndex: props.nodeData.configIndex,
+      updateAll,
+      mathRef: newMathRef,
+      math: currentModel.value,
+      nodeId: props.nodeId,
+      siblings: updateAll ? siblings.value : undefined,
     })
 
     emit('update:modelValue', false)

@@ -258,7 +258,10 @@
 
   <CellMLEditorDialog 
     v-model="cellMLEditorDialogVisible"
-    :nodeData="currentEditingNode"
+    :node-id="currentEditingNode?.nodeId"
+    :name="currentEditingNode?.name"
+    :math-ref="currentEditingNode?.mathRef"
+    :variables="currentEditingNode?.variables"
     @save="handleCellMLSave"
   />
 
@@ -1478,57 +1481,25 @@ function filterConfig(config, validPortNames, validVariableNames, updatedModule)
  */
 async function handleCellMLSave(saveData) {
 
-  const { componentFile, componentName, originalComponentFile, originalComponentName, originalConfigIndex, model } = saveData
-
-  const isRename = originalComponentName !== componentName
-  const isNewFile = originalComponentFile !== componentFile
-  const isForkOrRename = isRename || isNewFile
-
-  // Get the original configuration to migrate (if it exists).
-  const originalModule = libraryStore.findModulesByComponentName(originalComponentFile, originalComponentType)
-
-  // Safety check: If we can't find the original, create a blank config
-  let configToMigrate = {}
-  if (originalModule && originalModule.configs && originalModule.configs[originalConfigIndex]) {
-    configToMigrate = detachReactivity(originalModule.configs[originalConfigIndex])
+  // Update math references
+  updateNodeData(nodeId, { mathRef })
+  if (updateAll) {
+    siblings.forEach((siblingId) => {
+      updateNodeData(siblingId, { mathRef })
+    })
   }
 
-  // Load the New Data into the Store
-  // This registers the module under the name found in 'model'.
-  await loadCellMLData(model, componentFile, { notify: false })
+  // TO DO - Need to update variables and ports to reflect the updated math somehow...
 
-  // Retrieve the "Target" Module (The one we just loaded)
-  let targetModule = libraryStore.findModulesByComponentName(componentFile, componentType)
+  // // Propagate Changes (Update Nodes and Filter Configs).
+  // const validPortNames = updateGraphNodesAndPorts(saveData, targetModule)
 
-  if (!targetModule) {
-    console.warn(`Mismatch: Requested ${componentType}, but store didn't register it. Check component name extraction.`)
-    return
-  }
-
-  // Update the configuration.
-  if (!targetModule.configs) {
-    targetModule.configs = []
-  }
-
-  if (isForkOrRename) {
-    // CASE A: Fork or Rename -> We add a NEW config entry.
-
-    // Update metadata to match new home.
-    configToMigrate.component_file = componentFile
-    configToMigrate.component_type = componentName
-
-    // Push as a new config.
-    targetModule.configs.push(configToMigrate)
-    targetModule.configIndex = targetModule.configs.length - 1
-  } else {
-    // CASE B: Simple Update -> We update the EXISTING config in place.
-    // We don't push a new one, we just ensure the current one is up to date.
-    targetModule.configs[originalConfigIndex] = configToMigrate
-    targetModule.configIndex = originalConfigIndex
-  }
-
-  // Propagate Changes (Update Nodes and Filter Configs).
-  const validPortNames = updateGraphNodesAndPorts(saveData, targetModule)
+  // // Clean the Config (Remove ports that no longer exist).
+  // // Now that we have the valid ports from the new CellML, clean the config.
+  // const activeConfig = targetModule.configs[targetModule.configIndex]
+  // const validVariableNames = new Set((targetModule?.variables || []).map((v) => v.name))
+  // filterConfig(activeConfig, validPortNames, validVariableNames, targetModule)
+}
 
 async function handleParameterSave(saveData) {
   const { nodeId, variables } = saveData

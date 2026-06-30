@@ -208,7 +208,7 @@ function openEditCellmlDialog() {
     nodeId: props.id,
     name: props.data.name,
     mathRef: props.data.mathRef,
-    moduleRef: props.data.moduleRef,
+    variables: props.data.variables,
   })
 }
 
