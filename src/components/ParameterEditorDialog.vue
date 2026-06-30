@@ -32,7 +32,7 @@
           <span>Bulk Update Type:</span>
           <el-select v-model="bulkTypeValue" placeholder="Select type..." style="width: 200px">
             <el-option
-              v-for="types in parameterTypeOptions"
+              v-for="types in PARAMETER_TYPE_OPTIONS"
               :key="types.value"
               :label="types.label"
               :value="types.value"
@@ -76,7 +76,7 @@
             <template #default="scope">
               <el-select v-model="scope.row.type" @change="handleTypeChange(scope.row)">
                 <el-option
-                  v-for="types in parameterTypeOptions"
+                  v-for="types in PARAMETER_TYPE_OPTIONS"
                   :key="types.value"
                   :label="types.label"
                   :value="types.value"
@@ -116,6 +116,7 @@ import {
 } from 'element-plus'
 import { Warning } from '@element-plus/icons-vue'
 import { useVueFlow } from '@vue-flow/core'
+import { PARAMETER_TYPE_OPTIONS } from '../utils/constants'
 
 import { useLibraryStore } from '../stores/libraryStore'
 import { isEditableVariableType } from '../utils/variables'
@@ -152,13 +153,6 @@ const parameterRows = ref([])
 const somethingChanged = ref(false)
 const selectedRows = ref([])
 const bulkTypeValue = ref('')
-
-const parameterTypeOptions = [
-  { value: 'constant', label: 'constant' },
-  { value: 'global_constant', label: 'global_constant' },
-  { value: 'variable', label: 'variable' },
-  { value: 'boundary_condition', label: 'boundary_condition' },
-]
 
 const filteredParameterRows = computed(() => {
   if (!searchQuery.value.trim()) {
@@ -218,19 +212,6 @@ watch(
   }
 )
 
-// Handle type change re-triggers lookup
-function handleTypeChange(row) {
-  const result = resolveValue(row.name, row.type, row.unit)
-
-  row.value = result.value
-  row.valueOptions = result.options
-  handleEntryChange() // Mark as changed when user changes type
-}
-
-function handleEntryChange() {
-  somethingChanged.value = true
-}
-
 function handleSelectionChange(selection) {
   selectedRows.value = selection
 }
@@ -240,10 +221,7 @@ function applyBulkType() {
 
   selectedRows.value.forEach((row) => {
     row.type = bulkTypeValue.value
-    handleTypeChange(row)
   })
-
-  handleEntryChange()
   
   // Clear selections and bulk type after applying
   parametersTable.value.clearSelection()

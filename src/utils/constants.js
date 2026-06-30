@@ -24,6 +24,13 @@ export const FLOW_IDS = {
   EDGE: 'edge-conn-flow',
 }
 
+export const PARAMETER_TYPE_OPTIONS = [
+  { value: 'constant', label: 'constant' },
+  { value: 'global_constant', label: 'global_constant' },
+  { value: 'variable', label: 'variable' },
+  { value: 'boundary_condition', label: 'boundary_condition' },
+]
+
 export const AFFINE_UNIT_CONVERSIONS = {
   celsius:    { baseUnit: 'kelvin',  scale: 1,        offset: 273.15  },
   fahrenheit: { baseUnit: 'kelvin',  scale: 5 / 9,    offset: 255.372 },
