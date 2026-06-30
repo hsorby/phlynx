@@ -183,7 +183,7 @@ const props = defineProps({
   data: {
     type: Object,
     required: true,
-  }, // { handles, module, parameters, id, name }
+  }, // { handles, variables, mathRef, moduleRef, ports, name }
 })
 
 const emit = defineEmits([
@@ -197,8 +197,9 @@ async function openEditPortDialog() {
   emit('open-port-editor-dialog', {
     nodeId: props.id,
     handles: props.data.handles,
-    name: props.data.name,
-    module: props.data.module,
+    initialName: props.data.name,
+    initialPorts: props.data.ports,
+    variables: props.data.variables,
   })
 }
 

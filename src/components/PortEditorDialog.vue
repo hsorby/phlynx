@@ -151,7 +151,7 @@ const props = defineProps({
   },
   nodeId: {
     type: String,
-    required: true,
+    default: '',
   },
   initialName: {
     type: String,
@@ -219,7 +219,7 @@ function handleConfirm() {
   )
 
   const invalidFactor = finalPorts.find(
-    (p) => p.multiportType === 'Multiply' && (p.multiplyFactor === null || p.multiplyFactor === undefined || p.multiplyFactor === 0)
+    (p) => p.multiportType === 'Multiply' && (isEmpty(p.multiplyFactor))
   )
   
   if (invalidFactor) {

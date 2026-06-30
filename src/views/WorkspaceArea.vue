@@ -249,10 +249,9 @@
   <PortEditorDialog
     v-model="portEditorDialogVisible"
     :node-id="currentEditingNode?.nodeId"
-    :initial-name="currentEditingNode?.name"
-    :variables="currentEditingNode?.module?.variables"
-    :initial-ports="currentEditingNode?.module?.ports"
-    :test="currentEditingNode"
+    :initial-name="currentEditingNode?.initialName"
+    :initial-ports="currentEditingNode?.initialPorts"
+    :variables="currentEditingNode?.variables"
     :existing-names="allNodeNames"
     @confirm="onEditPortConfirm"
   />
@@ -759,6 +758,7 @@ onConnect((connection) => {
   const targetNode = findNode(connection.target)
 
   if (!sourceNode || !targetNode) return
+  if (sourceNode === targetNode) return
 
   // Derive ordinal indices from the existing edge graph:
   //   sourceIndex = how many edges already leave from this source node
