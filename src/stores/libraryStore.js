@@ -33,7 +33,6 @@ export const useLibraryStore = defineStore('library', () => {
   const availableModules = ref(new Map())
   const availableMath = ref(new Map())
   const availableUnits = ref([])
-  const availableVariableNameIdMap = ref(new Map())
   const lastSaveName = ref('phlynx-project')
   const lastExportName = ref('phlynx-export')
   const globalConstants = ref(new Map())
@@ -157,6 +156,9 @@ export const useLibraryStore = defineStore('library', () => {
     if (!availableCollections.value.has(oldMathRef)) return
 
     const existingSet = availableCollections.value.get(oldMathRef)
+    existingSet.forEach((moduleRef) => {
+      availableModules.value.get(moduleRef).mathRef = newMathRef
+    })
     availableCollections.value.delete(oldMathRef)
     availableCollections.value.set(newMathRef, existingSet)
   }
@@ -184,12 +186,6 @@ export const useLibraryStore = defineStore('library', () => {
   function loadState(state) {
     mergeIntoStore(state.availableCollections, availableCollections.value)
     mergeIntoStore(state.availableUnits, availableUnits.value)
-    if (state.availableParameters) {
-      mergeIn(new Map(state.availableParameters), availableParameters.value)
-    }
-    if (state.availableVariableNameIdMap) {
-      mergeIn(new Map(state.availableVariableNameIdMap), availableVariableNameIdMap.value)
-    }
     if (state.globalConstants) {
       mergeIn(new Map(state.globalConstants), globalConstants.value)
     }
@@ -216,7 +212,6 @@ export const useLibraryStore = defineStore('library', () => {
     return {
       availableCollections: availableCollections.value,
       availableUnits: availableUnits.value,
-      availableVariableNameIdMap: Array.from(availableVariableNameIdMap.value.entries()),
       globalConstants: Array.from(globalConstants.value.entries()),
       lastExportName: lastExportName.value,
       lastSaveName: lastSaveName.value,
