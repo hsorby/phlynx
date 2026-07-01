@@ -13,9 +13,10 @@
 
       <div v-else class="editor-wrapper">
         <CellMLTextEditor
+          :key="mathRef"
           :model-value="currentModel"
-          :regenerate-on-change="modelValue"
           @update:code="currentModel = $event"
+          @ready="handleEditorReady"
           @save="handleSave('key')"
         />
       </div>
@@ -85,7 +86,6 @@ const props = defineProps({
   variables: {
     type: Array,
     required: true,
-    // Expected: { nodeId, name, mathRef, moduleRef }
   },
 })
 
@@ -158,6 +158,16 @@ watch(
     }
   }
 )
+
+// Called once by CellMLTextEditor after it mounts, with the canonical
+// (round-tripped) form of the model it was given, so
+// isDirty only ever reflects genuine edits, not incidental differences
+// between the raw stored form and whatever the editor's own pipeline
+// produces for identical content.
+const handleEditorReady = (canonicalMath) => {
+  currentModel.value = canonicalMath
+  originalModel.value = canonicalMath
+}
 
 const checkDirtyAndProceed = (confirmAction) => {
   if (isDirty.value) {
