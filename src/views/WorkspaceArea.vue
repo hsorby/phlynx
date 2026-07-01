@@ -2151,40 +2151,24 @@ const copySelection = async () => {
 
   const storeSnapshot = {}
   for (const node of nodes) {
-    const { componentFile, componentType, configIndex } = node.data
-    if (!componentFile || !componentType) continue
+    const { moduleRef, mathRef } = node.data
+    if (!moduleRef || !mathRef) continue
 
-    if (!libraryStore.hasCollection(componentFile)) continue
-    const model = libraryStore.getModelByCollectionName(componentFile)
+    if (!libraryStore.availableMath.has(mathRef) || !libraryStore.availableModules.has(moduleRef)) continue
+    const math = libraryStore.availableMath.get(mathRef)
+    const module = libraryStore.availableModules.get(moduleRef)
+    if (!math || !module) continue
 
-    const modules = libraryStore.findModulesByComponentName(componentFile, componentType)
-    if (!modules || modules.length === 0) continue
-
-    const key = `${componentFile}::${componentType}`
+    const key = `${moduleRef}::${mathRef}`
     if (storeSnapshot[key]) {
-      // SMELL - data structure is wrong - config index should be on modules (modules[configIndex].config)
-      const config = modules.configs?.[configIndex]
-      if (config !== undefined && !storeSnapshot[key].configs.some(
-        (c) => c.module_subtype === config.module_subtype && c.module_type === config.module_type
-      )) {
-        storeSnapshot[key].configs.push(detachReactivity(config))
-      }
       continue
     }
 
-    const config = modules.configs?.[configIndex]
-
-    const { xml: componentModel } = extractComponentsFromCellmlString(
-      model,
-      componentType
-    )
-    if (!componentModel) continue
-
     storeSnapshot[key] = {
-      componentFile,
-      componentType,
-      configs: config !== undefined ? [detachReactivity(config)] : [],
-      model: componentModel,
+      mathRef,
+      math,
+      moduleRef,
+      module,
     }
   }
 
@@ -2221,42 +2205,11 @@ const pasteSelection = async (atMouse = false) => {
 
   if (sourceClipboard.storeSnapshot) {
     for (const entry of Object.values(sourceClipboard.storeSnapshot)) {
-      if (!libraryStore.hasCollection(entry.componentFile)) {
-        // The whole file is absent 
-        libraryStore.addOrUpdateCollection({
-          componentFile: entry.componentFile,
-          model: entry.model,
-          modules: [{
-            name: entry.componentType, // SMELL
-            componentType: entry.componentType,
-            configs: entry.configs,
-          }],
-        })
-      } else {
-        // The file exists but this specific component or config may be missing
-        const existingComponent = libraryStore.findModulesByComponentName(entry.componentFile, entry.componentType)
-        if (!existingComponent) {
-          libraryStore.addOrUpdateCollection({
-            componentFile: entry.componentFile,
-            model: entry.model,
-            modules: [{
-              name: entry.componentType, // SMELL - currently duplicate info
-              componentType: entry.componentType,
-              configs: entry.configs,
-            }],
-          })
-        } else {
-          // Component exists but config is missing
-          if (!existingComponent.configs) existingComponent.configs = []
-          for (const config of entry.configs) {
-            const alreadyPresent = existingComponent.configs.some(
-              (c) => c.module_subtype === config.module_subtype && c.module_type === config.module_type
-            )
-            if (!alreadyPresent) {
-              existingComponent.configs.push(config)
-            }
-          }
-        }
+      if (!libraryStore.availableModules.has(entry.moduleRef)) {
+        libraryStore.addModule(entry.module)
+      } 
+      if (!libraryStore.availableMath.has(entry.mathRef)) {
+        libraryStore.addMath(entry.mathRef, entry.math)
       }
     }
   }
@@ -2293,7 +2246,7 @@ const pasteSelection = async (atMouse = false) => {
     nodeIdSet.push(newId)
 
     const finalName = generateUniqueInstanceName(
-      { name: node.data.componentType },
+      node.data.name,
       namesSet
     )
     namesSet.add(finalName)
