@@ -1472,6 +1472,31 @@ function filterConfig(config, validPortNames, validVariableNames, updatedModule)
   }
 }
 
+function updateVariablesFromMath(node, updatedMath) {
+  const existingVariables = new Map(node.data.variables.map(v => [v.name, v]))
+  const updatedVariables = extractVariablesFromMath(updatedMath)
+
+  node.data.variables = updatedVariables.map((updated) => {
+    const existing = existingVariables.get(updated.name)
+
+    if (existing) {
+      return {
+        ...existing,
+        unit: updated.units,
+      }
+    }
+
+    // Create a new variable
+    return {
+      name: updated.name,
+      unit: updated.units,
+      access: "access", 
+      value: undefined,
+      type: undefined,
+    }
+  })
+}
+
 /**
  * Handler for both Saving (Updating) and Forking CellML modules.
  * Handles:
@@ -1480,6 +1505,7 @@ function filterConfig(config, validPortNames, validVariableNames, updatedModule)
  * 3. updating graph nodes to match new ports.
  */
 async function handleCellMLSave(saveData) {
+  const { nodeId, updateAll, mathRef, math, siblings, variables } = saveData
 
   // Update math references
   updateNodeData(nodeId, { mathRef })
@@ -1489,7 +1515,18 @@ async function handleCellMLSave(saveData) {
     })
   }
 
-  // TO DO - Need to update variables and ports to reflect the updated math somehow...
+  // Update variables in instance data // TO DO - use this to update ports
+  const currentNode = findNode(nodeId)
+  console.log('before', currentNode.data.variables)
+  updateVariablesFromMath(currentNode, math)
+  if (updateAll) {
+    siblings.forEach((siblingId) => {
+      const siblingNode = getNode(siblingId)
+      updateVariablesFromMath(siblingNode, math)
+    })
+  }
+
+  console.log('after', currentNode.data.variables)
 
   // // Propagate Changes (Update Nodes and Filter Configs).
   // const validPortNames = updateGraphNodesAndPorts(saveData, targetModule)
