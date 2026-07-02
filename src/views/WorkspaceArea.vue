@@ -1477,24 +1477,30 @@ function updateVariablesFromMath(node, updatedMath) {
   const updatedVariables = extractVariablesFromMath(updatedMath)
 
   node.data.variables = updatedVariables.map((updated) => {
-    const existing = existingVariables.get(updated.name)
+    const variableExists = existingVariables.get(updated.name)
 
-    if (existing) {
+    if (variableExists) {
       return {
-        ...existing,
+        ...variableExists,
         unit: updated.units,
       }
-    }
-
-    // Create a new variable
-    return {
-      name: updated.name,
-      unit: updated.units,
-      access: "access", 
-      value: undefined,
-      type: undefined,
-    }
+    } else {
+      return {
+        name: updated.name,
+        unit: updated.units,
+        access: "access", 
+        value: null,
+        type: null,
+      }
+    } 
   })
+}
+
+function cleanPorts(currentNode) {
+  const validVariables = new Set(currentNode.data.variables.map((v) => v.name))
+  currentNode.data.ports = currentNode.data.ports.filter(port =>
+    (port.variables || []).every(v => validVariables.has(v))
+  )
 }
 
 /**
@@ -1509,116 +1515,40 @@ async function handleCellMLSave(saveData) {
 
   // Update math references
   updateNodeData(nodeId, { mathRef })
+  let updatedCount = 1
   if (updateAll) {
     siblings.forEach((siblingId) => {
       updateNodeData(siblingId, { mathRef })
+      updatedCount++
     })
   }
 
-  // Update variables in instance data // TO DO - use this to update ports
+  // Update variables and ports
   const currentNode = findNode(nodeId)
-  console.log('before', currentNode.data.variables)
   updateVariablesFromMath(currentNode, math)
+  cleanPorts(currentNode)
   if (updateAll) {
     siblings.forEach((siblingId) => {
-      const siblingNode = getNode(siblingId)
+      const siblingNode = findNode(siblingId)
       updateVariablesFromMath(siblingNode, math)
+      cleanPorts(siblingNode)
     })
   }
 
-  console.log('after', currentNode.data.variables)
+  // Update edge couplings
+  recomputeEdgeCouplings(nodeId) // TO DO - confirm that the recomputeEdgeCouplings works with updated data
 
-  // // Propagate Changes (Update Nodes and Filter Configs).
-  // const validPortNames = updateGraphNodesAndPorts(saveData, targetModule)
-
-  // // Clean the Config (Remove ports that no longer exist).
-  // // Now that we have the valid ports from the new CellML, clean the config.
-  // const activeConfig = targetModule.configs[targetModule.configIndex]
-  // const validVariableNames = new Set((targetModule?.variables || []).map((v) => v.name))
-  // filterConfig(activeConfig, validPortNames, validVariableNames, targetModule)
+  notify.success({
+    title: 'CellML Updated',
+    message: `Updated ${updatedCount} node${
+      updatedCount !== 1 ? 's' : ''
+    } to ${mathRef.split(":").pop()}.`,
+  })
 }
 
 async function handleParameterSave(saveData) {
   const { nodeId, variables } = saveData
   updateNodeData(nodeId, { variables })
-}
-
-/**
- * Helper: Updates the instances in the workspace.
- */
-function updateGraphNodesAndPorts(updatedData, updatedModule) {
-  const validPortNames = new Set(
-    updatedModule?.portLabels?.map((p) => p.name) || [] // not sure if portlabels or portoptions (e.g. variables)
-  )
-
-  const updatedModuleVariableMap = new Map(
-    (updatedModule?.variables || []).map((v) => [v.name, v])
-  )
-
-  let updatedCount = 0
-
-  nodes.value.forEach((node) => {
-    const isTargetNode = node.id === updatedData.nodeId
-    const isMatchingModule =
-      updatedData.scope !== 'single' &&
-      node.data.componentFile === updatedData.originalComponentFile &&
-      node.data.componentType === updatedData.originalComponentType
-
-    if (!isTargetNode && !isMatchingModule) return
-
-    // Capture original variable names BEFORE filtering
-    const originalVariableNames = new Set(
-      (node.data.variables || []).map((v) => v.name)
-    )
-
-    // Remove invalid variables and update metadata
-    const cleanVariables = (node.data.variables || [])
-      .filter((v) => validPortNames.has(v.name))
-      .map((v) => {
-        const updatedMeta = updatedModuleVariableMap.get(v.name)
-        return updatedMeta
-          ? { ...v, units: updatedMeta.units }
-          : v
-      })
-
-    // Add only truly new variables (preserve old behavior)
-    const newItems = (updatedModule?.variables || [])
-      .filter((v) => !originalVariableNames.has(v.name))
-
-    cleanVariables.push(...newItems)
-
-    // Clean port labels
-    const cleanLabels = (node.data.portLabels || []).map((labelObj) => ({
-      ...labelObj,
-      variables: (labelObj.variables || []).filter((opt) =>
-        validPortNames.has(opt)
-      ),
-    }))
-
-    const newData = {
-      ...detachReactivity(node.data),
-      componentType: updatedData.componentType,
-      componentFile: updatedData.componentFile,
-      label: `${updatedData.componentType} — ${updatedData.componentFile}`,
-      portLabels: cleanLabels,
-      variables: cleanVariables,
-    }
-
-    updatedCount++
-    updateNodeData(node.id, newData)
-    // Recompute couplings now that this node's portLabels have changed.
-    // findNode will return the updated data because updateNodeData is synchronous.
-    recomputeEdgeCouplings(node.id)
-  })
-
-  notify.success({
-    title: 'Module Updated',
-    message: `Updated ${updatedCount} node${
-      updatedCount !== 1 ? 's' : ''
-    } to ${updatedData.componentType}.`,
-  })
-
-  return validPortNames
 }
 
 function onOpenMacroBuilderDialog() {
