@@ -2413,10 +2413,12 @@ const cellmlModules = import.meta.glob('../assets/modules/*.cellml', {
   query: 'raw',
   eager: true,
 })
+
 const cellmlUnits = import.meta.glob('../assets/units/*.cellml', {
   query: 'raw',
   eager: true,
 })
+
 const moduleConfigs = import.meta.glob('../assets/module_configs/*.json', {
   eager: true,
 })

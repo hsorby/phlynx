@@ -1247,38 +1247,9 @@ export function extractComponentsFromCellmlString(cellmlString) {
     for (let i = 0; i < model.componentCount(); i++) {
       const component = model.componentByIndex(i)
       const newModel = new _libcellml.Model()
-      newModel.setName('extractedComponent')
+      newModel.setName('PhLynxComponent')
       const compClone = component.clone()
       newModel.addComponent(compClone)
-
-      // Remove comments from MathML, libCellML can't handle them
-      const wrappedMathML = `<root>${compClone.math()}</root>`
-      const doc = xmlParser.parseFromString(wrappedMathML, 'application/xml')
-      if (!doc || hasParserError(doc)) {
-        const componentName = component.name()
-        component.delete()
-        compClone.delete()
-        model.delete()
-        parser.delete()
-        newModel.delete()
-        return { xml: null, errors: [`Error parsing MathML in '${modelName}' component '${componentName}'`] }
-      }
-      removeComments(doc)
-
-      const mathNodes = doc.querySelectorAll('math')
-
-      let cleanMathML = ''
-      if (mathNodes.length > 0) {
-        const primaryMath = mathNodes[0]
-        for (let i = 1; i < mathNodes.length; i++) {
-          const siblingMath = mathNodes[i]
-          while (siblingMath.firstChild) {
-            primaryMath.appendChild(siblingMath.firstChild)
-          }
-        }
-        cleanMathML = serializer.serializeToString(primaryMath)
-        compClone.setMath(cleanMathML)
-      }
 
       extractedComponents.push({
         name: component.name(), 
@@ -1296,6 +1267,7 @@ export function extractComponentsFromCellmlString(cellmlString) {
   } else {
     model.delete()
     parser.delete()
+    printer.delete()
     return { xml: null, errors: [`No components found in '${modelName}'`] }
   }
 
