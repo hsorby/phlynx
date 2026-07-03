@@ -12,8 +12,8 @@ function parseModuleRef(moduleRef) {
   const [moduleType, moduleSubtype] = moduleRef.split(':')
   return { moduleType, moduleSubtype }
 }
-
-export const useLibraryViewStore = defineStore('libraryView', () => {
+// rename to library proxy store
+export const useLibraryProxyStore = defineStore('libraryView', () => {
   const library = useLibraryStore()
 
   const groups = computed(() => {
@@ -26,6 +26,7 @@ export const useLibraryViewStore = defineStore('libraryView', () => {
           modules.push(module)
         }
       }
+      // SMELL - currently just group by shared mathRef - to discuss with Hugh and come back to
       result.push({
         mathRef,
         label: mathRef,

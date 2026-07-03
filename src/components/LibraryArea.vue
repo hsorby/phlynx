@@ -131,7 +131,7 @@
 <script setup>
 import { computed, ref, watch, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { View, Search, ArrowRight } from '@element-plus/icons-vue'
-import { useLibraryViewStore } from '../stores/libraryViewStore'
+import { useLibraryProxyStore } from '../stores/libraryProxyStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import useDragAndDrop from '../composables/useDnD'
 import ModulePreviewDialog from './ModulePreviewDialog.vue'
@@ -143,7 +143,8 @@ const props = defineProps({
 
 const emit = defineEmits(['select'])
 
-const view = useLibraryViewStore()
+const view = useLibraryProxyStore()
+const store = useLibraryStore()
 const { onDragStart } = useDragAndDrop()
 
 const filterText = ref('')
@@ -202,7 +203,7 @@ function configLabel(config) {
 //   (collections) => {
 //     collections.forEach((collection) => {
 //       collection.modules.forEach((module) => {
-//         if (selectedConfigs[module.id] === undefined) selectedConfigs[module.id] = 0
+//         if (selectedConfigs[module.moduleRef] === undefined) selectedConfigs[module.moduleRef] = 0
 //       })
 //     })
 //     activeCollapseNames.value = filterText.value ? collections.map((c) => c.componentFile) : []
