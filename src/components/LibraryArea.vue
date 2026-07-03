@@ -23,8 +23,8 @@
           <!-- Group header -->
           <button
             class="mlc__group-header"
-            :class="{ 'is-open': activeCollapseNames.includes(collection.componentFile) }"
-            @click="toggleGroup(collection.componentFile)"
+            :class="{ 'is-open': activeCollapseNames.includes(collection.mathRef) }"
+            @click="toggleGroup(collection.mathRef)"
           >
             <el-icon class="mlc__group-chevron"><ArrowRight /></el-icon>
             <span class="mlc__group-name"><span class="mlc__group-name-text">{{ collection.label }}</span></span>
@@ -35,7 +35,7 @@
 
           <!-- Module cards -->
           <transition name="slide">
-            <div v-show="activeCollapseNames.includes(collection.componentFile)" class="mlc__group-body">
+            <div v-show="activeCollapseNames.includes(collection.mathRef)" class="mlc__group-body">
               <el-card
                 v-for="module in collection.modules"
                 :key="module.moduleRef"
@@ -177,15 +177,15 @@ const filteredCollections = computed(() => {
   const q = filterText.value.toLowerCase()
   if (!q) return view.groups
   return view.groups
-    .map((g) => ({ ...g, modules: g.modules.filter((m) => m.name.toLowerCase().includes(q)) }))
+    .map((g) => ({ ...g, modules: g.modules.filter((m) => m.mathRef.toLowerCase().includes(q) || m.moduleRef.toLowerCase().includes(q)) }))
     .filter((g) => g.modules.length > 0)
 })
 
 // ─── Accordion ───────────────────────────────────────────────────────────────
 
-function toggleGroup(componentFile) {
-  const idx = activeCollapseNames.value.indexOf(componentFile)
-  if (idx === -1) activeCollapseNames.value.push(componentFile)
+function toggleGroup(collection) {
+  const idx = activeCollapseNames.value.indexOf(collection)
+  if (idx === -1) activeCollapseNames.value.push(collection)
   else activeCollapseNames.value.splice(idx, 1)
 }
 
