@@ -50,7 +50,7 @@ function buildPortLabels(moduleData) {
           portType: type,
           label: p.port_type,
           variables: p.variables.flat(),
-          multiport: p.multi_port ?? 'None',
+          multiportType: p.multi_port ?? 'None',
         }))
     )
 }
