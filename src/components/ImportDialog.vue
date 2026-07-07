@@ -112,7 +112,7 @@
 
         <div v-if="importReadiness && formState[IMPORT_KEYS.MODULE_ARRAY]?.readiness" class="validation-status">
           <el-alert
-            v-if="importReadiness.isComplete"
+            v-if="importReadiness.resourcesAreLoaded"
             title="All Required Resources Available"
             type="success"
             :closable="false"
@@ -125,37 +125,20 @@
             <template #default>
               <div>Please provide the following files to complete the import:</div>
               <ul class="missing-resources">
-                <li v-if="importReadiness.needsComponentFile" class="config-note">
+                <li v-if="importReadiness.missingResources?.math.size > 0" class="config-note">
                   <strong>CellML Component File</strong>
-                  <div
-                    v-if="importReadiness.missingResources?.componentFileIssues?.length > 0"
-                    class="issue-list-container"
-                  >
-                    <div
-                      v-for="fileIssue in importReadiness.missingResources.componentFileIssues"
-                      :key="fileIssue.uniqueKey"
-                      class="component-issue-item"
-                    >
-                      • {{ fileIssue.message }}
-                    </div>
-                  </div>
-                  <div v-else-if="importReadiness.missingResources?.components?.length > 0"
-                    class="component-type-list"
-                  >
-                    Required component types: {{ importReadiness.missingResources.components.join(', ') }}
+                  <div class="component-type-list">
+                    Required components: {{ [...importReadiness.missingResources.math].join(', ') }}
                   </div>
                 </li>
-                <li v-if="importReadiness.needsConfigFile" class="config-note">
+                <li v-if="importReadiness.missingResources?.modules.size > 0" class="config-note">
                   <strong>Module Configurations</strong> for module_types:module_subtypes:
-                  {{ importReadiness.missingResources?.configs?.join(', ') }} and possibly CellML components.
+                  {{ [...importReadiness.missingResources.modules].join(',') }} and possibly CellML components.
                 </li>
               </ul>
               <br />
-              <div v-if="importReadiness.needsConfigFile" class="config-note">
+              <div v-if="importReadiness.missingResources?.modules.size > 0" class="config-note">
                 <strong>NOTE:</strong> CellML Component File(s) may be required after providing the configurations.
-              </div>
-              <div v-if="importReadiness.hasCollectionFileMismatch" class="mismatch-warning">
-                Warning: Some components are not in the CellML files specified by their configurations.
               </div>
             </template>
           </el-alert>
@@ -168,7 +151,7 @@
         <el-button
           type="primary"
           @click="handleConfirm"
-          :disabled="!isFormValid || isLoading || !importReadiness?.isComplete"
+          :disabled="!isFormValid || isLoading || !importReadiness?.resourcesAreLoaded"
           :loading="isLoading"
         >
           Import
@@ -179,7 +162,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch, toRaw } from 'vue'
 import { ElDialog, ElForm, ElFormItem, ElButton, ElUpload, ElAlert, ElIcon, ElTag, ElPopover } from 'element-plus'
 import { Check, Warning, Upload, InfoFilled } from '@element-plus/icons-vue'
 
@@ -187,10 +170,10 @@ import { useLibraryStore } from '../stores/libraryStore'
 import { useGtm } from '../composables/useGtm'
 import { notify } from '../utils/notify'
 import { IMPORT_KEYS, MAX_VISIBLE_TAGS } from '../utils/constants'
-import { createDynamicFields, checkModulesAreLoaded } from '../utils/import'
+import { createDynamicFields, checkResourcesAreLoaded } from '../utils/import'
+import { normaliseConfig } from '../utils/config'
 import { processCellMLData } from '../utils/cellml'
 import phlynxspinner from '/src/assets/phlynxspinner.svg?raw'
-import { detachReactivity } from '../utils/reactivity'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -213,7 +196,7 @@ const importReadiness = ref(null)
 const isLoading = ref(false)
 const loadingText = ref('Loading...')
 const stagedFiles = ref({
-  componentFiles: [], // { filename: string, payload: object }
+  mathFiles: [], // { filename: string, payload: object }
   configFiles: [], // { filename: string, payload: object }
 })
 
@@ -234,21 +217,23 @@ const removeFile = (fieldKey, filename) => {
     fieldState.files.delete(filename)
 
     // Remove from staged files if applicable
-    stagedFiles.value.componentFiles = stagedFiles.value.componentFiles.filter(f => f.filename !== filename)
+    stagedFiles.value.mathFiles = stagedFiles.value.mathFiles.filter(f => f.filename !== filename)
     stagedFiles.value.configFiles = stagedFiles.value.configFiles.filter(f => f.filename !== filename)
-
+  
     // Re-evaluate overall module dependencies
     const modulesArrayPayload = getModuleArrayPayload()
     if (modulesArrayPayload) {
-      const temporaryStore = createTemporaryStore()
-      const newCompletionStatus = checkModulesAreLoaded(modulesArrayPayload, temporaryStore)
-      formState[IMPORT_KEYS.MODULE_ARRAY].readiness = newCompletionStatus
-      updateDynamicFields(newCompletionStatus)
+      const resourcesLoadStatus = checkReadiness(modulesArrayPayload)
+      updateDynamicFields(resourcesLoadStatus)
     } else if (fieldKey === IMPORT_KEYS.MODULE_ARRAY) {
       // If the user deletes the module array file, wipe completion status
       resetForm()
     }
   }
+}
+
+const detachReactivity = (obj) => {
+  return structuredClone(toRaw(obj))
 }
 
 function initFormFromConfig(fields = []) {
@@ -261,7 +246,7 @@ function initFormFromConfig(fields = []) {
 
 const unstageFiles = () => {
   stagedFiles.value = {
-    componentFiles: [],
+    mathFiles: [],
     configFiles: [],
   }
 }
@@ -341,106 +326,67 @@ const getModuleArrayPayload = () => {
     if (fileData.payload) return fileData.payload
   }
   return null
-}
+}    
 
 // Create a temporary store-like object for validation that includes staged files
 const createTemporaryStore = () => {
+  const availableModules = detachReactivity(libraryStore.availableModules)
+  const availableMath = detachReactivity(libraryStore.availableMath)
   const availableCollections = detachReactivity(libraryStore.availableCollections)
 
-  // Apply staged config files
+  // Apply staged module config files
   for (const { filename, payload: configs } of stagedFiles.value.configFiles) {
-    for (const config of configs) {
-      let collection = availableCollections.find((f) => f.componentFile === config.component_file)
-      if (!collection) {
-        collection = {
-          componentFile: config.component_file,
-          modules: [],
-          isStub: true,
+    configs.forEach((config) => {
+      const module = normaliseConfig(config)
+      if(!(availableMath.has(module.mathRef))) {
+        module.isStub = true
+      }
+      if(!(availableModules.has(module.moduleRef))) {
+        availableModules.set(module.moduleRef, module)
+        if (!(availableCollections.has(module.mathRef))) {
+          availableCollections.set(module.mathRef, new Set())
         }
-        availableCollections.push(collection)
-      }
-
-      let module = collection.modules.find(
-        (m) => m.name === config.component_type
-      )
-      if (!module) {
-        module = {
-          name: config.component_type,
-          configs: [],
-        }
-        collection.modules.push(module)
-      }
-
-      if (!module.configs) module.configs = []
-
-      const existingConfigIndex = module.configs.findIndex(
-        (c) => c.module_subtype === config.module_subtype && c.module_type === config.module_type
-      )
-      if (existingConfigIndex !== -1) {
-        module.configs[existingConfigIndex] = config
-      } else {
-        module.configs.push(config)
-      }
-    }
+        availableCollections.get(module.mathRef).add(module.moduleRef)
+      } 
+    })
   }
 
-  // Apply staged component files
-  for (const { filename, payload } of stagedFiles.value.componentFiles) {
-    const existingCollection = availableCollections.find((f) => f.filename === filename)
-
-    if (existingCollection) {
-      if (existingCollection.isStub) delete existingCollection.isStub
-    
-      // Match and preserve configs staged before the component file
-      const newModules = (payload.modules ?? []).map((m) => ({ ...m, configs: [] }))
-      const matchedOldModules = new Set()
-
-      for (const newModule of newModules) {
-        const oldModule = existingCollection.modules?.find((m) => m.name === newModule.name)
-        if (oldModule) {
-          if (oldModule.configs?.length > 0) {
-            newModule.configs = [...oldModule.configs]
+  // Apply staged math files
+  for (const { filename, payload } of stagedFiles.value.mathFiles) {
+    payload.forEach((component) => {
+      const mathRef = `${filename}:${component.name}`
+      if(!(availableMath.has(mathRef))) {
+        availableMath.set(mathRef, component.math)
+        availableCollections.get(mathRef)?.forEach((moduleRef) => {
+          const moduleToUpdate = availableModules.get(moduleRef)
+          if (moduleToUpdate && moduleToUpdate.isStub) {
+            delete availableModules.get(moduleRef).isStub
           }
-          matchedOldModules.add(oldModule)
-        }
+        })
       }
-
-      // Retain unmatched configuration modules so Object.assign doesn't wipe them out
-      if (existingCollection.modules) {
-        for (const oldModule of existingCollection.modules) {
-          if (!matchedOldModules.has(oldModule)) {
-            newModules.push(oldModule)
-          }
-        }
-      }
-
-      Object.assign(existingCollection, {
-        ...payload,
-        modules: newModules,
-      })
-    } else {
-      availableCollections.push({
-        ...payload,
-        modules: (payload.modules ?? []).map((m) => ({ ...m, configs: [] })),
-      })
-    }
+    })
   }
 
-  return { availableCollections }
+  return {
+    availableModules,
+    availableMath,
+    availableCollections,
+  }
 }
 
-const recheckReadiness = (moduleArrayPayload) => {
+const checkReadiness = (moduleArrayPayload) => {
   if (!moduleArrayPayload) return null
 
   const temporaryStore = createTemporaryStore()
-  const status = checkModulesAreLoaded(moduleArrayPayload, temporaryStore)
 
-  importReadiness.value = status
+  const resourcesLoadStatus = checkResourcesAreLoaded(moduleArrayPayload, temporaryStore)
+
+  importReadiness.value = resourcesLoadStatus
   if (formState[IMPORT_KEYS.MODULE_ARRAY]) {
-    formState[IMPORT_KEYS.MODULE_ARRAY].readiness = status
+    formState[IMPORT_KEYS.MODULE_ARRAY].readiness = resourcesLoadStatus
   }
 
-  return status
+  return resourcesLoadStatus
 }
 
 const isFieldReady = (fieldKey) => {
@@ -457,12 +403,12 @@ const isFieldReady = (fieldKey) => {
 
   // Module config field is ready if all required configs have been supplied
   if (fieldKey === IMPORT_KEYS.MODULE_CONFIG) {
-    return !(importReadiness.value?.needsConfigFile ?? true)
+    return !(importReadiness.value?.missingResources?.modules.size > 0 ?? true)
   }
 
-  // CellML component field is ready if all required components have been supplied
+  // Math field is ready if all required math have been supplied - TO DO - could be orange if all configs aren't yet provided
   if (fieldKey === IMPORT_KEYS.CELLML_FILE) {
-    return !(importReadiness.value?.needsComponentFile ?? true)
+    return !(importReadiness.value?.missingResources?.math.size > 0 ?? true)
   }
 
   return true
@@ -495,7 +441,6 @@ const handleFileChange = async (uploadFile, field) => {
   const rawFile = uploadFile.raw
   const filename = rawFile.name
 
-  // Pre-flight guards ----
   if (field.processUpload === 'cellml' && !validateCellMLFilename(rawFile)) {
     return
   }
@@ -514,12 +459,9 @@ const handleFileChange = async (uploadFile, field) => {
   try {
     const parsed = await parseFile(field, rawFile)
 
-    const data = parsed?.data ?? parsed // SMELLLLLLL
-    const warnings = parsed?.completionStatus?.warnings ?? []
-
-    state.files.get(filename).payload = data
+    state.files.get(filename).payload = parsed?.data ?? []
     state.readiness = parsed?.completionStatus ?? null
-    state.warnings = warnings
+    state.warnings = parsed?.completionStatus?.warnings ?? []
 
     if (field.processUpload) {
       stageValidatedFile(field, parsed, filename)
@@ -531,9 +473,9 @@ const handleFileChange = async (uploadFile, field) => {
     // Update readiness and UI ---
     const moduleArrayPayload = getModuleArrayPayload()
     if (moduleArrayPayload) {
-      const status = recheckReadiness(moduleArrayPayload)
+      const status = checkReadiness(moduleArrayPayload)
 
-      if (status && !status.isComplete) {
+      if (status && !status.resourcesAreLoaded) {
         await syncDynamicFields(status)
       }
 
@@ -541,13 +483,17 @@ const handleFileChange = async (uploadFile, field) => {
         notifyAfterStaging(field, filename, status)
       }
     } else {
-      importReadiness.value = { isComplete: true, errors: [], warnings: [] }
+      importReadiness.value = {
+        resourcesAreLoaded: true,
+        errors: [],
+        warnings: [],
+      }
     }
 
     // Surface any per-file warnings from the parser
-    if (warnings.length) {
+    if (state.warnings.length) {
       await nextTick()
-      for (const w of warnings) {
+      for (const w of state.warnings) {
         notify.warning({
           title: 'Import Warning',
           message: w,
@@ -577,7 +523,7 @@ const handleFileChange = async (uploadFile, field) => {
 
 async function updateDynamicFields(completionStatus) {
   importReadiness.value = completionStatus
-  if (completionStatus.isComplete) {
+  if (completionStatus.resourcesAreLoaded) {
     return
   }
   await syncDynamicFields(completionStatus)
@@ -610,22 +556,14 @@ async function stageValidatedFile(field, parsedData, filename) {
   if (field.processUpload === 'cellml') {
     const result = processCellMLData(data)
     if (result.type === 'success') {
-      const augmentedModules = result.components?.data.map((item) => ({
-        ...item,
-        componentFile: filename,
-      }))
-        stagedFiles.value.componentFiles.push({
-        componentFile: filename,
-        payload: {
-          componentFile: filename,
-          modules: augmentedModules,
-          model: result.components?.model,
-        },
-      })      
+      stagedFiles.value.mathFiles.push({
+        filename,
+        payload: result.components,
+      })
     }
   } else if (field.processUpload === 'config') {
     stagedFiles.value.configFiles.push({
-      filename: filename,
+      filename,
       payload: data,
     })
   }
@@ -677,8 +615,8 @@ function notifyAfterStaging(field, filename, status) {
 }
 
 const commitStagedFiles = () => {
-  for (const { payload } of stagedFiles.value.componentFiles) {
-    libraryStore.addMathFile(payload)
+  for (const { filename, payload } of stagedFiles.value.mathFiles) {
+    libraryStore.addMathFile(filename, payload)
   }
   for (const { filename, payload } of stagedFiles.value.configFiles) {
     libraryStore.addConfigFile(filename, payload)
@@ -694,6 +632,7 @@ const handleConfirm = async () => {
 
   commitStagedFiles()
 
+  // SMELL - to update once parameter imports are implemented
   if (formState[IMPORT_KEYS.PARAMETER]) {
     for (const [filename, data] of formState[IMPORT_KEYS.PARAMETER].files) {
       if (data.isValid) {
@@ -715,6 +654,7 @@ const handleConfirm = async () => {
     label: props.config.title || 'Import File',
     file_type: 'various',
   })
+
   emit('confirm', importPayload, (progressText) => {
     loadingText.value = progressText
   })
@@ -913,7 +853,7 @@ defineExpose({
 
 .component-type-list {
   font-size: var(--el-font-size-extra-small);
-  color: var(--el-text-color-secondary);
+  color: var(--el-text-color-warning);
 }
 
 .config-note {

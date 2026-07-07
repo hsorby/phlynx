@@ -3,132 +3,42 @@ import Papa from 'papaparse'
 import { IMPORT_KEYS, IMPORT_LABELS } from './constants'
 import { isCellML, doesComponentExistInModel } from './cellml'
 
-export const checkModulesAreLoaded = (modulesRequired, libraryStore) => {
-  const errors = []
+export const checkResourcesAreLoaded = (requestedModules, store) => {
   const warnings = []
   const missingResources = {
-    configs: new Set(),
-    components: new Set(),
-    componentFileIssues: new Map(),
+    modules: new Set(),
+    math: new Set(),
   }
-  const availableComponents = new Set()
 
-  libraryStore.availableCollections.forEach((file) => {
-    if (file.isStub) {
-      return
-    }
+  if (!requestedModules || requestedModules.length === 0) {
+    warnings.push('No modules specified in the module array file.')
+  }
 
-    file.modules?.forEach((module) => {
-      const moduleName = module.name
-      if (moduleName) {
-        availableComponents.add(moduleName)
-      }
-    })
-  })
-
-  // Get all available configs (module_type + module_subtype combinations)
-  // and the component_type they point to
-  const availableConfigs = new Map() // key: "module_type:module_subtype", value: config object with metadata
-  const componentTypesInConfigs = new Set()
-
-  libraryStore.availableCollections.forEach((file) => {
-    file.modules?.forEach((module) => {
-      module.configs?.forEach((config) => {
-        if (config.module_type && config.module_subtype) {
-          const key = `${config.module_type}:${config.module_subtype}`
-          // Store config with its associated file information
-          availableConfigs.set(key, config)
-
-          if (config.component_type) {
-            componentTypesInConfigs.add(config.component_type)
-          }
-        }
-      })
-    })
-  })
-
-  // Check each module in the CSV
-  const missingConfigs = []
-  const missingComponents = []
-
-  modulesRequired.forEach((module) => {
-    const moduleType = module.module_type?.trim()
-    const moduleSubtype = module.module_subtype?.trim()
-
-    if (!moduleType || !moduleSubtype) return
-
-    const key = `${moduleType}:${moduleSubtype}`
-    const config = availableConfigs.get(key)
-
-    if (!config) {
-      missingConfigs.push(key)
-      missingResources.configs.add(key)
+  for (const module of requestedModules) {
+    const moduleRef = `${module.module_type}:${module.module_subtype}`
+    if (!(store.availableModules.has(moduleRef))) {
+      missingResources.modules.add(moduleRef)
     } else {
-      const componentFileIssue = validateCollectionFileAssociation(config, libraryStore)
-      
-      if (componentFileIssue) {
-        // Use composite key for automatic deduplication via Map
-        const issueKey = `${componentFileIssue.config}:${componentFileIssue.issue}`
-        missingResources.componentFileIssues.set(issueKey, componentFileIssue)
-        
-        if (
-          componentFileIssue.issue === 'missing_file' ||
-          componentFileIssue.issue === 'stub_file' ||
-          componentFileIssue.issue === 'component_not_in_file'
-        ) {
-          missingComponents.push(config.component_type)
-          missingResources.components.add(config.component_type)
-        }
-      } else {
-        // Only check for missing module if file association is valid
-        if (config.module_type && !availableComponents.has(config.component_type)) {
-          missingComponents.push(config.component_type)
-          missingResources.components.add(config.component_type)
-        }
+      const mathRef = store.availableModules.get(moduleRef)?.mathRef 
+      if (!(store.availableMath.has(mathRef))) {
+        missingResources.math.add(mathRef)
       }
     }
-  })
+  }
 
   // Generate warnings
-  if (missingConfigs.length > 0) {
-    warnings.push(`Missing configurations for: ${[...new Set(missingConfigs)].join(', ')}`)
+  if (missingResources.modules.size > 0) {
+    warnings.push(`Missing modules: ${[...missingResources.modules].join(', ')}`)
   }
 
-  if (missingComponents.length > 0) {
-    warnings.push(`Missing CellML components: ${[...new Set(missingComponents)].join(', ')}`)
+  if (missingResources.math.size > 0) {
+    warnings.push(`Missing math: ${[...missingResources.math].join(', ')}`)
   }
-
-  if (missingResources.componentFileIssues.size > 0) {
-    const issueMessages = [...missingResources.componentFileIssues.values()].map(issue => issue.message)
-    warnings.push(`Collection file issues: ${[...new Set(issueMessages)].join('; ')}`)
-  }
-
-  const needsConfigFile = missingConfigs.length > 0
-  const needsComponentFile =
-    missingComponents.length > 0 ||
-    [...missingResources.componentFileIssues.values()].some(
-      (issue) =>
-        issue.issue === 'missing_file' ||
-        issue.issue === 'stub_file' ||
-        issue.issue === 'component_not_in_file'
-    )
-  const hasCollectionFileMismatch = [...missingResources.componentFileIssues.values()].some(
-    (issue) => issue.issue === 'component_not_in_file'
-  )
 
   return {
-    errors,
     warnings,
-    isValid: true,
-    isComplete: errors.length === 0 && warnings.length === 0,
-    missingResources: {
-      configs: [...missingResources.configs],
-      components: [...missingResources.components],
-      componentFileIssues: groupCollectionFileIssues([...missingResources.componentFileIssues.values()]),
-    },
-    needsConfigFile,
-    needsComponentFile,
-    hasCollectionFileMismatch,
+    resourcesAreLoaded: warnings.length === 0,
+    missingResources,
   }
 }
 
@@ -283,15 +193,16 @@ const parseModuleArray = (file, libraryStore = null) => {
             'name' in results.data[0] &&
             'module_subtype' in results.data[0] &&
             'module_type' in results.data[0] &&
-            'inp_modules' in results.data[0] &&
-            'out_modules' in results.data[0]
+            'inp_instances' in results.data[0] &&
+            'out_instances' in results.data[0]
           )
         ) {
-          reject(new Error(`Invalid module array file format. Required columns: name, module_type, module_subtype, inp_modules, out_modules`))
+          reject(new Error(`Invalid module array file format. Required columns: name, module_type, module_subtype, inp_instances, out_instances`))
           return
         }
         if (libraryStore) {
-          const completionStatus = checkModulesAreLoaded(results.data, libraryStore)
+          const requiredModules = results.data
+          const completionStatus = checkResourcesAreLoaded(requiredModules, libraryStore)
           resolve({
             data: results.data,
             // warnings: completionStatus.warnings,
@@ -393,27 +304,10 @@ const parseCellML = (file) => {
   })
 }
 
-export function createDynamicFields(validation) {
+export function createDynamicFields(completionStatus) {
   const fields = []
 
-  if (validation.needsComponentFile) {
-    const helpTexts = []
-    
-    // Add module types that are missing
-    if (validation.missingResources.moduleTypes && validation.missingResources.moduleTypes.length > 0) {
-      helpTexts.push(`Required module types: ${validation.missingResources.moduleTypes.join(', ')}`)
-    }
-    
-    // Add specific file issues 
-    if (validation.missingResources.componentFileIssues && validation.missingResources.componentFileIssues.length > 0) {
-      const fileNames = validation.missingResources.componentFileIssues
-        .filter(group => group.issue === 'missing_file' || group.issue === 'stub_file')
-        .map(group => group.file)
-      
-      if (fileNames.length > 0) {
-        helpTexts.push(`Required files: ${[...new Set(fileNames)].join(', ')}`)
-      }
-    }
+  if (completionStatus.missingResources.math?.size > 0) {
 
     fields.push({
       key: IMPORT_KEYS.CELLML_FILE,
@@ -421,19 +315,19 @@ export function createDynamicFields(validation) {
       required: true,
       accept: '.cellml, .xml',
       parser: parseCellML,
-      helpText: helpTexts.length > 0 ? helpTexts.join(' | ') : 'Upload the CellML module file',
+      helpText: `Required components: ${(completionStatus.missingResources.math)}`,
       processUpload: 'cellml',
     })
   }
 
-  if (validation.needsConfigFile) {
+  if (completionStatus.missingResources.modules?.size > 0) {
     fields.push({
       key: IMPORT_KEYS.MODULE_CONFIG,
       label: IMPORT_LABELS.MODULE_CONFIG,
       required: true,
       accept: '.json',
       parser: parseConfigJson,
-      helpText: `Required Configurations: ${(validation.missingResources.configs || []).join(', ')}`,
+      helpText: `Required Configurations: ${(completionStatus.missingResources.modules)}`,
       processUpload: 'config',
     })
   }
