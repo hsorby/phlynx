@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useLibraryStore } from './libraryStore'
-import { hasAll, hasAny } from '../utils/sets'
 
 function parseMathRef(mathRef) {
   const [componentFile, componentName] = mathRef.split(':')
