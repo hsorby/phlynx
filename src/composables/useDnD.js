@@ -4,7 +4,7 @@ import { ref, shallowRef, watch } from 'vue'
 import { GHOST_MODULE_FILENAME, GHOST_NODE_TYPE } from '../utils/constants'
 import { getId, generateUniqueInstanceName, attachNewNodeToFrame, findAnyNode } from '../utils/nodes'
 import { useLibraryStore } from '../stores/libraryStore'
-import { buildPortLabels } from '../services/import/buildPorts'
+import { buildPorts } from '../services/import/buildPorts'
 import { extractVariablesFromMath } from '../utils/cellml'
 
 /**
@@ -82,7 +82,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
    * @param {{x: number, y: number}} position - Flow coordinates to place the node.
    * @returns {{ nodeId: string, nodeType: string }}
    */
-  function createInstanceNode(moduleData, position) {
+  function createInstanceNode(moduleData, position, handles = []) {
     const nodeId = getId(getNodes.value.map((n) => n.id))
     pendingHistoryNodes.add(nodeId)
 
@@ -104,7 +104,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
         moduleRef: moduleData.moduleRef,
         variables: moduleData.variables,
         ports: moduleData.ports,
-        handles: [],
+        handles: handles,
       },
     }
 

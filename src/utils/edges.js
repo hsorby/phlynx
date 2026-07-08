@@ -75,8 +75,8 @@ export function getId(edgeIds, prefix = 'edge_') {
  *   null / undefined / false → single-connection (absent or falsy)
  *   any other truthy value   → multiport (unrestricted)
  */
-export function isSingleConnection(portLabel) {
-  const mp = portLabel.multiport
+export function isSingleConnection(port) {
+  const mp = port.multiportType
   return !mp || mp === 'None'
 }
 
@@ -96,29 +96,29 @@ export function isSingleConnection(portLabel) {
  * For labels that appear only once (the common case), the index is irrelevant
  * and that single entry is always selected.
  *
- * @param {Array}  sourcePortLabels  node.data.portLabels of the source node
- * @param {Array}  targetPortLabels  node.data.portLabels of the target node
- * @param {number} sourceIndex  position of target in source's out_modules (0-based)
- * @param {number} targetIndex  position of source in target's inp_modules (0-based)
+ * @param {Array}  sourcePorts node.data.ports of the source node
+ * @param {Array}  targetPorts  node.data.ports of the target node
+ * @param {number} sourceIndex  position of target in source's out_instances (0-based)
+ * @param {number} targetIndex  position of source in target's inp_instances (0-based)
  * @returns {Array<{ sourcePortLabel: Object, targetPortLabel: Object }>}
  */
 export function resolvePortCouplings(
-  sourcePortLabels,
-  targetPortLabels,
+  sourcePorts,
+  targetPorts,
   sourceIndex = 0,
   targetIndex = 0
 ) {
   const couplings = []
 
   // Group source portLabels by (portType, label) — preserving config order
-  const sourceGroups = groupByTypeAndLabel(sourcePortLabels, SOURCE_COMPATIBLE_TYPES)
+  const sourceGroups = groupByTypeAndLabel(sourcePorts, SOURCE_COMPATIBLE_TYPES)
 
   for (const [groupKey, srcSlots] of sourceGroups) {
     const [srcPortType, label] = groupKey.split('\x00')
     const validTargetTypes = TARGET_COMPATIBLE_TYPES[srcPortType]
 
     // Group matching target portLabels by (portType, label)
-    const targetGroups = groupByTypeAndLabel(targetPortLabels, validTargetTypes)
+    const targetGroups = groupByTypeAndLabel(targetPorts, validTargetTypes)
 
     for (const [tgtGroupKey, tgtSlots] of targetGroups) {
       const [, tgtLabel] = tgtGroupKey.split('\x00')
@@ -128,7 +128,7 @@ export function resolvePortCouplings(
       const srcSlot = srcSlots[Math.min(sourceIndex, srcSlots.length - 1)]
       const tgtSlot = tgtSlots[Math.min(targetIndex, tgtSlots.length - 1)]
 
-      couplings.push({ sourcePortLabel: srcSlot, targetPortLabel: tgtSlot })
+      couplings.push({ sourcePort: srcSlot, targetPort: tgtSlot })
     }
   }
 
@@ -147,8 +147,8 @@ export function resolvePortCouplings(
  * All-or-nothing: either all couplings are free (success, usedPortKeys updated)
  * or at least one is already consumed (failure, usedPortKeys NOT modified).
  *
- * @param {string} sourceNodeId
- * @param {string} targetNodeId
+ * @param {string} sourceNodeName
+ * @param {string} targetNodeName
  * @param {Array}  couplings     output of resolvePortCouplings()
  * @param {Set}    usedPortKeys  mutable Set, updated in-place on success
  * @returns {{ valid: boolean, conflicts: Array<string> }}
@@ -157,12 +157,12 @@ export function checkAndClaimCouplings(sourceNodeId, targetNodeId, couplings, us
   const conflicts = []
   const toMark = []
 
-  for (const { sourcePortLabel, targetPortLabel } of couplings) {
-    if (isSingleConnection(sourcePortLabel)) {
-      const key = portKey(sourceNodeId, sourcePortLabel)
+  for (const { sourcePort, targetPort } of couplings) {
+    if (isSingleConnection(sourcePort)) {
+      const key = portKey(sourceNodeId, sourcePort)
       if (usedPortKeys.has(key)) {
         conflicts.push(
-          `"${sourcePortLabel.label}" (${sourcePortLabel.portType}) on "${sourceNodeId}" ` +
+          `"${sourcePort.label}" (${sourcePort.portType}) on "${sourceNodeId}" ` +
             `is non-multiport and already has a connection.`
         )
       } else {
@@ -170,11 +170,11 @@ export function checkAndClaimCouplings(sourceNodeId, targetNodeId, couplings, us
       }
     }
 
-    if (isSingleConnection(targetPortLabel)) {
-      const key = portKey(targetNodeId, targetPortLabel)
+    if (isSingleConnection(targetPort)) {
+      const key = portKey(targetNodeId, targetPort)
       if (usedPortKeys.has(key)) {
         conflicts.push(
-          `"${targetPortLabel.label}" (${targetPortLabel.portType}) on "${targetNodeId}" ` +
+          `"${targetPort.label}" (${targetPort.portType}) on "${targetNodeId}" ` +
             `is non-multiport and already has a connection.`
         )
       } else {
@@ -239,8 +239,8 @@ function groupByTypeAndLabel(portLabels, allowedTypes) {
  * Format: "{nodeId}:{portType}:{label}:{slotIndex}"
  * The slotIndex is the position of this portLabel within its (portType, label) group.
  */
-function portKey(nodeId, portLabel) {
+function portKey(nodeId, port) {
   // The portLabel object itself is unique per slot — we use its variables array
   // serialised as a tiebreaker to distinguish same-label slots on the same node.
-  return `${nodeId}:${portLabel.portType}:${portLabel.label}:${JSON.stringify(portLabel.variables ?? [])}`
+  return `${nodeId}:${port.portType}:${port.label}:${JSON.stringify(port.variables ?? [])}`
 }
