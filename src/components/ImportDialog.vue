@@ -232,8 +232,25 @@ const removeFile = (fieldKey, filename) => {
   }
 }
 
+function deepToRaw(value) {
+  const raw = toRaw(value)
+  if (raw instanceof Map) {
+    return new Map([...raw].map(([k, v]) => [deepToRaw(k), deepToRaw(v)]))
+  }
+  if (raw instanceof Set) {
+    return new Set([...raw].map(deepToRaw))
+  }
+  if (Array.isArray(raw)) {
+    return raw.map(deepToRaw)
+  }
+  if (raw && typeof raw === 'object') {
+    return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, deepToRaw(v)]))
+  }
+  return raw
+}
+
 const detachReactivity = (obj) => {
-  return structuredClone(toRaw(obj))
+  return deepToRaw(obj)
 }
 
 function initFormFromConfig(fields = []) {
@@ -271,6 +288,17 @@ watch(
     initFormFromConfig(fields)
   },
   { immediate: true }
+)
+
+watch(
+  () => props.modelValue,
+  (isOpen) => {
+    if (isOpen) {
+      resetFormState()
+      initFormFromConfig(props.config?.fields)
+      unstageFiles()
+    }
+  }
 )
 
 // --- Dynamic Fields Handling ---
