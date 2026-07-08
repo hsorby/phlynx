@@ -30,6 +30,7 @@ export function useLoadFromModuleArray() {
   let pendingEdges = []
   let pendingNodeDataMap = new Map()
   let pendingProgressCallback = null
+  let pendingPositionProvided = false
   let layoutCompleteResolve = null
   let layoutCompleteReject = null
 
@@ -166,38 +167,6 @@ export function useLoadFromModuleArray() {
     return positionProvided
   }
 
-  function fixWorkflowLayout(positionProvided, progressCallback = null) {
-    // Run layout algorithm
-      if (positionProvided) {
-        // recalculate declared positions to ensure compatibility with workspace dimensions
-        runRescaleLayout(nodes.value)
-      } else {
-        // runPortGranularLayout(initializedNodes, pendingEdges)
-        // runElkLayout(initializedNodes, pendingEdges)
-        runFcoseLayout(nodes.value, edges.value)
-      }
-
-      // Handles may have moved from initial positions. Update node data from pending map.
-      updateNodeInternals(nodes.value.map((n) => n.id))
-
-      if (progressCallback) {
-        progressCallback(nodes.value.length, nodes.value.length, 'Connecting nodes...')
-      }
-
-      historyStore.clear()
-
-      // Report finalizing
-      if (progressCallback) {
-        progressCallback(nodes.value.length, nodes.value.length, 'Finalizing view...')
-      }
-
-      fitView({ padding: 0.2, duration: 800 })
-
-      if (progressCallback) {
-        progressCallback(initializedNodes.length, initializedNodes.length, 'Complete.')
-      }
-  }
-
   const loadFromModuleArray = async (configData, progressCallback = null) => {
     try {
       await clearWorkspace()
@@ -208,13 +177,11 @@ export function useLoadFromModuleArray() {
         progressCallback(0, configData.modules.length, 'Building graph...')
       }
 
-      const positionProvided = buildWorkflowGraph(store, configData.modules, progressCallback)
+      pendingPositionProvided = buildWorkflowGraph(store, configData.modules, progressCallback)
 
       if (progressCallback) {
         progressCallback(configData.modules.length, configData.modules.length, 'Graph built, calculating layout...')
       }
-
-      fixWorkflowLayout(positionProvided)
 
       // Create a promise that will resolve when layout is complete
       const layoutCompletePromise = new Promise((resolve, reject) => {
@@ -249,73 +216,71 @@ export function useLoadFromModuleArray() {
     }
   }
 
-  // onNodesInitialized(async (initializedNodes) => {
-  //   if (!layoutPending.value || initializedNodes.length === 0) return
+  onNodesInitialized(async (initializedNodes) => {
+    if (!layoutPending.value || initializedNodes.length === 0) return
 
-  //   const callback = pendingProgressCallback
-  //   const resolveFunc = layoutCompleteResolve
-  //   const rejectFunc = layoutCompleteReject
+    const callback = pendingProgressCallback
+    const resolveFunc = layoutCompleteResolve
+    const rejectFunc = layoutCompleteReject
 
-  //   try {
-  //     // If position is not declared in module array file,
-  //     // Run Layout (Calculates positions & sorts port arrays).
-  //     // Could make this choice configurable later.
-  //     if (callback) {
-  //       callback(initializedNodes.length, initializedNodes.length, 'Organizing layout...')
-  //     }
+    try {
+      // Nodes are now mounted and measured (dimensions/handle bounds are
+      // real), so it's safe to lay out and update handle internals.
+      if (callback) {
+        callback(initializedNodes.length, initializedNodes.length, 'Organizing layout...')
+      }
 
-  //     // Run layout algorithm
-  //     if (initializedNodes[0].data.position !== {x: 100, y: 100}) {
-  //       // recalculate declared positions to ensure compatibility with workspace dimensions
-  //       runRescaleLayout(initializedNodes)
-  //     } else {
-  //       // runPortGranularLayout(initializedNodes, pendingEdges)
-  //       // runElkLayout(initializedNodes, pendingEdges)
-  //       runFcoseLayout(initializedNodes, pendingEdges)
-  //     }
+          // Run layout algorithm
+      if (pendingPositionProvided) {
+        // recalculate declared positions to ensure compatibility with workspace dimensions
+        runRescaleLayout(nodes.value)
+      } else {
+        // runPortGranularLayout(initializedNodes, pendingEdges)
+        // runElkLayout(initializedNodes, pendingEdges)
+        runFcoseLayout(nodes.value, edges.value)
+      }
 
-  //     await nextTick()
+      await nextTick()
 
-  //     // Handles may have moved from initial positions. Update node data from pending map.
-  //     updateNodeInternals(initializedNodes.map((n) => n.id))
+      // Handles may have moved from initial positions. Update node data from pending map.
+      updateNodeInternals(nodes.value.map((n) => n.id))
 
-  //     if (callback) {
-  //       callback(initializedNodes.length, initializedNodes.length, 'Connecting nodes...')
-  //     }
+      if (callback) {
+        callback(nodes.value.length, nodes.value.length, 'Connecting nodes...')
+      }
 
-  //     historyStore.clear()
-  //     await nextTick()
+      historyStore.clear()
+      await nextTick()
 
-  //     // Report finalizing
-  //     if (callback) {
-  //       callback(initializedNodes.length, initializedNodes.length, 'Finalizing view...')
-  //     }
+      // Report finalizing
+      if (callback) {
+        callback(nodes.value.length, nodes.value.length, 'Finalizing view...')
+      }
 
-  //     fitView({ padding: 0.2, duration: 800 })
+      fitView({ padding: 0.2, duration: 800 })  
 
-  //     await new Promise((resolve) => setTimeout(resolve, 800))
+      if (callback) {
+        callback(nodes.value.length, nodes.value.length, 'Complete.')
+      }
 
-  //     if (callback) {
-  //       callback(initializedNodes.length, initializedNodes.length, 'Complete.')
-  //     }
-
-  //     if (resolveFunc) {
-  //       resolveFunc()
-  //     }
-  //   } catch (error) {
-  //     historyStore.clear()
-  //     notify.error({ message: 'Error organizing graph layout' })
-  //     if (rejectFunc) {
-  //       rejectFunc(error)
-  //     }
-  //   } finally {
-  //     layoutPending.value = false
-  //     pendingEdges = []
-  //     pendingProgressCallback = null
-  //     layoutCompleteResolve = null
-  //     layoutCompleteReject = null
-  //   }
-  // })
+      if (resolveFunc) {
+        resolveFunc()
+      }
+    } catch (error) {
+      historyStore.clear()
+      notify.error({ message: 'Error organizing graph layout' })
+      if (rejectFunc) {
+        rejectFunc(error)
+      }
+    } finally {
+      layoutPending.value = false
+      pendingEdges = []
+      pendingProgressCallback = null
+      pendingPositionProvided = false
+      layoutCompleteResolve = null
+      layoutCompleteReject = null
+    }
+  })
 
   return { loadFromModuleArray }
 }
