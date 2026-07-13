@@ -1,11 +1,9 @@
 import { useVueFlow } from '@vue-flow/core'
 import { ref, shallowRef, watch } from 'vue'
-
-import { GHOST_MODULE_FILENAME, GHOST_NODE_TYPE } from '../utils/constants'
-import { getId, generateUniqueInstanceName, attachNewNodeToFrame, findAnyNode } from '../utils/nodes'
-import { useLibraryStore } from '../stores/libraryStore'
-import { buildPorts } from '../services/import/buildPorts'
-import { extractVariablesFromMath } from '../utils/cellml'
+import { GHOST_MODULE_FILENAME, GHOST_NODE_TYPE, MAIN_NODE_TYPE } from '../utils/constants'
+import { getId as getNextNodeId } from '../utils/nodes'
+import { generateUniqueInstanceName, findAnyNode } from '../utils/nodes'
+import { buildInstance } from '../services/import/buildWorkflow'
 
 /**
  * In a real world scenario you'd want to avoid creating refs in a global scope like this as they might not be cleaned up properly.
@@ -24,7 +22,6 @@ export default function useDragAndDrop(pendingHistoryNodes) {
   const { draggedType, isDragOver, isDragging } = state
 
   const { addNodes, getNodes, onNodesInitialized, screenToFlowCoordinate, updateNode } = useVueFlow()
-  const libraryStore = useLibraryStore()
 
   const isGhostSetupOpen = ref(false)
   const pendingGhostNodeId = ref(null)
@@ -83,7 +80,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
    * @returns {{ nodeId: string, nodeType: string }}
    */
   function createInstanceNode(moduleData, position, handles = []) {
-    const nodeId = getId(getNodes.value.map((n) => n.id))
+    const nodeId = getNextNodeId(getNodes.value.map((n) => n.id))
     pendingHistoryNodes.add(nodeId)
 
     const existingNames = new Set(getNodes.value.map((n) => n.data.name))
@@ -91,22 +88,9 @@ export default function useDragAndDrop(pendingHistoryNodes) {
     const finalName = generateUniqueInstanceName(instanceName, existingNames)
 
     const componentFile = moduleData.mathRef.split(":")[0]
-    const componentName = moduleData.mathRef.split(":")[1]
-    const nodeType = componentFile === GHOST_MODULE_FILENAME ? GHOST_NODE_TYPE : 'instanceNode'
-
-    const newNode = {
-      id: nodeId,
-      type: nodeType,
-      position,
-      data: {
-        name: finalName,
-        mathRef: moduleData.mathRef,
-        moduleRef: moduleData.moduleRef,
-        variables: moduleData.variables,
-        ports: moduleData.ports,
-        handles: handles,
-      },
-    }
+    const nodeType = componentFile === GHOST_MODULE_FILENAME ? GHOST_NODE_TYPE : MAIN_NODE_TYPE
+    
+    const newNode = buildInstance(nodeId, finalName, nodeType, moduleData, handles, position)
 
     /**
      * Align node position after drop, so it's centered to the mouse.
@@ -152,11 +136,6 @@ export default function useDragAndDrop(pendingHistoryNodes) {
       y: event.clientY,
     })
     
-    const instanceData = {
-      module: moduleData,
-
-    }
-
     const { nodeId, nodeType } = createInstanceNode(moduleData, position)
 
     if (nodeType === GHOST_NODE_TYPE) {

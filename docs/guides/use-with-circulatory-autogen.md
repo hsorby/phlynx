@@ -2,15 +2,15 @@
 
 PhLynx was originally designed as a companion application for [Circulatory Autogen](https://physiomelinks.github.io/circulatory_autogen/), a software package for coupling CellML modules and facilitating model calibration, parameter identifiability, and sensitivity analysis.
 
-Existing sets of Circulatory Autogen configuration files can now be imported into PhLynx via the Module Array Import feature. By default, the Import button is configured to perform a Module Array import.
+Existing sets of Circulatory Autogen configuration files can now be imported into PhLynx via the Instance Array Import feature. By default, the Import button is configured to perform a Instance Array import.
 
 ## Importing Configuration Files
 
-Click the **Import** button in the Toolbar to open the Import Module Array dialog.
+Click the **Import** button in the Toolbar to open the Import Instance Array dialog.
 
-![Import Module Array dialog](../assets/images/import-vessel-array.png){.align-center width="550px"}
+![Import Instance Array dialog](../assets/images/import-vessel-array.png){.align-center width="550px"}
 
-Select a valid `module_array.csv` file (see [File Types Guide](../reference/file-types#vessel-array) for reference).
+Select a valid `instance_array.csv` file (see [File Types Guide](../reference/file-types#vessel-array) for reference).
 
 ### Handling Missing Definitions
 
@@ -41,7 +41,7 @@ When you are ready to return to Circulatory Autogen, you must export the updated
 
 PhLynx will generate and download a `.zip` archive containing the two essential files required by Circulatory Autogen:
 
-* `module_array.csv`: The updated network topology defining all modules and their connections.
+* `instance_array.csv`: The updated network topology defining all modules and their connections.
 * `module_config.json`: The definitions for parameters, ports, and units for every module in the workspace.
 
 ### Requirements for Successful Export

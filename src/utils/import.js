@@ -179,7 +179,7 @@ export function groupCollectionFileIssues(componentFileIssues) {
   })
 }
 
-const parseModuleArray = (file, libraryStore = null) => {
+const parseInstanceArray = (file, libraryStore = null) => {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       header: true,
@@ -336,16 +336,16 @@ export function createDynamicFields(completionStatus) {
 }
 
 const configs = {
-  [IMPORT_KEYS.MODULE_ARRAY]: {
-    title: 'Import Module Array File',
+  [IMPORT_KEYS.INSTANCE_ARRAY]: {
+    title: 'Import Instance Array File',
     fields: [
       {
-        key: IMPORT_KEYS.MODULE_ARRAY,
-        label: IMPORT_LABELS.MODULE_ARRAY,
+        key: IMPORT_KEYS.INSTANCE_ARRAY,
+        label: IMPORT_LABELS.INSTANCE_ARRAY,
         accept: '.csv',
         limit: 1,
         required: true,
-        parser: parseModuleArray,
+        parser: parseInstanceArray,
         requiresStore: true,
         isDynamic: true,
       },

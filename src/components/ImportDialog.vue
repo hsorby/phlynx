@@ -110,7 +110,7 @@
           </el-form-item>
         </div>
 
-        <div v-if="importReadiness && formState[IMPORT_KEYS.MODULE_ARRAY]?.readiness" class="validation-status">
+        <div v-if="importReadiness && formState[IMPORT_KEYS.INSTANCE_ARRAY]?.readiness" class="validation-status">
           <el-alert
             v-if="importReadiness.resourcesAreLoaded"
             title="All Required Resources Available"
@@ -221,12 +221,12 @@ const removeFile = (fieldKey, filename) => {
     stagedFiles.value.configFiles = stagedFiles.value.configFiles.filter(f => f.filename !== filename)
   
     // Re-evaluate overall module dependencies
-    const modulesArrayPayload = getModuleArrayPayload()
-    if (modulesArrayPayload) {
-      const resourcesLoadStatus = checkReadiness(modulesArrayPayload)
+    const instanceArrayPayload = getInstanceArrayPayload()
+    if (instanceArrayPayload) {
+      const resourcesLoadStatus = checkReadiness(instanceArrayPayload)
       updateDynamicFields(resourcesLoadStatus)
-    } else if (fieldKey === IMPORT_KEYS.MODULE_ARRAY) {
-      // If the user deletes the module array file, wipe completion status
+    } else if (fieldKey === IMPORT_KEYS.INSTANCE_ARRAY) {
+      // If the user deletes the instance array file, wipe completion status
       resetForm()
     }
   }
@@ -268,8 +268,8 @@ const unstageFiles = () => {
   }
 }
 
-const resetForm = (keepModuleArray = false) => {
-  resetFormState(keepModuleArray)
+const resetForm = (keepInstanceArray = false) => {
+  resetFormState(keepInstanceArray)
   unstageFiles()
 
   // Clear the visual file list in the UI components
@@ -337,20 +337,20 @@ function createEmptyFieldState() {
   }
 }
 
-function resetFormState(keepModuleArray = false) {
+function resetFormState(keepInstanceArray = false) {
   dynamicFields.value = []
   Object.keys(formState).forEach((key) => {
-    if (!(keepModuleArray && key === IMPORT_KEYS.MODULE_ARRAY)) {
+    if (!(keepInstanceArray && key === IMPORT_KEYS.INSTANCE_ARRAY)) {
       formState[key] = createEmptyFieldState()
     }
   })
   importReadiness.value = null
 }
 
-const getModuleArrayPayload = () => {
-  const moduleFiles = formState[IMPORT_KEYS.MODULE_ARRAY]?.files
-  if (!moduleFiles || moduleFiles.size === 0) return null
-  for (const fileData of moduleFiles.values()) {
+const getInstanceArrayPayload = () => {
+  const instanceFiles = formState[IMPORT_KEYS.INSTANCE_ARRAY]?.files
+  if (!instanceFiles || instanceFiles.size === 0) return null
+  for (const fileData of instanceFiles.values()) {
     if (fileData.payload) return fileData.payload
   }
   return null
@@ -402,16 +402,16 @@ const createTemporaryStore = () => {
   }
 }
 
-const checkReadiness = (moduleArrayPayload) => {
-  if (!moduleArrayPayload) return null
+const checkReadiness = (instanceArrayPayload) => {
+  if (!instanceArrayPayload) return null
 
   const temporaryStore = createTemporaryStore()
 
-  const resourcesLoadStatus = checkResourcesAreLoaded(moduleArrayPayload, temporaryStore)
+  const resourcesLoadStatus = checkResourcesAreLoaded(instanceArrayPayload, temporaryStore)
 
   importReadiness.value = resourcesLoadStatus
-  if (formState[IMPORT_KEYS.MODULE_ARRAY]) {
-    formState[IMPORT_KEYS.MODULE_ARRAY].readiness = resourcesLoadStatus
+  if (formState[IMPORT_KEYS.INSTANCE_ARRAY]) {
+    formState[IMPORT_KEYS.INSTANCE_ARRAY].readiness = resourcesLoadStatus
   }
 
   return resourcesLoadStatus
@@ -424,8 +424,8 @@ const isFieldReady = (fieldKey) => {
   const filesAllValid = Array.from(fieldState.files.values()).every((f) => f?.isValid)
   if (!filesAllValid) return false
 
-  // Module array field is ready if all its files are valid
-  if (fieldKey === IMPORT_KEYS.MODULE_ARRAY) {
+  // Instance array field is ready if all its files are valid
+  if (fieldKey === IMPORT_KEYS.INSTANCE_ARRAY) {
     return true
   }
 
@@ -473,10 +473,10 @@ const handleFileChange = async (uploadFile, field) => {
     return
   }
 
-  if (field.key === IMPORT_KEYS.MODULE_ARRAY) {
-    const existingFiles = formState[IMPORT_KEYS.MODULE_ARRAY]?.files
+  if (field.key === IMPORT_KEYS.INSTANCE_ARRAY) {
+    const existingFiles = formState[IMPORT_KEYS.INSTANCE_ARRAY]?.files
     if (existingFiles?.size > 0 && !existingFiles.has(filename)) {
-      resetForm(/* keepModuleArray */ true)
+      resetForm(/* keepInstanceArray */ true)
     }
   }
 
@@ -499,9 +499,9 @@ const handleFileChange = async (uploadFile, field) => {
     state.files.get(filename).isValid = true
 
     // Update readiness and UI ---
-    const moduleArrayPayload = getModuleArrayPayload()
-    if (moduleArrayPayload) {
-      const status = checkReadiness(moduleArrayPayload)
+    const instanceArrayPayload = getInstanceArrayPayload()
+    if (instanceArrayPayload) {
+      const status = checkReadiness(instanceArrayPayload)
 
       if (status && !status.resourcesAreLoaded) {
         await syncDynamicFields(status)

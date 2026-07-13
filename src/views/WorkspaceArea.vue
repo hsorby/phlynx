@@ -232,7 +232,6 @@
                 @open-port-editor-dialog="onOpenPortEditorDialog"
                 @open-cellml-editor-dialog="onOpenCellMLEditorDialog"
                 @open-parameter-editor-dialog="onOpenParameterEditorDialog"
-                @open-replacement-dialog="onOpenReplacementDialog"
                 @open-context-menu="onNodeContextMenu"
                 :ref="(el) => (nodeRefs[props.id] = el)"
               />
@@ -351,7 +350,7 @@ import { MiniMap } from '@vue-flow/minimap'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import useDragAndDrop from '../composables/useDnD'
-import { useLoadFromModuleArray } from '../composables/useLoadFromModuleArray'
+import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
 import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
 import { useResizableAside } from '../composables/useResizableAside'
@@ -386,7 +385,7 @@ import {
   JSON_FILE_TYPES,
   ZIP_FILE_TYPES,
   DEFAULT_FILE_NAME,
-  NEW_INSTANCE_REF
+  NEW_INSTANCE_MODULE_REF
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId } from '../utils/edges'
@@ -634,7 +633,7 @@ const onDrop = async (event) => {
 }
 
 const historyStore = useFlowHistoryStore()
-const { loadFromModuleArray } = useLoadFromModuleArray()
+const { loadFromInstanceArray } = useLoadFromInstanceArray()
 const { loadFromCellML } = useLoadFromCellML()
 const { capture } = useScreenshot()
 const { trackEvent } = useGtm()
@@ -695,8 +694,8 @@ const somethingAvailable = computed(() => nodes.value.length > 0)
 
 const importOptions = computed(() => [
   {
-    key: IMPORT_KEYS.MODULE_ARRAY,
-    label: 'Module Array',
+    key: IMPORT_KEYS.INSTANCE_ARRAY,
+    label: 'Instance Array',
     icon: markRaw(IconModuleArray),
     disabled: false,
   },
@@ -819,7 +818,6 @@ function selectAllNodes() {
   })
 }
 
-// Search filter logic
 const handleSearchInput = () => {
   if (!searchQuery.value.trim()) {
     matchingNodeIds.value.clear()
@@ -848,7 +846,6 @@ const handleSearchInput = () => {
   currentMatchIndex.value = 0
 }
 
-// Cycle to next matching node
 const cycleToNextMatch = () => {
   if (matchCount.value === 0) return
 
@@ -864,7 +861,6 @@ const cycleToNextMatch = () => {
   }
 }
 
-// Cycle to previous matching node
 const cycleToPreviousMatch = () => {
   if (matchCount.value <= 1) return
 
@@ -873,7 +869,6 @@ const cycleToPreviousMatch = () => {
   zoomToNode(matchArray[currentMatchIndex.value])
 }
 
-// Zoom and center on a specific node
 const zoomToNode = (nodeId) => {
   const node = findNode(nodeId)
   if (!node) return
@@ -892,7 +887,6 @@ const zoomToNode = (nodeId) => {
   )
 }
 
-// Helper function to determine node class based on search
 const getNodeClass = (props) => {
   if (!searchQuery.value.trim()) {
     return ''
@@ -1333,22 +1327,22 @@ const handleImportCommand = (option) => {
 }
 
 async function onImportConfirm(importPayload, updateProgress) {
-  if (currentImportMode.value.key === IMPORT_KEYS.MODULE_ARRAY) {
+  if (currentImportMode.value.key === IMPORT_KEYS.INSTANCE_ARRAY) {
     const [[, data]] = importPayload
-    const modules = data.payload
+    const instances = data.payload
 
-    if (!modules || modules.length === 0) {
+    if (!instances || instances.length === 0) {
       notify.warning({
         title: 'Import Aborted',
-        message: 'No module data provided',
+        message: 'No instance data provided',
       })
       return
     }
 
     try {
-      await loadFromModuleArray({ modules }, (current, total, statusMessage) => {
+      await loadFromInstanceArray({ instances }, (current, total, statusMessage) => {
         if (updateProgress) {
-          updateProgress(`${statusMessage || 'Loading module array...'} (${current}/${total})`)
+          updateProgress(`${statusMessage || 'Loading instance array...'} (${current}/${total})`)
         }
       })
       rebuildNodeEdgeIndex()
@@ -1802,7 +1796,7 @@ function onPaneContextMenu(event) {
 // }
 
 function createNewInstanceAtPosition(clientX, clientY) {
-  const module = libraryStore.availableModules.get(NEW_INSTANCE_REF)
+  const module = libraryStore.availableModules.get(NEW_INSTANCE_MODULE_REF)
 
   const position = screenToFlowCoordinate({ x: clientX, y: clientY })
   createInstanceNode(module, position)

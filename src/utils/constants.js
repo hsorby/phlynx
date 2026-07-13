@@ -3,7 +3,7 @@ import { MarkerType } from '@vue-flow/core'
 export const SOURCE_PORT_TYPE = 'source'
 export const TARGET_PORT_TYPE = 'target'
 export const USER_MODULES_FILE = 'User_Modules.cellml'
-export const NEW_INSTANCE_REF = 'new_module:phlynx'
+export const NEW_INSTANCE_MODULE_REF = 'new_module:phlynx'
 
 export const TOOLTIP_AUTO_CLOSE = 1200
 export const RESCALE_ASPECT_RATIO = 3
@@ -97,6 +97,7 @@ export const TIME_NAMES = new Set(['time', 't'])
 
 export const MAX_VISIBLE_TAGS = 1
 
+export const MAIN_NODE_TYPE = 'instanceNode'
 export const GHOST_NODE_TYPE = 'ghostNode'
 export const GHOST_MODULE_FILENAME = 'ghostModule.cellml'
 export const GHOST_MODULE_DEFINITION = {
@@ -108,6 +109,14 @@ export const GHOST_MODULE_DEFINITION = {
       componentFile: GHOST_MODULE_FILENAME,
     },
   ],
+}
+
+export const DEFAULT_INSTANCE_REF = {
+  name: 'new_instance',
+  module_type: 'new_module',
+  module_subtype: 'phlynx',
+  inp_instances: '',
+  out_instances: '',
 }
 
 export const PORT_TYPE_OPTIONS = [
@@ -125,7 +134,7 @@ export const multiportOptions = [
 export const DEFAULT_FILE_NAME = 'phlynx-export'
 
 export const IMPORT_KEYS = {
-  MODULE_ARRAY: 'moduleArray',
+  INSTANCE_ARRAY: 'instanceArray',
   MODULE_CONFIG: 'moduleConfig',
   CELLML_FILE: 'cellMLFile',
   PARAMETER: 'parameter',
@@ -133,7 +142,7 @@ export const IMPORT_KEYS = {
 }
 
 export const IMPORT_LABELS = {
-  MODULE_ARRAY: 'Module Array (.csv)',
+  INSTANCE_ARRAY: 'Instance Array (.csv)',
   MODULE_CONFIG: 'Module Configurations (.json)',
   CELLML_FILE: 'CellML File (.cellml or .xml)',
   PARAMETER: 'Parameters (.csv)',

@@ -48,7 +48,7 @@ A workbench populated with modules.
 <!-- aliases: edge, link -->
 An arrow that traverses two port nodes in the workbench.
 
-### Module Array {#module-array}
+### Instance Array {#instance-array}
 <!-- aliases: -->
 A circulatory autogen configuration file that describes the connections between modules and the configurations to be used.
 
