@@ -776,8 +776,8 @@ onConnect((connection) => {
   // Resolve which port labels are coupled across this conduit, using ordinal
   // indices to select the correct slot when a label appears multiple times.
   const couplings = resolvePortCouplings(
-    sourceNode.data.portLabels ?? [],
-    targetNode.data.portLabels ?? [],
+    sourceNode.data.ports ?? [],
+    targetNode.data.ports ?? [],
     sourceIndex,
     targetIndex
   )
@@ -1604,11 +1604,8 @@ function onOpenMacroBuilderDialog() {
 
 /**
  * Recomputes couplings on every edge touching a given node, using the node's
- * current portLabels. Call this after any operation that changes portLabels on
- * one or more nodes (CellML save, rename, in-place replace, port label edit).
- *
- * Ordinal indices are derived from each edge's position in the filtered list,
- * not from a count of other edges, so repeated same-label slots resolve correctly.
+ * current ports. Call this after any operation that changes ports on
+ * one or more nodes.
  */
 function recomputeEdgeCouplings(nodeId) {
   const outgoing = edges.value.filter((e) => e.source === nodeId)
@@ -1624,8 +1621,8 @@ function recomputeEdgeCouplings(nodeId) {
     edge.data = {
       ...edge.data,
       couplings: resolvePortCouplings(
-        sourceNode.data.portLabels ?? [],
-        targetNode.data.portLabels ?? [],
+        sourceNode.data.ports ?? [],
+        targetNode.data.ports ?? [],
         sourceIndex,
         targetIndex
       ),
@@ -1645,8 +1642,8 @@ function recomputeEdgeCouplings(nodeId) {
     edge.data = {
       ...edge.data,
       couplings: resolvePortCouplings(
-        sourceNode.data.portLabels ?? [],
-        targetNode.data.portLabels ?? [],
+        sourceNode.data.ports ?? [],
+        targetNode.data.ports ?? [],
         sourceIndex,
         targetIndex
       ),
@@ -1659,7 +1656,7 @@ async function onEditPortConfirm(updatedData) {
   if (!id) return
 
   updateNodeData(id, updatedData)
-  recomputeEdgeCouplings(id) // smell - confirm that the recomputeEdgeCouplings works with updated data
+  recomputeEdgeCouplings(id)
 }
 
 const nodeRefs = ref({})
@@ -1748,10 +1745,10 @@ function onEdgeDoubleClick({ edge }) {
   edgeConnectionDialogVisible.value = true
 }
 
-function onEdgeConnectionConfirm({ sourceNodeId, targetNodeId, sourcePortLabels, targetPortLabels, couplings, foreignCouplings }) {
-  // Update portLabels on both nodes
-  updateNodeData(sourceNodeId, { portLabels: sourcePortLabels })
-  updateNodeData(targetNodeId, { portLabels: targetPortLabels })
+function onEdgeConnectionConfirm({ sourceNodeId, targetNodeId, sourcePorts, targetPorts, couplings, foreignCouplings }) {
+  // Update ports on both nodes
+  updateNodeData(sourceNodeId, { ports: sourcePorts })
+  updateNodeData(targetNodeId, { ports: targetPorts })
 
   // Write the new couplings directly onto the active edge
   const activeEdge = findEdge(edgeDialogActiveEdge.value?.id)
@@ -1963,14 +1960,12 @@ async function onExportConfirm(fileName, handle) {
 function recomputeMissingCouplings() {
   const nodeMap = new Map(nodes.value.map((n) => [n.id, n]))
 
-  // Normalise portLabels on every node: migrate legacy field names.
+  // Normalise ports on every node: migrate legacy field names.
   for (const node of nodes.value) {
-    if (!node.data?.portLabels) continue
-    node.data.portLabels = node.data.portLabels.map((pl) => ({
-      ...pl,
-      // 'isMultiPortSum' was the old field name; 'multiport' is current.
-      // If multiport is absent, default to 'None' (single-connection)
-      multiport: pl.multiport ?? 'None',
+    if (!node.data?.ports) continue
+    node.data.ports = node.data.ports.map((p) => ({
+      ...p,
+      multiportType: p.multiportType ?? 'None',
     }))
   }
 
@@ -1989,8 +1984,8 @@ function recomputeMissingCouplings() {
     const targetIndex = targetInCount.get(edge.target) ?? 0
 
     const couplings = resolvePortCouplings(
-      sourceNode.data.portLabels ?? [],
-      targetNode.data.portLabels ?? [],
+      sourceNode.data.ports ?? [],
+      targetNode.data.ports ?? [],
       sourceIndex,
       targetIndex
     )

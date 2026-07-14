@@ -31,8 +31,8 @@
  *
  * Non-multiport constraint
  * ------------------------
- * A portLabel with multiport === 'None' (Python None serialised as a string,
- * used as the default in buildPortLabels when multi_port is absent) may only
+ * A port with multiport === 'None' (Python None serialised as a string,
+ * used as the default in buildPorts when multi_port is absent) may only
  * participate in ONE conduit edge across the entire graph. Any other truthy
  * value for multiport means the port is unrestricted.
  */
@@ -70,7 +70,7 @@ export function getId(edgeIds, prefix = 'edge_') {
 /**
  * Returns true when a portLabel entry is single-connection (non-multiport).
  *
- * buildPortLabels sets multiport to `p.multi_port ?? 'None'`, so:
+ * buildPorts sets multiportType to `p.multi_port ?? 'None'`, so:
  *   'None'               → single-connection (Python None serialised as string)
  *   null / undefined / false → single-connection (absent or falsy)
  *   any other truthy value   → multiport (unrestricted)
@@ -89,7 +89,7 @@ export function isSingleConnection(port) {
  *   - targetIndex: position of the source module instance in the target's inp_modules list
  *
  * Within each (portType, label) group on a given side, occurrences are ordered
- * as they appear in portLabels (which mirrors the config file order). The Nth
+ * as they appear in ports (which mirrors the config file order). The Nth
  * occurrence is selected by index, clamped to the last slot if the index exceeds
  * the group size — matching the module array semantics.
  *
@@ -110,14 +110,14 @@ export function resolvePortCouplings(
 ) {
   const couplings = []
 
-  // Group source portLabels by (portType, label) — preserving config order
+  // Group source ports by (portType, label) — preserving config order
   const sourceGroups = groupByTypeAndLabel(sourcePorts, SOURCE_COMPATIBLE_TYPES)
 
   for (const [groupKey, srcSlots] of sourceGroups) {
     const [srcPortType, label] = groupKey.split('\x00')
     const validTargetTypes = TARGET_COMPATIBLE_TYPES[srcPortType]
 
-    // Group matching target portLabels by (portType, label)
+    // Group matching target ports by (portType, label)
     const targetGroups = groupByTypeAndLabel(targetPorts, validTargetTypes)
 
     for (const [tgtGroupKey, tgtSlots] of targetGroups) {
@@ -201,9 +201,9 @@ export function buildUsedPortKeys(edges) {
   const used = new Set()
   for (const edge of edges) {
     const couplings = edge.data?.couplings ?? []
-    for (const { sourcePortLabel, targetPortLabel } of couplings) {
-      if (isSingleConnection(sourcePortLabel)) used.add(portKey(edge.source, sourcePortLabel))
-      if (isSingleConnection(targetPortLabel)) used.add(portKey(edge.target, targetPortLabel))
+    for (const { sourcePort, targetPort } of couplings) {
+      if (isSingleConnection(sourcePort)) used.add(portKey(edge.source, sourcePort))
+      if (isSingleConnection(targetPort)) used.add(portKey(edge.target, targetPort))
     }
   }
   return used
