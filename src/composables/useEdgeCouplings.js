@@ -1,23 +1,8 @@
 import { ref, computed } from 'vue'
 import { TARGET_COMPATIBLE } from '../utils/constants'
 import { detachReactivity } from '../utils/reactivity'
-
-export function isCompatible(srcType, tgtType) {
-  return TARGET_COMPATIBLE[srcType]?.has(tgtType) ?? false
-}
-
-export function isSingleConnection(port) {
-  return !port.multiportType || port.multiportType === 'None'
-}
-
-export function findPort(ports, port) {
-  if (!port) return null
-  return ports.find((p) =>
-    p.label === port.label &&
-    p.portType === port.portType &&
-    JSON.stringify(p.variables) === JSON.stringify(port.variables)
-  ) ?? null
-}
+import { isSingleConnection } from '../utils/edges'
+import { isCompatible, findPort } from '../utils/ports'
 
 export function useEdgeCouplings(props, askSwapIntent) {
   const localSrcPorts = ref([])

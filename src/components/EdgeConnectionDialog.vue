@@ -195,11 +195,12 @@ import { VueFlow, Position, Handle, useVueFlow } from '@vue-flow/core'
 import {
   FLOW_IDS, ROW_H, NODE_W, MID_GAP, PAD,
 } from '../utils/constants'
+import { isSingleConnection } from '../utils/edges'
+import { isCompatible } from '../utils/ports'
 import { detachReactivity } from '../utils/reactivity'
 
-// Modular imports
 import PortRow from './PortRow.vue'
-import { useEdgeCouplings, isCompatible, isSingleConnection } from '../composables/useEdgeCouplings'
+import { useEdgeCouplings } from '../composables/useEdgeCouplings'
 import { usePortDrag } from '../composables/usePortDrag'
 import { useConnectionAutoscroll } from '../composables/useConnectionAutoscroll'
 
