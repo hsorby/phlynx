@@ -1597,8 +1597,8 @@ async function handleCellMLSave(saveData) {
 }
 
 async function handleParameterSave(saveData) {
-  const { nodeId, variables } = saveData
-  updateNodeData(nodeId, { variables })
+  const { id, variables } = saveData
+  updateNodeData(id, { variables })
 }
 
 function onOpenMacroBuilderDialog() {
