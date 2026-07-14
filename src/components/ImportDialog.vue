@@ -662,9 +662,9 @@ const handleConfirm = async () => {
 
   const importPayload = new Map()
   displayFields.value.forEach((field) => {
-    for (const [filename, data] of formState[field.key].files) {
-      importPayload.set(filename, data)
-    }
+    const fieldFiles = formState[field.key].files
+    if (fieldFiles.size === 0) return
+    importPayload.set(field.key, new Map(fieldFiles))
   })
 
   trackEvent('import_action', {

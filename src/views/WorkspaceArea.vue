@@ -1230,7 +1230,7 @@ const loadParametersData = async (content, filename, { notify: shouldNotify = tr
     const variableCatalogue = new Set() 
     const nodeMap = new Map(nodes.value.map((n) => [n.data.name, n]))
     let totalLocal = 0
-    
+
     for (const [instance, node] of nodeMap) {
       for (const variable of node.data.variables) {
         variableCatalogue.add(variable.name.trim())
@@ -1371,8 +1371,12 @@ const handleImportCommand = (option) => {
 
 async function onImportConfirm(importPayload, updateProgress) {
   if (currentImportMode.value.key === IMPORT_KEYS.INSTANCE_ARRAY) {
-    const [[, data]] = importPayload
-    const instances = data.payload
+
+    const instanceArrayFiles = importPayload.get(IMPORT_KEYS.INSTANCE_ARRAY)
+    const [[, instanceData]] = instanceArrayFiles
+    const instances = instanceData.payload
+
+    const parametersFiles = importPayload.get(IMPORT_KEYS.PARAMETER)
 
     if (!instances || instances.length === 0) {
       notify.warning({
@@ -1388,6 +1392,12 @@ async function onImportConfirm(importPayload, updateProgress) {
           updateProgress(`${statusMessage || 'Loading instance array...'} (${current}/${total})`)
         }
       })
+
+      if (parametersFiles) {
+        for (const [filename, data] of parametersFiles) {
+          loadParametersData(data.payload, filename, { notify: false })
+        }
+      }
       rebuildNodeEdgeIndex()
 
       notify.success({
