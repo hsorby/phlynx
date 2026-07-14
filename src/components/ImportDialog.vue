@@ -487,7 +487,7 @@ const handleFileChange = async (uploadFile, field) => {
   try {
     const parsed = await parseFile(field, rawFile)
 
-    state.files.get(filename).payload = parsed?.data ?? []
+    state.files.get(filename).payload = parsed?.data ?? parsed // parameter files have different structure
     state.readiness = parsed?.completionStatus ?? null
     state.warnings = parsed?.completionStatus?.warnings ?? []
 
@@ -659,15 +659,6 @@ const handleConfirm = async () => {
   await new Promise((resolve) => setTimeout(resolve, 50))
 
   commitStagedFiles()
-
-  // SMELL - to update once parameter imports are implemented
-  if (formState[IMPORT_KEYS.PARAMETER]) {
-    for (const [filename, data] of formState[IMPORT_KEYS.PARAMETER].files) {
-      if (data.isValid) {
-        libraryStore.addParameterFile(filename, data.payload)
-      }
-    }
-  }
 
   const importPayload = new Map()
   displayFields.value.forEach((field) => {

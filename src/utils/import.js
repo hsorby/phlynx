@@ -257,10 +257,7 @@ export const parseParametersFile = (file) => {
       skipEmptyLines: true,
 
       complete: (results) => {
-        // results.data will be an array of objects
-        // e.g., [{ param_name: 'a', value: '1' }, { param_name: 'b', value: '2' }]
         const cleanData = results.data.filter((row) => {
-          // Check if variable_name exists and does NOT start with '#'
           return row.variable_name && !row.variable_name.trim().startsWith('#')
         })
 

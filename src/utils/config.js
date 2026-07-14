@@ -34,6 +34,7 @@ function normaliseVariables(RawVariablesAndUnits = []) {
     unit,
     access,
     type,
+    data_reference: null,
   }))
 }
 

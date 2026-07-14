@@ -1242,28 +1242,65 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
 
 const loadParametersData = async (content, filename, { notify: shouldNotify = true, trackEvents = true } = {}) => {
   try {
-    const added = libraryStore.addParameterFile(filename, content)
+    const nodeMap = new Map(nodes.value.map((n) => [n.data.name, n]))
+    let totalUpdated = 0
+    for (const [instance, node] of nodeMap) {
+      const instanceParameters = Array.from(content)
+        .filter((entry) => entry.variable_name.trimEnd().endsWith(instance))
+        .map((entry) => ({
+          ...entry,
+          name: entry.variable_name
+            .trimEnd()
+            .slice(0, -instance.length)
+            .replace(/_+$/, '')
+        }))
 
-    if (shouldNotify && added) {
+      const paramsByName = new Map(instanceParameters.map((p) => [p.name.trim(), p]))
+      let updatedCount = 0
+      node.data.variables = node.data.variables.map((variable) => {
+        const match = paramsByName.get(variable.name.trim())
+        if (!match) return variable
+        updatedCount++
+
+        const matchedUnit = match.units.trim()
+        const currentUnit = variable.unit.trim()
+
+        if (matchedUnit !== currentUnit) {
+          console.warn(
+            `Unit mismatch for "${variable.name}": node has "${currentUnit}", parameter has "${matchedUnit}"`
+          )
+        }
+
+        return {
+          ...variable,
+          value: match.value.trim(),
+          data_reference: match.data_reference.trim(),
+          type: 'constant',
+        }
+      })
+      totalUpdated += updatedCount
+    }
+
+    if (shouldNotify && totalUpdated > 0) {
       if (trackEvents) {
         trackEvent('parameters_load_action', {
           category: 'Parameters',
           action: 'load_parameters',
-          label: `Parameters: ${content.length}`,
+          label: `Parameters: ${totalUpdated}`,
           file_type: 'csv',
         })
       }
       notify.success({
         title: 'Parameters Loaded',
-        message: `Loaded ${content.length} parameters from ${filename}.`,
+        message: `Loaded ${totalUpdated} parameters from ${filename}.`,
       })
-    } else if (shouldNotify && !added) {
+    } else if (shouldNotify && totalUpdated === 0) {
       notify.info({
         title: 'Parameters Not Loaded',
         message: `No new parameters were added from ${filename}.`,
       })
     }
-    return { ok: added, count: added ? content.length : 0 }
+    return { ok: totalUpdated > 0, count: totalUpdated }
   } catch (err) {
     if (shouldNotify) {
       if (trackEvents) {
@@ -1380,7 +1417,6 @@ async function onImportConfirm(importPayload, updateProgress) {
     if (multiFile) {
       notifyMultiFileResults(results, { successTitle: 'Parameters Loaded' })
     }
-    updateNodesWithNewParameters()
   } else {
     console.log("Cannot get here this shouldn't be an import:", currentImportMode.value.key)
   }

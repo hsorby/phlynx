@@ -80,13 +80,7 @@ watch(visible, (newVal) => {
     if (portTable.value) {
       portTable.value.clearSort()
       portTable.value.setCurrentRow(null)
-      // Note: I think .el-table__body-wrapper is the correct class for the scrollable div in Element Plus tables
       portTable.value.$el.querySelector('.el-table__body-wrapper').scrollTop = 0
-      // Alternative if the above doesn't work:
-      // nextTick(() => {
-      // const wrapper = portTable.value?.$el.querySelector('.el-scrollbar__wrap')
-      // if (wrapper) wrapper.scrollTop = 0
-      // })
     }
   }
 })
