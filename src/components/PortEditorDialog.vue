@@ -149,7 +149,7 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  nodeId: {
+  id: {
     type: String,
     default: '',
   },
@@ -236,7 +236,7 @@ function handleConfirm() {
   
   emit('confirm', {
     name: editableData.name,
-    nodeId: props.nodeId,
+    id: props.id,
     ports: finalPorts,
   })
 

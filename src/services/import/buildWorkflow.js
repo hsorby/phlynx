@@ -32,14 +32,13 @@ export function buildInstance(nodeId, name, nodeType, moduleData, handles, posit
 
 function buildInstances(instanceRefs, availableModules, currentNodes, progressCallback = null) {
   const pendingInstances = []
-  const maxNodeId = getNextNodeId(currentNodes.map((n) => n.id))
+  let nodeId = getNextNodeId(currentNodes.map((n) => n.id))
 
   instanceRefs.forEach((instanceRef, index) => {
     if (progressCallback) {
       progressCallback(index, instanceRefs.length, instanceRef.name)
     }
 
-    const nodeId = `dndnode_${maxNodeId + index}`
     const existingNames = new Set(currentNodes.map((n) => n.data.name))
 
     const module = availableModules.get(`${instanceRef.module_type}:${instanceRef.module_subtype}`)
@@ -62,16 +61,17 @@ function buildInstances(instanceRefs, availableModules, currentNodes, progressCa
     } else {
       pendingInstances.push(buildInstance(nodeId, instanceRef.name, nodeType, module, handles, { x: instanceRef.x, y: instanceRef.y }))
     }
+
+    nodeId = getNextNodeId([nodeId])
   })
-  
-  console.log(pendingInstances)
+
   return pendingInstances
 }
 
 function buildEdges(instanceRefs, pendingInstances) {
 
   const pendingEdges = []
-  console.log('instances', pendingInstances)
+
   const nodeMap = new Map(pendingInstances.map((n) => [n.data.name, n]))
 
   // Tracks consumed single-connection port label slots across all edges built so far.

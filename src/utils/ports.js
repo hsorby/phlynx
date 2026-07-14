@@ -1,3 +1,5 @@
+import { TARGET_COMPATIBLE } from "./constants"
+
 export function isCompatible(srcType, tgtType) {
   return TARGET_COMPATIBLE[srcType]?.has(tgtType) ?? false
 }

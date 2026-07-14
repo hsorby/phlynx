@@ -247,7 +247,7 @@
 
   <PortEditorDialog
     v-model="portEditorDialogVisible"
-    :node-id="currentEditingNode?.nodeId"
+    :id="currentEditingNode?.id"
     :initial-name="currentEditingNode?.initialName"
     :initial-ports="currentEditingNode?.initialPorts"
     :variables="currentEditingNode?.variables"
@@ -257,42 +257,40 @@
 
   <CellMLEditorDialog 
     v-model="cellMLEditorDialogVisible"
-    :node-id="currentEditingNode?.nodeId"
+    :id="currentEditingNode?.id"
     :name="currentEditingNode?.name"
-    :math-ref="currentEditingNode?.mathRef"
+    :math-ref="currentEditingNode?.mathRef || ''"
     :variables="currentEditingNode?.variables"
     @save="handleCellMLSave"
   />
 
   <ParameterEditorDialog 
     v-model="parameterEditorDialogVisible"
-    :node-id="currentEditingNode?.nodeId"
+    :id="currentEditingNode?.id"
     :variables="currentEditingNode?.variables"
     @save="handleParameterSave"
   />
 
   <SaveDialog
     v-model="saveDialogVisible"
-    @confirm="onSaveConfirm"
     :default-name="libraryStore.lastSaveName"
+    @confirm="onSaveConfirm"
   />
 
   <SaveDialog
     v-model="exportDialogVisible"
-    @confirm="onExportConfirm"
     :title="`Export for ${currentExportMode.label}`"
     :default-name="libraryStore.lastExportName"
     :suffix="currentExportMode.suffix"
+    @confirm="onExportConfirm"
   />
 
-  <!-- <ModuleReplacementDialog
+  <ModuleReplacementDialog
+    v-if="replacementDialogVisible"
     v-model="replacementDialogVisible"
-    :modules="libraryStore.availableModules"
-    :node-id="currentEditingNode.nodeId"
-    :variables="currentEditingNode?.variables || []"
-    :port-labels="currentEditingNode?.portLabels || []"
+    :current-instance="currentEditingNode"
     @confirm="onReplaceConfirm"
-  /> -->
+  />
 
   <MacroBuilderDialog
     v-model="macroBuilderDialogVisible"
@@ -307,9 +305,13 @@
     @confirm="onImportConfirm"
   />
 
-  <PaneContextMenu ref="contextMenuRef" :items="contextMenuItems" />
+  <PaneContextMenu
+    ref="contextMenuRef"
+    :items="contextMenuItems"
+  />
 
   <EdgeConnectionDialog
+    v-if="edgeConnectionDialogVisible"
     v-model="edgeConnectionDialogVisible"
     :source-node="edgeDialogSourceNode"
     :target-node="edgeDialogTargetNode"
@@ -359,7 +361,7 @@ import LibraryArea from '../components/LibraryArea.vue'
 import Workbench from '../components/WorkbenchArea.vue'
 import InstanceNode from '../components/InstanceNode.vue'
 import ImportDialog from '../components/ImportDialog.vue'
-// import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
+import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
 import SaveDialog from '../components/SaveDialog.vue'
 import MacroBuilderDialog from '../components/MacroBuilderDialog.vue'
 import EdgeConnectionDialog from '../components/EdgeConnectionDialog.vue'
@@ -654,7 +656,7 @@ const cellMLEditorDialogVisible = ref(false)
 const saveDialogVisible = ref(false)
 const importDialogVisible = ref(false)
 const exportDialogVisible = ref(false)
-// const replacementDialogVisible = ref(false)
+const replacementDialogVisible = ref(false)
 const macroBuilderDialogVisible = ref(false)
 const edgeConnectionDialogVisible = ref(false)
 const edgeDialogSourceNode = ref(null)
@@ -666,8 +668,10 @@ const importDialogRef = ref(null)
 const currentEditingNode = ref({
   name: '',
   variables: [],
-  nodeId: '',
-  portLabels: [],
+  mathRef: '',
+  moduleRef: '',
+  id: '',
+  ports: [],
 })
 const currentImportMode = ref(null)
 const currentImportConfig = ref({})
@@ -1557,10 +1561,10 @@ function cleanPorts(currentNode) {
  * 3. updating graph nodes to match new ports.
  */
 async function handleCellMLSave(saveData) {
-  const { nodeId, updateAll, mathRef, math, siblings, variables } = saveData
+  const { id, updateAll, mathRef, math, siblings, variables } = saveData
 
   // Update math references
-  updateNodeData(nodeId, { mathRef })
+  updateNodeData(id, { mathRef })
   let updatedCount = 1
   if (updateAll) {
     siblings.forEach((siblingId) => {
@@ -1570,7 +1574,7 @@ async function handleCellMLSave(saveData) {
   }
 
   // Update variables and ports
-  const currentNode = findNode(nodeId)
+  const currentNode = findNode(id)
   updateVariablesFromMath(currentNode, math)
   cleanPorts(currentNode)
   if (updateAll) {
@@ -1582,7 +1586,7 @@ async function handleCellMLSave(saveData) {
   }
 
   // Update edge couplings
-  recomputeEdgeCouplings(nodeId) // TO DO - confirm that the recomputeEdgeCouplings works with updated data
+  recomputeEdgeCouplings(id) // TO DO - confirm that the recomputeEdgeCouplings works with updated data
 
   notify.success({
     title: 'CellML Updated',
@@ -1654,17 +1658,11 @@ function recomputeEdgeCouplings(nodeId) {
 }
 
 async function onEditPortConfirm(updatedData) {
-  const { nodeId, instanceId } = currentEditingNode.value
-  if (!nodeId) return
+  const { id } = currentEditingNode.value
+  if (!id) return
 
-  // smell - is this because of the macro edit tool...?
-  const targetInstance = instanceId || FLOW_IDS.MAIN
-  const { updateNodeData } = useVueFlow(targetInstance)
-
-  updateNodeData(nodeId, updatedData)
-  currentEditingNode.value.module.ports = updatedData.ports // SMELL - the updateNodeData only works on structures that are one level deep
-
-  recomputeEdgeCouplings(nodeId)
+  updateNodeData(id, updatedData)
+  recomputeEdgeCouplings(id) // smell - confirm that the recomputeEdgeCouplings works with updated data
 }
 
 const nodeRefs = ref({})
@@ -1777,26 +1775,19 @@ function onEdgeConnectionConfirm({ sourceNodeId, targetNodeId, sourcePortLabels,
   }
 }
 
-// function onOpenReplacementDialog(eventPayload) {
-//   currentEditingNode.value = {
-//     ...eventPayload,
-//   }
-//   replacementDialogVisible.value = true
-// }
+function onOpenReplacementDialog(eventPayload) {
+  currentEditingNode.value = {
+    ...eventPayload,
+  }
+  replacementDialogVisible.value = true
+}
 
-// async function onReplaceConfirm(updatedData) {
-//   const { nodeId, instanceId } = currentEditingNode.value 
-//   if (!nodeId) return
-
-//   const compLabel = updatedData.componentType
-//   const filePart = updatedData.componentFile
-//   updatedData.label = filePart ? `${compLabel} — ${filePart}` : compLabel
-
-//   const targetInstance = instanceId || FLOW_IDS.MAIN    
-//   const { updateNodeData } = useVueFlow(targetInstance) 
-//   updateNodeData(nodeId, updatedData)
-//   replacementDialogVisible.value = false
-// }
+async function onReplaceConfirm(updatedData) {
+  const { id } = currentEditingNode.value 
+  if (!id) return
+  updateNodeData(id, updatedData)
+  replacementDialogVisible.value = false
+}
 
 const contextMenuRef = ref(null)
 
@@ -1827,25 +1818,19 @@ function onPaneContextMenu(event) {
   contextMenuRef.value.open(event.clientX, event.clientY)
 }
 
-// function onNodeContextMenu({ clientX, clientY, nodeId }) {
-//   contextMenuItems.value = [
-//     {
-//       label: 'Replace Module',
-//       action: () => {
-//         const node = findNode(nodeId)
-//         if (!node) return
-//         onOpenReplacementDialog({
-//           nodeId,
-//           nodeData: node.data,
-//           name: node.data.name,
-//           variables: node.data.variables,
-//           portLabels: node.data.portLabels,
-//         })
-//       },
-//     },
-//   ]
-//   contextMenuRef.value.open(clientX, clientY)
-// }
+function onNodeContextMenu({ clientX, clientY, id }) {
+  contextMenuItems.value = [
+    {
+      label: 'Replace Module',
+      action: () => {
+        const node = findNode(id)
+        if (!node) return
+        onOpenReplacementDialog(node)
+      },
+    },
+  ]
+  contextMenuRef.value.open(clientX, clientY)
+}
 
 function createNewInstanceAtPosition(clientX, clientY) {
   const module = libraryStore.availableModules.get(NEW_INSTANCE_MODULE_REF)

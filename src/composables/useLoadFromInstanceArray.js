@@ -45,7 +45,6 @@ export function useLoadFromInstanceArray() {
 
       const result = buildWorkflowGraph(instanceArray.instances, store.availableModules, nodes.value, progressCallback)
 
-      console.log(detachReactivity(result))
       pendingEdges = result.pendingEdges
 
       if (progressCallback) {

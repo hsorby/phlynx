@@ -127,7 +127,7 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  nodeId: {
+  id: {
     type: String,
     default: '',
   },
@@ -285,7 +285,7 @@ async function handleConfirm() {
   })
 
   emit('save', {
-    nodeId: props.nodeId,
+    id: props.id,
     variables: parameterRows.value,
   })
   

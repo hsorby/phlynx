@@ -19,11 +19,11 @@
 
         <div v-if="selectedModule" class="selected-module">
           <div class="selected-name">
-            {{ selectedModule.name || selectedModule.componentFile }}
+            {{ selectedModule.name }}
           </div>
 
           <div class="selected-file">
-            {{ selectedModule.componentFile || '' }}
+            {{ selectedModule.moduleRef || '' }}
           </div>
         </div>
 
@@ -49,7 +49,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, toRaw } from 'vue'
 import { ElCheckbox, ElButton } from 'element-plus'
 
 import { useGtm } from '../composables/useGtm'
@@ -60,23 +60,15 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  modules: {
-    type: Array,
-    default: () => [],
-  },
-  variables: {
-    type: Array,
-    default: () => [],
-  },
-  portLabels: {
-    type: Array,
-    default: () => [],
+  currentInstance: {
+    type: Object,
+    required: true,
   },
 })
 
 const emit = defineEmits([
-  'update:modelValue', // Required for v-model
-  'confirm', // Emits the new data
+  'update:modelValue',
+  'confirm',
 ])
 
 const selectedModule = ref(null)
@@ -97,29 +89,25 @@ function onModuleSelected(module) {
 }
 
 function handleConfirm() {
-  const moduleVariables = selectedModule.value.variables || []
+  const moduleVariables = new Set(selectedModule.value.variables.map((variable) => variable.name))
+  const oldPorts = props.currentInstance.data.ports
 
-  const finalPortLabels = retainMatches.value
-    ? moduleVariables
-        .map((newPort) => {
-          const match = props.portLabels.find((oldPort) => oldPort.variables === newPort.name)
-          return match ? { variables: newPort.name, label: match.label } : null
-        })
-        .filter(Boolean)
+  const finalPorts = retainMatches.value
+    ? oldPorts.filter((port) => port.variables.every((variable) => moduleVariables.has(variable)))
     : []
 
   trackEvent('module_replacement_action', {
     category: 'ModuleReplacement',
     action: 'confirm',
-    label: `Module: ${selectedModule.value.componentType}`, // useful context
+    label: `Module: ${selectedModule.value.moduleRef}`,
     file_type: 'json',
   })
 
   emit('confirm', {
-    componentType: selectedModule.value.componentType,
-    componentFile: selectedModule.value.componentFile,
-    portLabels: finalPortLabels,
-    variables: moduleVariables,
+    moduleRef: selectedModule.value.moduleRef,
+    mathRef: selectedModule.value.mathRef,
+    variables: selectedModule.value.variables,
+    ports: finalPorts,
   })
 
   closeDialog()

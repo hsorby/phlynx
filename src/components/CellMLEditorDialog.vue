@@ -71,7 +71,7 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  nodeId: {
+  id: {
     type: String,
     required: true,
   },
@@ -91,7 +91,7 @@ const store = useLibraryStore()
 const { trackEvent } = useGtm()
 const { nodes } = useVueFlow()
 
-const loading = ref(false)
+const loading = ref(true)
 const currentModel = ref('')
 const originalModel = ref('')
 const applyToAll = ref(false)
@@ -126,7 +126,7 @@ const siblings = computed(() => {
 
   return nodes.value
     .filter((n) =>
-      n.id !== props.nodeId &&
+      n.id !== props.id &&
       n.data?.mathRef === props.mathRef
     )
     .map((n) => n.id)
@@ -143,7 +143,7 @@ watch(
     if (isOpen && props.mathRef) {
       loading.value = true
       try {
-        const math = await store.availableMath.get(props.mathRef) 
+        const math = store.availableMath.get(props.mathRef)
         currentModel.value = math
         originalModel.value = math
       } catch (e) {
@@ -155,11 +155,6 @@ watch(
   }
 )
 
-// Called once by CellMLTextEditor after it mounts, with the canonical
-// (round-tripped) form of the model it was given, so
-// isDirty only ever reflects genuine edits, not incidental differences
-// between the raw stored form and whatever the editor's own pipeline
-// produces for identical content.
 const handleEditorReady = (canonicalMath) => {
   currentModel.value = canonicalMath
   originalModel.value = canonicalMath
@@ -225,7 +220,7 @@ const handleSave = async (source) => {
       updateAll,
       mathRef: newMathRef,
       math: currentModel.value,
-      nodeId: props.nodeId,
+      id: props.id,
       siblings: updateAll ? siblings.value : undefined,
     })
 

@@ -1240,8 +1240,6 @@ export function extractComponentsFromCellmlString(cellmlString) {
 
   const extractedComponents = []
   const printer = new _libcellml.Printer()
-  const xmlParser = new DOMParser()
-  const serializer = new XMLSerializer()
 
   if (model.componentCount() > 0) {
     for (let i = 0; i < model.componentCount(); i++) {

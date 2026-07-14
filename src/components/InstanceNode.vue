@@ -195,7 +195,7 @@ const emit = defineEmits([
 
 async function openEditPortDialog() {
   emit('open-port-editor-dialog', {
-    nodeId: props.id,
+    id: props.id,
     handles: props.data.handles,
     initialName: props.data.name,
     initialPorts: props.data.ports,
@@ -205,7 +205,7 @@ async function openEditPortDialog() {
 
 function openEditCellmlDialog() {
   emit('open-cellml-editor-dialog', {
-    nodeId: props.id,
+    id: props.id,
     name: props.data.name,
     mathRef: props.data.mathRef,
     variables: props.data.variables,
@@ -214,7 +214,7 @@ function openEditCellmlDialog() {
 
 function openEditParameterDialog() {
   emit('open-parameter-editor-dialog', {
-    nodeId: props.id,
+    id: props.id,
     variables: props.data.variables,
     mathRef: props.data.mathRef,
   })
@@ -383,7 +383,7 @@ function openContextMenu(event) {
   emit('open-context-menu', {
     clientX: event.clientX,
     clientY: event.clientY,
-    nodeId: props.id,
+    id: props.id,
   })
 }
 
