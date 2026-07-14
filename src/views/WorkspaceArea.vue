@@ -1149,21 +1149,6 @@ const onEdgeChange = (changes) => {
 
 const screenshotDisabled = computed(() => nodes.value.length === 0 && vueFlowRef.value !== null)
 
-function updateNodesWithNewParameters() {
-  nodes.value.forEach((node) => {
-    if (node.type === 'instanceNode') {
-      libraryStore.setParameterValuesForInstance(
-        node.data.name,
-        node.data.variables,
-        node.data.componentFile,
-        node.data.componentType,
-        node.data.configIndex
-      )
-      updateNodeData(node.id, { variables: node.data.variables })
-    }
-  })
-}
-
 const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackEvents = true } = {}) => {
   return new Promise((resolve) => {
     const result = processCellMLData(content)
@@ -1244,7 +1229,6 @@ const loadParametersData = async (content, filename, { notify: shouldNotify = tr
   try {
     const variableCatalogue = new Set() 
     const nodeMap = new Map(nodes.value.map((n) => [n.data.name, n]))
-    let totalUpdated = 0
     let totalLocal = 0
     
     for (const [instance, node] of nodeMap) {
