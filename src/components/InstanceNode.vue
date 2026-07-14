@@ -367,16 +367,6 @@ function saveEdit() {
   // Update the node's data in the store
   updateNodeData(props.id, { name: sanitisedName })
   isEditing.value = false
-  setTimeout(() => {
-    libraryStore.setParameterValuesForInstance(
-      sanitisedName,
-      props.data.variables,
-      props.data.componentFile,
-      props.data.componentType,
-      props.data.configIndex
-    )
-    updateNodeData(props.id, { variables: props.data.variables })
-  }, 100) // Delay to ensure the DOM has updated
 }
 
 function openContextMenu(event) {
