@@ -1242,9 +1242,16 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
 
 const loadParametersData = async (content, filename, { notify: shouldNotify = true, trackEvents = true } = {}) => {
   try {
+    const variableCatalogue = new Set() 
     const nodeMap = new Map(nodes.value.map((n) => [n.data.name, n]))
     let totalUpdated = 0
+    let totalLocal = 0
+    
     for (const [instance, node] of nodeMap) {
+      for (const variable of node.data.variables) {
+        variableCatalogue.add(variable.name.trim())
+      }
+
       const instanceParameters = Array.from(content)
         .filter((entry) => entry.variable_name.trimEnd().endsWith(instance))
         .map((entry) => ({
@@ -1278,8 +1285,23 @@ const loadParametersData = async (content, filename, { notify: shouldNotify = tr
           type: 'constant',
         }
       })
-      totalUpdated += updatedCount
+      totalLocal += updatedCount
     }
+
+    const globalConstants = Array.from(content)
+      .filter((entry) => variableCatalogue.has(entry.variable_name.trimEnd()))
+      .map((entry) => ({
+        ...entry,
+        name: entry.variable_name.trimEnd(),
+      }))
+
+    globalConstants.forEach((p) => {
+      libraryStore.assignGlobalConstant(p.name, p.value, p.units)
+    })
+
+    const totalGlobal = globalConstants.length
+
+    const totalUpdated = totalLocal + totalGlobal
 
     if (shouldNotify && totalUpdated > 0) {
       if (trackEvents) {
