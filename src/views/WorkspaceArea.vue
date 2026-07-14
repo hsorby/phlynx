@@ -835,12 +835,11 @@ const handleSearchInput = () => {
 
   nodes.value.forEach((node) => {
     // Search in all relevant name fields
-    const componentType = node.data?.componentType?.toLowerCase() || ''
+    const moduleRef = node.data?.moduleRef?.toLowerCase() || ''
     const name = node.data?.name?.toLowerCase() || ''
-    const label = node.data?.label?.toLowerCase() || ''
-    const componentFile = node.data?.componentFile?.toLowerCase() || ''
+    const mathRef = node.data?.mathRef?.toLowerCase() || ''
 
-    if (componentType.includes(query) || name.includes(query) || label.includes(query) || componentFile.includes(query)) {
+    if (moduleRef.includes(query) || name.includes(query) || mathRef.includes(query)) {
       matches.add(node.id)
     }
   })
@@ -2283,38 +2282,6 @@ const pasteSelection = async (atMouse = false) => {
         selected: true,
       })
     }
-  })
-
-  newNodes.forEach((newNode) => {
-    const { name, componentFile, componentType, configIndex } = newNode.data
-    if (!componentFile || !componentType) return
-
-    const model = libraryStore.getModelByCollectionName(componentFile)
-    const variables = extractVariablesFromMath(model)
-    newNode.data.variables = variables
-
-    const resolvedIndex = configIndex ?? 0
-    const targetModule = libraryStore.findModulesByComponentName(componentFile, componentType)
-
-    if (targetModule &&
-      (!targetModule.configs?.[resolvedIndex]?.component_file?.length ||
-        !targetModule.configs?.[resolvedIndex]?.component_type?.length ||
-        !targetModule.configs?.[resolvedIndex]?.variables_and_units?.length)) {
-      const syntheticConfig = {
-        component_file: componentFile,
-        component_type: componentType,
-        variables_and_units: variables.map((v) => [v.name, v.units ?? 'dimensionless', 'access', 'variable']),
-      }
-      libraryStore.addConfigFile(componentFile, [syntheticConfig])
-    }
-
-    libraryStore.setParameterValuesForInstance(
-      name, // SMELL - instance?
-      variables,
-      componentFile,
-      componentType,
-      resolvedIndex
-    )
   })
 
   getSelectedNodes.value.forEach((n) => (n.selected = false))
