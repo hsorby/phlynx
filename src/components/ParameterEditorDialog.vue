@@ -49,7 +49,6 @@
           max-height="400"
           :default-sort="{ prop: 'value', order: 'ascending' }"
           @sort-change="handleSortChange"
-          @change="handleEntryChange"
           @selection-change="handleSelectionChange"
         >
           <el-table-column type="selection" width="55" />
@@ -150,7 +149,6 @@ const loadingText = ref('Loading parameters...')
 const hasVariables = ref(false)
 const parametersTable = ref(null)
 const parameterRows = ref([])
-const somethingChanged = ref(false)
 const selectedRows = ref([])
 const bulkTypeValue = ref('')
 
@@ -197,7 +195,6 @@ watch(
     if (isOpen) {
       isLoading.value = true
       hasVariables.value = true
-      somethingChanged.value = false
       selectedRows.value = []
       bulkTypeValue.value = ''
 
