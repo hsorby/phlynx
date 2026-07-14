@@ -286,7 +286,6 @@
   />
 
   <ModuleReplacementDialog
-    v-if="replacementDialogVisible"
     v-model="replacementDialogVisible"
     :current-instance="currentEditingNode"
     @confirm="onReplaceConfirm"
@@ -311,7 +310,6 @@
   />
 
   <EdgeConnectionDialog
-    v-if="edgeConnectionDialogVisible"
     v-model="edgeConnectionDialogVisible"
     :source-node="edgeDialogSourceNode"
     :target-node="edgeDialogTargetNode"
@@ -659,10 +657,10 @@ const exportDialogVisible = ref(false)
 const replacementDialogVisible = ref(false)
 const macroBuilderDialogVisible = ref(false)
 const edgeConnectionDialogVisible = ref(false)
-const edgeDialogSourceNode = ref(null)
-const edgeDialogTargetNode = ref(null)
-const edgeDialogActiveEdge = ref(null)
-const edgeDialogSubgraph = ref(null)
+const edgeDialogSourceNode = ref({})
+const edgeDialogTargetNode = ref({})
+const edgeDialogActiveEdge = ref({})
+const edgeDialogSubgraph = ref(new Map())
 const importDialogRef = ref(null)
 
 const currentEditingNode = ref({
