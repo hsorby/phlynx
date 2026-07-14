@@ -87,11 +87,11 @@ export async function runFcoseLayout(nodes, edges) {
     // Port Sorting.
     // Physics layouts put nodes anywhere (top, bottom, left, right).
     // We need to dynamically decide which side ports should be on based on their neighbours.
-    if (node.data.ports) {
+    if (node.data.handles) {
       // A. Determine Side dynamically based on neighbours.
-      node.data.ports.forEach((port) => {
+      node.data.handles.forEach((handle) => {
         // Find the neighbour node for this port.
-        const edge = edges.find((e) => e.sourceHandle === getHandleId(port) || e.targetHandle === getHandleId(port))
+        const edge = edges.find((e) => e.sourceHandle === getHandleId(handle) || e.targetHandle === getHandleId(handle))
         if (!edge) return
 
         const neighbourId = edge.source === node.id ? edge.target : edge.source
@@ -104,24 +104,24 @@ export async function runFcoseLayout(nodes, edges) {
 
           // If strictly horizontal > vertical distance, put on Left/Right.
           if (Math.abs(dx) > Math.abs(dy)) {
-            port.side = dx > 0 ? 'right' : 'left'
+            handle.side = dx > 0 ? 'right' : 'left'
           } else {
-            port.side = dy > 0 ? 'bottom' : 'top'
+            handle.side = dy > 0 ? 'bottom' : 'top'
           }
         }
       })
 
-      // B. Sort Ports on those sides.
+      // B. Sort Handles on those sides.
       const sides = { top: [], right: [], bottom: [], left: [] }
-      node.data.ports.forEach((p) => {
-        if (sides[p.side]) sides[p.side].push(p)
+      node.data.handles.forEach((h) => {
+        if (sides[h.side]) sides[h.side].push(h)
       })
 
-      const sortPortsByCoord = (list, isVertical) => {
+      const sortHandlesByCoord = (list, isVertical) => {
         list.sort((a, b) => {
           // Look up neighbour positions again for sorting.
-          const getNeighborPos = (port) => {
-            const edge = edges.find((e) => e.sourceHandle === getHandleId(port) || e.targetHandle === getHandleId(port))
+          const getNeighborPos = (handle) => {
+            const edge = edges.find((e) => e.sourceHandle === getHandleId(handle) || e.targetHandle === getHandleId(handle))
             if (!edge) return 0
             const nId = edge.source === node.id ? edge.target : edge.source
             const n = cy.getElementById(nId)
@@ -131,12 +131,12 @@ export async function runFcoseLayout(nodes, edges) {
         })
       }
 
-      sortPortsByCoord(sides.top, false) // Top varies by X.
-      sortPortsByCoord(sides.bottom, false) // Bottom varies by X.
-      sortPortsByCoord(sides.left, true) // Left varies by Y.
-      sortPortsByCoord(sides.right, true) // Right varies by Y.
+      sortHandlesByCoord(sides.top, false) // Top varies by X.
+      sortHandlesByCoord(sides.bottom, false) // Bottom varies by X.
+      sortHandlesByCoord(sides.left, true) // Left varies by Y.
+      sortHandlesByCoord(sides.right, true) // Right varies by Y.
 
-      node.data.ports = [...sides.top, ...sides.right, ...sides.bottom, ...sides.left]
+      node.data.handles = [...sides.top, ...sides.right, ...sides.bottom, ...sides.left]
     }
 
     node.style = { opacity: 1 }
