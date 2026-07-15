@@ -25,7 +25,7 @@
           ><template #append>
             <el-select v-model="searchColumn" style="width: 100px">
               <el-option label="Name" value="name" />
-              <el-option label="Units" value="unit" />
+              <el-option label="Units" value="units" />
               <el-option label="Type" value="type" /> </el-select></template
         ></el-input>
         <div style="margin-bottom: 12px; display: flex; gap: 12px; align-items: center">
@@ -69,7 +69,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column prop="unit" label="Units" width="150" sortable="custom" />
+          <el-table-column prop="units" label="Units" width="150" sortable="custom" />
 
           <el-table-column prop="type" label="Type" width="200" sortable="custom">
             <template #default="scope">
@@ -158,7 +158,7 @@ const filteredParameterRows = computed(() => {
   }
 
   const query = searchQuery.value.toLowerCase()
-  const columnKey = searchColumn.value // 'name', 'unit', or 'type'
+  const columnKey = searchColumn.value // 'name', 'units', or 'type'
 
   return parameterRows.value.filter((row) => {
     // Get the value of the selected column safely.
@@ -178,7 +178,7 @@ function loadData() {
     return {
       name: row.name,
       value: displayValue,
-      unit: row.unit,
+      units: row.units,
       type: row.type,
       access: row.access,
     }

@@ -654,13 +654,12 @@ function addVariableToParameterComponent(model, variable, parameterComponent, pa
     sourceVar.setName(parameterData.name)
     // Ensure the initial value is explicitly set to define variable type as 'constant'.
     sourceVar.setInitialValueByString(parameterData.value)
-    const units = parameterData.unit ?? parameterData.units 
-    const matchUnits = model.unitsByName(units)
+    const matchUnits = model.unitsByName(parameterData.units)
     if (matchUnits) {
       sourceVar.setUnitsByUnits(matchUnits)
       matchUnits.delete()
     } else {
-      sourceVar.setUnitsByName(units)
+      sourceVar.setUnitsByName(parameterData.units)
     }
 
     sourceVar.setInterfaceTypeByString('public')

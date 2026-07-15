@@ -4,7 +4,7 @@
       <el-tab-pane label="Variables & Units" name="variables">
         <el-table :data="moduleData?.variables" height="400" stripe>
           <el-table-column prop="name" label="Name" width="180" />
-          <el-table-column prop="unit" label="Units" width="150" />
+          <el-table-column prop="units" label="Units" width="150" />
           <el-table-column prop="access" label="Accessability" />
           <el-table-column prop="type" label="Type">
             <template #default="{ row }">

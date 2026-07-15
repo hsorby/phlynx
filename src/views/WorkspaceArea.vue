@@ -1166,7 +1166,7 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
       // Register units with the store
       if (unitCount > 0) {
         libraryStore.addUnitsFile({
-          componentFile: filename, // SMELL - why do we care where a unit file comes from?
+          componentFile: filename, 
           model: result.units.model,
         })
       }
@@ -1255,7 +1255,7 @@ const loadParametersData = async (content, filename, { notify: shouldNotify = tr
         updatedCount++
 
         const matchedUnit = match.units.trim()
-        const currentUnit = variable.unit.trim()
+        const currentUnit = variable.units.trim()
 
         if (matchedUnit !== currentUnit) {
           console.warn(
@@ -1529,12 +1529,12 @@ function updateVariablesFromMath(node, updatedMath) {
     if (variableExists) {
       return {
         ...variableExists,
-        unit: updated.units,
+        units: updated.units,
       }
     } else {
       return {
         name: updated.name,
-        unit: updated.units,
+        units: updated.units,
         access: "access", 
         value: null,
         type: null,
