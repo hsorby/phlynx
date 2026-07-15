@@ -654,13 +654,13 @@ function addVariableToParameterComponent(model, variable, parameterComponent, pa
     sourceVar.setName(parameterData.name)
     // Ensure the initial value is explicitly set to define variable type as 'constant'.
     sourceVar.setInitialValueByString(parameterData.value)
-
-    const matchUnits = model.unitsByName(parameterData.units)
+    const units = parameterData.unit ?? parameterData.units 
+    const matchUnits = model.unitsByName(units)
     if (matchUnits) {
       sourceVar.setUnitsByUnits(matchUnits)
       matchUnits.delete()
     } else {
-      sourceVar.setUnitsByName(parameterData.units)
+      sourceVar.setUnitsByName(units)
     }
 
     sourceVar.setInterfaceTypeByString('public')
@@ -734,6 +734,19 @@ function stripCelsiusToArbitraryUnit(xmlString) {
   return serializer.serializeToString(doc)
 }
 
+/**
+ * Builds a single flattened CellML model from the workspace graph.
+ *
+ * @param {Array} nodes - VueFlow nodes. Each node.data must include:
+ *   { name, mathRef, variables }, where mathRef ('componentFile:componentName')
+ *   is looked up in libraryStore.availableMath to get the raw CellML XML string
+ *   for a standalone single-component model (see extractComponentsFromCellmlString).
+ * @param {Array} edges - VueFlow edges. Each edge has { source, target, data: { couplings } },
+ *   where source/target are node ids (there is no edge.sourceNode/edge.targetNode) and
+ *   couplings are the pre-resolved port-label pairings produced by resolvePortCouplings.
+ * @param {object} libraryStore - Pinia library store, providing availableMath (Map<mathRef, xmlString>),
+ *   availableUnits (Array<{ componentFile, model }>), and getGlobalConstant(name).
+ */
 export function generateFlattenedModel(nodes, edges, libraryStore) {
   const appVersion = __APP_VERSION__ || '0.0.0'
 
@@ -750,12 +763,10 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
   const parameterComponent = new _libcellml.Component()
 
   // --- Helper State ---
-  const modelCache = new Map()            // Key: componentFile,  Value: libcellml.Model
+  const modelCache = new Map()            // Key: mathRef,        Value: libcellml.Model
   const nodeComponentMap = new Map()      // Key: NodeID,         Value: libcellml.Component
   const unitsLibraryCache = new Map()     // Key: componentFile,  Value: libcellml.Model
   const unitsImportSourceMap = new Map()  // Key: componentFile,  Value: libcellml.ImportSource
-
-  const globalVariables = libraryStore.globalVariables
 
   const ensureUnitImported = (unitsName) => {
     // Safety Checks
@@ -847,43 +858,32 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
     // Process Nodes (Create Components)
     // ---------------------------------
     for (const node of nodes) {
-      const fileName = node.data?.componentFile
-      const componentType = node.data?.componentType
+      const mathRef = node.data?.mathRef
+      if (!mathRef) throw new Error(`Node '${node.data?.name ?? node.id}' has no mathRef.`)
 
-      // Load and cache source model if not already done.
-      if (!modelCache.has(fileName)) {
-        if (!libraryStore.hasCollection(fileName)) throw new Error(`Missing file: ${fileName}`)
-        const parsedModel = parser.parseModel(libraryStore.getModelByCollectionName(fileName))
-        if (parser.errorCount() > 0) {
-          handleLoggerErrors(parser, `Error parsing ${fileName} [${parser.errorCount()} errors]:`)
-        }
-        modelCache.set(fileName, parsedModel)
-      }
+      const modelString = libraryStore.availableMath.get(mathRef)
+      if (!modelString) throw new Error(`Missing math definition for '${mathRef}'`)
 
-      const sourceModel = modelCache.get(fileName)
-      const originalComponent = sourceModel.componentByName(componentType, true)
-      if (!originalComponent) {
-        throw new Error(`Component '${componentType}' not found in '${fileName}'`)
-      }
+      const modelFromInstance = parser.parseModel(modelString)
 
-      // Clone Component
-      const componentClone = originalComponent.clone()
-      originalComponent.delete() // Only deleting the lookup wrapper
-      // Set this early so any thrown errors will still delete this.
-      nodeComponentMap.set(node.id, componentClone)
+      const originalComponent = modelFromInstance.componentByIndex(0)
+      originalComponent.setName(node.data.name)
 
-      componentClone.setName(node.data.name)
-      model.addComponent(componentClone)
+      model.addComponent(originalComponent)
+
+      modelFromInstance.delete()
+
+      nodeComponentMap.set(node.id, originalComponent)
 
       // Add Units found in MathML.
-      const mathUnits = extractUnitsFromMath(componentClone.math())
+      const mathUnits = extractUnitsFromMath(originalComponent.math())
       for (const unitsName of mathUnits) {
         ensureUnitImported(unitsName)
       }
 
       // Add Units found in Variables.
-      for (let i = 0; i < componentClone.variableCount(); i++) {
-        const variable = componentClone.variableByIndex(i)
+      for (let i = 0; i < originalComponent.variableCount(); i++) {
+        const variable = originalComponent.variableByIndex(i)
 
         const units = variable.units()
         const unitsName = units.name()
@@ -891,7 +891,7 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
         const nodeVariable = node.data.variables.find((v) => v.name === variable.name())
         if (nodeVariable) {
           if (nodeVariable.type === 'global_constant') {
-            const v = globalVariables.get(variable.name())
+            const v = libraryStore.getGlobalConstant(variable.name())
             if (!isEmpty(v?.value)) {
               addVariableToParameterComponent(model, variable, globalParameterComponent, {
                 ...v,
@@ -926,24 +926,24 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
     const multiPortSums = new Map()
     const multiPortMultiplies = [] // Array of { sourceComp, sourceVarName, targetComp, targetVarName, factor }
     for (const edge of edges) {
-      const sourceNode = edge.sourceNode
-      const targetNode = edge.targetNode
-
-      if (!sourceNode || !targetNode) continue
-
+      // Edges only carry source/target node ids plus resolved coupling data
+      // (see WorkspaceArea.vue's onConnect) — there is no edge.sourceNode /
+      // edge.targetNode. Resolve components directly from the map built above.
       const sourceComp = nodeComponentMap.get(edge.source)
       const targetComp = nodeComponentMap.get(edge.target)
+
+      if (!sourceComp || !targetComp) continue
 
       // Read the pre-resolved, slot-correct couplings stored on the edge.
       // These were computed by resolvePortCouplings at edge-creation time
       // (and recomputed on any edit), so ordinal slot assignment is already
-      // correct — no need to re-derive from portLabels here.
+      // correct — no need to re-derive from ports here.
       const couplings = edge.data?.couplings ?? []
 
-      for (const { sourcePortLabel: srcLabel, targetPortLabel: tgtLabel } of couplings) {
-        const isSrcMultiportSum = srcLabel.multiport === 'Sum'
-        const isTgtMultiportSum = tgtLabel.multiport === 'Sum'
-        const isSrcMultiportMultiply = srcLabel.multiport === 'Multiply'
+      for (const { sourcePort: srcLabel, targetPort: tgtLabel } of couplings) {
+        const isSrcMultiportSum = srcLabel.multiportType === 'Sum'
+        const isTgtMultiportSum = tgtLabel.multiportType === 'Sum'
+        const isSrcMultiportMultiply = srcLabel.multiportType === 'Multiply'
 
         if (isSrcMultiportSum && isTgtMultiportSum) {
           throw new Error('Multi-port-sum to Multi-port-sum connections are not supported.')
