@@ -2,16 +2,9 @@
  * parseCellMLConnections.js
  *
  * Parses a CellML 1.x/2.x file and extracts:
- *   - The set of component names (excluding 'environment' and other excluded components)
  *   - The connections between components as edges
- *   - Per-component port configs ready for libraryStore.addConfigFile
- *
- * One port per unique canonical variable per component (deduplicated by port_type).
- * One edge per unique component pair.
- * Each edge carries its portType for unambiguous handle matching.
- *
- * port_type = canonicalVarName__ownerComponent (display label, unique per variable)
- * variables = [all local var names for this component in this connection]
+ *   - The components as Vue Flow nodes (instances)
+ *   - The components as normalized library modules ready for the store
  */
 
 import { EXCLUDED_COMPONENTS, TIME_NAMES, TIME_UNITS } from '../../utils/constants'
@@ -20,7 +13,6 @@ function getOwnedVariables(compElement) {
   const owned = new Set()
 
   for (const mathEl of compElement.querySelectorAll('math')) {
-    // Only consider direct children of <math> — top-level statements
     for (const apply of mathEl.children) {
       if (apply.tagName !== 'apply') continue
       const children = Array.from(apply.children)
@@ -30,14 +22,12 @@ function getOwnedVariables(compElement) {
       if (lhs?.tagName === 'ci') {
         owned.add(lhs.textContent.trim())
       } else if (lhs?.tagName === 'apply') {
-        // ODE: <apply><diff/>...</apply>
         const diffCi = lhs.querySelector('ci')
         if (diffCi) owned.add(diffCi.textContent.trim())
       }
     }
   }
 
-  // Initial values — constants defined in this component
   for (const variable of compElement.querySelectorAll('variable')) {
     if (variable.getAttribute('initial_value') !== null) {
       const varName = variable.getAttribute('name')
@@ -48,17 +38,6 @@ function getOwnedVariables(compElement) {
   return owned
 }
 
-/**
- * Parse the raw CellML XML string and return structured graph data.
- *
- * @param {string} cellmlContent - Raw XML string
- * @param {string} filename - The filename (used as component_file in configs)
- * @returns {{
- *   components: string[],
- *   edges: Array<{ source: string, target: string }>,
- *   configs: Array<object>
- * }}
- */
 export function parseCellMLConnections(cellmlContent, componentFile) {
   const parser = new DOMParser()
   const doc = parser.parseFromString(cellmlContent, 'application/xml')
@@ -104,20 +83,10 @@ export function parseCellMLConnections(cellmlContent, componentFile) {
   }
 
   // --- 3. Parse all <connection> blocks ---
-  //
-  // For CellML 1.x: <connection><map_components .../><map_variables .../></connection>
-  // For CellML 2.x: <connection component_1="..." component_2="..."><map_variables .../></connection>
-  //
-  // We accumulate:
-  //   edgeSet:    unique component pairs
-  //   portLabels: compName -> Set<canonicalLabel>  (deduplicated per variable)
-
-  // portLabels: compName -> Set of canonical port label strings
   const pairInfoMap = new Map()
   const edgeSet = new Map()
 
   for (const connection of doc.querySelectorAll('connection')) {
-    // Support both CellML 1.x (map_components child) and 2.x (attributes on connection)
     let comp1, comp2
     const mapComponents = connection.querySelector('map_components')
     if (mapComponents) {
@@ -163,7 +132,6 @@ export function parseCellMLConnections(cellmlContent, componentFile) {
         canonicalLabel = var2
         ownerComp = comp2
       } else {
-        // Both defined, neither defined, or ambiguous — alphabetically first
         canonicalLabel = [var1, var2].sort()[0]
         ownerComp = canonicalLabel === var1 ? comp1 : comp2
       }
@@ -173,24 +141,20 @@ export function parseCellMLConnections(cellmlContent, componentFile) {
     }
   }
 
-  // --- 4. Build edges ---
-  const edges = [...edgeSet.keys()].map((pairKey) => {
-    const { source, target } = edgeSet.get(pairKey)
-     return { source, target }
-  })
-
-  // --- 5. Build component list ---
-  const components = [...componentVariableInfo.keys()].filter(
+  // --- 4. Build Component Roster ---
+  const validComponentNames = [...componentVariableInfo.keys()].filter(
     (name) =>
       !EXCLUDED_COMPONENTS.has(name) &&
-      edges.some(({ source, target }) => source === name || target === name)
+      [...edgeSet.values()].some(({ source, target }) => source === name || target === name)
   )
 
-  // --- 6. Build configs ---
-  // Deduplicated by port_type — one port per unique canonical variable per component
-  // variables = all local var names for this component in this connection
-  const configs = components.map((compName) => {
-    const general_ports = edges
+  // --- 5. Generate Nodes & Modules ---
+  const nodes = []
+  const modules = []
+
+  for (const compName of validComponentNames) {
+    // A. Parse Normalized Ports
+    const ports = [...edgeSet.values()]
       .filter(({ source, target }) => source === compName || target === compName)
       .reduce((acc, { source, target }) => {
         const pairKey = [source, target].sort().join('|||')
@@ -216,33 +180,73 @@ export function parseCellMLConnections(cellmlContent, componentFile) {
           const portLabel = `${canonicalLabel}__${ownerComp}`
           const localVar = info.comp1 === compName ? var1 : var2
 
-          if (!acc.some((p) => p.port_type === portLabel)) {
+          // Checking against 'label' as defined in normalisePorts
+          if (!acc.some((p) => p.label === portLabel)) {
             acc.push({
-              portType: portLabel,
+              portType: 'general_ports',
+              label: portLabel,
+              multiportType: 'True', 
               variables: [localVar],
             })
           }
         }
-
         return acc
       }, [])
 
-    const variables_and_units = []
+    // B. Parse Normalized Variables
+    const variables = []
     for (const [varName, { units }] of componentVariableInfo.get(compName)) {
-      variables_and_units.push([varName, units, 'access', 'variable'])
+      variables.push({
+        name: varName,
+        value: null,
+        units: units,
+        access: 'access',
+        type: 'variable',
+        data_reference: null
+      })
     }
+    
+    const moduleRef = `${compName}:cellml_import`
+    const mathRef = `${componentFile}:${compName}`
 
+    // C. Build Vue Flow Node
+    nodes.push({
+      id: compName,
+      type: 'instanceNode',
+      position: { x: 0, y: 0 }, 
+      data: {
+        name: compName,
+        moduleRef,
+        mathRef,
+        variables,
+        ports,
+      },
+    })
+
+    // D. Build Normalized Library Module
+    modules.push({
+      moduleRef,
+      mathRef,
+      name: compName,
+      variables,
+      ports,
+    })
+  }
+
+  // --- 6. Generate Edges ---
+  const edges = [...edgeSet.keys()].map((pairKey) => {
+    const { source, target } = edgeSet.get(pairKey)
+    const info = pairInfoMap.get(pairKey)
+    
     return {
-      component_file: componentFile,
-      component_type: compName,
-      module_type: compName, // SMELL 
-      module_subtype: 'nn',
-      entrance_ports: [],
-      exit_ports: [],
-      general_ports,
-      variables_and_units,
+      id: `${source}--${target}`,
+      source,
+      target,
+      data: {
+        rawMappings: info.mappings 
+      }
     }
   })
 
-  return { components, edges, configs }
+  return { components: validComponentNames, nodes, modules, edges }
 }

@@ -480,8 +480,9 @@ const loadCellMLFiles = async (entries) => {
   if (entries.length === 1) {
     const entry = entries[0]
     const content = entry instanceof File ? await readFileAsText(entry) : entry.content
-    const { components } = parseCellMLConnections(content, entry.name)
-    if (components.length > 0) {
+    const cellmlPayload = parseCellMLConnections(content, entry.name) // { nodes, modules, edges }
+
+    if (cellmlPayload.edges.length > 0) {
       if (nodes.value.length > 0) {
         try {
           await ElMessageBox.confirm(
@@ -502,7 +503,7 @@ const loadCellMLFiles = async (entries) => {
 
             // Load new graph into clean workspace using the normal path
             const result = await loadCellMLData(content, entry.name, { notify: false })
-            await loadFromCellML(content, entry.name)
+            await loadFromCellML(cellmlPayload, entry.name)
 
             // Remap snapshotted node IDs to avoid clashes with newly loaded nodes
             const existingIds = new Set(nodes.value.map((n) => n.id))
@@ -543,10 +544,10 @@ const loadCellMLFiles = async (entries) => {
         }
       }
       // Register modules/units in the store first, then build the graph.
-      // loadCellMLData is kept silent here since loadFromCellML provides its own feedback.
       const result = await loadCellMLData(content, entry.name, { notify: false })
-      await loadFromCellML(content, entry.name)
+      await loadFromCellML(cellmlPayload, entry.name)
       rebuildNodeEdgeIndex()
+      
       return [result]
     }
     // No connections — fall through to the standard module-registration path

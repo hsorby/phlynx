@@ -234,6 +234,7 @@ export const useLibraryStore = defineStore('library', () => {
 
     // Actions
     addConfigFile,
+    addModule,
     addMathFile,
     addMath,
     addUnitsFile,

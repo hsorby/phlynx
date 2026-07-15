@@ -103,7 +103,6 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore) {
     const module_config = Array.from(uniqueModuleConfigs.values());
 
     // --- 2. CONSOLIDATE PARAMETER FILES INTO ONE CSV ---
-
     const globalConstants = libraryStore.globalVariables
 
     for (const variable of globalConstants) {

@@ -160,12 +160,13 @@ import { Delete, Edit, Key, Place, WarningFilled, Operation } from '@element-plu
 import CellMLIcon from './icons/CellMLIcon.vue'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
-import { getHandleId, getHandleStyle, handlePosition } from '../utils/handles.js'
+import { getHandleId, getHandleStyle, handlePosition } from '../utils/handles'
 import { sanitiseName } from '../utils/nodes'
 import { notify } from '../utils/notify'
 import { isEditableVariableType, isEmpty } from '../utils/variables'
 import '../assets/vueflownode.css'
 import { detachReactivity } from '../utils/reactivity'
+import { TARGET_PORT_TYPE, SOURCE_PORT_TYPE } from '../utils/constants'
 
 const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } = useVueFlow()
 const historyStore = useFlowHistoryStore()
