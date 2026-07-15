@@ -547,7 +547,7 @@ const loadCellMLFiles = async (entries) => {
       const result = await loadCellMLData(content, entry.name, { notify: false })
       await loadFromCellML(cellmlPayload, entry.name)
       rebuildNodeEdgeIndex()
-      
+
       return [result]
     }
     // No connections — fall through to the standard module-registration path
@@ -1413,12 +1413,12 @@ async function onImportConfirm(importPayload, updateProgress) {
       })
     }
   } else if (currentImportMode.value.key === IMPORT_KEYS.CELLML_FILE) {
-    const entries = [...importPayload].map(([name, data]) => ({ name, content: data?.payload }))
+    const entries = [...importPayload.get(IMPORT_KEYS.CELLML_FILE)].map(([name, data]) => ({ name, content: data?.payload }))
     await loadCellMLFiles(entries)
   } else if (currentImportMode.value.key === IMPORT_KEYS.MODULE_CONFIG) {
     const multiFile = importPayload.size > 1
     const results = await Promise.all(
-      [...importPayload].map(([filename, data]) =>
+      [...importPayload.get(IMPORT_KEYS.MODULE_CONFIG)].map(([filename, data]) =>
         loadConfigData(data?.payload, filename, { notify: !multiFile })
       )
     )
@@ -1426,9 +1426,9 @@ async function onImportConfirm(importPayload, updateProgress) {
       notifyMultiFileResults(results, { successTitle: 'Configurations Loaded' })
     }
   } else if (currentImportMode.value.key === IMPORT_KEYS.PARAMETER) {
-    const multiFile = importPayload.size > 1
+    const multiFile = importPayload.get(IMPORT_KEYS.PARAMETER).size > 1
     const results = await Promise.all(
-      [...importPayload].map(([filename, data]) =>
+      [...importPayload.get(IMPORT_KEYS.PARAMETER)].map(([filename, data]) =>
         loadParametersData(data?.payload, filename, { notify: !multiFile })
       )
     )

@@ -662,7 +662,7 @@ const handleConfirm = async () => {
 
   const importPayload = new Map()
   displayFields.value.forEach((field) => {
-    const fieldFiles = formState[field.key].files
+    const fieldFiles = toRaw(formState[field.key].files)
     if (fieldFiles.size === 0) return
     importPayload.set(field.key, new Map(fieldFiles))
   })
