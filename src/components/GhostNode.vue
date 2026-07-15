@@ -8,7 +8,8 @@
         >
       </div>
       <!-- non-editable label showing CellML component and source file (no white box) -->
-      <div v-if="data.label" class="module-label">{{ data.label }}</div>
+      <div class="module-label">{{ ghostLabel }}</div>
+      <button debug>Debug</button> 
     </el-card>
 
     <template v-for="port in targetPorts" :key="port.uid" class="port">
@@ -30,7 +31,16 @@ import { getHandleId, getHandleStyle, handlePosition } from '../utils/handles'
 const props = defineProps(['id', 'data'])
 const { findNode } = useVueFlow()
 
+const ghostLabel = computed(() => {
+  return `${props.data.mathRef.split(':')[1]} [${props.data.mathRef.split(':')[0]}]`
+})
+
+function debug() {
+  console.log(targetNode)
+}
+
 const targetNode = computed(() => {
+  console.log('test', props.data)
   if (!props.data.targetNodeId) return null
   return findNode(props.data.targetNodeId)
 })

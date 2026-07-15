@@ -1,24 +1,13 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useLibraryStore } from './libraryStore'
-
-function parseMathRef(mathRef) {
-  const [componentFile, componentName] = mathRef.split(':')
-  return { componentFile, componentName }
-}
-
-function parseModuleRef(moduleRef) {
-  const [moduleType, moduleSubtype] = moduleRef.split(':')
-  return { moduleType, moduleSubtype }
-}
+import { parseMathRef, parseModuleRef } from '../utils/config'
 
 function formatDisplayLabel(fileName) {
   if (!fileName) return ''
-  // 1. Removes '.cellml' (case-insensitive) at the end of the string
-  // 2. Replaces all underscores with spaces (change ' ' to '' if you want them completely removed)
   return fileName.replace(/\.cellml$/i, '').replace(/_/g, ' ')
 }
-// rename to library proxy store
+
 export const useLibraryProxyStore = defineStore('libraryProxy', () => {
   const library = useLibraryStore()
 

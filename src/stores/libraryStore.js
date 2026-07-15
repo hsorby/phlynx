@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 
 import { isEditableVariableType } from '../utils/variables'
 import { normaliseConfig } from '../utils/config'
+import { GHOST_MATH_REF } from '../utils/constants'
 
 function mergeIntoStore(newModules, target) {
   const moduleMap = new Map(target.map((mod) => [mod.componentFile, mod]))
@@ -103,7 +104,7 @@ export const useLibraryStore = defineStore('library', () => {
   }
 
   function addModule(module) {
-    if(!(availableMath.value.has(module.mathRef))) {
+    if(!(availableMath.value.has(module.mathRef)) && module.mathRef !== GHOST_MATH_REF) {
       module.isStub = true
     }
 
@@ -241,6 +242,7 @@ export const useLibraryStore = defineStore('library', () => {
     assignGlobalConstant,
     clearGlobalConstants,
     loadState,
+    removeModule,
     removeCollection,
     setLastExportName,
     setLastSaveName,

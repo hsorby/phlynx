@@ -1,7 +1,7 @@
 import JSZip from 'jszip'
 import Papa from 'papaparse'
 import { notify } from '../utils/notify'
-import { decodeMathRef, decodeModuleRef, restorePorts, restoreVariables } from '../utils/config'
+import { parseMathRef, parseModuleRef, restorePorts, restoreVariables } from '../utils/config'
 import { PORT_TYPE_OPTIONS } from '../utils/constants'
 
 /**
@@ -56,8 +56,8 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore) {
       // --- PARAMETER CLASSIFICATION FOR THIS NODE ---
 
       const variablesAndUnits = restoreVariables(node.data.variables)
-      const { componentFile, componentType } = decodeMathRef(node.data.mathRef)
-      const { moduleType, moduleSubtype } = decodeModuleRef(node.data.moduleRef)
+      const { componentFile, componentType } = parseMathRef(node.data.mathRef)
+      const { moduleType, moduleSubtype } = parseModuleRef(node.data.moduleRef)
 
       const moduleData = libraryStore.availableModules.get(node.data.moduleRef)
       if (!moduleData) {

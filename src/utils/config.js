@@ -1,12 +1,14 @@
 import { PORT_TYPE_OPTIONS } from "./constants"
 import { toRaw } from "vue"
 
-export function decodeMathRef(mathRef) {
-  return { componentFile: mathRef.split(":")[0], componentType: mathRef.split(":")[1]}
+export function parseMathRef(mathRef) {
+  const [componentFile, componentName] = mathRef.split(':')
+  return { componentFile, componentName }
 }
 
-export function decodeModuleRef(moduleRef) {
-  return { moduleType: moduleRef.split(":")[0], moduleSubtype: moduleRef.split(":")[1]}
+export function parseModuleRef(moduleRef) {
+  const [moduleType, moduleSubtype] = moduleRef.split(':')
+  return { moduleType, moduleSubtype }
 }
 
 export function normaliseConfig(config) {

@@ -99,16 +99,24 @@ export const MAX_VISIBLE_TAGS = 1
 
 export const MAIN_NODE_TYPE = 'instanceNode'
 export const GHOST_NODE_TYPE = 'ghostNode'
-export const GHOST_MODULE_FILENAME = 'ghostModule.cellml'
+export const GHOST_MODULE_FILENAME = 'ghost_module.cellml'
+export const GHOST_MATH_REF = `${GHOST_MODULE_FILENAME}:ghost`
+export const GHOST_MODULE_REF = 'ghost:ghost'
+
 export const GHOST_MODULE_DEFINITION = {
-  collectionName: GHOST_MODULE_FILENAME,
-  modules: [
-    {
-      name: 'Ghost',
-      componentType: 'ghost',
-      componentFile: GHOST_MODULE_FILENAME,
-    },
-  ],
+  moduleRef: GHOST_MODULE_REF,
+  mathRef: GHOST_MATH_REF,
+  ports: [],
+  variables: [],
+}
+
+export function normaliseConfig(config) {
+  return {
+    moduleRef: `${config.module_type}:${config.module_subtype}`,
+    mathRef: `${config.component_file}:${config.component_type}`,
+    ports: normalisePorts(config),
+    variables: normaliseVariables(config.variables_and_units),
+  }
 }
 
 export const DEFAULT_INSTANCE_REF = {
@@ -118,6 +126,8 @@ export const DEFAULT_INSTANCE_REF = {
   inp_instances: '',
   out_instances: '',
 }
+
+export const MACRO_BUILDER_ARROW = 'macro-builder-arrow'
 
 export const PORT_TYPE_OPTIONS = [
   { value: 'general_ports',  label: 'G' },
