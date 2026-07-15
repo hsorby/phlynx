@@ -12,13 +12,12 @@ export function normaliseConfig(config) {
 function normalisePorts(config) {
   const ports = []
 
-  // SMELL - option.value isn't the most intuitive thing to read
-  PORT_TYPE_OPTIONS.forEach((option) => {
-    const list = config?.[option.value] || []
+  PORT_TYPE_OPTIONS.forEach((portType) => {
+    const list = config?.[portType.value] || []
     for (const p of list) {
       ports.push({
-        portType: option.value,
-        label: p.port_type, // SMELL - holdover from strange naming in circulatory autogen
+        portType: portType.value,
+        label: p.port_type, 
         variables: p.variables || [],
         multiportType: parseMultiport(p.multi_port),
       })
