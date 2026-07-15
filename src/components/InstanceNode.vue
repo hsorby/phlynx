@@ -166,7 +166,7 @@ import { notify } from '../utils/notify'
 import { isEditableVariableType, isEmpty } from '../utils/variables'
 import '../assets/vueflownode.css'
 import { detachReactivity } from '../utils/reactivity'
-import { TARGET_PORT_TYPE, SOURCE_PORT_TYPE } from '../utils/constants'
+import { TARGET_HANDLE_TYPE, SOURCE_HANDLE_TYPE } from '../utils/constants'
 
 const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } = useVueFlow()
 const historyStore = useFlowHistoryStore()

@@ -1,6 +1,6 @@
 import { buildHandles } from './buildPorts'
 import { getHandleId } from '../../utils/handles'
-import { MAIN_NODE_TYPE, SOURCE_PORT_TYPE, TARGET_PORT_TYPE } from '../../utils/constants'
+import { MAIN_NODE_TYPE, SOURCE_HANDLE_TYPE, TARGET_HANDLE_TYPE } from '../../utils/constants'
 import { extractVariablesFromMath } from '../../utils/cellml'
 import { resolvePortCouplings, checkAndClaimCouplings, buildUsedPortKeys } from '../../utils/edges'
 import { detachReactivity } from '../../utils/reactivity'
@@ -96,11 +96,11 @@ function buildEdges(instanceRefs, pendingInstances) {
       if (!targetNode || targetNode.data.error) return
 
       const sourceHandle = sourceNode.data.handles.find(
-        (p) => p.type === SOURCE_PORT_TYPE && p.name === targetName
+        (p) => p.type === SOURCE_HANDLE_TYPE && p.name === targetName
       )
 
       const targetHandle = targetNode.data.handles.find(
-        (p) => p.type === TARGET_PORT_TYPE && p.name === instanceRef.name
+        (p) => p.type === TARGET_HANDLE_TYPE && p.name === instanceRef.name
       )
 
       if (!sourceHandle || !targetHandle) {

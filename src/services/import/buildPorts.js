@@ -1,4 +1,4 @@
-import { SOURCE_PORT_TYPE, TARGET_PORT_TYPE } from "../../utils/constants"
+import { SOURCE_HANDLE_TYPE, TARGET_HANDLE_TYPE } from "../../utils/constants"
 
 function parseInstanceNames(connectedInstances) {
   return Array.from(
@@ -14,7 +14,7 @@ function buildHandles(instance) {
     inputs.forEach((name) => {
       handles.push({
         uid: crypto.randomUUID(),
-        type: TARGET_PORT_TYPE,
+        type: TARGET_HANDLE_TYPE,
         side: 'left',
         name,
       })
@@ -26,7 +26,7 @@ function buildHandles(instance) {
     outputs.forEach((name) => {
       handles.push({
         uid: crypto.randomUUID(),
-        type: SOURCE_PORT_TYPE,
+        type: SOURCE_HANDLE_TYPE,
         side: 'right',
         name,
       })

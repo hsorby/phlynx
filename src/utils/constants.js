@@ -1,7 +1,7 @@
 import { MarkerType } from '@vue-flow/core'
 
-export const SOURCE_PORT_TYPE = 'source'
-export const TARGET_PORT_TYPE = 'target'
+export const SOURCE_HANDLE_TYPE = 'source'
+export const TARGET_HANDLE_TYPE = 'target'
 export const USER_MODULES_FILE = 'User_Modules.cellml'
 export const NEW_INSTANCE_MODULE_REF = 'new_module:phlynx'
 
