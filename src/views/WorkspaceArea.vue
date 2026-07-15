@@ -1281,7 +1281,7 @@ const loadParametersData = async (content, filename, { notify: shouldNotify = tr
       }))
 
     globalConstants.forEach((p) => {
-      libraryStore.assignGlobalConstant(p.name, p.value, p.units)
+      libraryStore.assignGlobalConstant(p.name, p.value, p.units, p.data_reference)
     })
 
     const totalGlobal = globalConstants.length

@@ -1,4 +1,13 @@
 import { PORT_TYPE_OPTIONS } from "./constants"
+import { toRaw } from "vue"
+
+export function decodeMathRef(mathRef) {
+  return { componentFile: mathRef.split(":")[0], componentType: mathRef.split(":")[1]}
+}
+
+export function decodeModuleRef(moduleRef) {
+  return { moduleType: moduleRef.split(":")[0], moduleSubtype: moduleRef.split(":")[1]}
+}
 
 export function normaliseConfig(config) {
   return {
@@ -9,6 +18,7 @@ export function normaliseConfig(config) {
   }
 }
 
+// applied on import
 function normalisePorts(config) {
   const ports = []
 
@@ -26,6 +36,36 @@ function normalisePorts(config) {
   return ports
 }
 
+// applied on export
+export function restorePorts(ports) {
+  const config = {}
+  
+  PORT_TYPE_OPTIONS.forEach((portType) => {
+    config[portType.value] = []
+  })
+
+  for (const p of (ports || [])) {
+    if (!config[p.portType]) {
+      config[p.portType] = []
+    }
+
+    const portEntry = {
+      port_type: p.label,
+      variables: toRaw(p.variables) || [],
+    }
+
+    const multiPortValue = unparseMultiport(p.multiportType)
+    
+    if (multiPortValue !== undefined) {
+      portEntry.multi_port = multiPortValue
+    }
+
+    config[p.portType].push(portEntry)
+  }
+
+  return config
+}
+
 function normaliseVariables(RawVariablesAndUnits = []) {
   return RawVariablesAndUnits.map(([name, units, access, type]) => ({
     name,
@@ -37,9 +77,23 @@ function normaliseVariables(RawVariablesAndUnits = []) {
   }))
 }
 
+export function restoreVariables(variables = []) {
+  return variables.map(v => [
+    v.name,
+    v.units,
+    v.access,
+    v.type
+  ])
+}
+
 function parseMultiport(value) {
   if (value === true || value === "True") return "True"
   if (value === "Sum") return "Sum"
   if (value === "Multiply") return "Multiply"
   return "None"
+}
+
+function unparseMultiport(value) {
+  if (value === "None") return undefined
+  return value
 }

@@ -277,7 +277,7 @@ async function handleConfirm() {
 
   parameterRows.value.forEach((row) => {
     if (row.type === 'global_constant') {
-      libraryStore.assignGlobalConstant(row.name, row.value, row.units) 
+      libraryStore.assignGlobalConstant(row.name, row.value, row.units, row.data_reference) 
     }
   })
 

@@ -65,8 +65,8 @@ export const useLibraryStore = defineStore('library', () => {
     globalConstants.value.clear()
   }
 
-  function assignGlobalConstant(variableName, value, units) {
-    globalConstants.value.set(variableName, { value, units })
+  function assignGlobalConstant(variableName, value, units, data_reference) {
+    globalConstants.value.set(variableName, { value, units, data_reference })
   }
 
   function getGlobalConstant(variableName) {

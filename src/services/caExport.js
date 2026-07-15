@@ -1,104 +1,8 @@
 import JSZip from 'jszip'
 import Papa from 'papaparse'
 import { notify } from '../utils/notify'
-
-
-/**
- * Classifies a variable based on a list of parameters.
- * Assumes 'parameters' is an array of objects, where each object has a 'name' property
- * representing the parameter name (e.g., [{ name: 'param_a' }, { name: 'param_b' }]).
- *
- * @param {string} moduleName - The name the variable comes from.
- * @param {object} variable - The variable object (e.g., { name: 'q_V' })
- * @param {Array<object>} parameters - List of parameter objects.
- * @returns {string} - 'global_constant', 'constant', or 'variable'
- */
-function classifyVariable(moduleName, variable, parameters) {
-  if (!variable?.name || !Array.isArray(parameters)) {
-    console.error('Invalid input to classifyVariable')
-    return 'undefined' // Default or error state
-  }
-
-  const varName = variable.name
-  const qualifiedName = `${varName}_${moduleName}`
-
-  let isGlobalConstant = false
-
-  for (const param of parameters) {
-    const paramName = param.variable_name
-
-    if (qualifiedName === paramName) {
-      return 'constant'
-    }
-
-    if (varName === paramName) {
-      isGlobalConstant = true
-    }
-  }
-
-  if (isGlobalConstant) return 'global_constant'
-  return 'variable'
-}
-
-function checkSharedPorts(nodes, edges) {
-  const nodePortMap = new Map()
-
-  for (const node of nodes) {
-    const map = {}
-    for (const p of node.data.portLabels || []) {
-      const label = p.label.trim().toLowerCase()
-      const type =
-        p.portType === 'exit_ports'
-          ? 'exit'
-          : p.portType === 'entrance_ports'
-            ? 'entrance'
-            : p.portType === 'general_ports'
-              ? 'general'
-              : null
-      if (!type) continue
-      if (!map[label]) map[label] = []
-      if (!map[label].includes(type)) map[label].push(type)
-    }
-    nodePortMap.set(node.id, { name: node.data.name, portTypes: map })
-  }
-
-  const invalidConnections = []
-  for (const edge of edges) {
-    const source = nodePortMap.get(edge.source)
-    const target = nodePortMap.get(edge.target)
-
-    if (!source || !target) continue
-
-    const allLabels = Array.from(
-      new Set([...Object.keys(source.portTypes), ...Object.keys(target.portTypes)])
-    )
-
-    for (const label of allLabels) {
-
-      const srcTypes = source.portTypes[label] || []
-      const tgtTypes = target.portTypes[label] || []
-
-      if (srcTypes.length === 0 || tgtTypes.length === 0) continue // unknown label
-
-      const isValid = srcTypes.some(srcType =>
-        tgtTypes.some(tgtType =>
-          (srcType === 'exit' && tgtType === 'entrance') ||
-          (srcType === 'entrance' && tgtType === 'exit') ||
-          (srcType === 'general' && tgtType === 'general')
-        )
-      )
-      if (!isValid) {
-        invalidConnections.push({
-          portLabel: label,
-          type: `${srcTypes.join('|')}_to_${tgtTypes.join('|')}`,
-          nodes: [source.name, target.name],
-        })
-      }
-    }
-  }
-  return invalidConnections
-}
-
+import { decodeMathRef, decodeModuleRef, restorePorts, restoreVariables } from '../utils/config'
+import { PORT_TYPE_OPTIONS } from '../utils/constants'
 
 /**
  * Generates a zip blob for the Circulatory Autogen export.
@@ -120,85 +24,53 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore) {
       nodeNameObjMap.set(node.data.name, node)
     }
 
-    const uniqueModuleConfigs = new Map();
-    let module_array = []
-    let allParameters = new Set()
+    const uniqueModuleConfigs = new Map()
+    const instance_array = []
+    const allParameters = new Set()
 
     // --- 1. PROCESS NODES FOR CONFIG AND TOPOLOGY ---
     for (const node of nodes) {
-      const inp_modules = []
-      const out_modules = []
+      const inp_instances = []
+      const out_instances = []
 
       // Identify incoming and outgoing connections
       for (const edge of edges) {
         if (edge.target === node.id) {
           const sourceNodeName = nodeNameMap.get(edge.source)
-          if (sourceNodeName) inp_modules.push(sourceNodeName)
+          if (sourceNodeName) inp_instances.push(sourceNodeName)
         }
         if (edge.source === node.id) {
           const targetNodeName = nodeNameMap.get(edge.target)
-          if (targetNodeName) out_modules.push(targetNodeName)
+          if (targetNodeName) out_instances.push(targetNodeName)
         }
       }
 
       // Process Ports
-      const allConnectedModuleNames = new Set([...inp_modules, ...out_modules])
-      const connectedNodeObjects = Array.from(allConnectedModuleNames)
+      const allConnectedInstanceNames = new Set([...inp_instances, ...out_instances])
+      const connectedNodeObjects = Array.from(allConnectedInstanceNames)
         .map((name) => nodeNameObjMap.get(name))
         .filter(Boolean)
 
-      const portTypes = ['general_ports', 'entrance_ports', 'exit_ports']
-      const portsByType = {}
-
-      for (const type of portTypes) {
-        portsByType[type] = (node.data.portLabels || [])
-          .filter((pl) => pl.portType === type)
-          .map((info) => {
-            const currentPortLabel = info.label
-            const connectedCount = connectedNodeObjects.reduce((count, conn) => {
-              return count + ((conn.data.portLabels || []).some(pl => pl.label === currentPortLabel) ? 1 : 0)
-            }, 0)
-
-            const portEntry = {
-              port_type: currentPortLabel,
-              variables: info.variables || [],
-            }
-
-            const allowedValues = ['True', 'Sum']
-
-            if (allowedValues.includes(info.multiport)) {
-              portEntry.multi_port = info.multiport
-            }
-
-            return portEntry
-          })
-      }
+      const portsByType = restorePorts(node.data.ports)
 
       // --- PARAMETER CLASSIFICATION FOR THIS NODE ---
-      let variablesAndUnits = []
-      for (const variable of node.data.variables || []) {
-        variablesAndUnits.push([
-          variable.name,
-          variable.units || 'missing',
-          'access',
-          node.data.variables?.find(v => v.name === variable.name)?.type || 'undefined',
-        ])
+
+      const variablesAndUnits = restoreVariables(node.data.variables)
+      const { componentFile, componentType } = decodeMathRef(node.data.mathRef)
+      const { moduleType, moduleSubtype } = decodeModuleRef(node.data.moduleRef)
+
+      const moduleData = libraryStore.availableModules.get(node.data.moduleRef)
+      if (!moduleData) {
+        throw new Error(`Missing module definition '${node.data.moduleRef}' for node '${node.data.name}'`)
       }
 
-      const config = libraryStore.findConfigByIndex(
-        node.data.componentFile,
-        node.data.componentType,
-        node.data.configIndex,
-      )
-
-      const moduleConfigKey = `${config.module_type}|${config.module_subtype}`;
-      if (!uniqueModuleConfigs.has(moduleConfigKey)) {
-        uniqueModuleConfigs.set(moduleConfigKey, {
-          module_type: config.module_type,
-          module_subtype: config.module_subtype,
-          module_format: config.module_format,
-          component_file: config.component_file,
-          component_type: config.component_type,
+      if (!uniqueModuleConfigs.has(node.data.moduleRef)) {
+        uniqueModuleConfigs.set(node.data.moduleRef, {
+          module_type: moduleType,
+          module_subtype: moduleSubtype,
+          module_format: 'cellml', // SMELL - will need to generalise eventually
+          component_file: componentFile,
+          component_type: componentType,
           entrance_ports: portsByType.entrance_ports || [],
           exit_ports: portsByType.exit_ports || [],
           general_ports: portsByType.general_ports || [],
@@ -206,12 +78,12 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore) {
         });
       }
 
-      module_array.push({
+      instance_array.push({
         name: node.data.name,
-        module_subtype: config.module_subtype,
-        module_type: config.module_type,
-        inp_modules: inp_modules.join(' '),
-        out_modules: out_modules.join(' '),
+        module_subtype: moduleSubtype,
+        module_type: moduleType,
+        inp_instances: inp_instances.join(' '),
+        out_instances: out_instances.join(' '),
       })
 
       // Collect parameters for this node's module
@@ -221,7 +93,7 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore) {
             variable_name: `${variable.name}_${node.data.name}`,
             units: variable.units || '',
             value: variable.value || '',
-            data_reference: 'phlynx',
+            data_reference: variable.data_reference || 'phlynx',
           }))
         }
       }
@@ -231,6 +103,7 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore) {
     const module_config = Array.from(uniqueModuleConfigs.values());
 
     // --- 2. CONSOLIDATE PARAMETER FILES INTO ONE CSV ---
+
     const globalConstants = libraryStore.globalVariables
 
     for (const variable of globalConstants) {
@@ -241,11 +114,12 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore) {
         data_reference: 'phlynx',
       }))
     }
+
     const consolidatedParameters = Array.from(allParameters).map((paramStr) => JSON.parse(paramStr))
 
     // --- 3. FINALIZING AND COMPRESSING ZIP ---
     zip.file(`${fileName}_module_config.json`, JSON.stringify(module_config, null, 2))
-    zip.file(`${fileName}_module_array.csv`, Papa.unparse(module_array))
+    zip.file(`${fileName}_module_array.csv`, Papa.unparse(instance_array))
     zip.file(`${fileName}_parameters.csv`, Papa.unparse(consolidatedParameters))
 
     const zipBlob = await zip.generateAsync({
