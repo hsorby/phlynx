@@ -7,24 +7,21 @@ import { detachReactivity } from '../../utils/reactivity'
 import { getId as getNextNodeId } from '../../utils/nodes'
 
 export function buildInstance(nodeId, name, nodeType, moduleData, handles, position = null) {
+  const conditionalProperties = position 
+    ? { position } 
+    : { position: { x: 100, y: 100 }, style: { opacity: 0 } }
+
   return {
     id: nodeId,
     type: nodeType,
-    position: position === null
-      ? {
-          position: { x: 100, y: 100 },
-          style: { opacity: 0 }, 
-        }
-      : {
-          position: position,
-        },
+    ...conditionalProperties, 
     data: {
-      name: name,
+      name,
       mathRef: moduleData.mathRef,
       moduleRef: moduleData.moduleRef,
       variables: moduleData.variables,
       ports: moduleData.ports,
-      handles: handles,
+      handles,
     },
   }
 }
