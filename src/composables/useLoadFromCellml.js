@@ -5,6 +5,7 @@ import { useGtm } from './useGtm'
 import { useClearWorkspace } from '../utils/workspace' 
 import { buildWorkflowGraph } from '../services/import/buildWorkflow'
 import { useWorkflowLayout } from './useWorkflowLayout'
+import { parseModuleRef } from '../utils/config'
 
 export function useLoadFromCellML() {
   const { nodes: currentNodes, addNodes } = useVueFlow()
@@ -19,8 +20,7 @@ export function useLoadFromCellML() {
 
       if (progressCallback) progressCallback(0, 100, 'Building CellML graph...')
 
-      // We extract components, modules, and edges directly from our updated parser
-      const { components = [], modules = [], edges = [] } = cellmlPayload || {}
+      const { components = [], modules = [], edges = [], cellmlModuleSubtype } = cellmlPayload || {}
 
       if (components.length === 0) {
         notify.info({
@@ -30,13 +30,10 @@ export function useLoadFromCellML() {
         return
       }
 
-      // 1. Register our perfectly normalized modules into the library store!
-      // This bypasses the need for the old nested-array configs entirely.
-      modules.forEach(mod => {
+      modules.forEach((mod) => {
         store.addModule(mod) 
       })
 
-      // 2. Convert to instanceRefs so buildWorkflowGraph can generate handles correctly
       const instanceRefs = components.map((compName) => {
         const outInstances = edges
           .filter((e) => e.source === compName)
@@ -48,16 +45,16 @@ export function useLoadFromCellML() {
           .map((e) => e.source)
           .join(' ')
 
+        
         return {
           name: compName,
-          module_type: compName, 
-          module_subtype: 'cellml_import',
+          module_type: `${compName}`, 
+          module_subtype: cellmlModuleSubtype,
           out_instances: outInstances,
           inp_instances: inInstances,
         }
       })
 
-      // 3. Let buildWorkflowGraph do its magic (handles, opacity: 0, couplings, etc.)
       const result = buildWorkflowGraph(
         instanceRefs, 
         store.availableModules, 
@@ -65,7 +62,6 @@ export function useLoadFromCellML() {
         progressCallback
       )
 
-      // 4. Layout and render
       const layoutPromise = prepareLayout(result.pendingEdges, progressCallback)
       addNodes(result.pendingInstances)
       

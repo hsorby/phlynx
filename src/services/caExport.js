@@ -68,7 +68,7 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore) {
         uniqueModuleConfigs.set(node.data.moduleRef, {
           module_type: moduleType,
           module_subtype: moduleSubtype,
-          module_format: 'cellml', // SMELL - will need to generalise eventually
+          module_format: 'cellml', // TODO - will need to generalise 
           component_file: componentFile,
           component_type: componentType,
           entrance_ports: portsByType.entrance_ports || [],

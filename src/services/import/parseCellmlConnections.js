@@ -7,7 +7,7 @@
  *   - The components as normalized library modules ready for the store
  */
 
-import { EXCLUDED_COMPONENTS, TIME_NAMES, TIME_UNITS } from '../../utils/constants'
+import { EXCLUDED_COMPONENTS, MAIN_NODE_TYPE, TIME_NAMES, TIME_UNITS } from '../../utils/constants'
 
 function getOwnedVariables(compElement) {
   const owned = new Set()
@@ -41,11 +41,13 @@ function getOwnedVariables(compElement) {
 export function parseCellMLConnections(cellmlContent, componentFile) {
   const parser = new DOMParser()
   const doc = parser.parseFromString(cellmlContent, 'application/xml')
-
   const parseError = doc.querySelector('parsererror')
   if (parseError) {
     throw new Error(`Failed to parse CellML XML: ${parseError.textContent}`)
   }
+
+  const randomStr = Math.random().toString(36).slice(2, 11)
+  const cellmlModuleSubtype = `cellml_import_${randomStr}`
 
   // --- 1. Detect time variable names from the environment component ---
   const excludedVarNames = new Set()
@@ -206,13 +208,13 @@ export function parseCellMLConnections(cellmlContent, componentFile) {
       })
     }
     
-    const moduleRef = `${compName}:cellml_import`
+    const moduleRef = `${compName}:${cellmlModuleSubtype}`
     const mathRef = `${componentFile}:${compName}`
 
     // C. Build Vue Flow Node
     nodes.push({
       id: compName,
-      type: 'instanceNode',
+      type: MAIN_NODE_TYPE,
       position: { x: 0, y: 0 }, 
       data: {
         name: compName,
@@ -248,5 +250,5 @@ export function parseCellMLConnections(cellmlContent, componentFile) {
     }
   })
 
-  return { components: validComponentNames, nodes, modules, edges }
+  return { components: validComponentNames, nodes, modules, edges, cellmlModuleSubtype }
 }
