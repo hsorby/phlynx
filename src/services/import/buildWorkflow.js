@@ -5,20 +5,19 @@ import { extractVariablesFromMath } from '../../utils/cellml'
 import { resolvePortCouplings, checkAndClaimCouplings, buildUsedPortKeys } from '../../utils/edges'
 import { detachReactivity } from '../../utils/reactivity'
 import { getId as getNextNodeId } from '../../utils/nodes'
-import { isUndefined } from 'element-plus/es/utils/types.mjs'
 
-export function buildInstance(nodeId, name, nodeType, moduleData, handles, position = undefined) {
+export function buildInstance(nodeId, name, nodeType, moduleData, handles, position = null) {
   return {
     id: nodeId,
     type: nodeType,
-    ...((isUndefined(position))
+    position: position === null
       ? {
           position: { x: 100, y: 100 },
           style: { opacity: 0 }, 
         }
       : {
           position: position,
-        }),
+        },
     data: {
       name: name,
       mathRef: moduleData.mathRef,
@@ -56,11 +55,11 @@ function buildInstances(instanceRefs, availableModules, currentNodes, progressCa
     const nodeType = MAIN_NODE_TYPE
     const handles = buildHandles(instanceRef)
 
-    if (instanceRef.x === undefined && instanceRef.y === undefined) {
-      pendingInstances.push(buildInstance(nodeId, instanceRef.name, nodeType, module, handles))
-    } else {
-      pendingInstances.push(buildInstance(nodeId, instanceRef.name, nodeType, module, handles, { x: instanceRef.x, y: instanceRef.y }))
+    let position = null
+    if (instanceRef.x !== undefined && instanceRef.y !== undefined) {
+      position = { x: instanceRef.x, y: instanceRef.y }
     }
+    pendingInstances.push(buildInstance(nodeId, instanceRef.name, nodeType, module, handles, position))
 
     nodeId = getNextNodeId([nodeId])
   })

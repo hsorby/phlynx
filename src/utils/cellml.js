@@ -521,34 +521,6 @@ function extractUnitsFromMath(multiBlockMathString) {
   return Array.from(foundUnits)
 }
 
-/**
- * Checks if two port types are compatible for making connections over.
- *
- * @param {string} portType1 - Source port type one of 'general_ports', 'exit_ports', or 'entrance_ports'.
- * @param {string} portType2 - Target port type one of 'general_ports', 'exit_ports', or 'entrance_ports'.
- * @returns {boolean} True if the port types are compatible, false otherwise.
- *
- * @deprecated Connection generation now reads pre-resolved couplings from
- * edge.data.couplings (computed by resolvePortCouplings in portCouplings.js),
- * so compatibility is guaranteed before this point. This function is no longer
- * called by generateFlattenedModel but is kept for reference.
- */
-function arePortTypesCompatible(portType1, portType2) {
-  if (portType1 === 'general_ports' || portType2 === 'general_ports') {
-    return true
-  }
-  // A source exit port can connect to a target entrance port.
-  if (portType1 === 'exit_ports' && portType2 === 'entrance_ports') {
-    return true
-  }
-
-  if (portType1 === 'entrance_ports' && portType2 === 'exit_ports') {
-    return true
-  }
-
-  return false
-}
-
 function handleLoggerErrors(logger, headerMessage, dontThrow = false) {
   const errMessages = [headerMessage]
   console.log(headerMessage)

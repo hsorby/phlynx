@@ -85,7 +85,7 @@
           <el-button
             size="small"
             circle
-            @click="openEditPortDialog"
+            @click="openPortEditDialog"
             class="instance-button"
           >
             <el-icon><Edit /></el-icon>
@@ -100,7 +100,7 @@
             :show-after="300"
             :auto-close="1200"
         >
-          <el-button size="small" circle @click="openEditParameterDialog" class="instance-button">
+          <el-button size="small" circle @click="openParameterEditDialog" class="instance-button">
             <el-icon><Operation /></el-icon>
           </el-button>
         </el-tooltip>
@@ -116,7 +116,7 @@
           <el-button
             size="small"
             circle
-            @click="openEditCellmlDialog"
+            @click="openCellmlEditDialog"
             class="instance-button"
             :show-after="300"
             :auto-close="1200"
@@ -194,7 +194,7 @@ const emit = defineEmits([
   'open-context-menu',
 ])
 
-async function openEditPortDialog() {
+async function openPortEditDialog() {
   emit('open-port-editor-dialog', {
     id: props.id,
     handles: props.data.handles,
@@ -204,7 +204,7 @@ async function openEditPortDialog() {
   })
 }
 
-function openEditCellmlDialog() {
+function openCellmlEditDialog() {
   emit('open-cellml-editor-dialog', {
     id: props.id,
     name: props.data.name,
@@ -213,7 +213,7 @@ function openEditCellmlDialog() {
   })
 }
 
-function openEditParameterDialog() {
+function openParameterEditDialog() {
   emit('open-parameter-editor-dialog', {
     id: props.id,
     variables: props.data.variables,
@@ -237,7 +237,7 @@ const isMissingParameters = computed(() => {
         if (isEmpty(globalConstant?.value)) {
           return true
         }
-      } else if (isEditableVariableType(variable.type) && isEmpty(variable.value)) {
+      } else if (isEmpty(variable.value)) {
         return true
       }
     }
@@ -295,7 +295,7 @@ async function removeHandle(handleIdToRemove) {
         removeEdges(edgesSnapshot.map((e) => e.id))
       }
 
-      // Then, remove the port
+      // Then, remove the handle.
       await applyHandles(newHandles)
     },
   })
@@ -304,12 +304,12 @@ async function removeHandle(handleIdToRemove) {
 const addHandle = async (handleToAdd) => {
   const oldHandles = [...props.data.handles]
 
-  const newPort = {
+  const newHandle = {
     ...handleToAdd,
     uid: crypto.randomUUID(),
   }
 
-  const newHandles = [...props.data.handles, newPort]
+  const newHandles = [...props.data.handles, newHandle]
 
   await applyHandles(newHandles)
 

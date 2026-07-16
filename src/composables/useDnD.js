@@ -135,7 +135,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
       x: event.clientX,
       y: event.clientY,
     })
-    
+
     const { nodeId, nodeType } = createInstanceNode(moduleData, position)
 
     if (nodeType === GHOST_NODE_TYPE) {

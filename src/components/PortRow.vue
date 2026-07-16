@@ -76,7 +76,7 @@
         @change="$emit('change')"
       >
         <el-option
-          v-for="o in multiportOptions"
+          v-for="o in MULTIPORT_OPTIONS"
           :key="o.value"
           :label="o.label"
           :value="o.value"
@@ -112,7 +112,7 @@
 import { computed } from 'vue'
 import { Delete } from '@element-plus/icons-vue'
 import { Handle, Position } from '@vue-flow/core'
-import { PORT_TYPE_OPTIONS, multiportOptions, NODE_W } from '../utils/constants'
+import { PORT_TYPE_OPTIONS, MULTIPORT_OPTIONS, NODE_W } from '../utils/constants'
 
 const props = defineProps({
   side: {

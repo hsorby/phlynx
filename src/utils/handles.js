@@ -1,8 +1,5 @@
 import { Position } from '@vue-flow/core'
-
-export const HANDLE_SIDES = ["left", "right", "top", "bottom"]
-export const SOURCE_HANDLE_PRIORITY = ["right", "bottom", "top", "left"]
-export const TARGET_HANDLE_PRIORITY = ["left", "top", "bottom", "right"]
+import { HANDLE_SIDES, SOURCE_HANDLE_PRIORITY, TARGET_HANDLE_PRIORITY } from './constants'
 
 export function randomHandleSide() {
     return HANDLE_SIDES[Math.floor(Math.random() * HANDLE_SIDES.length)]

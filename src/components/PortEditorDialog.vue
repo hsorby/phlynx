@@ -73,7 +73,7 @@
                 style="width: 100%"
               >
                 <el-option
-                  v-for="option in multiportOptions"
+                  v-for="option in MULTIPORT_OPTIONS"
                   :key="option.value"
                   :label="option.label"
                   :value="option.value"
@@ -142,7 +142,7 @@ import { useGtm } from '../composables/useGtm'
 import { notify } from '../utils/notify'
 import { sanitiseName } from '../utils/nodes'
 import { detachReactivity } from '../utils/reactivity'
-import { PORT_TYPE_OPTIONS, multiportOptions } from '../utils/constants'
+import { PORT_TYPE_OPTIONS, MULTIPORT_OPTIONS } from '../utils/constants'
 
 const props = defineProps({
   modelValue: {

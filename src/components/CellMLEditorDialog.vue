@@ -91,7 +91,7 @@ const store = useLibraryStore()
 const { trackEvent } = useGtm()
 const { nodes } = useVueFlow()
 
-const loading = ref(true)
+const loading = ref(false)
 const currentModel = ref('')
 const originalModel = ref('')
 const applyToAll = ref(false)
@@ -122,7 +122,7 @@ const siblingCount = computed(() => {
 })
 
 const siblings = computed(() => {
-  if (!componentName.value || !componentFile.value) return 0
+  if (!componentName.value || !componentFile.value) return []
 
   return nodes.value
     .filter((n) =>

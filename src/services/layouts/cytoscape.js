@@ -84,13 +84,13 @@ export async function runFcoseLayout(nodes, edges) {
       y: y - h / 2,
     }
 
-    // Port Sorting.
-    // Physics layouts put nodes anywhere (top, bottom, left, right).
-    // We need to dynamically decide which side ports should be on based on their neighbours.
+    // Handle Sorting.
+    // Physics layouts put handles anywhere (top, bottom, left, right).
+    // We need to dynamically decide which side handles should be on based on their neighbours.
     if (node.data.handles) {
       // A. Determine Side dynamically based on neighbours.
       node.data.handles.forEach((handle) => {
-        // Find the neighbour node for this port.
+        // Find the neighbour node for this handle.
         const edge = edges.find((e) => e.sourceHandle === getHandleId(handle) || e.targetHandle === getHandleId(handle))
         if (!edge) return
 

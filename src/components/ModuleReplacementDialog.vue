@@ -49,7 +49,7 @@
 </template>
 
 <script setup>
-import { ref, toRaw } from 'vue'
+import { ref } from 'vue'
 import { ElCheckbox, ElButton } from 'element-plus'
 
 import { useGtm } from '../composables/useGtm'

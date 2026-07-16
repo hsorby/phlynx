@@ -135,7 +135,7 @@ export const PORT_TYPE_OPTIONS = [
   { value: 'exit_ports',     label: 'O' },  
 ]
 
-export const multiportOptions = [
+export const MULTIPORT_OPTIONS = [
   { value: 'True',  label: 'True'  },
   { value: 'Sum',   label: 'Sum'   },
   { value: 'None',  label: 'None'  },
@@ -190,3 +190,7 @@ export const ZIP_FILE_TYPES = [
     accept: { 'application/zip': ['.zip'] },
   },
 ]
+
+export const HANDLE_SIDES = ["left", "right", "top", "bottom"]
+export const SOURCE_HANDLE_PRIORITY = ["right", "bottom", "top", "left"]
+export const TARGET_HANDLE_PRIORITY = ["left", "top", "bottom", "right"]

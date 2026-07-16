@@ -252,7 +252,7 @@
     :initial-ports="currentEditingNode?.initialPorts"
     :variables="currentEditingNode?.variables"
     :existing-names="allNodeNames"
-    @confirm="onEditPortConfirm"
+    @confirm="onPortEditConfirm"
   />
 
   <CellMLEditorDialog 
@@ -555,7 +555,7 @@ const loadCellMLFiles = async (entries) => {
       const result = await loadCellMLData(content, entry.name)
       return [result]
     } catch {
-      return [{ ok: false, moduleCount: 0, unitCount: 0 }]
+      return [{ ok: false, moduleCount: 0, unitsCount: 0 }]
     }
   }
 
@@ -567,7 +567,7 @@ const loadCellMLFiles = async (entries) => {
         const content = entry instanceof File ? await readFileAsText(entry) : entry.content
         return loadCellMLData(content, entry.name, { notify: !multiFile })
       } catch {
-        return { ok: false, moduleCount: 0, unitCount: 0 }
+        return { ok: false, moduleCount: 0, unitsCount: 0 }
       }
     })
   )
@@ -576,7 +576,7 @@ const loadCellMLFiles = async (entries) => {
     const succeeded = results.filter((r) => r.ok)
     const failed = results.length - succeeded.length
     const totalModules = succeeded.reduce((sum, r) => sum + r.moduleCount, 0)
-    const totalUnits = succeeded.reduce((sum, r) => sum + r.unitCount, 0)
+    const totalUnits = succeeded.reduce((sum, r) => sum + r.unitsCount, 0)
     const fileWord = (n) => `${n} file${n !== 1 ? 's' : ''}`
     const summary = [
       totalModules > 0 ? `${totalModules} module${totalModules !== 1 ? 's' : ''}` : '',
@@ -1157,7 +1157,7 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
 
     if (result.type === 'success') {
       const componentCount = result.components?.length ?? 0
-      const unitCount = result.units.count
+      const unitsCount = result.units.count
 
       // Register math with the store
       if (componentCount > 0) {
@@ -1165,7 +1165,7 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
       }
 
       // Register units with the store
-      if (unitCount > 0) {
+      if (unitsCount > 0) {
         libraryStore.addUnitsFile({
           componentFile: filename, 
           model: result.units.model,
@@ -1176,26 +1176,26 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
         trackEvent('cellml_load_action', {
           category: 'CellML',
           action: 'load_cellml_file',
-          label: `Modules: ${componentCount}, Units: ${unitCount}`,
+          label: `Modules: ${componentCount}, Units: ${unitsCount}`,
           file_type: 'cellml',
         })
       }
 
       if (shouldNotify) {
-        if (componentCount > 0 && unitCount > 0) {
+        if (componentCount > 0 && unitsCount > 0) {
           notify.success({
             title: 'CellML File Loaded',
-            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} and ${unitCount} unit${unitCount !== 1 ? 's' : ''} from ${filename}.`,
+            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} and ${unitsCount} unit${unitsCount !== 1 ? 's' : ''} from ${filename}.`,
           })
         } else if (componentCount > 0) {
           notify.success({
             title: 'CellML Components Loaded',
             message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} from ${filename}.`,
           })
-        } else if (unitCount > 0) {
+        } else if (unitsCount > 0) {
           notify.success({
             title: 'CellML Units Loaded',
-            message: `Loaded ${unitCount} unit${unitCount !== 1 ? 's' : ''} from ${filename}.`,
+            message: `Loaded ${unitsCount} unit${unitsCount !== 1 ? 's' : ''} from ${filename}.`,
           })
         } else {
           notify.info({
@@ -1205,7 +1205,7 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
         }
       }
 
-      resolve({ ok: true, componentCount: componentCount, unitCount: unitCount })
+      resolve({ ok: true, componentCount: componentCount, unitsCount: unitsCount })
     } else {
       if (trackEvents) {
         trackEvent('cellml_load_action', {
@@ -1222,7 +1222,7 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
         })
       }
       console.error('CellML import issues:', result.issues)
-      resolve({ ok: false, componentCount: 0, unitCount: 0 })
+      resolve({ ok: false, componentCount: 0, unitsCount: 0 })
     }
   })
 }
@@ -1584,7 +1584,7 @@ async function handleCellMLSave(saveData) {
   }
 
   // Update edge couplings
-  recomputeEdgeCouplings(id) // TO DO - confirm that the recomputeEdgeCouplings works with updated data
+  recomputeEdgeCouplings(id) 
 
   notify.success({
     title: 'CellML Updated',
@@ -1652,7 +1652,7 @@ function recomputeEdgeCouplings(nodeId) {
   })
 }
 
-async function onEditPortConfirm(updatedData) {
+async function onPortEditConfirm(updatedData) {
   const { id } = currentEditingNode.value
   if (!id) return
 

@@ -434,7 +434,7 @@ const isFieldReady = (fieldKey) => {
     return !(importReadiness.value?.missingResources?.modules.size > 0 ?? true)
   }
 
-  // Math field is ready if all required math have been supplied - TO DO - could be orange if all configs aren't yet provided
+  // Math field is ready if all required math have been supplied - TODO - could be orange if all configs aren't yet provided
   if (fieldKey === IMPORT_KEYS.CELLML_FILE) {
     return !(importReadiness.value?.missingResources?.math.size > 0 ?? true)
   }

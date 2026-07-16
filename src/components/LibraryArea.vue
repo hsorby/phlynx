@@ -129,15 +129,15 @@
             </div>
           </transition>
         </div>
-      </template> 
+      </template>
 
       <!-- Empty state -->
       <el-empty
         v-else
         :description="filterText ? `No modules match '${filterText}'` : 'No modules found'"
         :image-size="72"
-      /> 
-    </div> 
+      />
+    </div>
 
     <ModulePreviewDialog v-model="showPreview" :module-data="previewTarget" />
   </div>
