@@ -77,6 +77,8 @@
             @edge-update="onEdgeUpdate"
             @connect-start="onConnectStart"
             @connect-end="onConnectEnd"
+            @edge-update-start="onEdgeUpdateStart"
+            @edge-update-end="onEdgeUpdateEnd"
             @node-click="onNodeClick"
           >
             <!-- Source port row -->
@@ -282,6 +284,8 @@ const {
   draggingFrom,
   onConnectStart,
   onConnectEnd,
+  onEdgeUpdateEnd,
+  onEdgeUpdateStart,
 } = useConnectionAutoscroll(canvasEl, getViewport, setViewport)
 
 // ─── VueFlow Layout Calculations ─────────────────────────────────────────────
