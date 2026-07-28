@@ -1,11 +1,12 @@
 import { isEmpty } from './variables.js'
-import { STANDARD_UNITS, 
-  AFFINE_UNIT_CONVERSIONS, 
+import {
+  STANDARD_UNITS,
+  AFFINE_UNIT_CONVERSIONS,
   CELLML_NS,
-  MATHML_NS, 
-  GLOBAL_PARAMETERS, 
+  MATHML_NS,
+  GLOBAL_PARAMETERS,
   MODEL_PARAMETERS,
- } from './constants.js'
+} from './constants.js'
 
 let _libcellml = null
 
@@ -21,7 +22,7 @@ export function buildVariableIdMap(cellmlString) {
   const doc = new DOMParser().parseFromString(cellmlString, 'application/xml')
   const map = new Map()
   Array.from(doc.getElementsByTagNameNS(CELLML_NS, 'variable')).forEach((v) => {
-    const id   = v.getAttribute('id')
+    const id = v.getAttribute('id')
     const name = v.getAttribute('name')
     if (id && name) map.set(id, name)
   })
@@ -40,9 +41,9 @@ export function extractParametersFromCellML(cellmlString, filename) {
       const initialValue = variable.getAttribute('initial_value')
       if (!initialValue || isNaN(parseFloat(initialValue))) continue
       params.push({
-        variable_name:  variable.getAttribute('name'),
-        units:          variable.getAttribute('units'),
-        value:          initialValue,
+        variable_name: variable.getAttribute('name'),
+        units: variable.getAttribute('units'),
+        value: initialValue,
         data_reference: filename,
       })
     }
@@ -194,116 +195,147 @@ function nextAvailableVarName(component, baseName) {
 }
 
 function createAffineConversionComponent(model, v1, v2, v1CompName, v2CompName) {
-  const u1 = v1.units().name()
-  const u2 = v2.units().name()
+  const garbageCollector = new Set()
+  try {
+    const units1 = v1.units()
+    const units2 = v2.units()
+    garbageCollector.add(units1)
+    garbageCollector.add(units2)
 
-  const conv1 = AFFINE_UNIT_CONVERSIONS[u1]
-  const conv2 = AFFINE_UNIT_CONVERSIONS[u2]
+    const u1 = units1.name()
+    const u2 = units2.name()
 
-  if (!conv1 && !conv2) return false
+    const conv1 = AFFINE_UNIT_CONVERSIONS[u1]
+    const conv2 = AFFINE_UNIT_CONVERSIONS[u2]
 
-  const v1Name = v1.name()
-  const v2Name = v2.name()
+    if (!conv1 && !conv2) return false
 
-  let inVarCompName, inVarName, outVarCompName, outVarName
-  let scale, offset, inUnitName, outUnitName
+    const v1Name = v1.name()
+    const v2Name = v2.name()
 
-  if (conv1 && conv2) {
-    if (conv1.baseUnit !== conv2.baseUnit) {
-      throw new Error(`Cannot convert between ${u1} and ${u2}: incompatible base units (${conv1.baseUnit} vs ${conv2.baseUnit})`)
+    let inVarCompName, inVarName, outVarCompName, outVarName
+    let scale, offset, inUnitName, outUnitName
+
+    if (conv1 && conv2) {
+      if (conv1.baseUnit !== conv2.baseUnit) {
+        throw new Error(
+          `Cannot convert between ${u1} and ${u2}: incompatible base units (${conv1.baseUnit} vs ${conv2.baseUnit})`
+        )
+      }
+      inVarCompName = v1CompName
+      inVarName = v1Name
+      inUnitName = u1
+      outVarCompName = v2CompName
+      outVarName = v2Name
+      outUnitName = u2
+      scale = conv1.scale / conv2.scale
+      offset = (conv1.offset - conv2.offset) / conv2.scale
+
+      // Both sides share the same affine unit
+      if (scale === 1 && offset === 0) {
+        _libcellml.Variable.addEquivalence(v1, v2)
+        return true
+      }
+    } else {
+      const conv = conv1 ?? conv2
+      // Base unit is input (computed), affine unit is output (derived display value)
+      inVarCompName = conv1 ? v2CompName : v1CompName // base unit side
+      inVarName = conv1 ? v2Name : v1Name
+      inUnitName = conv1 ? u2 : u1
+      outVarCompName = conv1 ? v1CompName : v2CompName // affine unit side
+      outVarName = conv1 ? v1Name : v2Name
+      outUnitName = conv1 ? u1 : u2
+      scale = 1 / conv.scale
+      offset = -conv.offset / conv.scale
     }
-    inVarCompName  = v1CompName; inVarName  = v1Name; inUnitName  = u1
-    outVarCompName = v2CompName; outVarName = v2Name; outUnitName = u2
-    scale  = conv1.scale / conv2.scale
-    offset = (conv1.offset - conv2.offset) / conv2.scale
 
-    // Both sides share the same affine unit 
-    if (scale === 1 && offset === 0) {
-      _libcellml.Variable.addEquivalence(v1, v2)
-      return true
+    if (!inVarName || !outVarName || !inVarCompName || !outVarCompName) {
+      throw new Error(
+        `Affine conversion: failed to resolve variable or component names (in: ${inVarName}@${inVarCompName}, out: ${outVarName}@${outVarCompName})`
+      )
     }
-  } else {
-    const conv = conv1 ?? conv2
-    // Base unit is input (computed), affine unit is output (derived display value)
-    inVarCompName  = conv1 ? v2CompName : v1CompName   // base unit side
-    inVarName      = conv1 ? v2Name : v1Name
-    inUnitName     = conv1 ? u2 : u1
-    outVarCompName = conv1 ? v1CompName : v2CompName   // affine unit side
-    outVarName     = conv1 ? v1Name : v2Name
-    outUnitName    = conv1 ? u1 : u2
-    scale  = 1 / conv.scale
-    offset = -conv.offset / conv.scale
-  }
- 
-  if (!inVarName || !outVarName || !inVarCompName || !outVarCompName) {
-    throw new Error(`Affine conversion: failed to resolve variable or component names (in: ${inVarName}@${inVarCompName}, out: ${outVarName}@${outVarCompName})`)
-  }
 
-  // Get or create the single shared affine conversions component
-  let convComp = model.componentByName('affine_unit_conversions', true)
-  const isNew = convComp === null
-  if (isNew) {
-    convComp = new _libcellml.Component()
-    convComp.setName('affine_unit_conversions')
-  }
+    // Get or create the single shared affine conversions component
+    let convComp = model.componentByName('affine_unit_conversions', true)
+    const isNew = convComp === null
+    if (isNew) {
+      convComp = new _libcellml.Component()
+      convComp.setName('affine_unit_conversions')
+    }
+    garbageCollector.add(convComp)
 
-  // Create uniquely named local variables within the shared component
-  const inNewName  = nextAvailableVarName(convComp, inVarName)
+    // Create uniquely named local variables within the shared component
+    const inNewName = nextAvailableVarName(convComp, inVarName)
 
-  const inLocalVar = new _libcellml.Variable()
-  inLocalVar.setName(inNewName)
-  inLocalVar.setUnitsByName(inUnitName)
-  inLocalVar.setInterfaceTypeByString('public')
-  convComp.addVariable(inLocalVar)
+    const inLocalVar = new _libcellml.Variable()
+    garbageCollector.add(inLocalVar)
+    inLocalVar.setName(inNewName)
+    inLocalVar.setUnitsByName(inUnitName)
+    inLocalVar.setInterfaceTypeByString('public')
+    convComp.addVariable(inLocalVar)
 
-  const outNewName = nextAvailableVarName(convComp, outVarName)
-  const outLocalVar = new _libcellml.Variable()
-  outLocalVar.setName(outNewName)
-  outLocalVar.setUnitsByName(outUnitName)
-  outLocalVar.setInterfaceTypeByString('public')
-  convComp.addVariable(outLocalVar)
+    const outNewName = nextAvailableVarName(convComp, outVarName)
+    const outLocalVar = new _libcellml.Variable()
+    garbageCollector.add(outLocalVar)
+    outLocalVar.setName(outNewName)
+    outLocalVar.setUnitsByName(outUnitName)
+    outLocalVar.setInterfaceTypeByString('public')
+    convComp.addVariable(outLocalVar)
 
-  const mathML = `<math xmlns="http://www.w3.org/1998/Math/MathML" xmlns:cellml="http://www.cellml.org/cellml/2.0#">
-    <apply>
-      <eq/>
-      <ci>${outNewName}</ci>
+    const mathML = `<math xmlns="http://www.w3.org/1998/Math/MathML" xmlns:cellml="http://www.cellml.org/cellml/2.0#">
       <apply>
-        <plus/>
+        <eq/>
+        <ci>${outNewName}</ci>
         <apply>
-          <times/>
-          <cn cellml:units="dimensionless">${scale}</cn>
-          <ci>${inNewName}</ci>
+          <plus/>
+          <apply>
+            <times/>
+            <cn cellml:units="dimensionless">${scale}</cn>
+            <ci>${inNewName}</ci>
+          </apply>
+          <cn cellml:units="${outUnitName}">${offset}</cn>
         </apply>
-        <cn cellml:units="${outUnitName}">${offset}</cn>
       </apply>
-    </apply>
-  </math>`
+    </math>`
 
-  convComp.appendMath(mathML)
+    convComp.appendMath(mathML)
 
-  // Only add to model if newly created
-  if (isNew) {
-    model.addComponent(convComp)
+    // Only add to model if newly created
+    if (isNew) {
+      model.addComponent(convComp)
+    }
+
+    // Look up fresh references for equivalence wiring
+    const freshConvComp = model.componentByName('affine_unit_conversions', true)
+    garbageCollector.add(freshConvComp)
+    const freshInLocal = freshConvComp.variableByName(inNewName)
+    garbageCollector.add(freshInLocal)
+    const freshOutLocal = freshConvComp.variableByName(outNewName)
+    garbageCollector.add(freshOutLocal)
+    const inVarComponent = model.componentByName(inVarCompName, true)
+    garbageCollector.add(inVarComponent)
+    const freshInVar = inVarComponent.variableByName(inVarName)
+    garbageCollector.add(freshInVar)
+    const outVarComponent = model.componentByName(outVarCompName, true)
+    garbageCollector.add(outVarComponent)
+    const freshOutVar = outVarComponent.variableByName(outVarName)
+    garbageCollector.add(freshOutVar)
+
+    _libcellml.Variable.addEquivalence(freshInLocal, freshInVar)
+    _libcellml.Variable.addEquivalence(freshOutLocal, freshOutVar)
+  } finally {
+    garbageCollector.forEach((obj) => obj?.delete())
   }
 
-  // Look up fresh references for equivalence wiring
-  const freshConvComp  = model.componentByName('affine_unit_conversions', true)
-  const freshInLocal   = freshConvComp.variableByName(inNewName)
-  const freshOutLocal  = freshConvComp.variableByName(outNewName)
-  const freshInVar     = model.componentByName(inVarCompName,  true).variableByName(inVarName)
-  const freshOutVar    = model.componentByName(outVarCompName, true).variableByName(outVarName)
+  return true
+}
 
-  _libcellml.Variable.addEquivalence(freshInLocal,  freshInVar)
-  _libcellml.Variable.addEquivalence(freshOutLocal, freshOutVar)
-
-  freshInLocal.delete()
-  freshOutLocal.delete()
-  freshInVar.delete()
-  freshOutVar.delete()
-  freshConvComp.delete()
-  inLocalVar.delete()
-  outLocalVar.delete()
-  convComp.delete()
+/**
+ * Creates (or appends to) a shared 'generated_multiplications' component that
+ * scales a source variable by a constant factor.
+    outLocalVar.delete()
+    convComp.delete()
+  }
 
   return true
 }
@@ -448,24 +480,28 @@ function createSummationComponent(model, sourceComp, sourceVarName, targetCompon
     // Only subtractions — negate the sum
     rhsMathML = `<apply>
         <minus/>
-        ${subVarNames.length === 1
-          ? `<ci>${subVarNames[0]}</ci>`
-          : `<apply>
+        ${
+          subVarNames.length === 1
+            ? `<ci>${subVarNames[0]}</ci>`
+            : `<apply>
           <plus/>
           ${subVarNames.map((name) => `<ci>${name}</ci>`).join('\n          ')}
-        </apply>`}
+        </apply>`
+        }
       </apply>`
   } else {
     // Mixed — additions minus sum-of-subtractions
-    const addsPart = addVarNames.length === 1
-      ? `<ci>${addVarNames[0]}</ci>`
-      : `<apply>
+    const addsPart =
+      addVarNames.length === 1
+        ? `<ci>${addVarNames[0]}</ci>`
+        : `<apply>
           <plus/>
           ${addVarNames.map((name) => `<ci>${name}</ci>`).join('\n          ')}
         </apply>`
-    const subsPart = subVarNames.length === 1
-      ? `<ci>${subVarNames[0]}</ci>`
-      : `<apply>
+    const subsPart =
+      subVarNames.length === 1
+        ? `<ci>${subVarNames[0]}</ci>`
+        : `<apply>
           <plus/>
           ${subVarNames.map((name) => `<ci>${name}</ci>`).join('\n          ')}
         </apply>`
@@ -653,11 +689,11 @@ function addVariableToParameterComponent(model, variable, parameterComponent, pa
  * exclusively as differences (e.g. (TmpC - 37) / 10), where the 273.15 K offset
  * cancels between the two operands. It will produce WRONG results if celsius is
  * used in any absolute context — for example, a product like (x_per_oC * T_celsius)
- * where 5°C should be treated as 278.15 K, not 5. 
- * 
- * This is required as the presence of 'celsius' in a cellml model currently causes 
+ * where 5°C should be treated as 278.15 K, not 5.
+ *
+ * This is required as the presence of 'celsius' in a cellml model currently causes
  * web OpenCOR to crash.
- * 
+ *
  */
 function stripCelsiusToArbitraryUnit(xmlString) {
   const CELSIUS_UNIT_NAME = 'celsius'
@@ -734,10 +770,10 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
   const parameterComponent = new _libcellml.Component()
 
   // --- Helper State ---
-  const modelCache = new Map()            // Key: mathRef,        Value: libcellml.Model
-  const nodeComponentMap = new Map()      // Key: NodeID,         Value: libcellml.Component
-  const unitsLibraryCache = new Map()     // Key: componentFile,  Value: libcellml.Model
-  const unitsImportSourceMap = new Map()  // Key: componentFile,  Value: libcellml.ImportSource
+  const modelCache = new Map() // Key: mathRef,        Value: libcellml.Model
+  const nodeComponentMap = new Map() // Key: NodeID,         Value: libcellml.Component
+  const unitsLibraryCache = new Map() // Key: componentFile,  Value: libcellml.Model
+  const unitsImportSourceMap = new Map() // Key: componentFile,  Value: libcellml.ImportSource
 
   const ensureUnitImported = (unitsName) => {
     // Safety Checks
@@ -750,7 +786,7 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
       const { baseUnit } = AFFINE_UNIT_CONVERSIONS[unitsName]
       const affineUnits = new _libcellml.Units()
       affineUnits.setName(unitsName)
-      affineUnits.addUnitByReference(baseUnit) 
+      affineUnits.addUnitByReference(baseUnit)
       model.addUnits(affineUnits)
       affineUnits.delete()
       return
@@ -799,7 +835,7 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
         importedUnits.delete()
 
         found = true
-        break 
+        break
       }
     }
 
@@ -818,7 +854,7 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
     // Count how many nodes use each constant variable name
     const constantNameRefCount = new Map()
     for (const node of nodes) {
-      for (const v of (node.data.variables ?? [])) {
+      for (const v of node.data.variables ?? []) {
         if (v.type === 'constant' && !isEmpty(v.value)) {
           constantNameRefCount.set(v.name, (constantNameRefCount.get(v.name) ?? 0) + 1)
         }
@@ -969,7 +1005,7 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
             }
           }
         }
-      } 
+      }
     }
 
     // Handle Multi-Port-Sum Connections
@@ -1078,7 +1114,7 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
     analyser.analyseModel(flattenedModel)
     if (analyser.errorCount()) {
       // FIXME: There is a bug in libCellML v0.6.3 where the analyser cannot handle
-      // initialisation of a variable that is computed. Fixed in v0.6.4, but we need 
+      // initialisation of a variable that is computed. Fixed in v0.6.4, but we need
       // a workaround for now to at least export something usable in the case where this is the only error.
       handleLoggerErrors(analyser, `Analyser error count: ${analyser.errorCount()}`, true)
     }
@@ -1131,7 +1167,7 @@ function isPossibleParameter(variable) {
  * Extracts unique variable names from a CellML model/component
  */
 export function extractVariablesFromMath(math, includeInitialisedVariables = true) {
-  const garbageCollector = new Set() // To track created objects for cleanup
+  const garbageCollector = new Set() // To track created objects for cleanup.
   try {
     const variables = new Set()
     if (math) {
@@ -1139,7 +1175,7 @@ export function extractVariablesFromMath(math, includeInitialisedVariables = tru
       garbageCollector.add(parser)
       const model = parser.parseModel(math)
       garbageCollector.add(model)
-      if ((model.componentCount() > 1)) throw new Error(`More than one component detected in ${model.modelName()}.`)
+      if (model.componentCount() > 1) throw new Error(`More than one component detected in ${model.modelName()}.`)
       const comp = model.componentByIndex(0)
       garbageCollector.add(comp)
       if (!comp) throw new Error(`No component found in file.`)
@@ -1156,9 +1192,7 @@ export function extractVariablesFromMath(math, includeInitialisedVariables = tru
 
     return Array.from(variables)
   } finally {
-    for (const obj of garbageCollector) {
-      obj && obj.delete()
-    }
+    garbageCollector.forEach((obj) => obj?.delete())
   }
 }
 
@@ -1221,7 +1255,7 @@ export function extractComponentsFromCellmlString(cellmlString) {
       newModel.addComponent(compClone)
 
       extractedComponents.push({
-        name: component.name(), 
+        name: component.name(),
         math: printer.printModel(newModel, false),
         variables: extractVariablesFromMath(printer.printModel(newModel, false)),
       })
