@@ -12,11 +12,11 @@
       <button debug>Debug</button> 
     </el-card>
 
-    <template v-for="port in targetPorts" :key="port.uid" class="port">
+    <template v-for="handle in targetHandles" :key="handle.uid" class="handle">
       <Handle
-        :id="getHandleId(port)"
-        :position="portPosition(port.side)"
-        :style="getHandleStyle(port, targetPorts)"
+        :id="getHandleId(handle)"
+        :position="handlePosition(handle.side)"
+        :style="getHandleStyle(handle, targetHandles)"
         class="port-handle"
       />
     </template>
@@ -40,13 +40,12 @@ function debug() {
 }
 
 const targetNode = computed(() => {
-  console.log('test', props.data)
   if (!props.data.targetNodeId) return null
   return findNode(props.data.targetNodeId)
 })
 
-const targetPorts = computed(() => {
-  return targetNode.value?.data?.ports || []
+const targetHandles = computed(() => {
+  return targetNode.value?.data?.handles || []
 })
 
 const nodeStyle = computed(() => {

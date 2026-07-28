@@ -96,7 +96,7 @@ export function useMacroGenerator() {
         // Calculate shift.
         const xOffset = i * (MACRO_WIDTH + MARGIN_X)
 
-        const finalName = generateUniqueInstanceName({name: node.data.componentType}, namesSet)
+        const finalName = generateUniqueInstanceName(node.data.name, namesSet)
         namesSet.add(finalName)
 
         newNodes.push({
