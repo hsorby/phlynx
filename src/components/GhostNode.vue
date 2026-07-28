@@ -9,7 +9,7 @@
       </div>
       <!-- non-editable label showing CellML component and source file (no white box) -->
       <div class="module-label">{{ ghostLabel }}</div>
-      <button debug>Debug</button> 
+      <!-- <button debug>Debug</button>  -->
     </el-card>
 
     <template v-for="handle in targetHandles" :key="handle.uid" class="handle">

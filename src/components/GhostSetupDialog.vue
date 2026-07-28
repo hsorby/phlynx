@@ -39,9 +39,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import { FLOW_IDS, GHOST_NODE_TYPE } from '../utils/constants'
+import { notify } from '../utils/notify'
 
 // Make sure we look at the MACRO flow, not the main flow
 const { getNodes } = useVueFlow(FLOW_IDS.MACRO)
@@ -52,5 +53,18 @@ const availableNodes = computed(() => {
   return getNodes.value.filter((n) => n.type !== GHOST_NODE_TYPE)
 })
 
-defineEmits(['confirm', 'cancel'])
+const emit =defineEmits(['confirm', 'cancel'])
+
+watch(
+  availableNodes,
+  (nodes) => {
+    if (nodes.length === 0) {
+      notify.warning({ title: 'No Available Nodes', message: 'No available nodes to ghost. Please add nodes first.' })
+      emit('cancel')
+    } else if (nodes.length === 1) {
+      emit('confirm', nodes[0].id)
+    }
+  },
+  { immediate: true }
+)
 </script>
