@@ -38,19 +38,6 @@ export const useLibraryStore = defineStore('library', () => {
   const lastExportName = ref('phlynx-export')
   const globalConstants = ref(new Map())
 
-  // --- DEBUG ---
-
-  function listCollections() {
-    availableCollections.value.forEach((e) => console.log(e.componentFile))
-  }
-
-  function listUnits() {
-    availableUnits.value.forEach((e) => {
-      console.log(e.componentFile)
-      console.log(e.model.substring(0, 200))
-    })
-  }
-
   // --- ACTIONS ---
   function normaliseValue(val) {
     if (!val || val === '-') return val 
@@ -286,9 +273,5 @@ export const useLibraryStore = defineStore('library', () => {
     // Query
     getGlobalConstant,
     getState,
-
-    // Debug
-    listCollections,
-    listUnits,
   }
 })
