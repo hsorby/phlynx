@@ -2005,6 +2005,10 @@ function recomputeMissingCouplings() {
  */
 function createSaveBlob() {
   const saveState = {
+    info: {
+      format_version: '1.0.0',
+      project: 'PhLynx-Project',
+    },
     flow: toObject(),
     store: libraryStore.getState(),
   }
