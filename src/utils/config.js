@@ -21,7 +21,7 @@ export function normaliseConfig(config) {
 }
 
 // applied on import
-function normalisePorts(config) {
+export function normalisePorts(config) {
   const ports = []
 
   PORT_TYPE_OPTIONS.forEach((portType) => {
@@ -68,7 +68,7 @@ export function restorePorts(ports) {
   return config
 }
 
-function normaliseVariables(RawVariablesAndUnits = []) {
+export function normaliseVariables(RawVariablesAndUnits = []) {
   return RawVariablesAndUnits.map(([name, units, access, type]) => ({
     name,
     value: null,

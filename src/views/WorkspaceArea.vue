@@ -369,6 +369,7 @@ import { useScreenshot } from '../services/useScreenshot'
 import { generateExportZip } from '../services/caExport'
 import { createCellMLDataFragment } from '../services/cellml'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
+import { migrateWorkspace } from '../services/workspaceMigrator'
 import { notify } from '../utils/notify'
 import { resolvePortCouplings } from '../utils/edges'
 import { getHelperLines } from '../utils/helperLines'
@@ -385,7 +386,9 @@ import {
   JSON_FILE_TYPES,
   ZIP_FILE_TYPES,
   DEFAULT_FILE_NAME,
-  NEW_INSTANCE_MODULE_REF
+  NEW_INSTANCE_MODULE_REF,
+  FORMAT_VERSION,
+  DEFAULT_PROJECT_TYPE
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId } from '../utils/edges'
@@ -2032,15 +2035,6 @@ const onSaveConfirm = async (fileName) => {
 }
 
 function migrateWorkspace(flow) {
-  if (!flow?.nodes) return flow
-  return {
-    ...flow,
-    nodes: flow.nodes.map((node) =>
-      node.type === 'moduleNode' ? { ...node, type: 'instanceNode' } : node
-    ),
-  }
-}
-
 /**
  * Reads a JSON file and restores the application state.
  */

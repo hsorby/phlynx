@@ -143,6 +143,10 @@ export const MULTIPORT_OPTIONS = [
 
 export const DEFAULT_FILE_NAME = 'phlynx-export'
 
+export const DEFAULT_PROJECT_TYPE = 'Phlynx-Project'
+
+export const FORMAT_VERSION = '1.0.0'
+
 export const IMPORT_KEYS = {
   INSTANCE_ARRAY: 'instanceArray',
   MODULE_CONFIG: 'moduleConfig',

@@ -74,6 +74,14 @@ export const useLibraryStore = defineStore('library', () => {
     return globalConstants.value.get(variableName)
   }
 
+  function resetStore() {
+    clearGlobalConstants()
+    availableMath.value.clear()
+    availableCollections.value.clear()
+    availableModules.value.clear()
+    availableUnits.value = []
+  }
+
   // --- SETTERS ---
 
   function setLastSaveName(name) {
@@ -185,11 +193,35 @@ export const useLibraryStore = defineStore('library', () => {
   }
 
   function loadState(state) {
-    mergeIntoStore(state.availableCollections, availableCollections.value)
-    mergeIntoStore(state.availableUnits, availableUnits.value)
+
+    resetStore()
+
+    if (state.availableCollections) {
+      const collections = Array.isArray(state.availableCollections)
+      ? state.availableCollections : Object.entries(state.availableCollections)
+      
+      collections.forEach(([mathRef, modules]) => {
+          const iterableModules = Array.isArray(modules) ? modules : []
+          availableCollections.value.set(mathRef, new Set(iterableModules))
+      })
+    }
+
+    if (state.availableMath) {
+      mergeIn(new Map(state.availableMath), availableMath.value)
+    }
+
+    if (state.availableModules) {
+      mergeIn(new Map(state.availableModules), availableModules.value)
+    }
+
+    if (state.availableUnits) {
+      mergeIntoStore(state.availableUnits, availableUnits.value)
+    }
+
     if (state.globalConstants) {
       mergeIn(new Map(state.globalConstants), globalConstants.value)
     }
+
     lastSaveName.value = state.lastSaveName || 'phlynx-project'
     lastExportName.value = state.lastExportName || 'phlynx-export'
   }
@@ -211,7 +243,11 @@ export const useLibraryStore = defineStore('library', () => {
 
   function getState() {
     return {
-      availableCollections: availableCollections.value,
+      availableCollections: Array.from(availableCollections.value.entries()).map(
+        ([key, set]) => [key, Array.from(set)]
+      ),
+      availableMath: Array.from(availableMath.value.entries()),
+      availableModules: Array.from(availableModules.value.entries()),
       availableUnits: availableUnits.value,
       globalConstants: Array.from(globalConstants.value.entries()),
       lastExportName: lastExportName.value,
