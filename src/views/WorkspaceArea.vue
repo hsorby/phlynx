@@ -2009,8 +2009,8 @@ function recomputeMissingCouplings() {
 function createSaveBlob() {
   const saveState = {
     info: {
-      format_version: '1.0.0',
-      project: 'PhLynx-Project',
+      format_version: FORMAT_VERSION,
+      project: DEFAULT_PROJECT_TYPE,
     },
     flow: toObject(),
     store: libraryStore.getState(),
@@ -2034,7 +2034,6 @@ const onSaveConfirm = async (fileName) => {
   notify.success({ title: 'Workflow saved!' })
 }
 
-function migrateWorkspace(flow) {
 /**
  * Reads a JSON file and restores the application state.
  */
@@ -2051,26 +2050,22 @@ function handleLoadWorkspace(file) {
         throw new Error('Invalid workflow file format.')
       }
 
+      // Handles legacy formats if needed
+      const migratedState = migrateWorkspace(loadedState)
+
       // Clear the current Vue Flow state.
       await clearWorkspace()
 
-      // Restore Vue Flow state.
-      // We use `setViewport` to apply zoom/pan.
-      setViewport(loadedState.flow.viewport)
-      // We directly set the reactive refs.
-      const migrated = migrateWorkspace(loadedState.flow)
-      fromObject(migrated)
+      setViewport(migratedState.flow.viewport)
+
+      fromObject(migratedState.flow)
 
       // Rebuild the edge index so the EdgeConnectionDialog subgraph is correct.
       rebuildNodeEdgeIndex()
-
-      // Recompute couplings for any edge missing them (e.g. saved before couplings
-      // were introduced, or saved with an older serialiser that dropped edge data).
-      // resolvePortCouplings is deterministic so this is always safe to run.
       recomputeMissingCouplings()
 
       // Restore Pinia store state.
-      libraryStore.loadState(loadedState.store)
+      libraryStore.loadState(migratedState.store)
 
       trackEvent('workflow_load_action', {
         category: 'Workflow',
