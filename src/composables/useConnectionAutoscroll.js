@@ -7,7 +7,7 @@ export function useConnectionAutoscroll(canvasEl) {
   let startScrollTop = 0
   let jitterToggle = false 
   let activePointerId = 0
-  
+
   const CONNECT_AUTOSCROLL_ZONE = 60
   const CONNECT_AUTOSCROLL_SPEED = 12
 
@@ -51,7 +51,6 @@ export function useConnectionAutoscroll(canvasEl) {
       document.dispatchEvent(new MouseEvent('mousemove', eventOpts))
     }
   }
-  
 
   function startConnectAutoScroll() {
     if (connectScrollRaf) return
@@ -104,16 +103,14 @@ export function useConnectionAutoscroll(canvasEl) {
           cancelable: true,
           view: window
         }
-        
-        // Vue Flow attaches its drag listeners to the window.
-        // Dispatching both ensures compatibility across Vue Flow versions.
+
         document.dispatchEvent(new PointerEvent('pointermove', eventOpts))
         document.dispatchEvent(new MouseEvent('mousemove', eventOpts))
       }
 
       connectScrollRaf = requestAnimationFrame(tick)
     }
-    
+
     connectScrollRaf = requestAnimationFrame(tick)
   }
 
@@ -133,7 +130,7 @@ export function useConnectionAutoscroll(canvasEl) {
     const side = nodeId === 'ghost-src' ? 'source'
                : nodeId === 'ghost-tgt' ? 'target'
                : handleType === 'source' ? 'source' : 'target'
-               
+
     draggingFrom.value = { uid, side }
     startScrollTop = canvasEl.value?.scrollTop ?? 0
     startConnectAutoScroll()
