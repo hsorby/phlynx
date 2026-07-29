@@ -5,7 +5,7 @@
 
 // Import the helper function (adjust path as needed)
 import { extractComponentsFromCellmlString } from "../utils/cellml"
-import { MAIN_NODE_TYPE, PORT_TYPE_OPTIONS, FORMAT_VERSION, DEFAULT_PROJECT_NAME } from "../utils/constants"
+import { MAIN_NODE_TYPE, PORT_TYPE_OPTIONS, FORMAT_VERSION, DEFAULT_PROJECT_TYPE } from "../utils/constants"
 import { normalisePorts, normaliseVariables } from "../utils/config"
 
 function mergeVariables(oldData, nodeName, globalConstantNames, paramLookup) {
@@ -292,7 +292,7 @@ function convertStore(oldStore, globalConstantNames) {
   }
 }
 
-export function migrateWorkspace(doc, projectName = DEFAULT_PROJECT_NAME) {
+export function migrateWorkspace(doc, projectName = DEFAULT_PROJECT_TYPE) {
   // New versions (i.e., containing info field) don't need migrating
   if (doc && doc.info) {
     return doc
