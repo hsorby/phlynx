@@ -8,9 +8,9 @@
 
      <el-divider />
 
-      <label class="el-form-label">Port Labels:</label>
+      <label class="el-form-label">Ports:</label>
       <el-table
-        :data="editableData.portLabels"
+        :data="editableData.ports"
         style="width: 100%; margin-top: 10px"
         empty-text="No port labels added"
       >
@@ -19,7 +19,7 @@
           <template #default="scope">
             <el-select v-model="scope.row.portType" size="small">
               <el-option
-                v-for="option in portTypeOptions"
+                v-for="option in PORT_TYPE_OPTIONS"
                 :key="option.value"
                 :label="option.label"
                 :value="option.value"
@@ -52,7 +52,7 @@
               style="width: 100%"
             >
               <el-option
-                v-for="variable in props.variableOptions"
+                v-for="variable in props.variables"
                 :key="variable.name"
                 :label="variable.name"
                 :value="variable.name"
@@ -67,13 +67,13 @@
           <template #default="scope">
             <div style="display: flex; flex-direction: column; gap: 5px">
               <el-select
-                v-model="scope.row.multiport"
+                v-model="scope.row.multiportType"
                 size="small"
                 placeholder="Select"
                 style="width: 100%"
               >
                 <el-option
-                  v-for="option in multiportOptions"
+                  v-for="option in MULTIPORT_OPTIONS"
                   :key="option.value"
                   :label="option.label"
                   :value="option.value"
@@ -106,7 +106,7 @@
               circle
               plain
               size="small"
-              @click="deletePortLabel(scope.$index)"
+              @click="deletePort(scope.$index)"
             />
           </template>
         </el-table-column>
@@ -120,7 +120,7 @@
             :icon="Plus"
             plain
             circle
-            @click="addPortLabel"
+            @click="addPort"
           />
         </el-tooltip>
       </div>
@@ -142,27 +142,28 @@ import { useGtm } from '../composables/useGtm'
 import { notify } from '../utils/notify'
 import { sanitiseName } from '../utils/nodes'
 import { detachReactivity } from '../utils/reactivity'
+import { PORT_TYPE_OPTIONS, MULTIPORT_OPTIONS } from '../utils/constants'
 
 const props = defineProps({
   modelValue: {
     type: Boolean,
     default: false,
   },
+  id: {
+    type: String,
+    default: '',
+  },
   initialName: {
     type: String,
     default: '',
   },
-  variableOptions: {
+  variables: {
     type: Array,
     default: () => [],
   },
-  initialPortLabels: { 
+  initialPorts: { 
     type: Array,
     default: () => [],
-  },
-  nodeId: {
-    type: String,
-    required: true,
   },
   existingNames: {
     type: Array,
@@ -177,48 +178,14 @@ const emit = defineEmits([
 
 const editableData = reactive({
   name: '',
-  portLabels: [], // Will hold objects like { variable: 'var_a', label: 'label_1' }
+  ports: [], // Will hold objects like { variable: 'var_a', label: 'label_1' }
 })
-
-const multiportOptions = [
-  {
-    value: 'True',
-    label: 'True',
-  },
-  {
-    value: 'Sum',
-    label: 'Sum',
-  },
-  {
-    value: 'Multiply',
-    label: 'Multiply',
-  },
-  {
-    value: 'None',
-    label: 'None',
-  },
-]
-
-const portTypeOptions = [
-  {
-    value: 'general_ports',
-    label: 'G',
-  },
-  {
-    value: 'entrance_ports',
-    label: 'I',
-  },
-  {
-    value: 'exit_ports',
-    label: 'O',
-  },
-]
 
 const { trackEvent } = useGtm()
 
 function resetForm() {
   editableData.name = props.initialName
-  editableData.portLabels = detachReactivity(props.initialPortLabels || [])
+  editableData.ports = detachReactivity(props.initialPorts || [])
 }
 
 function closeDialog() {
@@ -247,12 +214,12 @@ function handleConfirm() {
     return
   }
 
-  const finalPortLabels = editableData.portLabels.filter(
-    (p) => p.variable && p.label && p.label.trim()
+  const finalPorts = editableData.ports.filter(
+    (p) => p.variables && p.label && p.label.trim()
   )
 
-  const invalidFactor = finalPortLabels.find(
-    (p) => p.multiport === 'Multiply' && (p.multiplyFactor === null || p.multiplyFactor === undefined || p.multiplyFactor === 0)
+  const invalidFactor = finalPorts.find(
+    (p) => p.multiportType === 'Multiply' && (isEmpty(p.multiplyFactor))
   )
   
   if (invalidFactor) {
@@ -269,15 +236,15 @@ function handleConfirm() {
   
   emit('confirm', {
     name: editableData.name,
-    nodeId: props.nodeId,
-    portLabels: finalPortLabels,
+    id: props.id,
+    ports: finalPorts,
   })
 
   closeDialog()
 }
 
 watch(
-  () => [props.initialName, , props.initialPortLabels, props.modelValue],
+  () => [props.initialName, , props.initialPorts, props.modelValue],
   () => {
     if (props.modelValue) {
       resetForm()
@@ -287,11 +254,11 @@ watch(
 )
 
 watch(
-  () => editableData.portLabels.map(p => p.variable),
+  () => editableData.ports.map(p => p.variable),
   (newVariables) => {
     newVariables.forEach((varName, i) => {
-      if (varName?.length > 1 && editableData.portLabels[i].multiport === 'Sum') {
-        editableData.portLabels[i].multiport = 'None'
+      if (varName?.length > 1 && editableData.ports[i].multiportType === 'Sum') {
+        editableData.ports[i].multiportType = 'None'
       }
     })
   },
@@ -299,11 +266,11 @@ watch(
 )
 
 watch(
-  () => editableData.portLabels.map(p => p.multiport),
+  () => editableData.ports.map(p => p.multiportType),
   (newMultiports) => {
     newMultiports.forEach((mp, i) => {
       if (mp !== 'Multiply') {
-        editableData.portLabels[i].multiplyFactor = 1
+        editableData.ports[i].multiplyFactor = 1
       }
     })
   },
@@ -312,7 +279,7 @@ watch(
 
 const usedVariables = computed(() => {
   return new Set(
-    editableData.portLabels
+    editableData.ports
       .map((p) => p.variable)
       .filter(Boolean)
       .flat()
@@ -329,18 +296,18 @@ function isVariableDisabled(variableName, currentSelection) {
   return false
 }
 
-function addPortLabel() {
-  editableData.portLabels.push({
+function addPort() {
+  editableData.ports.push({
     portType: 'general_ports',
     variable: '',
     label: '',
-    multiport: 'None',
+    multiportType: 'None',
     multiplyFactor: 1,
   })
 }
 
-function deletePortLabel(index) {
-  editableData.portLabels.splice(index, 1)
+function deletePort(index) {
+  editableData.ports.splice(index, 1)
 }
 </script>
 

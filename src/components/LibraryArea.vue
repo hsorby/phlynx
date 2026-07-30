@@ -27,9 +27,9 @@
             @click="toggleGroup(collection.componentFile)"
           >
             <el-icon class="mlc__group-chevron"><ArrowRight /></el-icon>
-            <span class="mlc__group-name"><span class="mlc__group-name-text">{{ displayName(collection.componentFile) }}</span></span>
+            <span class="mlc__group-name"><span class="mlc__group-name-text">{{ collection.label }}</span></span>
             <el-tag size="small" type="info" effect="plain" round class="mlc__group-count">
-              {{ collection.modules.length }}
+              {{ collection.cards.length }}
             </el-tag>
           </button>
 
@@ -37,39 +37,38 @@
           <transition name="slide">
             <div v-show="activeCollapseNames.includes(collection.componentFile)" class="mlc__group-body">
               <el-card
-                v-for="module in collection.modules"
-                :key="module.name"
+                v-for="card in collection.cards"
+                :key="card.cardKey"
                 class="mlc__card"
                 :class="{
                   'mlc__card--selectable': selectable,
-                  'mlc__card--stub': collection.isStub,
-                  'mlc__card--draggable': !selectable && !collection.isStub,
+                  'mlc__card--stub': activeModule(card).isStub,
+                  'mlc__card--draggable': !selectable && !activeModule(card).isStub,
                 }"
                 shadow="never"
                 :body-style="{ padding: '0' }"
-                :draggable="!selectable && !collection.isStub"
-                @dragstart="handleDragStart($event, module)"
+                :draggable="!selectable && !activeModule(card).isStub"
+                @dragstart="handleDragStart($event, activeModule(card))"
                 @dragend="handleDragEnd"
-                @click="selectable && handleSelect(module)"
+                @click="selectable && handleSelect(activeModule(card))"
               >
                 <div class="mlc__card-inner">
                   <div class="mlc__card-body">
                     <!-- Name + actions row -->
                     <div class="mlc__card-header">
-                      <span class="mlc__card-name">{{ module.name }}</span>
+                      <span class="mlc__card-name">{{ card.label }}</span>
                       <div class="mlc__card-actions">
                         <el-tag
-                          v-if="module.configs && module.configs.length > 1"
                           size="small"
                           type="primary"
                           effect="light"
                           round
                           class="mlc__badge"
                         >
-                          {{ module.configs.length }} configs
+                          {{ card.modules?.length }} module{{ card.modules?.length !== 1 ? 's' : '' }}
                         </el-tag>
                         <el-tooltip
-                          v-if="module.configs && module.configs.length >= 1"
+                          v-if="activeModule(card).moduleRef"
                           content="Preview configuration"
                           placement="top"
                           :auto-close="TOOLTIP_AUTO_CLOSE"
@@ -79,25 +78,45 @@
                             size="small"
                             circle
                             :icon="View"
-                            @click.stop="openPreview(module, collection.componentFile)"
+                            @click.stop="openPreview(activeModule(card))"
                           />
                         </el-tooltip>
                       </div>
                     </div>
 
-                    <!-- Config selector -->
+                    <!-- Subtype selector - switches which module this card currently represents -->
                     <div
-                      v-if="!selectable && module.configs && module.configs.length > 1"
                       class="mlc__config-row"
                       @click.stop
                     >
                       <el-select
-                        v-model="selectedConfigs[module.name]"
+                        :model-value="selectedModuleIndex[card.cardKey] ?? 0"
+                        @update:model-value="(val) => selectedModuleIndex[card.cardKey] = val"
                         size="small"
                         class="mlc__config-select"
                       >
                         <el-option
-                          v-for="(config, index) in module.configs"
+                          v-for="(module, index) in card.modules"
+                          :key="module.moduleRef"
+                          :label="module.moduleRef"
+                          :value="index"
+                        />
+                      </el-select>
+                    </div>
+
+                    <!-- Config selector - configs belonging to whichever module is currently active -->
+                    <div
+                      v-if="!selectable && activeModule(card).configs && activeModule(card).configs.length > 1"
+                      class="mlc__config-row"
+                      @click.stop
+                    >
+                      <el-select
+                        v-model="selectedConfigs[activeModule(card).moduleRef]"
+                        size="small"
+                        class="mlc__config-select"
+                      >
+                        <el-option
+                          v-for="(config, index) in activeModule(card).configs"
                           :key="index"
                           :label="configLabel(config) || `Config ${index + 1}`"
                           :value="index"
@@ -127,6 +146,7 @@
 <script setup>
 import { computed, ref, watch, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { View, Search, ArrowRight } from '@element-plus/icons-vue'
+import { useLibraryProxyStore } from '../stores/libraryProxyStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import useDragAndDrop from '../composables/useDnD'
 import ModulePreviewDialog from './ModulePreviewDialog.vue'
@@ -138,12 +158,13 @@ const props = defineProps({
 
 const emit = defineEmits(['select'])
 
+const view = useLibraryProxyStore()
 const store = useLibraryStore()
 const { onDragStart } = useDragAndDrop()
 
 const filterText = ref('')
 const activeCollapseNames = ref([])
-const knownComponentFiles = ref(new Set())
+const selectedModuleIndex = reactive({})
 const selectedConfigs = reactive({})
 const showPreview = ref(false)
 const previewTarget = ref(null)
@@ -157,6 +178,7 @@ function blockScroll(e) {
 onMounted(() => {
   scrollEl.value?.addEventListener('wheel', blockScroll, { passive: false })
 })
+
 onBeforeUnmount(() => {
   scrollEl.value?.removeEventListener('wheel', blockScroll)
 })
@@ -164,16 +186,24 @@ onBeforeUnmount(() => {
 // ─── Filtering ────────────────────────────────────────────────────────────────
 
 const filteredCollections = computed(() => {
-  const q = filterText.value.toLowerCase()
-  if (!q) return store.availableCollections
+  const q = filterText.value.toLowerCase().trim()
+  if (!q) return view.groups
 
-  return store.availableCollections
-    .map((collection) => ({
-      ...collection,
-      modules: collection.modules.filter((m) => m.name.toLowerCase().includes(q)),
+  return view.groups
+    .map((group) => ({
+      ...group,
+      cards: group.cards.filter((card) => group.label.toLowerCase().includes(q) || cardMatches(card, q)),
     }))
-    .filter((collection) => collection.modules.length > 0)
+    .filter((group) => group.cards.length > 0)
 })
+
+function cardMatches(card, q) {
+  if (card.label.toLowerCase().includes(q)) return true
+  return card.modules.some(
+    (module) =>
+      (module.moduleSubtype ?? '').toLowerCase().includes(q) || module.moduleRef.toLowerCase().includes(q)
+  )
+}
 
 // ─── Accordion ───────────────────────────────────────────────────────────────
 
@@ -185,41 +215,20 @@ function toggleGroup(componentFile) {
 
 // ─── Config helpers ───────────────────────────────────────────────────────────
 
-function displayName(componentFile) {
-  return componentFile.replace(/\.cellml$/i, '').replaceAll('_', ' ')
-}
-
 function configLabel(config) {
   if (!config) return ''
-  return [config.module_type, config.module_subtype].filter(Boolean).join(' – ')
+  return [config.module_type, config.module_subtype].filter(Boolean).join(' - ')
 }
 
-// ─── Watchers ─────────────────────────────────────────────────────────────────
+// ─── Module helpers ────────────────────────────────────────────────────────────
 
-watch(
-  filteredCollections,
-  (collections) => {
-    collections.forEach((collection) => {
-      collection.modules.forEach((module) => {
-        if (selectedConfigs[module.name] === undefined) selectedConfigs[module.name] = 0
-      })
-    })
-    activeCollapseNames.value = filterText.value ? collections.map((c) => c.componentFile) : []
-  },
-  { immediate: true, deep: true }
-)
-
-watch(
-  () => store.availableCollections,
-  (currentCollections) => {
-    for (const file of currentCollections) {
-      if (!knownComponentFiles.value.has(file.componentFile)) {
-        knownComponentFiles.value.add(file.componentFile)
-      }
-    }
-  },
-  { deep: true }
-)
+// Each card can represent several moduleRef "subtype" siblings (e.g. elastance:linear,
+// elastance:polynomial). This resolves which one is currently selected for the card,
+// defaulting to the first module until the user picks otherwise.
+function activeModule(card) {
+  const index = selectedModuleIndex[card.cardKey] ?? 0
+  return card.modules[index] ?? card.modules[0]
+}
 
 // ─── Drag & Drop ──────────────────────────────────────────────────────────────
 
@@ -227,7 +236,7 @@ function handleDragStart(event, module) {
   if (props.selectable) return
   isDragging.value = true
   event.dataTransfer.effectAllowed = 'copy'
-  const configIndex = selectedConfigs[module.name] ?? 0
+  const configIndex = selectedConfigs[module.moduleRef] ?? 0
   onDragStart(event, { ...module, configIndex })
 }
 
@@ -237,13 +246,11 @@ function handleDragEnd() {
 
 // ─── Preview ──────────────────────────────────────────────────────────────────
 
-function openPreview(module, componentFile) {
-  const configIndex = selectedConfigs[module.name] ?? 0
+function openPreview(module) {
   previewTarget.value = {
-    moduleName: module.name,
-    componentFile: componentFile,
-    configIndex,
-    configData: module.configs[configIndex],
+    moduleRef: module.moduleRef,
+    ports: module.ports,
+    variables: module.variables,
   }
   showPreview.value = true
 }

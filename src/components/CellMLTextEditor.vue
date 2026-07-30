@@ -44,19 +44,18 @@ const props = defineProps({
     type: String,
     default: '',
   },
-  regenerateOnChange: {
-    type: Boolean,
-    default: false,
-  },
 })
 
-const emit = defineEmits(['update:code', 'save'])
-
-const cellmlText = ref('')
+const emit = defineEmits(['update:code', 'save', 'ready'])
 
 const generator = new CellMLTextGenerator()
 const parser = new CellMLTextParser()
 const latexGen = new CellMLLatexGenerator()
+
+// Set once at creation from the model this instance was mounted with.
+// The parent forces a remount (via :key="mathRef") whenever the target
+// model changes, so this never needs to react to prop changes later.
+const cellmlText = ref(generator.generate(props.modelValue))
 
 const errors = ref([])
 const latexContainer = ref(null)
@@ -186,20 +185,19 @@ watch(cellmlText, (newText) => {
   }, 500)
 })
 
-watch(
-  () => props.regenerateOnChange,
-  (newValue) => {
-    if (newValue) {
-      const newText = generator.generate(props.modelValue)
-      if (newText !== cellmlText.value) {
-        cellmlText.value = newText
-      }
-    }
-  },
-  { immediate: true }
-)
-
 onMounted(() => {
+  try {
+    const parsed = parser.parse(cellmlText.value)
+    errors.value = parsed.errors
+    if (errors.value.length === 0 && parsed.xml) {
+      currentDoc = parser['doc']
+      updatePreview()
+      emit('ready', parsed.xml)
+    }
+  } catch (e) {
+    // Do nothing for invalid syntax on initial load.
+  }
+
   window.addEventListener('keydown', handleKeyDown)
 })
 

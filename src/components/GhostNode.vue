@@ -8,14 +8,15 @@
         >
       </div>
       <!-- non-editable label showing CellML component and source file (no white box) -->
-      <div v-if="data.label" class="module-label">{{ data.label }}</div>
+      <div class="module-label">{{ ghostLabel }}</div>
+      <!-- <button debug>Debug</button>  -->
     </el-card>
 
-    <template v-for="port in targetPorts" :key="port.uid" class="port">
+    <template v-for="handle in targetHandles" :key="handle.uid" class="handle">
       <Handle
-        :id="getHandleId(port)"
-        :position="portPosition(port.side)"
-        :style="getHandleStyle(port, targetPorts)"
+        :id="getHandleId(handle)"
+        :position="handlePosition(handle.side)"
+        :style="getHandleStyle(handle, targetHandles)"
         class="port-handle"
       />
     </template>
@@ -25,18 +26,26 @@
 <script setup>
 import { computed } from 'vue'
 import { useVueFlow, Handle } from '@vue-flow/core'
-import { getHandleId, getHandleStyle, portPosition } from '../utils/ports'
+import { getHandleId, getHandleStyle, handlePosition } from '../utils/handles'
 
 const props = defineProps(['id', 'data'])
 const { findNode } = useVueFlow()
+
+const ghostLabel = computed(() => {
+  return `${props.data.mathRef.split(':')[1]} [${props.data.mathRef.split(':')[0]}]`
+})
+
+function debug() {
+  console.log(targetNode)
+}
 
 const targetNode = computed(() => {
   if (!props.data.targetNodeId) return null
   return findNode(props.data.targetNodeId)
 })
 
-const targetPorts = computed(() => {
-  return targetNode.value?.data?.ports || []
+const targetHandles = computed(() => {
+  return targetNode.value?.data?.handles || []
 })
 
 const nodeStyle = computed(() => {

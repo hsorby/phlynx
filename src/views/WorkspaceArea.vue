@@ -229,10 +229,9 @@
                 :data="props.data"
                 :selected="props.selected"
                 :class="getNodeClass(props)"
-                @open-edit-dialog="onOpenEditDialog"
+                @open-port-editor-dialog="onOpenPortEditorDialog"
                 @open-cellml-editor-dialog="onOpenCellMLEditorDialog"
                 @open-parameter-editor-dialog="onOpenParameterEditorDialog"
-                @open-replacement-dialog="onOpenReplacementDialog"
                 @open-context-menu="onNodeContextMenu"
                 :ref="(el) => (nodeRefs[props.id] = el)"
               />
@@ -246,47 +245,56 @@
     </el-container>
   </el-container>
 
-  <EditInstanceDialog
-    v-model="editDialogVisible"
-    :initial-name="currentEditingNode.name"
-    :variable-options="currentEditingNode?.variables || []"
-    :initial-port-labels="currentEditingNode?.portLabels || []"
-    :node-id="currentEditingNode.nodeId"
+  <PortEditorDialog
+    v-model="portEditorDialogVisible"
+    :id="currentEditingNode?.id"
+    :initial-name="currentEditingNode?.initialName"
+    :initial-ports="currentEditingNode?.initialPorts"
+    :variables="currentEditingNode?.variables"
     :existing-names="allNodeNames"
-    @confirm="onEditConfirm"
+    @confirm="onPortEditConfirm"
   />
 
   <CellMLEditorDialog 
     v-model="cellMLEditorDialogVisible"
-    :nodeData="currentEditingNode"
+    :id="currentEditingNode?.id"
+    :name="currentEditingNode?.name"
+    :math-ref="currentEditingNode?.mathRef || ''"
+    :variables="currentEditingNode?.variables"
     @save="handleCellMLSave"
   />
 
-  <EditParameterDialog v-model="editParameterDialogVisible" :nodeData="currentEditingNode" />
+  <ParameterEditorDialog 
+    v-model="parameterEditorDialogVisible"
+    :id="currentEditingNode?.id"
+    :variables="currentEditingNode?.variables"
+    @save="handleParameterSave"
+  />
 
-  <SaveDialog v-model="saveDialogVisible" @confirm="onSaveConfirm" :default-name="libraryStore.lastSaveName" />
+  <SaveDialog
+    v-model="saveDialogVisible"
+    :default-name="libraryStore.lastSaveName"
+    @confirm="onSaveConfirm"
+  />
 
   <SaveDialog
     v-model="exportDialogVisible"
-    @confirm="onExportConfirm"
     :title="`Export for ${currentExportMode.label}`"
     :default-name="libraryStore.lastExportName"
     :suffix="currentExportMode.suffix"
+    @confirm="onExportConfirm"
   />
 
   <ModuleReplacementDialog
     v-model="replacementDialogVisible"
-    :modules="libraryStore.availableModules"
-    :node-id="currentEditingNode.nodeId"
-    :variables="currentEditingNode?.variables || []"
-    :port-labels="currentEditingNode?.portLabels || []"
+    :current-instance="currentEditingNode"
     @confirm="onReplaceConfirm"
   />
 
   <MacroBuilderDialog
     v-model="macroBuilderDialogVisible"
     @generate="onMacroBuilderGenerate"
-    @edit-node="onOpenEditDialog"
+    @edit-node="onOpenPortEditorDialog"
   />
 
   <ImportDialog
@@ -296,7 +304,10 @@
     @confirm="onImportConfirm"
   />
 
-  <PaneContextMenu ref="contextMenuRef" :items="contextMenuItems" />
+  <PaneContextMenu
+    ref="contextMenuRef"
+    :items="contextMenuItems"
+  />
 
   <EdgeConnectionDialog
     v-model="edgeConnectionDialogVisible"
@@ -339,7 +350,7 @@ import { MiniMap } from '@vue-flow/minimap'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import useDragAndDrop from '../composables/useDnD'
-import { useLoadFromModuleArray } from '../composables/useLoadFromModuleArray'
+import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
 import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
 import { useResizableAside } from '../composables/useResizableAside'
@@ -347,7 +358,6 @@ import { useGtm } from '../composables/useGtm'
 import LibraryArea from '../components/LibraryArea.vue'
 import Workbench from '../components/WorkbenchArea.vue'
 import InstanceNode from '../components/InstanceNode.vue'
-import EditInstanceDialog from '../components/EditInstanceDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
 import SaveDialog from '../components/SaveDialog.vue'
@@ -359,13 +369,14 @@ import { useScreenshot } from '../services/useScreenshot'
 import { generateExportZip } from '../services/caExport'
 import { createCellMLDataFragment } from '../services/cellml'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
+import { migrateWorkspace } from '../services/workspaceMigrator'
 import { notify } from '../utils/notify'
 import { resolvePortCouplings } from '../utils/edges'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
 import { relayoutNodes } from '../services/layouts/physics'
-import { generateFlattenedModel, initLibCellML, processCellMLData, extractVariablesFromComponent, createEditableModelFromSourceModelAndComponent } from '../utils/cellml'
+import { generateFlattenedModel, initLibCellML, processCellMLData, extractVariablesFromMath, extractComponentsFromCellmlString } from '../utils/cellml'
 import {
   edgeLineOptions,
   CELLML_FILE_TYPES,
@@ -375,13 +386,16 @@ import {
   JSON_FILE_TYPES,
   ZIP_FILE_TYPES,
   DEFAULT_FILE_NAME,
+  NEW_INSTANCE_MODULE_REF,
+  FORMAT_VERSION,
+  DEFAULT_PROJECT_TYPE
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId } from '../utils/edges'
 import { getImportConfig, parseParametersFile } from '../utils/import'
 import { detachReactivity } from '../utils/reactivity'
 import {
-  saveFileHandle, 
+  saveFileHandle,
   saveWithDialog,
   getFileHandle,
   writeFileHandle,
@@ -389,7 +403,8 @@ import {
   legacyDownload
 } from '../utils/save'
 import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
-import EditParameterDialog from '../components/EditParameterDialog.vue'
+import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
+import PortEditorDialog from '../components/PortEditorDialog.vue'
 
 const {
   addEdges,
@@ -468,8 +483,9 @@ const loadCellMLFiles = async (entries) => {
   if (entries.length === 1) {
     const entry = entries[0]
     const content = entry instanceof File ? await readFileAsText(entry) : entry.content
-    const { components } = parseCellMLConnections(content, entry.name)
-    if (components.length > 0) {
+    const cellmlPayload = parseCellMLConnections(content, entry.name) // { nodes, modules, edges }
+
+    if (cellmlPayload.edges.length > 0) {
       if (nodes.value.length > 0) {
         try {
           await ElMessageBox.confirm(
@@ -490,7 +506,7 @@ const loadCellMLFiles = async (entries) => {
 
             // Load new graph into clean workspace using the normal path
             const result = await loadCellMLData(content, entry.name, { notify: false })
-            await loadFromCellML(content, entry.name)
+            await loadFromCellML(cellmlPayload, entry.name)
 
             // Remap snapshotted node IDs to avoid clashes with newly loaded nodes
             const existingIds = new Set(nodes.value.map((n) => n.id))
@@ -531,10 +547,10 @@ const loadCellMLFiles = async (entries) => {
         }
       }
       // Register modules/units in the store first, then build the graph.
-      // loadCellMLData is kept silent here since loadFromCellML provides its own feedback.
       const result = await loadCellMLData(content, entry.name, { notify: false })
-      await loadFromCellML(content, entry.name)
+      await loadFromCellML(cellmlPayload, entry.name)
       rebuildNodeEdgeIndex()
+
       return [result]
     }
     // No connections — fall through to the standard module-registration path
@@ -542,7 +558,7 @@ const loadCellMLFiles = async (entries) => {
       const result = await loadCellMLData(content, entry.name)
       return [result]
     } catch {
-      return [{ ok: false, moduleCount: 0, unitCount: 0 }]
+      return [{ ok: false, moduleCount: 0, unitsCount: 0 }]
     }
   }
 
@@ -554,7 +570,7 @@ const loadCellMLFiles = async (entries) => {
         const content = entry instanceof File ? await readFileAsText(entry) : entry.content
         return loadCellMLData(content, entry.name, { notify: !multiFile })
       } catch {
-        return { ok: false, moduleCount: 0, unitCount: 0 }
+        return { ok: false, moduleCount: 0, unitsCount: 0 }
       }
     })
   )
@@ -563,7 +579,7 @@ const loadCellMLFiles = async (entries) => {
     const succeeded = results.filter((r) => r.ok)
     const failed = results.length - succeeded.length
     const totalModules = succeeded.reduce((sum, r) => sum + r.moduleCount, 0)
-    const totalUnits = succeeded.reduce((sum, r) => sum + r.unitCount, 0)
+    const totalUnits = succeeded.reduce((sum, r) => sum + r.unitsCount, 0)
     const fileWord = (n) => `${n} file${n !== 1 ? 's' : ''}`
     const summary = [
       totalModules > 0 ? `${totalModules} module${totalModules !== 1 ? 's' : ''}` : '',
@@ -621,7 +637,7 @@ const onDrop = async (event) => {
 }
 
 const historyStore = useFlowHistoryStore()
-const { loadFromModuleArray } = useLoadFromModuleArray()
+const { loadFromInstanceArray } = useLoadFromInstanceArray()
 const { loadFromCellML } = useLoadFromCellML()
 const { capture } = useScreenshot()
 const { trackEvent } = useGtm()
@@ -636,8 +652,8 @@ const libraryStore = useLibraryStore()
 
 const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
-const editParameterDialogVisible = ref(false)
-const editDialogVisible = ref(false)
+const parameterEditorDialogVisible = ref(false)
+const portEditorDialogVisible = ref(false)
 const cellMLEditorDialogVisible = ref(false)
 const saveDialogVisible = ref(false)
 const importDialogVisible = ref(false)
@@ -645,18 +661,20 @@ const exportDialogVisible = ref(false)
 const replacementDialogVisible = ref(false)
 const macroBuilderDialogVisible = ref(false)
 const edgeConnectionDialogVisible = ref(false)
-const edgeDialogSourceNode = ref(null)
-const edgeDialogTargetNode = ref(null)
-const edgeDialogActiveEdge = ref(null)
-const edgeDialogSubgraph = ref(null)
-const currentEditingNode = ref({
-  nodeId: '',
-  instanceId: '',
-  ports: [],
-  name: '',
-})
+const edgeDialogSourceNode = ref({})
+const edgeDialogTargetNode = ref({})
+const edgeDialogActiveEdge = ref({})
+const edgeDialogSubgraph = ref(new Map())
 const importDialogRef = ref(null)
 
+const currentEditingNode = ref({
+  name: '',
+  variables: [],
+  mathRef: '',
+  moduleRef: '',
+  id: '',
+  ports: [],
+})
 const currentImportMode = ref(null)
 const currentImportConfig = ref({})
 
@@ -682,8 +700,8 @@ const somethingAvailable = computed(() => nodes.value.length > 0)
 
 const importOptions = computed(() => [
   {
-    key: IMPORT_KEYS.MODULE_ARRAY,
-    label: 'Module Array',
+    key: IMPORT_KEYS.INSTANCE_ARRAY,
+    label: 'Instance Array',
     icon: markRaw(IconModuleArray),
     disabled: false,
   },
@@ -748,6 +766,7 @@ onConnect((connection) => {
   const targetNode = findNode(connection.target)
 
   if (!sourceNode || !targetNode) return
+  if (sourceNode === targetNode) return
 
   // Derive ordinal indices from the existing edge graph:
   //   sourceIndex = how many edges already leave from this source node
@@ -761,8 +780,8 @@ onConnect((connection) => {
   // Resolve which port labels are coupled across this conduit, using ordinal
   // indices to select the correct slot when a label appears multiple times.
   const couplings = resolvePortCouplings(
-    sourceNode.data.portLabels ?? [],
-    targetNode.data.portLabels ?? [],
+    sourceNode.data.ports ?? [],
+    targetNode.data.ports ?? [],
     sourceIndex,
     targetIndex
   )
@@ -805,7 +824,6 @@ function selectAllNodes() {
   })
 }
 
-// Search filter logic
 const handleSearchInput = () => {
   if (!searchQuery.value.trim()) {
     matchingNodeIds.value.clear()
@@ -819,12 +837,11 @@ const handleSearchInput = () => {
 
   nodes.value.forEach((node) => {
     // Search in all relevant name fields
-    const componentType = node.data?.componentType?.toLowerCase() || ''
+    const moduleRef = node.data?.moduleRef?.toLowerCase() || ''
     const name = node.data?.name?.toLowerCase() || ''
-    const label = node.data?.label?.toLowerCase() || ''
-    const componentFile = node.data?.componentFile?.toLowerCase() || ''
+    const mathRef = node.data?.mathRef?.toLowerCase() || ''
 
-    if (componentType.includes(query) || name.includes(query) || label.includes(query) || componentFile.includes(query)) {
+    if (moduleRef.includes(query) || name.includes(query) || mathRef.includes(query)) {
       matches.add(node.id)
     }
   })
@@ -834,7 +851,6 @@ const handleSearchInput = () => {
   currentMatchIndex.value = 0
 }
 
-// Cycle to next matching node
 const cycleToNextMatch = () => {
   if (matchCount.value === 0) return
 
@@ -850,7 +866,6 @@ const cycleToNextMatch = () => {
   }
 }
 
-// Cycle to previous matching node
 const cycleToPreviousMatch = () => {
   if (matchCount.value <= 1) return
 
@@ -859,7 +874,6 @@ const cycleToPreviousMatch = () => {
   zoomToNode(matchArray[currentMatchIndex.value])
 }
 
-// Zoom and center on a specific node
 const zoomToNode = (nodeId) => {
   const node = findNode(nodeId)
   if (!node) return
@@ -878,7 +892,6 @@ const zoomToNode = (nodeId) => {
   )
 }
 
-// Helper function to determine node class based on search
 const getNodeClass = (props) => {
   if (!searchQuery.value.trim()) {
     return ''
@@ -1122,6 +1135,7 @@ const onEdgeChange = (changes) => {
       redo: () => addEdges(edgesToRestore),
     })
   }
+
   if (removeChanges.length) {
     const edgesToRestore = removeChanges.map((change) => change.edge)
     const idsToRemove = removeChanges.map((change) => change.edge.id)
@@ -1130,6 +1144,7 @@ const onEdgeChange = (changes) => {
       redo: () => removeEdges(idsToRemove),
     })
   }
+  
   if (selectChanges.length) {
     historyStore.addCommand(createSelectCommand(selectChanges, findEdge))
   }
@@ -1139,47 +1154,23 @@ const onEdgeChange = (changes) => {
 
 const screenshotDisabled = computed(() => nodes.value.length === 0 && vueFlowRef.value !== null)
 
-function updateNodesWithNewParameters() {
-  nodes.value.forEach((node) => {
-    if (node.type === 'instanceNode') {
-      libraryStore.setParameterValuesForInstance(
-        node.data.name,
-        node.data.variables,
-        node.data.componentFile,
-        node.data.componentType,
-        node.data.configIndex
-      )
-      updateNodeData(node.id, { variables: node.data.variables })
-    }
-  })
-}
-
-const loadCellMLData = (content, componentFile, { notify: shouldNotify = true, trackEvents = true } = {}) => {
+const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackEvents = true } = {}) => {
   return new Promise((resolve) => {
     const result = processCellMLData(content)
 
     if (result.type === 'success') {
-      const componentCount = result.components.data.length
-      const unitCount = result.units.count
+      const componentCount = result.components?.length ?? 0
+      const unitsCount = result.units.count
 
-      // Register components (modules) with the store
+      // Register math with the store
       if (componentCount > 0) {
-        const modules = result.components.data.map((item) => ({
-          ...item,
-          componentFile: componentFile,
-        }))
-      
-        libraryStore.addOrUpdateCollection({
-          componentFile: componentFile,
-          modules: modules,
-          model: result.components.model,
-        })
+        libraryStore.addMathFile(filename, result.components)
       }
 
       // Register units with the store
-      if (unitCount > 0) {
+      if (unitsCount > 0) {
         libraryStore.addUnitsFile({
-          componentFile: componentFile,
+          componentFile: filename, 
           model: result.units.model,
         })
       }
@@ -1188,36 +1179,36 @@ const loadCellMLData = (content, componentFile, { notify: shouldNotify = true, t
         trackEvent('cellml_load_action', {
           category: 'CellML',
           action: 'load_cellml_file',
-          label: `Modules: ${result.components.data.length}, Units: ${result.units.count}`,
+          label: `Modules: ${componentCount}, Units: ${unitsCount}`,
           file_type: 'cellml',
         })
       }
 
       if (shouldNotify) {
-        if (componentCount > 0 && unitCount > 0) {
+        if (componentCount > 0 && unitsCount > 0) {
           notify.success({
             title: 'CellML File Loaded',
-            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} and ${unitCount} unit${unitCount !== 1 ? 's' : ''} from ${componentFile}.`,
+            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} and ${unitsCount} unit${unitsCount !== 1 ? 's' : ''} from ${filename}.`,
           })
         } else if (componentCount > 0) {
           notify.success({
             title: 'CellML Components Loaded',
-            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} from ${componentFile}.`,
+            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} from ${filename}.`,
           })
-        } else if (unitCount > 0) {
+        } else if (unitsCount > 0) {
           notify.success({
             title: 'CellML Units Loaded',
-            message: `Loaded ${unitCount} unit${unitCount !== 1 ? 's' : ''} from ${componentFile}.`,
+            message: `Loaded ${unitsCount} unit${unitsCount !== 1 ? 's' : ''} from ${filename}.`,
           })
         } else {
           notify.info({
             title: 'CellML File Loaded',
-            message: `${componentFile} contained no components or unit definitions.`,
+            message: `${filename} contained no components or unit definitions.`,
           })
         }
       }
 
-      resolve({ ok: true, componentCount: componentCount, unitCount: unitCount })
+      resolve({ ok: true, componentCount: componentCount, unitsCount: unitsCount })
     } else {
       if (trackEvents) {
         trackEvent('cellml_load_action', {
@@ -1230,39 +1221,97 @@ const loadCellMLData = (content, componentFile, { notify: shouldNotify = true, t
       if (shouldNotify) {
         notify.error({
           title: 'CellML Load Error',
-          message: `${result.issues.length} issue${result.issues.length !== 1 ? 's' : ''} found in ${componentFile}.`,
+          message: `${result.issues.length} issue${result.issues.length !== 1 ? 's' : ''} found in ${filename}.`,
         })
       }
       console.error('CellML import issues:', result.issues)
-      resolve({ ok: false, componentCount: 0, unitCount: 0 })
+      resolve({ ok: false, componentCount: 0, unitsCount: 0 })
     }
   })
 }
 
 const loadParametersData = async (content, filename, { notify: shouldNotify = true, trackEvents = true } = {}) => {
   try {
-    const added = libraryStore.addParameterFile(filename, content)
+    const variableCatalogue = new Set() 
+    const nodeMap = new Map(nodes.value.map((n) => [n.data.name, n]))
+    let totalLocal = 0
 
-    if (shouldNotify && added) {
+    for (const [instance, node] of nodeMap) {
+      for (const variable of node.data.variables) {
+        variableCatalogue.add(variable.name.trim())
+      }
+
+      const instanceParameters = Array.from(content)
+        .filter((entry) => entry.variable_name.trimEnd().endsWith(instance))
+        .map((entry) => ({
+          ...entry,
+          name: entry.variable_name
+            .trimEnd()
+            .slice(0, -instance.length)
+            .replace(/_+$/, '')
+        }))
+
+      const paramsByName = new Map(instanceParameters.map((p) => [p.name.trim(), p]))
+      let updatedCount = 0
+      node.data.variables = node.data.variables.map((variable) => {
+        const match = paramsByName.get(variable.name.trim())
+        if (!match) return variable
+        updatedCount++
+
+        const matchedUnit = match.units.trim()
+        const currentUnit = variable.units.trim()
+
+        if (matchedUnit !== currentUnit) {
+          console.warn(
+            `Unit mismatch for "${variable.name}": node has "${currentUnit}", parameter has "${matchedUnit}"`
+          )
+        }
+
+        return {
+          ...variable,
+          value: match.value.trim(),
+          data_reference: match.data_reference.trim(),
+          type: 'constant',
+        }
+      })
+      totalLocal += updatedCount
+    }
+
+    const globalConstants = Array.from(content)
+      .filter((entry) => variableCatalogue.has(entry.variable_name.trimEnd()))
+      .map((entry) => ({
+        ...entry,
+        name: entry.variable_name.trimEnd(),
+      }))
+
+    globalConstants.forEach((p) => {
+      libraryStore.assignGlobalConstant(p.name, p.value, p.units, p.data_reference)
+    })
+
+    const totalGlobal = globalConstants.length
+
+    const totalUpdated = totalLocal + totalGlobal
+
+    if (shouldNotify && totalUpdated > 0) {
       if (trackEvents) {
         trackEvent('parameters_load_action', {
           category: 'Parameters',
           action: 'load_parameters',
-          label: `Parameters: ${content.length}`,
+          label: `Parameters: ${totalUpdated}`,
           file_type: 'csv',
         })
       }
       notify.success({
         title: 'Parameters Loaded',
-        message: `Loaded ${content.length} parameters from ${filename}.`,
+        message: `Loaded ${totalUpdated} parameters from ${filename}.`,
       })
-    } else if (shouldNotify && !added) {
+    } else if (shouldNotify && totalUpdated === 0) {
       notify.info({
         title: 'Parameters Not Loaded',
         message: `No new parameters were added from ${filename}.`,
       })
     }
-    return { ok: added, count: added ? content.length : 0 }
+    return { ok: totalUpdated > 0, count: totalUpdated }
   } catch (err) {
     if (shouldNotify) {
       if (trackEvents) {
@@ -1326,24 +1375,34 @@ const handleImportCommand = (option) => {
 }
 
 async function onImportConfirm(importPayload, updateProgress) {
-  if (currentImportMode.value.key === IMPORT_KEYS.MODULE_ARRAY) {
-    const [[, data]] = importPayload
-    const modules = data.payload
+  if (currentImportMode.value.key === IMPORT_KEYS.INSTANCE_ARRAY) {
 
-    if (!modules || modules.length === 0) {
+    const instanceArrayFiles = importPayload.get(IMPORT_KEYS.INSTANCE_ARRAY)
+    const [[, instanceData]] = instanceArrayFiles
+    const instances = instanceData.payload
+
+    const parametersFiles = importPayload.get(IMPORT_KEYS.PARAMETER)
+
+    if (!instances || instances.length === 0) {
       notify.warning({
         title: 'Import Aborted',
-        message: 'No module data provided',
+        message: 'No instance data provided',
       })
       return
     }
 
     try {
-      await loadFromModuleArray({ modules }, (current, total, statusMessage) => {
+      await loadFromInstanceArray({ instances }, (current, total, statusMessage) => {
         if (updateProgress) {
-          updateProgress(`${statusMessage || 'Loading module array...'} (${current}/${total})`)
+          updateProgress(`${statusMessage || 'Loading instance array...'} (${current}/${total})`)
         }
       })
+
+      if (parametersFiles) {
+        for (const [filename, data] of parametersFiles) {
+          loadParametersData(data.payload, filename, { notify: false })
+        }
+      }
       rebuildNodeEdgeIndex()
 
       notify.success({
@@ -1357,12 +1416,12 @@ async function onImportConfirm(importPayload, updateProgress) {
       })
     }
   } else if (currentImportMode.value.key === IMPORT_KEYS.CELLML_FILE) {
-    const entries = [...importPayload].map(([name, data]) => ({ name, content: data?.payload }))
+    const entries = [...importPayload.get(IMPORT_KEYS.CELLML_FILE)].map(([name, data]) => ({ name, content: data?.payload }))
     await loadCellMLFiles(entries)
   } else if (currentImportMode.value.key === IMPORT_KEYS.MODULE_CONFIG) {
     const multiFile = importPayload.size > 1
     const results = await Promise.all(
-      [...importPayload].map(([filename, data]) =>
+      [...importPayload.get(IMPORT_KEYS.MODULE_CONFIG)].map(([filename, data]) =>
         loadConfigData(data?.payload, filename, { notify: !multiFile })
       )
     )
@@ -1370,16 +1429,15 @@ async function onImportConfirm(importPayload, updateProgress) {
       notifyMultiFileResults(results, { successTitle: 'Configurations Loaded' })
     }
   } else if (currentImportMode.value.key === IMPORT_KEYS.PARAMETER) {
-    const multiFile = importPayload.size > 1
+    const multiFile = importPayload.get(IMPORT_KEYS.PARAMETER).size > 1
     const results = await Promise.all(
-      [...importPayload].map(([filename, data]) =>
+      [...importPayload.get(IMPORT_KEYS.PARAMETER)].map(([filename, data]) =>
         loadParametersData(data?.payload, filename, { notify: !multiFile })
       )
     )
     if (multiFile) {
       notifyMultiFileResults(results, { successTitle: 'Parameters Loaded' })
     }
-    updateNodesWithNewParameters()
   } else {
     console.log("Cannot get here this shouldn't be an import:", currentImportMode.value.key)
   }
@@ -1390,12 +1448,12 @@ async function onImportConfirm(importPayload, updateProgress) {
 
 const performExport = async () => {
   currentExportKey.value = currentExportMode.value.key
-  
+
   const baseName = libraryStore.lastExportName || DEFAULT_FILE_NAME
-  const fileTypes = currentExportKey.value === EXPORT_KEYS.CELLML 
-    ? CELLML_FILE_TYPES 
+  const fileTypes = currentExportKey.value === EXPORT_KEYS.CELLML
+    ? CELLML_FILE_TYPES
     : ZIP_FILE_TYPES
-  
+
   // Get handle first
   const result = await getFileHandle(baseName, fileTypes, currentExportMode.value.suffix)
   if (result.success && result.handle) {
@@ -1415,11 +1473,11 @@ const handleExportCommand = (option) => {
   performExport(option)
 }
 
-function onOpenEditDialog(eventPayload) {
+function onOpenPortEditorDialog(eventPayload) {
   currentEditingNode.value = {
     ...eventPayload,
   }
-  editDialogVisible.value = true
+  portEditorDialogVisible.value = true
 }
 
 function onOpenCellMLEditorDialog(eventPayload) {
@@ -1433,7 +1491,7 @@ function onOpenParameterEditorDialog(eventPayload) {
   currentEditingNode.value = {
     ...eventPayload,
   }
-  editParameterDialogVisible.value = true
+  parameterEditorDialogVisible.value = true
 }
 
 function filterConfig(config, validPortNames, validVariableNames, updatedModule) {
@@ -1465,6 +1523,37 @@ function filterConfig(config, validPortNames, validVariableNames, updatedModule)
   }
 }
 
+function updateVariablesFromMath(node, updatedMath) {
+  const existingVariables = new Map(node.data.variables.map(v => [v.name, v]))
+  const updatedVariables = extractVariablesFromMath(updatedMath)
+
+  node.data.variables = updatedVariables.map((updated) => {
+    const variableExists = existingVariables.get(updated.name)
+
+    if (variableExists) {
+      return {
+        ...variableExists,
+        units: updated.units,
+      }
+    } else {
+      return {
+        name: updated.name,
+        units: updated.units,
+        access: "access", 
+        value: null,
+        type: null,
+      }
+    } 
+  })
+}
+
+function cleanPorts(currentNode) {
+  const validVariables = new Set(currentNode.data.variables.map((v) => v.name))
+  currentNode.data.ports = currentNode.data.ports.filter(port =>
+    (port.variables || []).every(v => validVariables.has(v))
+  )
+}
+
 /**
  * Handler for both Saving (Updating) and Forking CellML modules.
  * Handles:
@@ -1473,143 +1562,44 @@ function filterConfig(config, validPortNames, validVariableNames, updatedModule)
  * 3. updating graph nodes to match new ports.
  */
 async function handleCellMLSave(saveData) {
+  const { id, updateAll, mathRef, math, siblings, variables } = saveData
 
-  const { componentFile, componentType, originalComponentFile, originalComponentType, originalConfigIndex, model } = saveData
-
-  const isRename = originalComponentType !== componentType
-  const isNewFile = originalComponentFile !== componentFile
-  const isForkOrRename = isRename || isNewFile
-
-  // Get the original configuration to migrate (if it exists).
-  const originalModule = libraryStore.findModulesByComponentName(originalComponentFile, originalComponentType)
-
-  // Safety check: If we can't find the original, create a blank config
-  let configToMigrate = {}
-  if (originalModule && originalModule.configs && originalModule.configs[originalConfigIndex]) {
-    configToMigrate = detachReactivity(originalModule.configs[originalConfigIndex])
+  // Update math references
+  updateNodeData(id, { mathRef })
+  let updatedCount = 1
+  if (updateAll) {
+    siblings.forEach((siblingId) => {
+      updateNodeData(siblingId, { mathRef })
+      updatedCount++
+    })
   }
 
-  // Load the New Data into the Store
-  // This registers the module under the name found in 'model'.
-  await loadCellMLData(model, componentFile, { notify: false })
-
-  // Retrieve the "Target" Module (The one we just loaded)
-  let targetModule = libraryStore.findModulesByComponentName(componentFile, componentType)
-
-  if (!targetModule) {
-    console.warn(`Mismatch: Requested ${componentType}, but store didn't register it. Check component name extraction.`)
-    return
+  // Update variables and ports
+  const currentNode = findNode(id)
+  updateVariablesFromMath(currentNode, math)
+  cleanPorts(currentNode)
+  if (updateAll) {
+    siblings.forEach((siblingId) => {
+      const siblingNode = findNode(siblingId)
+      updateVariablesFromMath(siblingNode, math)
+      cleanPorts(siblingNode)
+    })
   }
 
-  // Update the configuration.
-  if (!targetModule.configs) {
-    targetModule.configs = []
-  }
-
-  if (isForkOrRename) {
-    // CASE A: Fork or Rename -> We add a NEW config entry.
-
-    // Update metadata to match new home.
-    configToMigrate.component_file = componentFile
-    configToMigrate.component_type = componentType
-
-    // Push as a new config.
-    targetModule.configs.push(configToMigrate)
-    targetModule.configIndex = targetModule.configs.length - 1
-  } else {
-    // CASE B: Simple Update -> We update the EXISTING config in place.
-    // We don't push a new one, we just ensure the current one is up to date.
-    targetModule.configs[originalConfigIndex] = configToMigrate
-    targetModule.configIndex = originalConfigIndex
-  }
-
-  // Propagate Changes (Update Nodes and Filter Configs).
-  const validPortNames = updateGraphNodesAndPorts(saveData, targetModule)
-
-  // Clean the Config (Remove ports that no longer exist).
-  // Now that we have the valid ports from the new CellML, clean the config.
-  const activeConfig = targetModule.configs[targetModule.configIndex]
-  const validVariableNames = new Set((targetModule?.variables || []).map((v) => v.name))
-  filterConfig(activeConfig, validPortNames, validVariableNames, targetModule)
-}
-
-/**
- * Helper: Updates the visual nodes on the graph.
- * Separated from data fetching for clarity.
- */
-function updateGraphNodesAndPorts(updatedData, updatedModule) {
-  const validPortNames = new Set(
-    updatedModule?.portLabels?.map((p) => p.name) || [] // not sure if portlabels or portoptions (e.g. variables)
-  )
-
-  const updatedModuleVariableMap = new Map(
-    (updatedModule?.variables || []).map((v) => [v.name, v])
-  )
-
-  let updatedCount = 0
-
-  nodes.value.forEach((node) => {
-    const isTargetNode = node.id === updatedData.nodeId
-    const isMatchingModule =
-      updatedData.scope !== 'single' &&
-      node.data.componentFile === updatedData.originalComponentFile &&
-      node.data.componentType === updatedData.originalComponentType
-
-    if (!isTargetNode && !isMatchingModule) return
-
-    // Capture original variable names BEFORE filtering
-    const originalVariableNames = new Set(
-      (node.data.variables || []).map((v) => v.name)
-    )
-
-    // Remove invalid variables and update metadata
-    const cleanVariables = (node.data.variables || [])
-      .filter((v) => validPortNames.has(v.name))
-      .map((v) => {
-        const updatedMeta = updatedModuleVariableMap.get(v.name)
-        return updatedMeta
-          ? { ...v, units: updatedMeta.units }
-          : v
-      })
-
-    // Add only truly new variables (preserve old behavior)
-    const newItems = (updatedModule?.variables || [])
-      .filter((v) => !originalVariableNames.has(v.name))
-
-    cleanVariables.push(...newItems)
-
-    // Clean port labels
-    const cleanLabels = (node.data.portLabels || []).map((labelObj) => ({
-      ...labelObj,
-      variables: (labelObj.variables || []).filter((opt) =>
-        validPortNames.has(opt)
-      ),
-    }))
-
-    const newData = {
-      ...detachReactivity(node.data),
-      componentType: updatedData.componentType,
-      componentFile: updatedData.componentFile,
-      label: `${updatedData.componentType} — ${updatedData.componentFile}`,
-      portLabels: cleanLabels,
-      variables: cleanVariables,
-    }
-
-    updatedCount++
-    updateNodeData(node.id, newData)
-    // Recompute couplings now that this node's portLabels have changed.
-    // findNode will return the updated data because updateNodeData is synchronous.
-    recomputeEdgeCouplings(node.id)
-  })
+  // Update edge couplings
+  recomputeEdgeCouplings(id) 
 
   notify.success({
-    title: 'Module Updated',
+    title: 'CellML Updated',
     message: `Updated ${updatedCount} node${
       updatedCount !== 1 ? 's' : ''
-    } to ${updatedData.componentType}.`,
+    } to ${mathRef.split(":").pop()}.`,
   })
+}
 
-  return validPortNames
+async function handleParameterSave(saveData) {
+  const { id, variables } = saveData
+  updateNodeData(id, { variables })
 }
 
 function onOpenMacroBuilderDialog() {
@@ -1618,11 +1608,8 @@ function onOpenMacroBuilderDialog() {
 
 /**
  * Recomputes couplings on every edge touching a given node, using the node's
- * current portLabels. Call this after any operation that changes portLabels on
- * one or more nodes (CellML save, rename, in-place replace, port label edit).
- *
- * Ordinal indices are derived from each edge's position in the filtered list,
- * not from a count of other edges, so repeated same-label slots resolve correctly.
+ * current ports. Call this after any operation that changes ports on
+ * one or more nodes.
  */
 function recomputeEdgeCouplings(nodeId) {
   const outgoing = edges.value.filter((e) => e.source === nodeId)
@@ -1638,8 +1625,8 @@ function recomputeEdgeCouplings(nodeId) {
     edge.data = {
       ...edge.data,
       couplings: resolvePortCouplings(
-        sourceNode.data.portLabels ?? [],
-        targetNode.data.portLabels ?? [],
+        sourceNode.data.ports ?? [],
+        targetNode.data.ports ?? [],
         sourceIndex,
         targetIndex
       ),
@@ -1659,8 +1646,8 @@ function recomputeEdgeCouplings(nodeId) {
     edge.data = {
       ...edge.data,
       couplings: resolvePortCouplings(
-        sourceNode.data.portLabels ?? [],
-        targetNode.data.portLabels ?? [],
+        sourceNode.data.ports ?? [],
+        targetNode.data.ports ?? [],
         sourceIndex,
         targetIndex
       ),
@@ -1668,16 +1655,12 @@ function recomputeEdgeCouplings(nodeId) {
   })
 }
 
-async function onEditConfirm(updatedData) {
-  const { nodeId, instanceId } = currentEditingNode.value
-  if (!nodeId) return
+async function onPortEditConfirm(updatedData) {
+  const { id } = currentEditingNode.value
+  if (!id) return
 
-  const targetInstance = instanceId || FLOW_IDS.MAIN
-  const { updateNodeData } = useVueFlow(targetInstance)
-
-  updateNodeData(nodeId, updatedData)
-
-  recomputeEdgeCouplings(nodeId)
+  updateNodeData(id, updatedData)
+  recomputeEdgeCouplings(id)
 }
 
 const nodeRefs = ref({})
@@ -1766,10 +1749,10 @@ function onEdgeDoubleClick({ edge }) {
   edgeConnectionDialogVisible.value = true
 }
 
-function onEdgeConnectionConfirm({ sourceNodeId, targetNodeId, sourcePortLabels, targetPortLabels, couplings, foreignCouplings }) {
-  // Update portLabels on both nodes
-  updateNodeData(sourceNodeId, { portLabels: sourcePortLabels })
-  updateNodeData(targetNodeId, { portLabels: targetPortLabels })
+function onEdgeConnectionConfirm({ sourceNodeId, targetNodeId, sourcePorts, targetPorts, couplings, foreignCouplings }) {
+  // Update ports on both nodes
+  updateNodeData(sourceNodeId, { ports: sourcePorts })
+  updateNodeData(targetNodeId, { ports: targetPorts })
 
   // Write the new couplings directly onto the active edge
   const activeEdge = findEdge(edgeDialogActiveEdge.value?.id)
@@ -1798,30 +1781,24 @@ function onOpenReplacementDialog(eventPayload) {
 }
 
 async function onReplaceConfirm(updatedData) {
-  const { nodeId, instanceId } = currentEditingNode.value 
-  if (!nodeId) return
-
-  const compLabel = updatedData.componentType
-  const filePart = updatedData.componentFile
-  updatedData.label = filePart ? `${compLabel} — ${filePart}` : compLabel
-
-  const targetInstance = instanceId || FLOW_IDS.MAIN    
-  const { updateNodeData } = useVueFlow(targetInstance) 
-  updateNodeData(nodeId, updatedData)
+  const { id } = currentEditingNode.value 
+  if (!id) return
+  updateNodeData(id, updatedData)
   replacementDialogVisible.value = false
 }
+
 const contextMenuRef = ref(null)
 
 const paneContextMenuItems = [
   {
     label: 'Create Module',
-    action: () => createNewModuleAtPosition(mousePosition.value.x, mousePosition.value.y),
+    action: () => createNewInstanceAtPosition(mousePosition.value.x, mousePosition.value.y),
   },
   {
     label: 'Select All',
     action: () => selectAllNodes(),
   },
-  { 
+  {
     label: 'Fit View',
     action: () => fitView(),
   },
@@ -1839,48 +1816,25 @@ function onPaneContextMenu(event) {
   contextMenuRef.value.open(event.clientX, event.clientY)
 }
 
-function onNodeContextMenu({ clientX, clientY, nodeId }) {
+function onNodeContextMenu({ clientX, clientY, id }) {
   contextMenuItems.value = [
     {
       label: 'Replace Module',
       action: () => {
-        const node = findNode(nodeId)
+        const node = findNode(id)
         if (!node) return
-        onOpenReplacementDialog({
-          nodeId,
-          nodeData: node.data,
-          name: node.data.name,
-          variables: node.data.variables,
-          portLabels: node.data.portLabels,
-        })
+        onOpenReplacementDialog(node)
       },
     },
   ]
   contextMenuRef.value.open(clientX, clientY)
 }
 
-function createNewModuleAtPosition(clientX, clientY) {
-  const allModules = libraryStore.availableCollections
-  const moduleFile = allModules.find((f) => f.modules?.some((m) => m.componentType === 'new_module'))
-  const moduleEntry = moduleFile?.modules?.find((m) => m.componentType === 'new_module')
-
-  if (!moduleEntry) {
-    notify.warning({ title: 'Module Not Found', message: 'new_module is not available.' })
-    return
-  }
-
-  const moduleData = {
-    name: moduleEntry.name,
-    componentType: moduleEntry.componentType,
-    componentFile: moduleFile.componentFile,
-    configs: moduleEntry.configs || null,
-    configIndex: 0,
-    ports: moduleEntry.ports || [],
-    variables: moduleEntry.variables || [],
-  }
+function createNewInstanceAtPosition(clientX, clientY) {
+  const module = libraryStore.availableModules.get(NEW_INSTANCE_MODULE_REF)
 
   const position = screenToFlowCoordinate({ x: clientX, y: clientY })
-  createInstanceNode(moduleData, position)
+  createInstanceNode(module, position)
 }
 
 function handleAutoLayout() {
@@ -1935,25 +1889,25 @@ async function onExportConfirm(fileName, handle) {
   const notification = notify.info({
     title: 'Exporting...',
     message: message,
-    duration: 0, 
+    duration: 0,
   })
 
   try {
     const finalName = fileName || libraryStore.lastExportName || DEFAULT_FILE_NAME
-    
+
     const blob = caExport
       ? await generateExportZip(finalName, nodes.value, edges.value, libraryStore)
       : generateFlattenedModel(nodes.value, edges.value, libraryStore)
-    
+
     const result = await saveWithDialog(
-      blob, 
-      handle, 
+      blob,
+      handle,
       finalName,
       currentExportMode.value.suffix
     )
-    
+
     libraryStore.setLastExportName(result.savedName)
-    
+
     notification.close()
 
     let exportMessage = ''
@@ -2010,20 +1964,18 @@ async function onExportConfirm(fileName, handle) {
 function recomputeMissingCouplings() {
   const nodeMap = new Map(nodes.value.map((n) => [n.id, n]))
 
-  // Normalise portLabels on every node: migrate legacy field names.
+  // Normalise ports on every node: migrate legacy field names.
   for (const node of nodes.value) {
-    if (!node.data?.portLabels) continue
-    node.data.portLabels = node.data.portLabels.map((pl) => ({
-      ...pl,
-      // 'isMultiPortSum' was the old field name; 'multiport' is current.
-      // If multiport is absent, default to 'None' (single-connection)
-      multiport: pl.multiport ?? 'None',
+    if (!node.data?.ports) continue
+    node.data.ports = node.data.ports.map((p) => ({
+      ...p,
+      multiportType: p.multiportType ?? 'None',
     }))
   }
 
   // Track inbound/outbound ordinal counts per node, matching buildEdges semantics.
   const sourceOutCount = new Map()
-  const targetInCount  = new Map()
+  const targetInCount = new Map()
 
   for (const edge of edges.value) {
     if (edge.data?.couplings?.length) continue  // already has valid couplings
@@ -2033,11 +1985,11 @@ function recomputeMissingCouplings() {
     if (!sourceNode || !targetNode) continue
 
     const sourceIndex = sourceOutCount.get(edge.source) ?? 0
-    const targetIndex = targetInCount.get(edge.target)  ?? 0
+    const targetIndex = targetInCount.get(edge.target) ?? 0
 
     const couplings = resolvePortCouplings(
-      sourceNode.data.portLabels ?? [],
-      targetNode.data.portLabels ?? [],
+      sourceNode.data.ports ?? [],
+      targetNode.data.ports ?? [],
       sourceIndex,
       targetIndex
     )
@@ -2047,7 +1999,7 @@ function recomputeMissingCouplings() {
     }
 
     sourceOutCount.set(edge.source, sourceIndex + 1)
-    targetInCount.set(edge.target,  targetIndex  + 1)
+    targetInCount.set(edge.target, targetIndex + 1)
   }
 }
 
@@ -2056,6 +2008,10 @@ function recomputeMissingCouplings() {
  */
 function createSaveBlob() {
   const saveState = {
+    info: {
+      format_version: FORMAT_VERSION,
+      project: DEFAULT_PROJECT_TYPE,
+    },
     flow: toObject(),
     store: libraryStore.getState(),
   }
@@ -2078,16 +2034,6 @@ const onSaveConfirm = async (fileName) => {
   notify.success({ title: 'Workflow saved!' })
 }
 
-function migrateWorkspace(flow) {
-  if (!flow?.nodes) return flow
-  return {
-    ...flow,
-    nodes: flow.nodes.map((node) =>
-      node.type === 'moduleNode' ? { ...node, type: 'instanceNode' } : node
-    ),
-  }
-}
-
 /**
  * Reads a JSON file and restores the application state.
  */
@@ -2098,32 +2044,28 @@ function handleLoadWorkspace(file) {
   reader.onload = async (e) => {
     try {
       const loadedState = JSON.parse(e.target.result)
-    
+
       // Validate the loaded file
       if (!loadedState.flow || !loadedState.store) {
         throw new Error('Invalid workflow file format.')
       }
 
+      // Handles legacy formats if needed
+      const migratedState = migrateWorkspace(loadedState)
+
       // Clear the current Vue Flow state.
       await clearWorkspace()
 
-      // Restore Vue Flow state.
-      // We use `setViewport` to apply zoom/pan.
-      setViewport(loadedState.flow.viewport)
-      // We directly set the reactive refs.
-      const migrated = migrateWorkspace(loadedState.flow)
-      fromObject(migrated)
+      setViewport(migratedState.flow.viewport)
+
+      fromObject(migratedState.flow)
 
       // Rebuild the edge index so the EdgeConnectionDialog subgraph is correct.
       rebuildNodeEdgeIndex()
-
-      // Recompute couplings for any edge missing them (e.g. saved before couplings
-      // were introduced, or saved with an older serialiser that dropped edge data).
-      // resolvePortCouplings is deterministic so this is always safe to run.
       recomputeMissingCouplings()
 
       // Restore Pinia store state.
-      libraryStore.loadState(loadedState.store)
+      libraryStore.loadState(migratedState.store)
 
       trackEvent('workflow_load_action', {
         category: 'Workflow',
@@ -2189,44 +2131,28 @@ const copySelection = async () => {
   const nodes = getSelectedNodes.value
   const edges = getSelectedEdges.value
 
-  if (nodes.length === 0) return  
-  
+  if (nodes.length === 0) return
+
   const storeSnapshot = {}
   for (const node of nodes) {
-    const { componentFile, componentType, configIndex } = node.data
-    if (!componentFile || !componentType) continue
+    const { moduleRef, mathRef } = node.data
+    if (!moduleRef || !mathRef) continue
 
-    if (!libraryStore.hasCollection(componentFile)) continue
-    const model = libraryStore.getModelByCollectionName(componentFile)
+    if (!libraryStore.availableMath.has(mathRef) || !libraryStore.availableModules.has(moduleRef)) continue
+    const math = libraryStore.availableMath.get(mathRef)
+    const module = libraryStore.availableModules.get(moduleRef)
+    if (!math || !module) continue
 
-    const modules = libraryStore.findModulesByComponentName(componentFile, componentType)
-    if (!modules || modules.length === 0) continue
-
-    const key = `${componentFile}::${componentType}`
+    const key = `${moduleRef}::${mathRef}`
     if (storeSnapshot[key]) {
-      // SMELL - data structure is wrong - config index should be on modules (modules[configIndex].config)
-      const config = modules.configs?.[configIndex]
-      if (config !== undefined && !storeSnapshot[key].configs.some(
-        (c) => c.module_subtype === config.module_subtype && c.module_type === config.module_type
-      )) {
-        storeSnapshot[key].configs.push(detachReactivity(config))
-      }
       continue
     }
 
-    const config = modules.configs?.[configIndex]
-
-    const { xml: componentModel } = createEditableModelFromSourceModelAndComponent(
-      model,
-      componentType
-    )
-    if (!componentModel) continue
-
     storeSnapshot[key] = {
-      componentFile,
-      componentType,
-      configs: config !== undefined ? [detachReactivity(config)] : [],
-      model: componentModel,
+      mathRef,
+      math,
+      moduleRef,
+      module,
     }
   }
 
@@ -2263,42 +2189,11 @@ const pasteSelection = async (atMouse = false) => {
 
   if (sourceClipboard.storeSnapshot) {
     for (const entry of Object.values(sourceClipboard.storeSnapshot)) {
-      if (!libraryStore.hasCollection(entry.componentFile)) {
-        // The whole file is absent 
-        libraryStore.addOrUpdateCollection({
-          componentFile: entry.componentFile,
-          model: entry.model,
-          modules: [{
-            name: entry.componentType, // SMELL
-            componentType: entry.componentType,
-            configs: entry.configs,
-          }],
-        })
-      } else {
-        // The file exists but this specific component or config may be missing
-        const existingComponent = libraryStore.findModulesByComponentName(entry.componentFile, entry.componentType)
-        if (!existingComponent) {
-          libraryStore.addOrUpdateCollection({
-            componentFile: entry.componentFile,
-            model: entry.model,
-            modules: [{
-              name: entry.componentType, // SMELL - currently duplicate info
-              componentType: entry.componentType,
-              configs: entry.configs,
-            }],
-          })
-        } else {
-          // Component exists but config is missing
-          if (!existingComponent.configs) existingComponent.configs = []
-          for (const config of entry.configs) {
-            const alreadyPresent = existingComponent.configs.some(
-              (c) => c.module_subtype === config.module_subtype && c.module_type === config.module_type
-            )
-            if (!alreadyPresent) {
-              existingComponent.configs.push(config)
-            }
-          }
-        }
+      if (!libraryStore.availableModules.has(entry.moduleRef)) {
+        libraryStore.addModule(entry.module)
+      } 
+      if (!libraryStore.availableMath.has(entry.mathRef)) {
+        libraryStore.addMath(entry.mathRef, entry.math)
       }
     }
   }
@@ -2335,7 +2230,7 @@ const pasteSelection = async (atMouse = false) => {
     nodeIdSet.push(newId)
 
     const finalName = generateUniqueInstanceName(
-      { name: node.data.componentType },
+      node.data.name,
       namesSet
     )
     namesSet.add(finalName)
@@ -2374,38 +2269,6 @@ const pasteSelection = async (atMouse = false) => {
         selected: true,
       })
     }
-  })
-
-  newNodes.forEach((newNode) => {
-    const { name, componentFile, componentType, configIndex } = newNode.data
-    if (!componentFile || !componentType) return
-
-    const model = libraryStore.getModelByCollectionName(componentFile)
-    const variables = extractVariablesFromComponent(model, componentType)
-    newNode.data.variables = variables
-
-    const resolvedIndex = configIndex ?? 0
-    const targetModule = libraryStore.findModulesByComponentName(componentFile, componentType)
-
-    if (targetModule && 
-    (!targetModule.configs?.[resolvedIndex]?.component_file?.length  ||
-    !targetModule.configs?.[resolvedIndex]?.component_type?.length ||
-    !targetModule.configs?.[resolvedIndex]?.variables_and_units?.length)) {
-      const syntheticConfig = {
-        component_file: componentFile,
-        component_type: componentType,
-        variables_and_units: variables.map((v) => [v.name, v.units ?? 'dimensionless', 'access', 'variable']),
-      }
-      libraryStore.addConfigFile(componentFile, [syntheticConfig])
-    }
-
-    libraryStore.setParameterValuesForInstance(
-      name, // SMELL - instance?
-      variables,
-      componentFile,
-      componentType,
-      resolvedIndex
-    )
   })
 
   getSelectedNodes.value.forEach((n) => (n.selected = false))
@@ -2535,10 +2398,12 @@ const cellmlModules = import.meta.glob('../assets/modules/*.cellml', {
   query: 'raw',
   eager: true,
 })
+
 const cellmlUnits = import.meta.glob('../assets/units/*.cellml', {
   query: 'raw',
   eager: true,
 })
+
 const moduleConfigs = import.meta.glob('../assets/module_configs/*.json', {
   eager: true,
 })

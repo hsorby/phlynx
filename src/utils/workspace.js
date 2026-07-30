@@ -4,6 +4,7 @@ import { useFlowHistoryStore } from '../stores/historyStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import { FLOW_IDS } from './constants'
 
+// TODO - move to composables
 export function useClearWorkspace() {
     const historyStore = useFlowHistoryStore()
     const libraryStore = useLibraryStore()

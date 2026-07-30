@@ -16,7 +16,7 @@ As a web-based application, PhLynx downloads files to your browser's default dow
 
 ### Import Issues
 
-#### "Module Array Import Failed"
+#### "Instance Array Import Failed"
 **Symptoms:** The workspace remains empty or an error notification appears after selecting a file.
 **Solution:**
 * **Check Delimiters:** Ensure your `.csv` uses commas (`,`) as delimiters, not semicolons or tabs.

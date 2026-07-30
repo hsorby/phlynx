@@ -42,8 +42,8 @@ Saves the current state of your project.
 
 The Import menu allows you to bring various file types into PhLynx.
 
-#### 1. Module Array
-Populates the workspace using a [module array](./file-types#module-array) file.
+#### 1. Instance Array
+Populates the workspace using a [module array](./file-types#instance-array) file.
 * **Supported Format:** `.csv`
 * **Result:** Automatically populates the workspace with configured and connected modules based on the array definition.
 
@@ -82,7 +82,7 @@ Generates output files for Circulatory Autogen or standard CellML.
 
 | Export Type | Output Content | Requirements |
 | :--- | :--- | :--- |
-| **Configuration Files** | A `.zip` archive containing:<br>• `module_array.csv` (connections)<br>• `module_config.json` (parameters/ports) | • At least one module in workspace<br>• Parameter file loaded<br>• Ports defined for connections |
+| **Configuration Files** | A `.zip` archive containing:<br>• `instance_array.csv` (connections)<br>• `module_config.json` (parameters/ports) | • At least one module in workspace<br>• Parameter file loaded<br>• Ports defined for connections |
 | **CellML Model** | A flattened CellML 2.0 model file. | • At least one module in workspace<br>• Ports defined for connections<br>• All units defined |
 
 ---

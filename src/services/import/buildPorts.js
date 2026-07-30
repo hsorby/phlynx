@@ -1,42 +1,42 @@
-import { SOURCE_PORT_TYPE, TARGET_PORT_TYPE } from "../../utils/constants"
+import { SOURCE_HANDLE_TYPE, TARGET_HANDLE_TYPE } from "../../utils/constants"
 
-function parseModuleNames(moduleField) {
+function parseInstanceNames(connectedInstances) {
   return Array.from(
-    new Set(moduleField?.trim().split(/\s+/).filter(Boolean) ?? [])
+    new Set(connectedInstances?.trim().split(/\s+/).filter(Boolean) ?? [])
   )
 }
 
-function buildPorts(module) {
-  const ports = []
+function buildHandles(instance) {
+  const handles = []
 
-  if (module.inp_modules) {
-    const inputs = parseModuleNames(module.inp_modules)
+  if (instance.inp_instances) {
+    const inputs = parseInstanceNames(instance.inp_instances)
     inputs.forEach((name) => {
-      ports.push({
+      handles.push({
         uid: crypto.randomUUID(),
-        type: TARGET_PORT_TYPE,
+        type: TARGET_HANDLE_TYPE,
         side: 'left',
         name,
       })
     })
   }
 
-  if (module.out_modules) {
-    const outputs = parseModuleNames(module.out_modules)
+  if (instance.out_instances) {
+    const outputs = parseInstanceNames(instance.out_instances)
     outputs.forEach((name) => {
-      ports.push({
+      handles.push({
         uid: crypto.randomUUID(),
-        type: SOURCE_PORT_TYPE,
+        type: SOURCE_HANDLE_TYPE,
         side: 'right',
         name,
       })
     })
   }
 
-  return ports
+  return handles
 }
 
-function buildPortLabels(moduleData) {
+function buildPorts(moduleData) {
   return Object.entries(moduleData)
     .filter(
       ([key, value]) =>
@@ -50,9 +50,9 @@ function buildPortLabels(moduleData) {
           portType: type,
           label: p.port_type,
           variables: p.variables.flat(),
-          multiport: p.multi_port ?? 'None',
+          multiportType: p.multi_port ?? 'None',
         }))
     )
 }
 
-export { buildPortLabels, buildPorts }
+export { buildPorts, buildHandles }

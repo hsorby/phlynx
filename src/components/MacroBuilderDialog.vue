@@ -89,8 +89,11 @@ import useDragAndDrop from '../composables/useDnD'
 import {
   edgeLineOptions,
   FLOW_IDS,
+  GHOST_MATH_REF,
   GHOST_MODULE_DEFINITION,
   GHOST_MODULE_FILENAME,
+  GHOST_MODULE_REF,
+  MACRO_BUILDER_ARROW,
   markerEnd,
 } from '../utils/constants'
 import { detachReactivity } from '../utils/reactivity'
@@ -105,7 +108,7 @@ const {
   onNodeChange,
   onEdgeChange,
   removeNodes,
-} = useVueFlow(FLOW_IDS.MACRO) // Unique ID separates this from main canvas.
+} = useVueFlow(FLOW_IDS.MACRO) 
 
 const previousNodes = new Set()
 const { onDrop, isGhostSetupOpen, pendingGhostNodeId } =
@@ -116,7 +119,6 @@ const { width: asideWidth, startResize } = useResizableAside(200, 150, 400)
 const libraryStore = useLibraryStore()
 
 const props = defineProps({
-  // v-model for visibility
   modelValue: {
     type: Boolean,
     default: false,
@@ -131,8 +133,8 @@ const nodeRefs = ref({})
 const macroEdgeOptions = {
   ...edgeLineOptions,
   markerEnd: {
-    type: markerEnd, // Keep the same look
-    id: 'macro-builder-arrow',    // <--- UNIQUE ID IS THE KEY
+    type: markerEnd, 
+    id: MACRO_BUILDER_ARROW,    
   }
 }
 
@@ -157,8 +159,8 @@ watch(
   () => props.modelValue,
   (newVal) => {
     newVal
-      ? libraryStore.addOrUpdateCollection(GHOST_MODULE_DEFINITION)
-      : libraryStore.removeCollection(GHOST_MODULE_FILENAME)
+      ? libraryStore.addModule(GHOST_MODULE_DEFINITION)
+      : libraryStore.removeModule(GHOST_MATH_REF, GHOST_MODULE_REF)
   }
 )
 
@@ -190,7 +192,7 @@ function generateMacro() {
   trackEvent('macro_action', {
     category: 'MacroBuilder',
     action: 'generate_macro',
-    label: `Nodes: ${nodes.value.length}`, // useful context
+    label: `Nodes: ${nodes.value.length}`,
     file_type: 'json'
   })
   emit('generate', macroData)
@@ -201,14 +203,12 @@ const finalizeGhostNode = (selectedTargetNodeId) => {
   const ghostNode = findNode(pendingGhostNodeId.value)
 
   if (ghostNode) {
-    // 1. Update the ghost node with the user's choice
     ghostNode.data = {
       ...ghostNode.data,
       targetNodeId: selectedTargetNodeId,
     }
   }
 
-  // 2. Close Modal
   isGhostSetupOpen.value = false
   pendingGhostNodeId.value = null
 }
@@ -236,7 +236,7 @@ const cancelGhostNode = () => {
 
 .dnd-flow {
   flex-grow: 1;
-  height: 100%; /* Crucial for Vue Flow */
+  height: 100%; 
   width: 100%;
   position: relative;
 }
@@ -244,9 +244,8 @@ const cancelGhostNode = () => {
 
 <style>
 .macro-dialog .el-dialog__body {
-  /* Calculate height: 100vh - Header (approx 55px) - Footer (approx 65px) */
   height: calc(100vh - 120px);
-  padding: 0 !important; /* Remove default padding for edge-to-edge look */
+  padding: 0 !important; 
   display: flex;
   flex-direction: column;
 }

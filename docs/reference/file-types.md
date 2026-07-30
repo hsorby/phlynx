@@ -91,7 +91,7 @@ The `variables_and_units` array defines properties for every variable in the mod
 
 ---
 
-### 2. Module Array (`module_array.csv`)
+### 2. Instance Array (`instance_array.csv`)
 
 A CSV file defining the network topology (connections) of the system. Each row represents a specific module instance in the model.
 
@@ -106,5 +106,5 @@ A CSV file defining the network topology (connections) of the system. Each row r
 > [!NOTE]
 > **Optional Positioning:** You may include `x`, `y`, and `z` columns in this file to define the spatial position of nodes upon import.
 
-**Example Module Array:**
+**Example Instance Array:**
 ![Example module array file](../assets/images/vessel-array.png){.align-center width="600px"}

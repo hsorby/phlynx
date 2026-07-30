@@ -4,18 +4,18 @@ import { FLOW_IDS } from "./constants"
 const { getNodes } = useVueFlow(FLOW_IDS.MAIN)
 
 /**
- * Generates a unique instance name based on the module data and existing names.
+ * Generates a unique instance name based on the instance data and existing names.
  *
- * @param {*} moduleData - The module data to generate a name for.
+ * @param {*} instanceData - The instance to generate a unqiue name for.
  * @param {*} existingNames - A set of existing names to check against.
- * @returns {string} A unique module name.
+ * @returns {string} A unique instance name.
  */
-export function generateUniqueInstanceName(moduleData, existingNames) {
-  let finalName = moduleData.name
+export function generateUniqueInstanceName(currentName, existingNames) {
+  let finalName = currentName
   let counter = 1
 
   while (existingNames.has(finalName)) {
-    finalName = `${moduleData.name}_${counter}`
+    finalName = `${currentName}_${counter}`
     counter++
   }
 

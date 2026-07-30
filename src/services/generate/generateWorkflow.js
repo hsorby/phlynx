@@ -39,10 +39,7 @@ export function useMacroGenerator() {
    * @param {Object} macroData - { flow: { nodes, edges, ... }, repeatCount: Number }
    * @param {Object} insertPosition - { x, y } where the first macro starts (e.g. center of screen)
    */
-  const processMacroGeneration = (
-    macroData,
-    insertPosition = { x: 0, y: 0 }
-  ) => {
+  const processMacroGeneration = (macroData, insertPosition = { x: 0, y: 0 }) => {
     const { flow, repeatCount } = macroData
     const sourceNodes = flow.nodes || []
     const sourceEdges = flow.edges || []
@@ -96,23 +93,19 @@ export function useMacroGenerator() {
         // Calculate shift.
         const xOffset = i * (MACRO_WIDTH + MARGIN_X)
 
-        const finalName = generateUniqueInstanceName({name: node.data.componentType}, namesSet)
+        const finalName = generateUniqueInstanceName(node.data.name, namesSet)
         namesSet.add(finalName)
 
         newNodes.push({
           id: newId,
           data: {
             ...node.data,
-            name: finalName
+            name: finalName,
           },
           type: node.type,
           position: {
             // Relocate relative to the insertion point.
-            x:
-              insertPosition.x +
-              node.position.x +
-              xOffset -
-              (repeatCount * MACRO_WIDTH) / 2,
+            x: insertPosition.x + node.position.x + xOffset - (repeatCount * MACRO_WIDTH) / 2,
             y: insertPosition.y + node.position.y,
           },
           selected: true,
@@ -142,9 +135,7 @@ export function useMacroGenerator() {
 
         chainingEdges.forEach((chainEdge) => {
           // Find the Ghost Node this edge was pointing to.
-          const ghostNode = ghostNodes.find(
-            (g) => g.id === chainEdge.targetGhostId
-          )
+          const ghostNode = ghostNodes.find((g) => g.id === chainEdge.targetGhostId)
 
           // Find who the Ghost was mimicking (e.g., Node A).
           const originalTargetId = ghostNode.data.targetNodeId
@@ -153,7 +144,7 @@ export function useMacroGenerator() {
           // Source: The node from Previous Iteration
           // Target: The node from Current Iteration (the one the Ghost mimicked)
           newEdges.push({
-            id: `chain_${i}_${chainEdge.id}`,
+            id: `chain_${i}_${crypto.randomUUID()}`,
             source: prevInstanceMap.get(chainEdge.source), // Source from Prev
             sourceHandle: chainEdge.sourceHandle,
             target: currentInstanceMap.get(originalTargetId), // Target from Curr

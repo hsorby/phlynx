@@ -1,8 +1,9 @@
 import { MarkerType } from '@vue-flow/core'
 
-export const SOURCE_PORT_TYPE = 'source'
-export const TARGET_PORT_TYPE = 'target'
+export const SOURCE_HANDLE_TYPE = 'source'
+export const TARGET_HANDLE_TYPE = 'target'
 export const USER_MODULES_FILE = 'User_Modules.cellml'
+export const NEW_INSTANCE_MODULE_REF = 'new_module:phlynx'
 
 export const TOOLTIP_AUTO_CLOSE = 1200
 export const RESCALE_ASPECT_RATIO = 3
@@ -22,6 +23,13 @@ export const FLOW_IDS = {
   MACRO: 'macro-builder-editor',
   EDGE: 'edge-conn-flow',
 }
+
+export const PARAMETER_TYPE_OPTIONS = [
+  { value: 'constant', label: 'constant' },
+  { value: 'global_constant', label: 'global_constant' },
+  { value: 'variable', label: 'variable' },
+  { value: 'boundary_condition', label: 'boundary_condition' },
+]
 
 export const AFFINE_UNIT_CONVERSIONS = {
   celsius:    { baseUnit: 'kelvin',  scale: 1,        offset: 273.15  },
@@ -89,26 +97,45 @@ export const TIME_NAMES = new Set(['time', 't'])
 
 export const MAX_VISIBLE_TAGS = 1
 
+export const MAIN_NODE_TYPE = 'instanceNode'
 export const GHOST_NODE_TYPE = 'ghostNode'
-export const GHOST_MODULE_FILENAME = 'ghostModule.cellml'
+export const GHOST_MODULE_FILENAME = 'ghost_module.cellml'
+export const GHOST_MATH_REF = `${GHOST_MODULE_FILENAME}:ghost`
+export const GHOST_MODULE_REF = 'ghost:ghost'
+
 export const GHOST_MODULE_DEFINITION = {
-  collectionName: GHOST_MODULE_FILENAME,
-  modules: [
-    {
-      name: 'Ghost',
-      componentType: 'ghost',
-      componentFile: GHOST_MODULE_FILENAME,
-    },
-  ],
+  moduleRef: GHOST_MODULE_REF,
+  mathRef: GHOST_MATH_REF,
+  ports: [],
+  variables: [],
 }
 
-export const portTypeOptions = [
+export function normaliseConfig(config) {
+  return {
+    moduleRef: `${config.module_type}:${config.module_subtype}`,
+    mathRef: `${config.component_file}:${config.component_type}`,
+    ports: normalisePorts(config),
+    variables: normaliseVariables(config.variables_and_units),
+  }
+}
+
+export const DEFAULT_INSTANCE_REF = {
+  name: 'new_instance',
+  module_type: 'new_module',
+  module_subtype: 'phlynx',
+  inp_instances: '',
+  out_instances: '',
+}
+
+export const MACRO_BUILDER_ARROW = 'macro-builder-arrow'
+
+export const PORT_TYPE_OPTIONS = [
   { value: 'general_ports',  label: 'G' },
   { value: 'entrance_ports', label: 'I' },
   { value: 'exit_ports',     label: 'O' },  
 ]
 
-export const multiportOptions = [
+export const MULTIPORT_OPTIONS = [
   { value: 'True',  label: 'True'  },
   { value: 'Sum',   label: 'Sum'   },
   { value: 'None',  label: 'None'  },
@@ -116,8 +143,12 @@ export const multiportOptions = [
 
 export const DEFAULT_FILE_NAME = 'phlynx-export'
 
+export const DEFAULT_PROJECT_TYPE = 'Phlynx-Project'
+
+export const FORMAT_VERSION = '1.0.0'
+
 export const IMPORT_KEYS = {
-  MODULE_ARRAY: 'moduleArray',
+  INSTANCE_ARRAY: 'instanceArray',
   MODULE_CONFIG: 'moduleConfig',
   CELLML_FILE: 'cellMLFile',
   PARAMETER: 'parameter',
@@ -125,7 +156,7 @@ export const IMPORT_KEYS = {
 }
 
 export const IMPORT_LABELS = {
-  MODULE_ARRAY: 'Module Array (.csv)',
+  INSTANCE_ARRAY: 'Instance Array (.csv)',
   MODULE_CONFIG: 'Module Configurations (.json)',
   CELLML_FILE: 'CellML File (.cellml or .xml)',
   PARAMETER: 'Parameters (.csv)',
@@ -163,3 +194,7 @@ export const ZIP_FILE_TYPES = [
     accept: { 'application/zip': ['.zip'] },
   },
 ]
+
+export const HANDLE_SIDES = ["left", "right", "top", "bottom"]
+export const SOURCE_HANDLE_PRIORITY = ["right", "bottom", "top", "left"]
+export const TARGET_HANDLE_PRIORITY = ["left", "top", "bottom", "right"]

@@ -130,7 +130,7 @@ Once the model is built and configured, export the final system. Click the arrow
 
 **Export Options:**
 * **CellML:** Generates a flattened CellML 2.0 model file.
-* **Configuration Files:** Generates a ZIP archive containing `module_array.csv` and `module_config.json` for Circulatory Autogen.
+* **Configuration Files:** Generates a ZIP archive containing `instance_array.csv` and `module_config.json` for Circulatory Autogen.
 
 Select **CellML** to save the model to your Downloads folder.
 

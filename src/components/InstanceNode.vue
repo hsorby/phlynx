@@ -24,8 +24,8 @@
         </span>
         <el-input v-else ref="inputRef" v-model="editingName" size="small" @blur="saveEdit" @keyup.enter="saveEdit" />
       </div>
-      <!-- non-editable label showing CellML component and source file (no white box) -->
-      <div v-if="data.label" class="instance-label">{{ data.label }}</div>
+
+      <div class="instance-label">{{ instanceLabel }}</div>
       <div class="button-group">
         <el-tooltip
           effect="dark"
@@ -42,13 +42,9 @@
               <el-dropdown-menu>
                 <el-dropdown-item command="membrane">Membrane</el-dropdown-item>
                 <el-dropdown-item command="process">Process</el-dropdown-item>
-                <el-dropdown-item command="compartment"
-                  >Compartment</el-dropdown-item
-                >
+                <el-dropdown-item command="compartment">Compartment</el-dropdown-item>
                 <el-dropdown-item command="protein">Protein</el-dropdown-item>
-                <el-dropdown-item command="undefined" divided
-                  >Reset to Default</el-dropdown-item
-                >
+                <el-dropdown-item command="undefined" divided>Reset to Default</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -62,7 +58,7 @@
             :show-after="300"
             :auto-close="1200"
         >
-          <el-dropdown trigger="click" @command="addPort({ side: $event })">
+          <el-dropdown trigger="click" @command="addHandle({ side: $event })">
           
             <el-button size="small" circle class="instance-button">
               <el-icon><Place /></el-icon>
@@ -89,7 +85,7 @@
           <el-button
             size="small"
             circle
-            @click="openEditDialog"
+            @click="openPortEditDialog"
             class="instance-button"
           >
             <el-icon><Edit /></el-icon>
@@ -104,7 +100,7 @@
             :show-after="300"
             :auto-close="1200"
         >
-          <el-button size="small" circle @click="openEditParameterDialog" class="instance-button">
+          <el-button size="small" circle @click="openParameterEditDialog" class="instance-button">
             <el-icon><Operation /></el-icon>
           </el-button>
         </el-tooltip>
@@ -120,7 +116,7 @@
           <el-button
             size="small"
             circle
-            @click="openCellMLEditDialog"
+            @click="openCellmlEditDialog"
             class="instance-button"
             :show-after="300"
             :auto-close="1200"
@@ -131,24 +127,24 @@
       </div>
     </el-card>
 
-    <template v-for="port in data.ports" :key="port.uid" class="port">
-      <el-tooltip class="box-item" effect="dark" :content="port.name" placement="bottom" :show-after="1000">
+    <template v-for="handle in data.handles" :key="handle.uid" class="handle">
+      <el-tooltip class="box-item" effect="dark" :content="handle.name" placement="bottom" :show-after="1000">
         <Handle
-          :id="getHandleId(port)"
-          :ref="'handle_' + port.side + '_' + port.uid"
-          :position="portPosition(port.side)"
-          :style="getHandleStyle(port, data.ports)"
-          class="port-handle"
+          :id="getHandleId(handle)"
+          :ref="'handle_' + handle.side + '_' + handle.uid"
+          :position="handlePosition(handle.side)"
+          :style="getHandleStyle(handle, data.handles)"
+          class="handle"
         />
         <template #content>
           <el-button
-            class="delete-port-btn"
+            class="delete-handle-btn"
             type="danger"
             :icon="Delete"
             circle
             plain
             size="small"
-            @click.stop="removePort(port.uid)"
+            @click.stop="removeHandle(handle.uid)"
           />
         </template>
       </el-tooltip>
@@ -164,22 +160,19 @@ import { Delete, Edit, Key, Place, WarningFilled, Operation } from '@element-plu
 import CellMLIcon from './icons/CellMLIcon.vue'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
-import { getHandleId, getHandleStyle, portPosition } from '../utils/ports'
+import { getHandleId, getHandleStyle, handlePosition } from '../utils/handles'
 import { sanitiseName } from '../utils/nodes'
 import { notify } from '../utils/notify'
 import { isEditableVariableType, isEmpty } from '../utils/variables'
 import '../assets/vueflownode.css'
 import { detachReactivity } from '../utils/reactivity'
+import { TARGET_HANDLE_TYPE, SOURCE_HANDLE_TYPE } from '../utils/constants'
 
 const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } = useVueFlow()
 const historyStore = useFlowHistoryStore()
 const libraryStore = useLibraryStore()
 
 const props = defineProps({
-  data: {
-    type: Object,
-    required: true,
-  },
   id: {
     type: String,
     required: true,
@@ -188,52 +181,55 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  data: {
+    type: Object,
+    required: true,
+  }, // { handles, variables, mathRef, moduleRef, ports, name }
 })
 
 const emit = defineEmits([
   'open-cellml-editor-dialog',
-  'open-edit-dialog',
+  'open-port-editor-dialog',
   'open-parameter-editor-dialog',
   'open-context-menu',
 ])
 
-async function openEditDialog() {
-  emit('open-edit-dialog', {
-    nodeId: props.id,
-    ports: props.data.ports,
-    name: props.data.name,
+async function openPortEditDialog() {
+  emit('open-port-editor-dialog', {
+    id: props.id,
+    handles: props.data.handles,
+    initialName: props.data.name,
+    initialPorts: props.data.ports,
     variables: props.data.variables,
-    portLabels: props.data.portLabels,
   })
 }
 
-function openCellMLEditDialog() {
+function openCellmlEditDialog() {
   emit('open-cellml-editor-dialog', {
-    nodeId: props.id,
+    id: props.id,
     name: props.data.name,
-    componentFile: props.data.componentFile,
-    componentType: props.data.componentType,
-    configIndex: props.data.configIndex,
+    mathRef: props.data.mathRef,
+    variables: props.data.variables,
   })
 }
 
-function openEditParameterDialog() {
+function openParameterEditDialog() {
   emit('open-parameter-editor-dialog', {
-    nodeId: props.id,
-    instanceName: props.data.name,
-    componentType: props.data.componentType,
-    componentFile: props.data.componentFile,
+    id: props.id,
+    variables: props.data.variables,
+    mathRef: props.data.mathRef,
   })
 }
+
+const instanceLabel = computed(() => {
+  return `${props.data.mathRef.split(':')[1]} [${props.data.mathRef.split(':')[0]}]`
+})
 
 const domainTypeClass = computed(() => {
   return props.data.domainType ? `domain-type-${props.data.domainType}` : 'domain-type-default'
 })
 
 const isMissingParameters = computed(() => {
-  const name = props.data?.name
-  if (!name) return true // If there's no component file, it's "missing" parameters
-
   for (const variable of props.data.variables || []) {
     if (isEditableVariableType(variable.type)) {
       if (variable.type === 'global_constant') {
@@ -246,7 +242,6 @@ const isMissingParameters = computed(() => {
       }
     }
   }
-
   return false
 })
 
@@ -255,21 +250,19 @@ function handleSetDomainType(typeCommand) {
   updateNodeData(props.id, { domainType: newType })
 }
 
-const applyPorts = async (portsToSet) => {
-  updateNodeData(props.id, { ports: portsToSet })
-
-  // Changing ports adds/removes handles, so we MUST refresh internals
+const applyHandles = async (handlesToSet) => {
+  updateNodeData(props.id, { handles: handlesToSet })
   await nextTick()
   updateNodeInternals(props.id)
 }
 
-async function removePort(portIdToRemove) {
-  const oldPorts = detachReactivity(props.data.ports)
+async function removeHandle(handleIdToRemove) {
+  const oldHandles = detachReactivity(props.data.handles)
 
-  const port = oldPorts.find((p) => p.uid === portIdToRemove)
-  if (!port) return
+  const handle = oldHandles.find((p) => p.uid === handleIdToRemove)
+  if (!handle) return
 
-  const handleId = getHandleId(port)
+  const handleId = getHandleId(handle)
 
   // Find all edges connected to this specific port handle.
   // We need to snapshot these edge objects so we can restore them later
@@ -281,15 +274,15 @@ async function removePort(portIdToRemove) {
 
   const edgesSnapshot = connectedEdges.map((edge) => detachReactivity(edge))
 
-  // Define New Ports (for Redo)
-  const newPorts = props.data.ports.filter((p) => p.uid !== portIdToRemove)
+  // Define New Handles (for Redo)
+  const newHandles = props.data.handles.filter((h) => h.uid !== handleIdToRemove)
 
   // Add Composite Command to History
   historyStore.executeAndAddCommand({
-    type: 'remove-port',
+    type: 'remove-handle',
     undo: async () => {
-      // Restore the port first (so the handle exists in the DOM).
-      await applyPorts(oldPorts)
+      // Restore the handle first (so the handle exists in the DOM).
+      await applyHandles(oldHandles)
 
       // Then, restore the edges.
       if (edgesSnapshot.length > 0) {
@@ -302,54 +295,46 @@ async function removePort(portIdToRemove) {
         removeEdges(edgesSnapshot.map((e) => e.id))
       }
 
-      // Then, remove the port
-      await applyPorts(newPorts)
+      // Then, remove the handle.
+      await applyHandles(newHandles)
     },
   })
 }
 
-const addPort = async (portToAdd) => {
-  const oldPorts = [...props.data.ports]
-  // create stable node id
-  const newPort = {
-    ...portToAdd,
+const addHandle = async (handleToAdd) => {
+  const oldHandles = [...props.data.handles]
+
+  const newHandle = {
+    ...handleToAdd,
     uid: crypto.randomUUID(),
   }
 
-  // Create a new array with the old ports + the new one
-  const newPorts = [...props.data.ports, newPort]
+  const newHandles = [...props.data.handles, newHandle]
 
-  // Tell Vue Flow to update this node's data
-  // This will cause the component to re-render
-  await applyPorts(newPorts)
+  await applyHandles(newHandles)
 
   historyStore.addCommand({
-    type: 'add-port',
+    type: 'add-handle',
     undo: async () => {
-      applyPorts(oldPorts)
+      applyHandles(oldHandles)
     },
     redo: async () => {
-      applyPorts(newPorts)
+      applyHandles(newHandles)
     },
   })
 }
 
 const isEditing = ref(false)
 const editingName = ref('')
-const inputRef = ref(null) // This is a template ref for the input
+const inputRef = ref(null) 
 
-// This function is triggered by the double-click
 async function startEditing(event) {
-  // Don't allow click-through to the flow pane
   event.stopPropagation()
 
   isEditing.value = true
   editingName.value = props.data.name
 
-  // Wait for Vue to re-render and show the input
   await nextTick()
-
-  // Focus the input
   inputRef.value?.focus()
 }
 
@@ -383,23 +368,13 @@ function saveEdit() {
   // Update the node's data in the store
   updateNodeData(props.id, { name: sanitisedName })
   isEditing.value = false
-  setTimeout(() => {
-    libraryStore.setParameterValuesForInstance(
-      sanitisedName,
-      props.data.variables,
-      props.data.componentFile,
-      props.data.componentType,
-      props.data.configIndex
-    )
-    updateNodeData(props.id, { variables: props.data.variables })
-  }, 100) // Delay to ensure the DOM has updated
 }
 
 function openContextMenu(event) {
   emit('open-context-menu', {
     clientX: event.clientX,
     clientY: event.clientY,
-    nodeId: props.id,
+    id: props.id,
   })
 }
 
@@ -432,10 +407,6 @@ function openContextMenu(event) {
   top: 0px;
   right: 0px;
   z-index: 10;
-  /* Ensure it sits above other card content */
-
-  /* Optional: Add a white background circle so the icon pops 
-     if it overlaps a border or busy background */
   background-color: white;
   border-radius: 50%;
   width: 20px;
