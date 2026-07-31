@@ -69,6 +69,7 @@
     "katex": "^0.16.27",
     "papaparse": "^5.5.3",
     "pinia": "^3.0.3",
+    "primeicons": "^7.0.0",
     "primevue": "4",
     "sass-embedded": "^1.97.1",
     "semver": "^7.7.3",

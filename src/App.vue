@@ -28,13 +28,18 @@
         </keep-alive>
       </router-view>
     </div>
+    <ConfirmDialog />
   </div>
 </template>
 
 <script setup>
 import { computed, ref, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
+
 import { useLibraryStore } from './stores/libraryStore'
+
+import ConfirmDialog from './components/ConfirmDialog.vue'
+
 
 const appVersion = __APP_VERSION__ + __BUILD_STATE_MARKER__
 const route = useRoute()

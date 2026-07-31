@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import PrimeVue from 'primevue/config'
 import Aura from '@primevue/themes/aura'
+import ConfirmationService from 'primevue/confirmationservice'
 import libcellmlPlugin from 'vue3-libcellml.js'
 import GlossaryLink from './components/GlossaryLink.vue'
 
@@ -14,6 +15,7 @@ import '@vue-flow/controls/dist/style.css'
 import 'markdown-it-github-alerts/styles/github-colors-light.css'
 import 'markdown-it-github-alerts/styles/github-colors-dark-class.css'
 import 'markdown-it-github-alerts/styles/github-base.css'
+import 'primeicons/primeicons.css'
 
 import './assets/style.css'
 import './assets/main.css'
@@ -28,11 +30,12 @@ app.use(pinia)
 app.use(router)
 app.use(ElementPlus)
 app.use(PrimeVue, {
-  zIndex: { // align zIndex with element plus TODO - remove once finished
-    modal: 3000,        
-    overlay: 3000,      
-    menu: 3000,         
-    tooltip: 3000       
+  zIndex: {
+    // align zIndex with element plus TODO - remove once finished
+    modal: 3000,
+    overlay: 3000,
+    menu: 3000,
+    tooltip: 3000,
   },
   theme: {
     preset: Aura,
@@ -40,11 +43,12 @@ app.use(PrimeVue, {
       cssLayer: {
         name: 'primevue',
         /* Add this strict order for Tailwind v4 compatibility */
-        order: 'theme, base, element-plus, primevue, utilities' 
-      }
-    }
-  }
+        order: 'theme, base, element-plus, primevue, utilities',
+      },
+    },
+  },
 })
+app.use(ConfirmationService)
 app.use(libcellmlPlugin)
 app.component('GlossaryLink', GlossaryLink)
 app.mount('#app')
