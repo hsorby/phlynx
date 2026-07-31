@@ -2,7 +2,7 @@
   <div class="h-screen overflow-y-auto">
     <div class="about-wrapper">
       <transition name="fade-slide" appear>
-        <div class="image-container">
+        <div class="image-container" :class="{ 'is-compact': activeTab === 'changelog' }">
           <img src="/phlynxlogo.svg" alt="PhLynx Logo" class="centred-image" />
         </div>
       </transition>
@@ -158,6 +158,21 @@ const commitUrl = computed(() => `https://github.com/physiomelinks/phlynx/commit
   display: flex;
   justify-content: center;
   align-items: center;
+  transition: margin-top 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.centred-image {
+  max-width: 250px;
+  height: auto;
+  transition: max-width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.image-container.is-compact {
+  margin-top: 25px; 
+}
+
+.image-container.is-compact .centred-image {
+  max-width: 120px; 
 }
 
 .centred-image {
