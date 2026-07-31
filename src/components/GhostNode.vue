@@ -1,16 +1,20 @@
 <template>
   <div class="ghost-node" :style="nodeStyle">
-    <el-card class="ghost-card" shadow="hover" style="height: 100%; box-sizing: border-box;">
-      <div class="module-name">
-        <span class="ghost-icon">👻</span>
-        <span class="label truncate"
-          >Next: {{ targetNode?.data?.name || 'Unknown' }}</span
-        >
-      </div>
+    <Card class="ghost-card" shadow="hover" style="height: 100%; box-sizing: border-box">
+      <template #title>
+        <div class="module-name">
+          <span class="ghost-icon">👻</span>
+          <span class="label truncate">Next: {{ targetNode?.data?.name || 'Unknown' }}</span>
+        </div>
+      </template>
       <!-- non-editable label showing CellML component and source file (no white box) -->
-      <div class="module-label">{{ ghostLabel }}</div>
+      <template #subtitle>
+        <div class="module-label">
+          <span class="label truncate">{{ ghostLabel }}</span>
+        </div>
+      </template>
       <!-- <button debug>Debug</button>  -->
-    </el-card>
+    </Card>
 
     <template v-for="handle in targetHandles" :key="handle.uid" class="handle">
       <Handle
@@ -25,6 +29,9 @@
 
 <script setup>
 import { computed } from 'vue'
+
+import Card from 'primevue/card'
+
 import { useVueFlow, Handle } from '@vue-flow/core'
 import { getHandleId, getHandleStyle, handlePosition } from '../utils/handles'
 
@@ -50,10 +57,10 @@ const targetHandles = computed(() => {
 
 const nodeStyle = computed(() => {
   const node = targetNode.value
-  
+
   // If we can't find dimensions yet, fallback or let content dictate size
   if (!node || !node.dimensions) {
-    return {} 
+    return {}
   }
 
   return {
@@ -66,6 +73,7 @@ const nodeStyle = computed(() => {
 <style scoped>
 /* Visual styling to make it look "Ghostly" */
 .ghost-card {
+  --p-card-color: #1f2937;
   outline: 2px dashed #ccc;
   outline-offset: -1px;
   background: rgba(255, 255, 255, 0.5);
