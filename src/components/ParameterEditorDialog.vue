@@ -1,122 +1,120 @@
 <template>
-  <el-dialog
-    :model-value="modelValue"
-    title="Edit Parameters"
-    width="800px"
-    @closed="closeDialog"
-    teleported
-    :close-on-click-modal="!isLoading"
-    :close-on-press-escape="!isLoading"
-    :show-close="!isLoading"
+  <Dialog
+    v-model:visible="dialogVisible"
+    modal
+    :closable="!isLoading"
+    :dismissableMask="!isLoading"
+    :style="{ width: '800px', maxWidth: '95vw' }"
   >
-    <div
-      v-loading="isLoading"
-      :element-loading-text="loadingText"
-      :element-loading-svg="phlynxspinner"
-      element-loading-svg-view-box="0, 0, 100, 100"
-      element-loading-background="var(--el-mask-color-extra-light)"
-    >
-      <template v-if="hasVariables">
-        <el-input
-          v-model="searchQuery"
-          :placeholder="`Search by variable ${searchColumn} ...`"
-          clearable
-          style="margin-bottom: 12px"
-          ><template #append>
-            <el-select v-model="searchColumn" style="width: 100px">
-              <el-option label="Name" value="name" />
-              <el-option label="Units" value="units" />
-              <el-option label="Type" value="type" /> </el-select></template
-        ></el-input>
-        <div style="margin-bottom: 12px; display: flex; gap: 12px; align-items: center">
-          <span>Bulk Update Type:</span>
-          <el-select v-model="bulkTypeValue" placeholder="Select type..." style="width: 200px">
-            <el-option
-              v-for="types in PARAMETER_TYPE_OPTIONS"
-              :key="types.value"
-              :label="types.label"
-              :value="types.value"
-            />
-          </el-select>
-          <el-button type="primary" :disabled="selectedRows.length === 0" @click="applyBulkType">
-            Apply to {{ selectedRows.length }} selected
-          </el-button>
+    <div class="dialog-body">
+      <div v-if="isLoading" class="loading-overlay">
+        <div class="loading-content">
+          <img :src="phlynxspinner" alt="Loading" class="loading-spinner" />
+          <span>{{ loadingText }}</span>
         </div>
-        <el-table
+      </div>
+
+      <template v-if="hasVariables">
+        <div class="toolbar-row">
+          <div class="search-group">
+            <InputText
+              v-model="searchQuery"
+              :placeholder="`Search by variable ${searchColumn} ...`"
+              class="search-input"
+            />
+            <Button v-if="searchQuery" icon="pi pi-times" text rounded severity="secondary" @click="searchQuery = ''" />
+          </div>
+
+          <Select
+            v-model="searchColumn"
+            :options="searchColumnOptions"
+            optionLabel="label"
+            optionValue="value"
+            class="search-column"
+          />
+        </div>
+
+        <div class="bulk-controls">
+          <span>Bulk Update Type:</span>
+          <Select
+            v-model="bulkTypeValue"
+            :options="PARAMETER_TYPE_OPTIONS"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Select type..."
+            class="bulk-select"
+          />
+          <Button :disabled="selectedRows.length === 0" @click="applyBulkType">
+            Apply to {{ selectedRows.length }} selected
+          </Button>
+        </div>
+
+        <DataTable
           ref="parametersTable"
-          :data="filteredParameterRows"
-          style="width: 100%"
-          max-height="400"
-          :default-sort="{ prop: 'value', order: 'ascending' }"
-          @sort-change="handleSortChange"
-          @selection-change="handleSelectionChange"
+          v-model:selection="selectedRows"
+          :value="filteredParameterRows"
+          selectionMode="multiple"
+          dataKey="name"
+          scrollable
+          scrollHeight="400px"
+          tableStyle="min-width: 100%"
+          :sortField="sortField"
+          :sortOrder="sortOrder"
+          @sort="handleSortChange"
         >
-          <el-table-column type="selection" width="55" />
-          <el-table-column prop="name" label="Variable" width="180" sortable="custom" />
+          <Column selectionMode="multiple" headerStyle="width: 3rem" />
+          <Column field="name" header="Variable" sortable style="width: 180px" />
 
-          <el-table-column prop="value" label="Value" min-width="50" sortable="custom">
-            <template #default="scope">
-              <el-input
-                v-if="isEditableVariableType(scope.row.type)"
-                v-model="scope.row.value"
+          <Column field="value" header="Value" sortable style="min-width: 220px">
+            <template #body="slotProps">
+              <InputText
+                v-if="isEditableVariableType(slotProps.data.type)"
+                v-model="slotProps.data.value"
                 placeholder="Enter value..."
+                class="w-full"
               />
-              <el-input 
-                v-else 
-                model-value="-"
-                disabled 
+              <span v-else>-</span>
+            </template>
+          </Column>
+
+          <Column field="units" header="Units" sortable style="width: 150px" />
+
+          <Column field="type" header="Type" sortable style="width: 220px">
+            <template #body="slotProps">
+              <Select
+                v-model="slotProps.data.type"
+                :options="PARAMETER_TYPE_OPTIONS"
+                optionLabel="label"
+                optionValue="value"
+                class="w-full"
               />
             </template>
-          </el-table-column>
-
-          <el-table-column prop="units" label="Units" width="150" sortable="custom" />
-
-          <el-table-column prop="type" label="Type" width="200" sortable="custom">
-            <template #default="scope">
-              <el-select v-model="scope.row.type" @change="handleTypeChange(scope.row)">
-                <el-option
-                  v-for="types in PARAMETER_TYPE_OPTIONS"
-                  :key="types.value"
-                  :label="types.label"
-                  :value="types.value"
-                />
-              </el-select>
-            </template>
-          </el-table-column>
-        </el-table>
+          </Column>
+        </DataTable>
       </template>
     </div>
+
     <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="handleConfirm" type="primary">
-          Save Parameters
-        </el-button>
-        <el-button @click="closeDialog">
-          Cancel
-        </el-button>
-      </span>
+      <div class="dialog-footer">
+        <Button severity="primary" @click="handleConfirm">Save Parameters</Button>
+        <Button severity="secondary" outlined @click="closeDialog">Cancel</Button>
+      </div>
     </template>
-  </el-dialog>
+  </Dialog>
 </template>
 
 <script setup>
-import { ref, computed, watch, h } from 'vue'
-import {
-  ElDialog,
-  ElInput,
-  ElTable,
-  ElTableColumn,
-  ElSelect,
-  ElOption,
-  ElButton,
-  ElAlert,
-  ElTooltip,
-  ElMessageBox,
-} from 'element-plus'
-import { Warning } from '@element-plus/icons-vue'
+import { ref, computed, watch } from 'vue'
+import Button from 'primevue/button'
+import Column from 'primevue/column'
+import DataTable from 'primevue/datatable'
+import Dialog from 'primevue/dialog'
+import InputText from 'primevue/inputtext'
+import Select from 'primevue/select'
 import { useVueFlow } from '@vue-flow/core'
 import { PARAMETER_TYPE_OPTIONS } from '../utils/constants'
 
+import { useAppConfirm } from '../composables/useConfirmDialog'
 import { useLibraryStore } from '../stores/libraryStore'
 import { isEditableVariableType } from '../utils/variables'
 import phlynxspinner from '/src/assets/phlynxspinner.svg?raw'
@@ -133,15 +131,17 @@ const props = defineProps({
   variables: {
     type: Array,
     default: () => [],
-  }, 
+  },
 })
 
-const emit = defineEmits([
-  'update:modelValue',
-  'save',
-])
+const emit = defineEmits(['update:modelValue', 'save'])
 
 const searchColumn = ref('name')
+const searchColumnOptions = [
+  { label: 'Name', value: 'name' },
+  { label: 'Units', value: 'units' },
+  { label: 'Type', value: 'type' },
+]
 const searchQuery = ref('')
 const libraryStore = useLibraryStore()
 const isLoading = ref(false)
@@ -151,6 +151,14 @@ const parametersTable = ref(null)
 const parameterRows = ref([])
 const selectedRows = ref([])
 const bulkTypeValue = ref('')
+const sortField = ref('type')
+const sortOrder = ref(1)
+const { confirm } = useAppConfirm()
+
+const dialogVisible = computed({
+  get: () => props.modelValue,
+  set: (value) => emit('update:modelValue', value),
+})
 
 const filteredParameterRows = computed(() => {
   if (!searchQuery.value.trim()) {
@@ -169,11 +177,24 @@ const filteredParameterRows = computed(() => {
   })
 })
 
+function sortParameterRows(field = 'type', order = 1) {
+  parameterRows.value.sort((a, b) => {
+    let result = 0
+    const valA = String(a[field] || '').toLowerCase()
+    const valB = String(b[field] || '').toLowerCase()
+    result = valA.localeCompare(valB)
+
+    if (result !== 0) {
+      return order === 1 ? result : -result
+    }
+
+    return a.name.localeCompare(b.name)
+  })
+}
+
 function loadData() {
-  parametersTable.value.clearSort() // Clear any existing sort state
   parameterRows.value = props.variables.map((row) => {
-    const displayValue =
-      row.type === 'global_constant' ? libraryStore.getGlobalConstant(row.name)?.value : row.value
+    const displayValue = row.type === 'global_constant' ? libraryStore.getGlobalConstant(row.name)?.value : row.value
 
     return {
       name: row.name,
@@ -184,7 +205,9 @@ function loadData() {
     }
   })
 
-  handleSortChange({ prop: 'type', order: 'ascending' }, true)
+  sortParameterRows('type', 1)
+  sortField.value = 'type'
+  sortOrder.value = 1
 }
 
 // Initialize rows when dialog opens
@@ -219,37 +242,22 @@ function applyBulkType() {
   selectedRows.value.forEach((row) => {
     row.type = bulkTypeValue.value
   })
-  
-  // Clear selections and bulk type after applying
-  parametersTable.value.clearSelection()
+
+  parametersTable.value?.clearSelection()
+  selectedRows.value = []
   bulkTypeValue.value = ''
 }
 
 /**
  * Handle manual sorting.
  */
-function handleSortChange({ prop, order }) {
-  if (!order) {
-    prop = 'type' // Default sort by Type when user cancels sorting
-    order = 'ascending'
-  }
+function handleSortChange(event) {
+  const field = event?.sortField || 'type'
+  const order = event?.sortOrder === -1 ? -1 : 1
 
-  parameterRows.value.sort((a, b) => {
-    let result = 0
-    const valA = String(a[prop] || '').toLowerCase()
-    const valB = String(b[prop] || '').toLowerCase()
-    result = valA.localeCompare(valB)
-
-    // If the primary values are DIFFERENT, respect the user's sort direction (Asc/Desc)
-    if (result !== 0) {
-      return order === 'ascending' ? result : -result
-    }
-
-    // If primary values are SAME (e.g. both are 'Constant'), sort by Name.
-    // We force this to be Ascending (A-Z) for readability,
-    // regardless of the primary column's sort direction.
-    return a.name.localeCompare(b.name)
-  })
+  sortField.value = field
+  sortOrder.value = order
+  sortParameterRows(field, order)
 }
 
 function closeDialog() {
@@ -259,25 +267,22 @@ function closeDialog() {
 async function handleConfirm() {
   // Check if user has selections and a bulk type chosen but hasn't applied
   if (selectedRows.value.length > 0 && bulkTypeValue.value) {
-    try {
-      await ElMessageBox.confirm(
-        `You have ${selectedRows.value.length} row(s) selected with bulk type "${bulkTypeValue.value}" that hasn't been applied. Do you want to continue without applying these changes?`,
-        'Unapplied Bulk Changes',
-        {
-          confirmButtonText: 'Save Without Applying',
-          cancelButtonText: 'Go Back',
-          type: 'warning',
-        }
-      )
-    } catch {
-      // User clicked "Go Back" or closed the dialog
-      return
+    const proceed = await confirm({
+      header: 'Unapplied Bulk Changes',
+      message: `You have ${selectedRows.value.length} row(s) selected with bulk type "${bulkTypeValue.value}" that hasn't been applied. Do you want to continue without applying these changes?`,
+      severity: 'warning',
+      acceptLabel: 'Save Without Applying',
+      rejectLabel: 'Go Back',
+    })
+
+    if (!proceed) {
+      return // User chose to go back, so exit the function without saving.
     }
   }
 
   parameterRows.value.forEach((row) => {
     if (row.type === 'global_constant') {
-      libraryStore.assignGlobalConstant(row.name, row.value, row.units, row.data_reference) 
+      libraryStore.assignGlobalConstant(row.name, row.value, row.units, row.data_reference)
     }
   })
 
@@ -285,35 +290,72 @@ async function handleConfirm() {
     id: props.id,
     variables: parameterRows.value,
   })
-  
+
   closeDialog()
 }
 </script>
 
 <style scoped>
-.error-state {
-  padding: 20px 0;
+.dialog-body {
+  position: relative;
+}
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+}
+
+.toolbar-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.search-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.search-input {
+  flex: 1;
+}
+
+.search-column,
+.bulk-select {
+  width: 140px;
+}
+
+.bulk-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
 }
 
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-}
-
-.ambiguous-container {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ambiguous-select {
-  flex-grow: 1;
-}
-
-.warning-icon {
-  color: var(--el-color-warning);
-  font-size: 18px;
-  cursor: help;
 }
 </style>
