@@ -255,7 +255,7 @@
     @confirm="onPortEditConfirm"
   />
 
-  <CellMLEditorDialog 
+  <CellMLEditorDialog
     v-model="cellMLEditorDialogVisible"
     :id="currentEditingNode?.id"
     :name="currentEditingNode?.name"
@@ -264,18 +264,14 @@
     @save="handleCellMLSave"
   />
 
-  <ParameterEditorDialog 
+  <ParameterEditorDialog
     v-model="parameterEditorDialogVisible"
     :id="currentEditingNode?.id"
     :variables="currentEditingNode?.variables"
     @save="handleParameterSave"
   />
 
-  <SaveDialog
-    v-model="saveDialogVisible"
-    :default-name="libraryStore.lastSaveName"
-    @confirm="onSaveConfirm"
-  />
+  <SaveDialog v-model="saveDialogVisible" :default-name="libraryStore.lastSaveName" @confirm="onSaveConfirm" />
 
   <SaveDialog
     v-model="exportDialogVisible"
@@ -304,10 +300,7 @@
     @confirm="onImportConfirm"
   />
 
-  <PaneContextMenu
-    ref="contextMenuRef"
-    :items="contextMenuItems"
-  />
+  <PaneContextMenu ref="contextMenuRef" :items="contextMenuItems" />
 
   <EdgeConnectionDialog
     v-model="edgeConnectionDialogVisible"
@@ -375,8 +368,15 @@ import { resolvePortCouplings } from '../utils/edges'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
+import { useAppConfirm } from '../composables/useConfirmDialog'
 import { relayoutNodes } from '../services/layouts/physics'
-import { generateFlattenedModel, initLibCellML, processCellMLData, extractVariablesFromMath, extractComponentsFromCellmlString } from '../utils/cellml'
+import {
+  generateFlattenedModel,
+  initLibCellML,
+  processCellMLData,
+  extractVariablesFromMath,
+  extractComponentsFromCellmlString,
+} from '../utils/cellml'
 import {
   edgeLineOptions,
   CELLML_FILE_TYPES,
@@ -388,7 +388,7 @@ import {
   DEFAULT_FILE_NAME,
   NEW_INSTANCE_MODULE_REF,
   FORMAT_VERSION,
-  DEFAULT_PROJECT_TYPE
+  DEFAULT_PROJECT_TYPE,
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId } from '../utils/edges'
@@ -400,7 +400,7 @@ import {
   getFileHandle,
   writeFileHandle,
   ensureExtension,
-  legacyDownload
+  legacyDownload,
 } from '../utils/save'
 import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
@@ -431,10 +431,17 @@ const {
   vueFlowRef,
 } = useVueFlow(FLOW_IDS.MAIN)
 const { processMacroGeneration } = useMacroGenerator()
+const { confirm } = useAppConfirm()
 
 const pendingHistoryNodes = new Set()
 
-const { onDragOver: onDragOverModule, onDrop: onDropModule, onDragLeave, isDragOver, createInstanceNode } = useDragAndDrop(pendingHistoryNodes)
+const {
+  onDragOver: onDragOverModule,
+  onDrop: onDropModule,
+  onDragLeave,
+  isDragOver,
+  createInstanceNode,
+} = useDragAndDrop(pendingHistoryNodes)
 
 /**
  * Shared multi-file notification helper.
@@ -442,7 +449,10 @@ const { onDragOver: onDragOverModule, onDrop: onDropModule, onDragLeave, isDragO
  * human-readable description of what was loaded (e.g. "3 modules and 2 units").
  * Titles are customisable so each import type can use its own wording.
  */
-const notifyMultiFileResults = (results, { successTitle, partialTitle = 'Partial Import', failTitle = 'Import Failed' }) => {
+const notifyMultiFileResults = (
+  results,
+  { successTitle, partialTitle = 'Partial Import', failTitle = 'Import Failed' }
+) => {
   const succeeded = results.filter((r) => r.ok)
   const failed = results.length - succeeded.length
   const fileWord = (n) => `${n} file${n !== 1 ? 's' : ''}`
@@ -450,7 +460,10 @@ const notifyMultiFileResults = (results, { successTitle, partialTitle = 'Partial
   if (succeeded.length > 0 && failed === 0) {
     notify.success({ title: successTitle, message: `Loaded from ${fileWord(succeeded.length)}.` })
   } else if (succeeded.length > 0) {
-    notify.warning({ title: partialTitle, message: `Loaded from ${fileWord(succeeded.length)}. ${fileWord(failed)} failed.` })
+    notify.warning({
+      title: partialTitle,
+      message: `Loaded from ${fileWord(succeeded.length)}. ${fileWord(failed)} failed.`,
+    })
   } else {
     notify.error({ title: failTitle, message: `Failed to load all ${fileWord(failed)}.` })
   }
@@ -487,65 +500,58 @@ const loadCellMLFiles = async (entries) => {
 
     if (cellmlPayload.edges.length > 0) {
       if (nodes.value.length > 0) {
-        try {
-          await ElMessageBox.confirm(
-            'The workspace already contains nodes. What would you like to do?',
-            'Workspace Not Empty',
-            {
-              distinguishCancelAndClose: true,
-              confirmButtonText: 'Overwrite',
-              cancelButtonText: 'Add to Workspace',
-              type: 'warning',
+        const overwrite = await confirm({
+          header: 'Workspace Not Empty',
+          message: 'The workspace already contains nodes. What would you like to do?',
+          severity: 'warning',
+          acceptLabel: 'Overwrite',
+          rejectLabel: 'Add to Workspace',
+        })
+
+        if (!overwrite) {
+          // Snapshot current workspace before wiping it
+          const snapshot = toObject()
+
+          // Load new graph into clean workspace using the normal path
+          const result = await loadCellMLData(content, entry.name, { notify: false })
+          await loadFromCellML(cellmlPayload, entry.name)
+
+          // Remap snapshotted node IDs to avoid clashes with newly loaded nodes
+          const existingIds = new Set(nodes.value.map((n) => n.id))
+          const idRemap = new Map()
+
+          const restoredNodes = snapshot.nodes.map((n) => {
+            let newId = n.id
+            let counter = 1
+            while (existingIds.has(newId)) {
+              newId = `${n.id}_${counter++}`
             }
-          )
-          // confirmed — overwrite, fall through to normal loadFromCellML below
-        } catch (action) {
-          if (action === 'cancel') {
-            // Snapshot current workspace before wiping it
-            const snapshot = toObject()
+            existingIds.add(newId)
+            idRemap.set(n.id, newId)
 
-            // Load new graph into clean workspace using the normal path
-            const result = await loadCellMLData(content, entry.name, { notify: false })
-            await loadFromCellML(cellmlPayload, entry.name)
+            return {
+              ...n,
+              id: newId,
+              position: { x: n.position.x + 1500, y: n.position.y },
+              data: { ...n.data, name: newId },
+            }
+          })
 
-            // Remap snapshotted node IDs to avoid clashes with newly loaded nodes
-            const existingIds = new Set(nodes.value.map((n) => n.id))
-            const idRemap = new Map()
+          // Remap edge source/target to use new IDs
+          const restoredEdges = snapshot.edges.map((e) => ({
+            ...e,
+            id: `${e.id}_restored_${crypto.randomUUID()}`,
+            source: idRemap.get(e.source) ?? e.source,
+            target: idRemap.get(e.target) ?? e.target,
+          }))
 
-            const restoredNodes = snapshot.nodes.map((n) => {
-              let newId = n.id
-              let counter = 1
-              while (existingIds.has(newId)) {
-                newId = `${n.id}_${counter++}`
-              }
-              existingIds.add(newId)
-              idRemap.set(n.id, newId)
+          addNodes(restoredNodes)
+          addEdges(restoredEdges)
 
-              return {
-                ...n,
-                id: newId,
-                position: { x: n.position.x + 1500, y: n.position.y },
-                data: { ...n.data, name: newId },
-              }
-            })
-
-            // Remap edge source/target to use new IDs
-            const restoredEdges = snapshot.edges.map((e) => ({
-              ...e,
-              id: `${e.id}_restored_${crypto.randomUUID()}`,
-              source: idRemap.get(e.source) ?? e.source,
-              target: idRemap.get(e.target) ?? e.target,
-            }))
-
-            addNodes(restoredNodes)
-            addEdges(restoredEdges)
-
-            return [result]
-          }
-          // 'close' — user dismissed with X, do nothing
-          return []
+          return [result]
         }
       }
+
       // Register modules/units in the store first, then build the graph.
       const result = await loadCellMLData(content, entry.name, { notify: false })
       await loadFromCellML(cellmlPayload, entry.name)
@@ -584,11 +590,16 @@ const loadCellMLFiles = async (entries) => {
     const summary = [
       totalModules > 0 ? `${totalModules} module${totalModules !== 1 ? 's' : ''}` : '',
       totalUnits > 0 ? `${totalUnits} unit${totalUnits !== 1 ? 's' : ''}` : '',
-    ].filter(Boolean).join(' and ')
+    ]
+      .filter(Boolean)
+      .join(' and ')
     if (succeeded.length > 0 && failed === 0) {
       notify.success({ title: 'CellML Files Loaded', message: `Loaded ${summary} from ${fileWord(succeeded.length)}.` })
     } else if (succeeded.length > 0) {
-      notify.warning({ title: 'Partial Import', message: `Loaded ${summary} from ${fileWord(succeeded.length)}. ${fileWord(failed)} failed.` })
+      notify.warning({
+        title: 'Partial Import',
+        message: `Loaded ${summary} from ${fileWord(succeeded.length)}. ${fileWord(failed)} failed.`,
+      })
     } else {
       notify.error({ title: 'Import Failed', message: `Failed to load all ${fileWord(failed)}.` })
     }
@@ -621,12 +632,18 @@ const onDrop = async (event) => {
     const cellmlFiles = Array.from(files).filter((f) => f.name.toLowerCase().endsWith('.cellml'))
 
     if (cellmlFiles.length === 0) {
-      notify.warning({ title: 'Unsupported File Type', message: 'Only .cellml files can be dropped onto the workspace.' })
+      notify.warning({
+        title: 'Unsupported File Type',
+        message: 'Only .cellml files can be dropped onto the workspace.',
+      })
       return
     }
 
     if (libcellml.status !== 'ready') {
-      notify.warning({ title: 'CellML Library Not Ready', message: 'Please wait for the CellML library to finish loading and try again.' })
+      notify.warning({
+        title: 'CellML Library Not Ready',
+        message: 'Please wait for the CellML library to finish loading and try again.',
+      })
       return
     }
 
@@ -722,7 +739,7 @@ const importOptions = computed(() => [
     label: 'Parameters',
     icon: markRaw(IconParameters),
     disabled: false,
-  }
+  },
 ])
 currentImportMode.value = importOptions.value[0]
 
@@ -1144,7 +1161,7 @@ const onEdgeChange = (changes) => {
       redo: () => removeEdges(idsToRemove),
     })
   }
-  
+
   if (selectChanges.length) {
     historyStore.addCommand(createSelectCommand(selectChanges, findEdge))
   }
@@ -1170,7 +1187,7 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
       // Register units with the store
       if (unitsCount > 0) {
         libraryStore.addUnitsFile({
-          componentFile: filename, 
+          componentFile: filename,
           model: result.units.model,
         })
       }
@@ -1188,7 +1205,9 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
         if (componentCount > 0 && unitsCount > 0) {
           notify.success({
             title: 'CellML File Loaded',
-            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} and ${unitsCount} unit${unitsCount !== 1 ? 's' : ''} from ${filename}.`,
+            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} and ${unitsCount} unit${
+              unitsCount !== 1 ? 's' : ''
+            } from ${filename}.`,
           })
         } else if (componentCount > 0) {
           notify.success({
@@ -1232,7 +1251,7 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
 
 const loadParametersData = async (content, filename, { notify: shouldNotify = true, trackEvents = true } = {}) => {
   try {
-    const variableCatalogue = new Set() 
+    const variableCatalogue = new Set()
     const nodeMap = new Map(nodes.value.map((n) => [n.data.name, n]))
     let totalLocal = 0
 
@@ -1245,10 +1264,7 @@ const loadParametersData = async (content, filename, { notify: shouldNotify = tr
         .filter((entry) => entry.variable_name.trimEnd().endsWith(instance))
         .map((entry) => ({
           ...entry,
-          name: entry.variable_name
-            .trimEnd()
-            .slice(0, -instance.length)
-            .replace(/_+$/, '')
+          name: entry.variable_name.trimEnd().slice(0, -instance.length).replace(/_+$/, ''),
         }))
 
       const paramsByName = new Map(instanceParameters.map((p) => [p.name.trim(), p]))
@@ -1376,7 +1392,6 @@ const handleImportCommand = (option) => {
 
 async function onImportConfirm(importPayload, updateProgress) {
   if (currentImportMode.value.key === IMPORT_KEYS.INSTANCE_ARRAY) {
-
     const instanceArrayFiles = importPayload.get(IMPORT_KEYS.INSTANCE_ARRAY)
     const [[, instanceData]] = instanceArrayFiles
     const instances = instanceData.payload
@@ -1416,7 +1431,10 @@ async function onImportConfirm(importPayload, updateProgress) {
       })
     }
   } else if (currentImportMode.value.key === IMPORT_KEYS.CELLML_FILE) {
-    const entries = [...importPayload.get(IMPORT_KEYS.CELLML_FILE)].map(([name, data]) => ({ name, content: data?.payload }))
+    const entries = [...importPayload.get(IMPORT_KEYS.CELLML_FILE)].map(([name, data]) => ({
+      name,
+      content: data?.payload,
+    }))
     await loadCellMLFiles(entries)
   } else if (currentImportMode.value.key === IMPORT_KEYS.MODULE_CONFIG) {
     const multiFile = importPayload.size > 1
@@ -1450,9 +1468,7 @@ const performExport = async () => {
   currentExportKey.value = currentExportMode.value.key
 
   const baseName = libraryStore.lastExportName || DEFAULT_FILE_NAME
-  const fileTypes = currentExportKey.value === EXPORT_KEYS.CELLML
-    ? CELLML_FILE_TYPES
-    : ZIP_FILE_TYPES
+  const fileTypes = currentExportKey.value === EXPORT_KEYS.CELLML ? CELLML_FILE_TYPES : ZIP_FILE_TYPES
 
   // Get handle first
   const result = await getFileHandle(baseName, fileTypes, currentExportMode.value.suffix)
@@ -1509,9 +1525,7 @@ function filterConfig(config, validPortNames, validVariableNames, updatedModule)
     const existingNames = new Set(config.variables_and_units.map((e) => e[0]))
 
     // Use validVariableNames here, not validPortNames
-    config.variables_and_units = config.variables_and_units.filter((entry) =>
-      validVariableNames.has(entry[0])
-    )
+    config.variables_and_units = config.variables_and_units.filter((entry) => validVariableNames.has(entry[0]))
 
     if (updatedModule?.variables) {
       const newEntries = updatedModule.variables
@@ -1524,7 +1538,7 @@ function filterConfig(config, validPortNames, validVariableNames, updatedModule)
 }
 
 function updateVariablesFromMath(node, updatedMath) {
-  const existingVariables = new Map(node.data.variables.map(v => [v.name, v]))
+  const existingVariables = new Map(node.data.variables.map((v) => [v.name, v]))
   const updatedVariables = extractVariablesFromMath(updatedMath)
 
   node.data.variables = updatedVariables.map((updated) => {
@@ -1539,18 +1553,18 @@ function updateVariablesFromMath(node, updatedMath) {
       return {
         name: updated.name,
         units: updated.units,
-        access: "access", 
+        access: 'access',
         value: null,
         type: null,
       }
-    } 
+    }
   })
 }
 
 function cleanPorts(currentNode) {
   const validVariables = new Set(currentNode.data.variables.map((v) => v.name))
-  currentNode.data.ports = currentNode.data.ports.filter(port =>
-    (port.variables || []).every(v => validVariables.has(v))
+  currentNode.data.ports = currentNode.data.ports.filter((port) =>
+    (port.variables || []).every((v) => validVariables.has(v))
   )
 }
 
@@ -1587,13 +1601,11 @@ async function handleCellMLSave(saveData) {
   }
 
   // Update edge couplings
-  recomputeEdgeCouplings(id) 
+  recomputeEdgeCouplings(id)
 
   notify.success({
     title: 'CellML Updated',
-    message: `Updated ${updatedCount} node${
-      updatedCount !== 1 ? 's' : ''
-    } to ${mathRef.split(":").pop()}.`,
+    message: `Updated ${updatedCount} node${updatedCount !== 1 ? 's' : ''} to ${mathRef.split(':').pop()}.`,
   })
 }
 
@@ -1725,7 +1737,7 @@ function indexRemoveEdge(change) {
 function buildEdgeSubgraph(activeEdge) {
   const adjacentIds = new Set([
     ...(nodeEdgeIndex.value.get(activeEdge.source) || []),
-    ...(nodeEdgeIndex.value.get(activeEdge.target) || [])
+    ...(nodeEdgeIndex.value.get(activeEdge.target) || []),
   ])
 
   const edgeSubgraph = new Map()
@@ -1749,7 +1761,14 @@ function onEdgeDoubleClick({ edge }) {
   edgeConnectionDialogVisible.value = true
 }
 
-function onEdgeConnectionConfirm({ sourceNodeId, targetNodeId, sourcePorts, targetPorts, couplings, foreignCouplings }) {
+function onEdgeConnectionConfirm({
+  sourceNodeId,
+  targetNodeId,
+  sourcePorts,
+  targetPorts,
+  couplings,
+  foreignCouplings,
+}) {
   // Update ports on both nodes
   updateNodeData(sourceNodeId, { ports: sourcePorts })
   updateNodeData(targetNodeId, { ports: targetPorts })
@@ -1781,7 +1800,7 @@ function onOpenReplacementDialog(eventPayload) {
 }
 
 async function onReplaceConfirm(updatedData) {
-  const { id } = currentEditingNode.value 
+  const { id } = currentEditingNode.value
   if (!id) return
   updateNodeData(id, updatedData)
   replacementDialogVisible.value = false
@@ -1899,12 +1918,7 @@ async function onExportConfirm(fileName, handle) {
       ? await generateExportZip(finalName, nodes.value, edges.value, libraryStore)
       : generateFlattenedModel(nodes.value, edges.value, libraryStore)
 
-    const result = await saveWithDialog(
-      blob,
-      handle,
-      finalName,
-      currentExportMode.value.suffix
-    )
+    const result = await saveWithDialog(blob, handle, finalName, currentExportMode.value.suffix)
 
     libraryStore.setLastExportName(result.savedName)
 
@@ -1978,7 +1992,7 @@ function recomputeMissingCouplings() {
   const targetInCount = new Map()
 
   for (const edge of edges.value) {
-    if (edge.data?.couplings?.length) continue  // already has valid couplings
+    if (edge.data?.couplings?.length) continue // already has valid couplings
 
     const sourceNode = nodeMap.get(edge.source)
     const targetNode = nodeMap.get(edge.target)
@@ -2167,7 +2181,7 @@ const copySelection = async () => {
   try {
     await navigator.clipboard.writeText(JSON.stringify(payload))
   } catch (err) {
-    console.warn("Clipboard write failed", err)
+    console.warn('Clipboard write failed', err)
   }
 }
 
@@ -2191,7 +2205,7 @@ const pasteSelection = async (atMouse = false) => {
     for (const entry of Object.values(sourceClipboard.storeSnapshot)) {
       if (!libraryStore.availableModules.has(entry.moduleRef)) {
         libraryStore.addModule(entry.module)
-      } 
+      }
       if (!libraryStore.availableMath.has(entry.mathRef)) {
         libraryStore.addMath(entry.mathRef, entry.math)
       }
@@ -2229,10 +2243,7 @@ const pasteSelection = async (atMouse = false) => {
     idMap[node.id] = newId
     nodeIdSet.push(newId)
 
-    const finalName = generateUniqueInstanceName(
-      node.data.name,
-      namesSet
-    )
+    const finalName = generateUniqueInstanceName(node.data.name, namesSet)
     namesSet.add(finalName)
 
     // Create the new node with offset position.
