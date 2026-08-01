@@ -147,18 +147,22 @@
       </div>
 
       <div class="header-right-actions">
-        <!-- Light / Dark Mode Toggle Button -->
-        <Button
-          :icon="isDarkMode ? 'pi pi-sun' : 'pi pi-moon'"
-          severity="secondary"
-          text
-          rounded
-          size="small"
-          @click="toggleDarkMode"
+        <!-- Light / Dark Mode Toggle Slider -->
+        <div 
+          class="theme-slider-container" 
+          style="display: flex; align-items: center; margin-right: 20px; gap: 8px;"
           v-tooltip.bottom="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
-          aria-label="Toggle Theme"
-          style="margin-right: 12px"
-        />
+        >
+          <ToggleSwitch 
+            :model-value="isDarkMode" 
+            @change="toggleDarkMode" 
+            aria-label="Toggle Theme"
+          >
+            <template #handle="{ checked }">
+              <i :class="['pi', checked ? 'pi-moon' : 'pi-sun']" style="font-size: 0.75rem"></i>
+            </template>
+          </ToggleSwitch>
+        </div>
 
         <a href="https://github.com/physiomelinks/phlynx/issues/new" style="font-size: small;" target="_blank" class="report-link">
           Report Issue
@@ -352,6 +356,7 @@ import InputText from 'primevue/inputtext'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import ConfirmDialog from 'primevue/confirmdialog'
+import ToggleSwitch from 'primevue/toggleswitch'
 
 import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
