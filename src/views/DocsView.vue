@@ -437,6 +437,7 @@ watch(currentSlug, () => {
   cursor: pointer;
   font-weight: 600;
   color: var(--p-text-color);
+  font-size: 14px;
 }
 
 .menu-group-label {
@@ -465,6 +466,7 @@ watch(currentSlug, () => {
   color: var(--p-text-muted-color);
   text-decoration: none;
   transition: background-color 0.2s ease, color 0.2s ease;
+  font-size: 13px;
 }
 
 .menu-item:hover,
