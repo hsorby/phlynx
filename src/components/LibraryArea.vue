@@ -3,13 +3,15 @@
 
     <!-- Sticky search -->
     <div class="mlc__search">
-      <el-input
-        v-model="filterText"
-        placeholder="Search Library…"
-        clearable
-        :prefix-icon="Search"
-        size="default"
-      />
+      <IconField class="w-full">
+        <InputIcon class="pi pi-search" />
+        <InputText
+          v-model="filterText"
+          placeholder="Search Library…"
+          size="small"
+          class="w-full"
+        />
+      </IconField>
     </div>
 
     <!-- Collections -->
@@ -26,17 +28,20 @@
             :class="{ 'is-open': activeCollapseNames.includes(collection.componentFile) }"
             @click="toggleGroup(collection.componentFile)"
           >
-            <el-icon class="mlc__group-chevron"><ArrowRight /></el-icon>
+            <i class="pi pi-chevron-right mlc__group-chevron" />
             <span class="mlc__group-name"><span class="mlc__group-name-text">{{ collection.label }}</span></span>
-            <el-tag size="small" type="info" effect="plain" round class="mlc__group-count">
-              {{ collection.cards.length }}
-            </el-tag>
+            <Tag 
+              severity="secondary" 
+              rounded 
+              class="mlc__group-count"
+              :value="collection.cards.length"
+            />
           </button>
 
           <!-- Module cards -->
           <transition name="slide">
             <div v-show="activeCollapseNames.includes(collection.componentFile)" class="mlc__group-body">
-              <el-card
+              <div
                 v-for="card in collection.cards"
                 :key="card.cardKey"
                 class="mlc__card"
@@ -45,8 +50,6 @@
                   'mlc__card--stub': activeModule(card).isStub,
                   'mlc__card--draggable': !selectable && !activeModule(card).isStub,
                 }"
-                shadow="never"
-                :body-style="{ padding: '0' }"
                 :draggable="!selectable && !activeModule(card).isStub"
                 @dragstart="handleDragStart($event, activeModule(card))"
                 @dragend="handleDragEnd"
@@ -58,29 +61,24 @@
                     <div class="mlc__card-header">
                       <span class="mlc__card-name">{{ card.label }}</span>
                       <div class="mlc__card-actions">
-                        <el-tag
-                          size="small"
-                          type="primary"
-                          effect="light"
-                          round
+                        <Tag
+                          severity="info"
+                          rounded
                           class="mlc__badge"
-                        >
-                          {{ card.modules?.length }} module{{ card.modules?.length !== 1 ? 's' : '' }}
-                        </el-tag>
-                        <el-tooltip
+                          :value="`${card.modules?.length} module${card.modules?.length !== 1 ? 's' : ''}`"
+                        />
+                        
+                        <Button
                           v-if="activeModule(card).moduleRef"
-                          content="Preview configuration"
-                          placement="top"
-                          :auto-close="TOOLTIP_AUTO_CLOSE"
-                        >
-                          <el-button
-                            class="mlc__preview-btn"
-                            size="small"
-                            circle
-                            :icon="View"
-                            @click.stop="openPreview(activeModule(card))"
-                          />
-                        </el-tooltip>
+                          icon="pi pi-eye"
+                          severity="secondary"
+                          text
+                          rounded
+                          size="small"
+                          class="mlc__preview-btn"
+                          v-tooltip.top="'Preview configuration'"
+                          @click.stop="openPreview(activeModule(card))"
+                        />
                       </div>
                     </div>
 
@@ -89,19 +87,15 @@
                       class="mlc__config-row"
                       @click.stop
                     >
-                      <el-select
-                        :model-value="selectedModuleIndex[card.cardKey] ?? 0"
-                        @update:model-value="(val) => selectedModuleIndex[card.cardKey] = val"
+                      <Select
+                        :modelValue="selectedModuleIndex[card.cardKey] ?? 0"
+                        @update:modelValue="(val) => selectedModuleIndex[card.cardKey] = val"
+                        :options="card.modules.map((m, idx) => ({ label: m.moduleRef, value: idx }))"
+                        optionLabel="label"
+                        optionValue="value"
                         size="small"
                         class="mlc__config-select"
-                      >
-                        <el-option
-                          v-for="(module, index) in card.modules"
-                          :key="module.moduleRef"
-                          :label="module.moduleRef"
-                          :value="index"
-                        />
-                      </el-select>
+                      />
                     </div>
 
                     <!-- Config selector - configs belonging to whichever module is currently active -->
@@ -110,33 +104,33 @@
                       class="mlc__config-row"
                       @click.stop
                     >
-                      <el-select
+                      <Select
                         v-model="selectedConfigs[activeModule(card).moduleRef]"
+                        :options="activeModule(card).configs.map((config, index) => ({
+                          label: configLabel(config) || `Config ${index + 1}`,
+                          value: index
+                        }))"
+                        optionLabel="label"
+                        optionValue="value"
                         size="small"
                         class="mlc__config-select"
-                      >
-                        <el-option
-                          v-for="(config, index) in activeModule(card).configs"
-                          :key="index"
-                          :label="configLabel(config) || `Config ${index + 1}`"
-                          :value="index"
-                        />
-                      </el-select>
+                      />
                     </div>
                   </div>
                 </div>
-              </el-card>
+              </div>
             </div>
           </transition>
         </div>
       </template>
 
       <!-- Empty state -->
-      <el-empty
-        v-else
-        :description="filterText ? `No modules match '${filterText}'` : 'No modules found'"
-        :image-size="72"
-      />
+      <div v-else class="mlc__empty">
+        <i class="pi pi-inbox mlc__empty-icon" />
+        <p class="mlc__empty-text">
+          {{ filterText ? `No modules match '${filterText}'` : 'No modules found' }}
+        </p>
+      </div>
     </div>
 
     <ModulePreviewDialog v-model="showPreview" :module-data="previewTarget" />
@@ -144,13 +138,21 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, reactive, onMounted, onBeforeUnmount } from 'vue'
-import { View, Search, ArrowRight } from '@element-plus/icons-vue'
+import { computed, ref, reactive, onMounted, onBeforeUnmount } from 'vue'
+
+// PrimeVue Imports
+import InputText from 'primevue/inputtext'
+import IconField from 'primevue/iconfield'
+import InputIcon from 'primevue/inputicon'
+import Tag from 'primevue/tag'
+import Button from 'primevue/button'
+import Select from 'primevue/select'
+import vTooltip from 'primevue/tooltip'
+
 import { useLibraryProxyStore } from '../stores/libraryProxyStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import useDragAndDrop from '../composables/useDnD'
 import ModulePreviewDialog from './ModulePreviewDialog.vue'
-import { TOOLTIP_AUTO_CLOSE } from '../utils/constants'
 
 const props = defineProps({
   selectable: { type: Boolean, default: false },
@@ -222,9 +224,6 @@ function configLabel(config) {
 
 // ─── Module helpers ────────────────────────────────────────────────────────────
 
-// Each card can represent several moduleRef "subtype" siblings (e.g. elastance:linear,
-// elastance:polynomial). This resolves which one is currently selected for the card,
-// defaulting to the first module until the user picks otherwise.
 function activeModule(card) {
   const index = selectedModuleIndex[card.cardKey] ?? 0
   return card.modules[index] ?? card.modules[0]
@@ -263,18 +262,18 @@ function handleSelect(module) {
 </script>
 
 <style scoped>
-/* ── Tokens ──────────────────────────────────────────────────────────────────── */
+/* ── Dynamic Theme Tokens ────────────────────────────────────────────────────── */
 .mlc {
-  --mlc-bg:           #f5f7fa;
-  --mlc-surface:      #ffffff;
-  --mlc-border:       #e4e7ed;
-  --mlc-border-hover: #c0c4cc;
-  --mlc-accent:       var(--el-color-primary, #409eff);
-  --mlc-accent-light: var(--el-color-primary-light-9, #ecf5ff);
-  --mlc-text-primary: #303133;
-  --mlc-text-regular: #606266;
-  --mlc-text-muted:   #c0c4cc;
-  --mlc-radius:       6px;
+  --mlc-bg:           var(--p-surface-100);
+  --mlc-surface:      var(--p-content-background);
+  --mlc-border:       var(--p-content-border-color);
+  --mlc-border-hover: var(--p-primary-color);
+  --mlc-accent:       var(--p-primary-color);
+  --mlc-accent-light: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
+  --mlc-text-primary: var(--p-text-color);
+  --mlc-text-regular: var(--p-text-muted-color);
+  --mlc-text-muted:   var(--p-text-muted-color);
+  --mlc-radius:       var(--p-content-border-radius, 6px);
   --mlc-transition:   140ms ease;
 }
 
@@ -285,11 +284,10 @@ function handleSelect(module) {
   height: 100%;
   min-height: 0;
   background: var(--mlc-bg);
+  border-radius: var(--mlc-radius);
+  overflow: hidden;
 }
 
-/* During drag, block pointer interactions on the list but keep overflow-y unchanged
-   (toggling overflow-y causes a layout shift as the scrollbar appears/disappears).
-   Scroll is blocked via a wheel event listener in script instead. */
 .mlc.is-dragging .mlc__scroll {
   pointer-events: none;
 }
@@ -344,7 +342,7 @@ function handleSelect(module) {
 }
 .mlc__group-header:hover {
   color: var(--mlc-text-primary);
-  background: var(--mlc-border);
+  background: var(--p-surface-200);
 }
 .mlc__group-header.is-open {
   color: var(--mlc-accent);
@@ -354,8 +352,7 @@ function handleSelect(module) {
 .mlc__group-chevron {
   flex-shrink: 0;
   font-size: 12px;
-  margin-top: 1px;
-  transform: rotate(0deg);
+  margin-top: 2px;
   transition: transform var(--mlc-transition);
 }
 .mlc__group-header.is-open .mlc__group-chevron {
@@ -380,10 +377,9 @@ function handleSelect(module) {
 
 .mlc__group-count {
   flex-shrink: 0;
-  margin-top: 2px; /* optical alignment with first text line */
-  font-variant-numeric: tabular-nums;
-  /* Ensure the badge always has room and is never overlapped by the name */
+  margin-top: 2px;
   align-self: flex-start;
+  font-size: 0.7rem;
 }
 
 /* ── Slide transition ────────────────────────────────────────────────────────── */
@@ -401,10 +397,10 @@ function handleSelect(module) {
 
 /* ── Module card ─────────────────────────────────────────────────────────────── */
 .mlc__card {
-  border: 1px solid var(--mlc-border) !important;
-  border-radius: var(--mlc-radius) !important;
-  background: var(--mlc-surface) !important;
-  transition: border-color var(--mlc-transition), box-shadow var(--mlc-transition) !important;
+  border: 1px solid var(--mlc-border);
+  border-radius: var(--mlc-radius);
+  background: var(--mlc-surface);
+  transition: border-color var(--mlc-transition), box-shadow var(--mlc-transition);
   user-select: none;
 }
 
@@ -415,8 +411,8 @@ function handleSelect(module) {
 
 .mlc__card--draggable:hover,
 .mlc__card--selectable:hover {
-  border-color: var(--mlc-accent) !important;
-  box-shadow: 0 0 0 2px var(--mlc-accent-light), 0 2px 6px rgba(0,0,0,0.06) !important;
+  border-color: var(--mlc-accent);
+  box-shadow: 0 0 0 2px var(--mlc-accent-light), 0 2px 6px color-mix(in srgb, var(--p-text-color) 18%, transparent);
 }
 
 /* ── Card inner layout ───────────────────────────────────────────────────────── */
@@ -426,25 +422,11 @@ function handleSelect(module) {
   gap: 4px;
 }
 
-/* ── Grip ────────────────────────────────────────────────────────────────────── */
-.mlc__grip {
-  padding: 9px 0 9px 8px;
-  color: var(--mlc-text-muted);
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  opacity: 0;
-  transition: opacity var(--mlc-transition);
-}
-.mlc__card--draggable:hover .mlc__grip { opacity: 1; }
-
-/* ── Card body ───────────────────────────────────────────────────────────────── */
 .mlc__card-body {
   flex: 1;
   min-width: 0;
-  padding: 8px 8px 8px 0;
+  padding: 8px 10px;
 }
-.mlc__card-inner:not(:has(.mlc__grip)) .mlc__card-body { padding-left: 10px; }
 
 .mlc__card-header {
   display: flex;
@@ -471,13 +453,57 @@ function handleSelect(module) {
   flex-shrink: 0;
 }
 
-/* Preview button always visible */
+.mlc__badge {
+  font-size: 0.7rem;
+}
+
 .mlc__preview-btn {
-  opacity: 1;
+  width: 24px !important;
+  height: 24px !important;
 }
 
 /* ── Config row ──────────────────────────────────────────────────────────────── */
 .mlc__config-row { margin-top: 6px; }
 
 .mlc__config-select { width: 100%; }
+
+/* ── Empty State ─────────────────────────────────────────────────────────────── */
+.mlc__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--mlc-text-regular);
+  text-align: center;
+}
+
+.mlc__empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 8px;
+  color: var(--mlc-text-muted);
+}
+
+.mlc__empty-text {
+  font-size: 0.875rem;
+  margin: 0;
+}
+</style>
+<style>
+/* Unscoped on purpose: these need to react to the .p-dark class that lives
+   on <html>, and Vue's scoped-style compiler can't reliably combine an
+   ancestor selector living outside the component with a scoped descendant
+   (:global(.p-dark) .mlc silently drops the .mlc part). .mlc / .mlc__group-header
+   are specific enough to this component that going unscoped here is safe.
+
+   --p-surface-* are raw palette values that don't swap with light/dark mode
+   on their own (only semantic tokens like --p-content-background do), so
+   these need an explicit override. */
+.p-dark .mlc {
+  --mlc-bg: var(--p-surface-950);
+}
+
+.p-dark .mlc__group-header:hover {
+  background: var(--p-surface-800);
+}
 </style>

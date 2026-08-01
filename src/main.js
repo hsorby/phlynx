@@ -2,6 +2,8 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import PrimeVue from 'primevue/config'
+import Tooltip from 'primevue/tooltip'
+import Ripple from 'primevue/ripple'
 import Aura from '@primevue/themes/aura'
 import ConfirmationService from 'primevue/confirmationservice'
 import libcellmlPlugin from 'vue3-libcellml.js'
@@ -30,6 +32,7 @@ app.use(pinia)
 app.use(router)
 app.use(ElementPlus)
 app.use(PrimeVue, {
+  ripple: true,
   zIndex: {
     // align zIndex with element plus TODO - remove once finished
     modal: 3000,
@@ -40,6 +43,7 @@ app.use(PrimeVue, {
   theme: {
     preset: Aura,
     options: {
+      darkModeSelector: '.p-dark',
       cssLayer: {
         name: 'primevue',
         /* Add this strict order for Tailwind v4 compatibility */
@@ -49,6 +53,8 @@ app.use(PrimeVue, {
   },
 })
 app.use(ConfirmationService)
+app.directive('tooltip', Tooltip)
+app.directive('ripple', Ripple)
 app.use(libcellmlPlugin)
 app.component('GlossaryLink', GlossaryLink)
 app.mount('#app')
