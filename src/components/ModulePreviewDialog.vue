@@ -1,62 +1,71 @@
 <template>
-  <el-dialog v-model="visible" :title="`Preview: ${moduleData?.moduleRef}`" width="800px" append-to-body>
-    <el-tabs v-if="moduleData" v-model="activeTab" type="border-card">
-      <el-tab-pane label="Variables & Units" name="variables">
-        <el-table :data="moduleData?.variables" height="400" stripe>
-          <el-table-column prop="name" label="Name" width="180" />
-          <el-table-column prop="units" label="Units" width="150" />
-          <el-table-column prop="access" label="Accessability" />
-          <el-table-column prop="type" label="Type">
-            <template #default="{ row }">
-              <el-tag size="small">{{ row.type }}</el-tag>
+  <Dialog
+    v-model:visible="visible"
+    :header="`Preview: ${moduleData?.moduleRef}`"
+    :style="{ width: '800px' }"
+    :appendTo="'body'"
+  >
+    <TabView v-if="moduleData" v-model:activeIndex="activeTabIndex" class="w-full">
+      <TabPanel header="Variables & Units">
+        <DataTable :value="moduleData?.variables" :scrollable="true" scrollHeight="400px" stripedRows>
+          <Column field="name" header="Name" style="width: 180px" />
+          <Column field="units" header="Units" style="width: 150px" />
+          <Column field="access" header="Accessibility" />
+          <Column header="Type">
+            <template #body="slotProps">
+              <Tag>{{ slotProps.data.type }}</Tag>
             </template>
-          </el-table-column>
-        </el-table>
-      </el-tab-pane>
+          </Column>
+        </DataTable>
+      </TabPanel>
 
-      <el-tab-pane label="Ports" name="ports">
-        <el-table
+      <TabPanel header="Ports">
+        <DataTable
           ref="portTable"
-          :data="moduleData?.ports"
-          height="400"
-          stripe
-          style="width: 100%"
-          :default-sort="{ prop: 'access', order: 'ascending' }"
+          :value="moduleData?.ports"
+          :scrollable="true"
+          scrollHeight="400px"
+          stripedRows
+          :sortField="'access'"
+          :sortOrder="1"
         >
-          <el-table-column prop="type" label="Type" width="200" sortable>
-            <template #default="{ row }">
-              <strong>{{ row.portType }}</strong>
+          <Column field="portType" header="Type" style="width: 200px" sortable>
+            <template #body="slotProps">
+              <strong>{{ slotProps.data.portType }}</strong>
             </template>
-          </el-table-column>
+          </Column>
 
-          <el-table-column prop="variables" label="Port Variable(s)">
-            <template #default="{ row }">
-              <div v-if="row.variables && row.variables.length">
-                <el-tag v-for="v in row.variables" :key="v" size="small" style="margin-right: 4px">
+          <Column field="variables" header="Port Variable(s)">
+            <template #body="slotProps">
+              <div v-if="slotProps.data.variables && slotProps.data.variables.length" class="flex flex-wrap gap-1">
+                <Tag v-for="v in slotProps.data.variables" :key="v">
                   {{ v }}
-                </el-tag>
+                </Tag>
               </div>
-              <span v-else class="text-gray">-</span>
+              <span v-else class="text-slate-500">-</span>
             </template>
-          </el-table-column>
+          </Column>
 
-          <el-table-column prop="multiport" label="Multiport" width="100">
-            <template #default="{ row }">
-              {{ row.multiportType }}
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-tab-pane>
-    </el-tabs>
+          <Column field="multiportType" header="Multiport" style="width: 100px" />
+        </DataTable>
+      </TabPanel>
+    </TabView>
 
     <template #footer>
-      <el-button @click="visible = false">Close</el-button>
+      <Button label="Close" severity="secondary" text @click="visible = false" />
     </template>
-  </el-dialog>
+  </Dialog>
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import Button from 'primevue/button'
+import Column from 'primevue/column'
+import DataTable from 'primevue/datatable'
+import Dialog from 'primevue/dialog'
+import TabPanel from 'primevue/tabpanel'
+import TabView from 'primevue/tabview'
+import Tag from 'primevue/tag'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -66,7 +75,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const portTable = ref(null)
-const activeTab = ref('variables')
+const activeTabIndex = ref(0)
 
 const visible = computed({
   get: () => props.modelValue,
@@ -75,26 +84,10 @@ const visible = computed({
 
 watch(visible, (newVal) => {
   if (newVal) {
-    // Reset to first tab and top of table when opened
-    activeTab.value = 'variables'
-    if (portTable.value) {
-      portTable.value.clearSort()
-      portTable.value.setCurrentRow(null)
-      portTable.value.$el.querySelector('.el-table__body-wrapper').scrollTop = 0
+    activeTabIndex.value = 0
+    if (portTable.value?.resetSort) {
+      portTable.value.resetSort()
     }
   }
 })
-
-function getTypeTag(type) {
-  switch (type) {
-    case 'Input':
-      return 'warning' // Orange for Entrance
-    case 'Output':
-      return 'success' // Green for Exit
-    case 'General':
-      return '' // Blue (default) for General
-    default:
-      return 'info'
-  }
-}
 </script>
