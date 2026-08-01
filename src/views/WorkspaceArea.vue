@@ -370,7 +370,6 @@ export default {
 <script setup>
 import { computed, h, inject, markRaw, nextTick, onMounted, onUnmounted, ref, watch, watchPostEffect } from 'vue'
 import { useVueFlow, VueFlow } from '@vue-flow/core'
-import { useConfirm } from 'primevue/useconfirm'
 
 import Button from 'primevue/button'
 import SplitButton from 'primevue/splitbutton'
@@ -450,7 +449,6 @@ import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
 import PortEditorDialog from '../components/PortEditorDialog.vue'
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
 
-const confirm = useConfirm()
 const workspaceFileInput = ref(null)
 
 const DARK_MODE_STORAGE_KEY = 'phlynx-color-scheme'
@@ -1614,14 +1612,8 @@ function filterConfig(config, validPortNames, validVariableNames, updatedModule)
   if (config.variables_and_units) {
     const existingNames = new Set(config.variables_and_units.map((e) => e[0]))
 
-<<<<<<< HEAD
     // Use validVariableNames here, not validPortNames
     config.variables_and_units = config.variables_and_units.filter((entry) => validVariableNames.has(entry[0]))
-=======
-    config.variables_and_units = config.variables_and_units.filter((entry) =>
-      validVariableNames.has(entry[0])
-    )
->>>>>>> 3a774c580a7da407685f70a86a165e1a50171b19
 
     if (updatedModule?.variables) {
       const newEntries = updatedModule.variables
@@ -2087,11 +2079,7 @@ function recomputeMissingCouplings() {
   const targetInCount = new Map()
 
   for (const edge of edges.value) {
-<<<<<<< HEAD
     if (edge.data?.couplings?.length) continue // already has valid couplings
-=======
-    if (edge.data?.couplings?.length) continue
->>>>>>> 3a774c580a7da407685f70a86a165e1a50171b19
 
     const sourceNode = nodeMap.get(edge.source)
     const targetNode = nodeMap.get(edge.target)
