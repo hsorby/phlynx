@@ -7,7 +7,7 @@
     @contextmenu.stop.prevent="openContextMenu"
     @mousedown.capture="StopDrag"
   >
-    <NodeResizer min-width="225" min-height="120" :is-visible="selected" />
+    <NodeResizer min-width="200" min-height="120" :is-visible="selected" />
 
     <div :class="[domainTypeClass, 'instance-card']">
       <div v-if="isMissingParameters" class="status-indicator">
@@ -28,8 +28,9 @@
       <div class="button-group">
         <Button
           rounded
-          text
+          iconOnly
           size="small"
+          severity="secondary"
           class="instance-button"
           icon="pi pi-key"
           @click="toggleDomainMenu"
@@ -41,8 +42,9 @@
 
         <Button
           rounded
-          text
+          iconOnly
           size="small"
+          severity="secondary"
           class="instance-button"
           icon="pi pi-map-marker"
           @click="togglePortMenu"
@@ -54,8 +56,9 @@
 
         <Button
           rounded
-          text
+          iconOnly
           size="small"
+          severity="secondary"
           class="instance-button"
           icon="pi pi-pencil"
           @click="openPortEditDialog"
@@ -64,8 +67,9 @@
 
         <Button
           rounded
-          text
+          iconOnly
           size="small"
+          severity="secondary"
           class="instance-button"
           icon="pi pi-sliders-h"
           @click="openParameterEditDialog"
@@ -74,8 +78,9 @@
 
         <Button
           rounded
-          text
+          iconOnly
           size="small"
+          severity="secondary"
           class="instance-button"
           @click="openCellmlEditDialog"
           v-tooltip.bottom="{ value: 'Edit CellML Text', showDelay: 300 }"
@@ -409,16 +414,13 @@ function openContextMenu(event) {
 }
 
 .instance-name {
-  /* Reserve enough vertical space for the PrimeVue small input */
   min-height: 2.5rem; 
   display: flex;
   align-items: center;
-  /* Ensure the text breaks properly if it's long */
   width: 100%; 
   margin-bottom: -4px;
 }
 
-/* Ensure the input box fills the container and doesn't overflow */
 .instance-name :deep(.p-inputtext) {
   width: 100%;
   padding-top: 0.25rem;
@@ -454,8 +456,8 @@ function openContextMenu(event) {
 
 .status-indicator {
   position: absolute;
-  top: 0px;
-  right: 0px;
+  top: 3px;
+  right: 3px;
   z-index: 10;
   background-color: color-mix(in srgb, var(--p-orange-500) 20%, var(--p-content-background));
   border-radius: 50%;
@@ -480,11 +482,23 @@ function openContextMenu(event) {
 .instance-button {
   margin: 0;
   flex-shrink: 0; 
+
+  width: 1.75rem !important;
+  height: 1.75rem !important;
+  padding: 0 !important;
+}
+
+.instance-button :deep(.p-button-icon),
+.instance-button :deep(i) {
+  font-size: 0.75rem !important;
+  width: 0.75rem;
+  height: 0.75rem;
 }
 
 .button-group {
   display: flex;
   align-items: center;
+  gap: 0.5rem;
 }
 
 /* Base appearance for the popover */
@@ -532,5 +546,8 @@ function openContextMenu(event) {
 .content-fit-menu {
   width: max-content !important; 
   min-width: 0 !important; 
+}
+.vue-flow__node {
+  background: transparent !important;
 }
 </style>
