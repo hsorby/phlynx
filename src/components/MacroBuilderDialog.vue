@@ -11,30 +11,9 @@
     @hide="closeDialog"
   >
     <div class="macro-dialog-body">
-      <aside
-        :style="{ width: isAsideCollapsed ? '0px' : asideWidth + 'px' }"
-        class="module-aside"
-        :class="{ 'module-aside--collapsed': isAsideCollapsed }"
-      >
-        <h4 class="module-aside-title">Module Library</h4>
+      <ResizableLibraryPanel title="Module Library" :initial-width="200" :min-width="150" :max-width="400">
         <LibraryArea />
-      </aside>
-
-      <div
-        class="resize-handle"
-        :class="{ 'resize-handle--disabled': isAsideCollapsed }"
-        @mousedown="!isAsideCollapsed && startResize($event)"
-      >
-        <button
-          type="button"
-          class="aside-collapse-toggle"
-          @mousedown.stop
-          @click="toggleAsideCollapse"
-          v-tooltip.right="isAsideCollapsed ? 'Show module library' : 'Hide module library'"
-        >
-          <i :class="isAsideCollapsed ? 'pi pi-chevron-right' : 'pi pi-chevron-left'"></i>
-        </button>
-      </div>
+      </ResizableLibraryPanel>
 
       <main class="workbench-macro">
         <div class="dnd-flow" @drop="onDrop" @dragover.prevent>
@@ -90,11 +69,11 @@ import InputNumber from 'primevue/inputnumber'
 
 import WorkbenchArea from './WorkbenchArea.vue'
 import LibraryArea from './LibraryArea.vue'
+import ResizableLibraryPanel from './ResizableLibraryPanel.vue'
 import InstanceNode from './InstanceNode.vue'
 import GhostNode from './GhostNode.vue'
 import GhostSetupModal from './GhostSetupDialog.vue'
 import { useLibraryStore } from '../stores/libraryStore'
-import { useResizableAside } from '../composables/useResizableAside'
 import { useGtm } from '../composables/useGtm'
 import useDragAndDrop from '../composables/useDnD'
 import {
@@ -115,13 +94,6 @@ const { addEdges, edges, findNode, nodes, onConnect, onDragLeave, onNodeChange, 
 const previousNodes = new Set()
 const { onDrop, isGhostSetupOpen, pendingGhostNodeId } = useDragAndDrop(previousNodes)
 const { trackEvent } = useGtm()
-
-const { width: asideWidth, startResize } = useResizableAside(200, 150, 400)
-const isAsideCollapsed = ref(false)
-
-function toggleAsideCollapse() {
-  isAsideCollapsed.value = !isAsideCollapsed.value
-}
 
 const libraryStore = useLibraryStore()
 

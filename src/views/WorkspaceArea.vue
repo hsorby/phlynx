@@ -67,12 +67,7 @@
 
           <Divider layout="vertical" style="margin: 0 15px" />
 
-          <Button
-            label="Macro Build"
-            variant="text"
-            severity="info"
-            @click="onOpenMacroBuilderDialog"
-          />
+          <Button label="Macro Build" variant="text" severity="info" @click="onOpenMacroBuilderDialog" />
 
           <Divider layout="vertical" style="margin: 0 15px" />
 
@@ -86,28 +81,19 @@
             @click="triggerCurrentImport"
             :disabled="currentImportMode.disabled"
             v-tooltip.bottom="
-              currentImportMode.disabled
-                ? 'The Import option is disabled because CellML library is not ready yet.'
-                : ''
+              currentImportMode.disabled ? 'The Import option is disabled because CellML library is not ready yet.' : ''
             "
           >
             <!-- Main Button Icon (for custom Vue component icons) -->
             <template #icon v-if="typeof currentImportMode.icon !== 'string'">
-              <component
-                :is="currentImportMode.icon"
-                class="p-button-icon p-button-icon-left"
-              />
+              <component :is="currentImportMode.icon" class="p-button-icon p-button-icon-left" />
             </template>
 
             <!-- Dropdown Menu Item Icons -->
             <template #item="{ item, props }">
               <a class="p-menuitem-link" v-ripple v-bind="props.action">
                 <!-- If icon is a Vue component -->
-                <component
-                  :is="item.icon"
-                  v-if="typeof item.icon !== 'string'"
-                  class="p-menuitem-icon"
-                />
+                <component :is="item.icon" v-if="typeof item.icon !== 'string'" class="p-menuitem-icon" />
                 <!-- If icon is a PrimeIcon class string -->
                 <span v-else :class="[item.icon, 'p-menuitem-icon']"></span>
 
@@ -115,7 +101,7 @@
               </a>
             </template>
           </SplitButton>
-          
+
           <!-- Export Dropdown / SplitButton -->
           <SplitButton
             :label="`Export ${currentExportMode.label}`"
@@ -130,21 +116,14 @@
           >
             <!-- Main Button Icon (for custom Vue component icons) -->
             <template #icon v-if="typeof currentExportMode.icon !== 'string'">
-              <component
-                :is="currentExportMode.icon"
-                class="p-button-icon p-button-icon-left"
-              />
+              <component :is="currentExportMode.icon" class="p-button-icon p-button-icon-left" />
             </template>
 
             <!-- Dropdown Menu Item Icons -->
             <template #item="{ item, props }">
               <a class="p-menuitem-link" v-ripple v-bind="props.action">
                 <!-- If icon is a Vue component -->
-                <component
-                  :is="item.icon"
-                  v-if="typeof item.icon !== 'string'"
-                  class="p-menuitem-icon"
-                />
+                <component :is="item.icon" v-if="typeof item.icon !== 'string'" class="p-menuitem-icon" />
                 <!-- If icon is a PrimeIcon class string -->
                 <span v-else :class="[item.icon, 'p-menuitem-icon']"></span>
 
@@ -168,41 +147,16 @@
           style="margin-right: 12px"
         />
 
-        <a
-          href="https://github.com/physiomelinks/phlynx/issues/new"
-          target="_blank"
-          class="report-link"
-        >
+        <a href="https://github.com/physiomelinks/phlynx/issues/new" target="_blank" class="report-link">
           Report Issue
         </a>
       </div>
     </header>
 
     <div class="app-body-container">
-      <aside
-        :style="{ width: isAsideCollapsed ? '0px' : asideWidth + 'px' }"
-        class="module-aside"
-        :class="{ 'module-aside--collapsed': isAsideCollapsed }"
-      >
-        <h4 style="margin-top: 0">Available Modules</h4>
+      <ResizableLibraryPanel title="Available Modules" :initial-width="300" :min-width="150" :max-width="400">
         <LibraryArea />
-      </aside>
-
-      <div
-        class="resize-handle"
-        :class="{ 'resize-handle--disabled': isAsideCollapsed }"
-        @mousedown="!isAsideCollapsed && startResize($event)"
-      >
-        <button
-          type="button"
-          class="aside-collapse-toggle"
-          @mousedown.stop
-          @click="toggleAsideCollapse"
-          v-tooltip.right="isAsideCollapsed ? 'Show module library' : 'Hide module library'"
-        >
-          <i :class="isAsideCollapsed ? 'pi pi-chevron-right' : 'pi pi-chevron-left'"></i>
-        </button>
-      </div>
+      </ResizableLibraryPanel>
 
       <main class="workbench-main">
         <div class="workspace-search-container" :class="{ 'search-inactive': !searchBarFocused && !searchQuery }">
@@ -218,7 +172,7 @@
             <InputIcon
               v-if="searchQuery"
               class="pi pi-times cursor-pointer"
-              @click="searchQuery = ''; handleSearchInput()"
+              @click="handleSearchInput()"
             />
           </IconField>
           <div v-if="searchQuery" class="search-suffix-content">
@@ -388,9 +342,9 @@ import useDragAndDrop from '../composables/useDnD'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
 import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
-import { useResizableAside } from '../composables/useResizableAside'
 import { useGtm } from '../composables/useGtm'
 import LibraryArea from '../components/LibraryArea.vue'
+import ResizableLibraryPanel from '../components/ResizableLibraryPanel.vue'
 import Workbench from '../components/WorkbenchArea.vue'
 import InstanceNode from '../components/InstanceNode.vue'
 import ImportDialog from '../components/ImportDialog.vue'
@@ -728,12 +682,6 @@ const { loadFromInstanceArray } = useLoadFromInstanceArray()
 const { loadFromCellML } = useLoadFromCellML()
 const { capture } = useScreenshot()
 const { trackEvent } = useGtm()
-const { width: asideWidth, startResize } = useResizableAside(300, 150, 400)
-const isAsideCollapsed = ref(false)
-function toggleAsideCollapse() {
-  isAsideCollapsed.value = !isAsideCollapsed.value
-}
-
 const helperLineHorizontal = ref(null)
 const helperLineVertical = ref(null)
 const alignment = ref('edge')
@@ -782,6 +730,7 @@ const searchQuery = ref('')
 const matchCount = ref(null)
 const matchingNodeIds = ref(new Set())
 const searchBarFocused = ref(false)
+
 const currentMatchIndex = ref(0)
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
@@ -2655,64 +2604,6 @@ watch(
   display: flex;
   flex-grow: 1;
   min-height: 0;
-}
-
-.module-aside {
-  background-color: var(--p-content-background);
-  border-right: 1px solid var(--p-content-border-color);
-  padding: 1rem;
-  box-sizing: border-box;
-  overflow: hidden;
-  transition: width 160ms ease, padding 160ms ease;
-}
-
-.module-aside--collapsed {
-  padding: 0;
-  border-right: none;
-}
-
-/* Sidebar Resizer */
-.resize-handle {
-  position: relative;
-  width: 6px;
-  flex-shrink: 0;
-  cursor: col-resize;
-  background-color: var(--p-content-border-color);
-  transition: background-color 120ms ease;
-}
-
-.resize-handle:hover {
-  background-color: var(--p-primary-color);
-}
-
-.resize-handle--disabled {
-  cursor: default;
-}
-
-.aside-collapse-toggle {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 1px solid var(--p-content-border-color);
-  border-radius: 50%;
-  background: var(--p-content-background);
-  color: var(--p-text-muted-color);
-  font-size: 10px;
-  cursor: pointer;
-  z-index: 2;
-  transition: color 120ms ease, border-color 120ms ease;
-}
-
-.aside-collapse-toggle:hover {
-  color: var(--p-primary-color);
-  border-color: var(--p-primary-color);
 }
 
 /* ==========================================================================
