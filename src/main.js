@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import PrimeVue from 'primevue/config'
+import Tooltip from 'primevue/tooltip'
 import Aura from '@primevue/themes/aura'
 import ConfirmationService from 'primevue/confirmationservice'
 import libcellmlPlugin from 'vue3-libcellml.js'
@@ -49,6 +50,7 @@ app.use(PrimeVue, {
   },
 })
 app.use(ConfirmationService)
+app.directive('tooltip', Tooltip)
 app.use(libcellmlPlugin)
 app.component('GlossaryLink', GlossaryLink)
 app.mount('#app')
