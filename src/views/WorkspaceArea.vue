@@ -274,7 +274,11 @@
     @save="handleParameterSave"
   />
 
-  <SaveDialog v-model="saveDialogVisible" :default-name="libraryStore.lastSaveName" @confirm="onSaveConfirm" />
+  <SaveDialog
+    v-model="saveDialogVisible"
+    :default-name="libraryStore.lastSaveName"
+    @confirm="onSaveConfirm"
+  />
 
   <SaveDialog
     v-model="exportDialogVisible"
@@ -303,7 +307,10 @@
     @confirm="onImportConfirm"
   />
 
-  <PaneContextMenu ref="contextMenuRef" :items="contextMenuItems" />
+  <PaneContextMenu
+    ref="contextMenuRef"
+    :items="contextMenuItems"
+  />
 
   <EdgeConnectionDialog
     v-model="edgeConnectionDialogVisible"
@@ -342,6 +349,7 @@ import useDragAndDrop from '../composables/useDnD'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
 import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
+import { useColorScheme } from '../composables/useColorScheme'
 import { useGtm } from '../composables/useGtm'
 import LibraryArea from '../components/LibraryArea.vue'
 import ResizableLibraryPanel from '../components/ResizableLibraryPanel.vue'
@@ -405,30 +413,7 @@ import CellMLIcon from '../components/icons/CellMLIcon.vue'
 
 const workspaceFileInput = ref(null)
 
-const DARK_MODE_STORAGE_KEY = 'phlynx-color-scheme'
-
-const applyDarkMode = (value) => {
-  if (typeof document === 'undefined') return
-  document.documentElement.classList.toggle('p-dark', value)
-}
-
-const getInitialDarkMode = () => {
-  if (typeof window === 'undefined') return false
-
-  const stored = window.localStorage.getItem(DARK_MODE_STORAGE_KEY)
-  if (stored !== null) return stored === 'dark'
-
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
-}
-
-const isDarkMode = ref(getInitialDarkMode())
-applyDarkMode(isDarkMode.value)
-
-const toggleDarkMode = () => {
-  isDarkMode.value = !isDarkMode.value
-  applyDarkMode(isDarkMode.value)
-  window.localStorage.setItem(DARK_MODE_STORAGE_KEY, isDarkMode.value ? 'dark' : 'light')
-}
+const { isDarkMode, toggleDarkMode } = useColorScheme()
 
 const {
   addEdges,

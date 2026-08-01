@@ -3,14 +3,27 @@
     <aside :class="['left-sidebar', { collapsed: isCollapse }]">
       <div class="sidebar-header">
         <h2 v-show="!isCollapse" class="sidebar-title">User Guide</h2>
-        <Button
-          class="collapse-btn"
-          :icon="isCollapse ? 'pi pi-angle-right' : 'pi pi-angle-left'"
-          rounded
-          text
-          severity="secondary"
-          @click="isCollapse = !isCollapse"
-        />
+        <div class="sidebar-header-actions">
+          <Button
+            v-show="!isCollapse"
+            class="theme-toggle-btn"
+            :icon="isDarkMode ? 'pi pi-sun' : 'pi pi-moon'"
+            rounded
+            text
+            severity="secondary"
+            @click="toggleDarkMode"
+            v-tooltip.bottom="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+            aria-label="Toggle Theme"
+          />
+          <Button
+            class="collapse-btn"
+            :icon="isCollapse ? 'pi pi-angle-right' : 'pi pi-angle-left'"
+            rounded
+            text
+            severity="secondary"
+            @click="isCollapse = !isCollapse"
+          />
+        </div>
       </div>
 
       <div class="sidebar-menu">
@@ -76,9 +89,13 @@
 import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import Button from 'primevue/button'
 import { useRoute, useRouter } from 'vue-router'
+import { useColorScheme } from '../composables/useColorScheme'
+import githubMarkdownLightCss from 'github-markdown-css/github-markdown-light.css?inline'
+import githubMarkdownDarkCss from 'github-markdown-css/github-markdown-dark.css?inline'
 
 const route = useRoute()
 const router = useRouter()
+const { isDarkMode, toggleDarkMode } = useColorScheme()
 const isCollapse = ref(false)
 const openGroups = ref(['Getting Started', 'Guides', 'Reference', 'Help'])
 const markdownFiles = import.meta.glob('@docs/**/*.md', { eager: true })
@@ -203,7 +220,7 @@ const extractHeadings = () => {
 
 const scrollToHeading = (id) => {
   const element = document.getElementById(id)
-  const mainElement = document.querySelector('.el-main.markdown-body')
+  const mainElement = document.querySelector('.markdown-body')
 
   if (element && mainElement) {
     const elementTop = element.offsetTop
@@ -226,7 +243,7 @@ const scrollToHeading = (id) => {
 }
 
 const updateActiveHeading = () => {
-  const mainElement = document.querySelector('.el-main.markdown-body')
+  const mainElement = document.querySelector('.markdown-body')
   if (!mainElement) return
 
   const headingElements = Array.from(mainElement.querySelectorAll('h1, h2, h3, h4, h5, h6'))
@@ -263,12 +280,35 @@ const updateActiveHeading = () => {
   activeHeading.value = ''
 }
 
+// Injects whichever github-markdown-css variant matches the current theme
+// into a dedicated <style> tag, since the package's own dark mode only
+// follows the OS's prefers-color-scheme, not our manual toggle.
+let markdownThemeStyleEl = null
+
+function applyMarkdownTheme(dark) {
+  if (typeof document === 'undefined') return
+
+  if (!markdownThemeStyleEl) {
+    markdownThemeStyleEl = document.createElement('style')
+    markdownThemeStyleEl.setAttribute('data-docs-markdown-theme', '')
+    document.head.appendChild(markdownThemeStyleEl)
+  }
+
+  markdownThemeStyleEl.textContent = dark ? githubMarkdownDarkCss : githubMarkdownLightCss
+}
+
+watch(isDarkMode, (dark) => {
+  applyMarkdownTheme(dark)
+})
+
 let scrollElement = null
 
 onMounted(() => {
+  applyMarkdownTheme(isDarkMode.value)
+
   nextTick(() => {
     headings.value = extractHeadings()
-    scrollElement = document.querySelector('.el-main.markdown-body')
+    scrollElement = document.querySelector('.markdown-body')
     if (scrollElement) {
       scrollElement.addEventListener('scroll', updateActiveHeading)
       updateActiveHeading()
@@ -278,7 +318,7 @@ onMounted(() => {
 })
 
 const setupInternalLinks = () => {
-  const mainElement = document.querySelector('.el-main.markdown-body')
+  const mainElement = document.querySelector('.markdown-body')
   if (!mainElement) return
 
   mainElement.addEventListener('click', (e) => {
@@ -320,6 +360,10 @@ onUnmounted(() => {
   if (scrollElement) {
     scrollElement.removeEventListener('scroll', updateActiveHeading)
   }
+  if (markdownThemeStyleEl) {
+    markdownThemeStyleEl.remove()
+    markdownThemeStyleEl = null
+  }
 })
 
 watch(currentSlug, () => {
@@ -333,8 +377,6 @@ watch(currentSlug, () => {
 </script>
 
 <style>
-@import 'github-markdown-css/github-markdown.css';
-
 .docs-page {
   display: flex;
   height: 100%;
@@ -346,9 +388,9 @@ watch(currentSlug, () => {
   flex-shrink: 0;
   height: 100%;
   overflow-y: auto;
-  border-right: 1px solid #dcdfe6;
+  border-right: 1px solid var(--p-content-border-color);
   transition: width 0.3s ease;
-  background: #fff;
+  background: var(--p-content-background);
 }
 
 .left-sidebar.collapsed {
@@ -360,8 +402,14 @@ watch(currentSlug, () => {
   align-items: center;
   justify-content: space-between;
   padding: 16px;
-  border-bottom: 1px solid #dcdfe6;
+  border-bottom: 1px solid var(--p-content-border-color);
   min-height: 60px;
+}
+
+.sidebar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .sidebar-title {
@@ -380,7 +428,7 @@ watch(currentSlug, () => {
 }
 
 .menu-group {
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid color-mix(in srgb, var(--p-text-color) 6%, transparent);
 }
 
 .menu-group-title {
@@ -390,7 +438,7 @@ watch(currentSlug, () => {
   padding: 10px 16px;
   cursor: pointer;
   font-weight: 600;
-  color: #303133;
+  color: var(--p-text-color);
 }
 
 .menu-group-label {
@@ -416,15 +464,15 @@ watch(currentSlug, () => {
 .menu-item {
   padding: 8px 12px;
   border-radius: 6px;
-  color: #606266;
+  color: var(--p-text-muted-color);
   text-decoration: none;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .menu-item:hover,
 .menu-item--active {
-  background-color: #ecf5ff;
-  color: #409eff;
+  background-color: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
+  color: var(--p-primary-color);
 }
 
 .left-sidebar.collapsed .sidebar-header {
@@ -453,8 +501,8 @@ watch(currentSlug, () => {
 
 @keyframes highlightFade {
   0% {
-    background-color: #c9e2ff;
-    box-shadow: 0 0 0 8px #c9e2ff;
+    background-color: color-mix(in srgb, var(--p-primary-color) 25%, transparent);
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--p-primary-color) 25%, transparent);
     border-radius: 4px;
   }
   100% {
@@ -470,9 +518,13 @@ watch(currentSlug, () => {
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  border-left: 1px solid #dcdfe6;
-  background-color: #fafafa;
+  border-left: 1px solid var(--p-content-border-color);
+  background-color: var(--p-surface-50);
   transition: width 0.3s ease;
+}
+
+.p-dark .toc-sidebar {
+  background-color: var(--p-surface-950);
 }
 
 .toc-container {
@@ -502,9 +554,9 @@ watch(currentSlug, () => {
   font-size: 14px;
   font-weight: 600;
   margin: 0 0 12px 0;
-  color: #333;
+  color: var(--p-text-color);
   padding-bottom: 8px;
-  border-bottom: 1px solid #dcdfe6;
+  border-bottom: 1px solid var(--p-content-border-color);
 }
 
 .toc-nav ul {
@@ -520,7 +572,7 @@ watch(currentSlug, () => {
 .toc-item a {
   display: block;
   padding: 4px 8px;
-  color: #666;
+  color: var(--p-text-muted-color);
   text-decoration: none;
   font-size: 13px;
   line-height: 1.4;
@@ -532,14 +584,14 @@ watch(currentSlug, () => {
 }
 
 .toc-item a:hover {
-  color: #409eff;
-  background-color: #ecf5ff;
+  color: var(--p-primary-color);
+  background-color: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
 }
 
 .toc-item.active a {
-  color: #409eff;
+  color: var(--p-primary-color);
   font-weight: 500;
-  background-color: #ecf5ff;
+  background-color: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
 }
 
 .toc-level-1 {
@@ -567,19 +619,8 @@ watch(currentSlug, () => {
 }
 
 .toc-empty {
-  color: #999;
+  color: var(--p-text-muted-color);
   font-size: 12px;
   font-style: italic;
-}
-
-.toc-sidebar {
-  width: 250px;
-  flex-shrink: 0;
-  height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-  border-left: 1px solid #dcdfe6;
-  background-color: #fafafa;
-  transition: width 0.3s ease;
 }
 </style>
