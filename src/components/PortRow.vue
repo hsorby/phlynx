@@ -1,12 +1,5 @@
 <template>
-  <div
-    :class="[
-      'port-row',
-      `port-row--${side}`,
-      rowClass,
-      { 'row--valid-target': isValidTarget }
-    ]"
-  >
+  <div :class="['port-row', `port-row--${side}`, rowClass, { 'row--valid-target': isValidTarget }]">
     <!-- Target Side Handle -->
     <Handle
       v-if="side === 'target'"
@@ -21,79 +14,44 @@
       <!-- Left actions for Target Row -->
       <template v-if="side === 'target'">
         <span class="drag-handle" @mousedown.stop="$emit('start-drag', $event)">⠿</span>
-        <el-button
-          type="danger"
-          :icon="Delete"
-          circle
-          plain
-          size="small"
-          @click="$emit('delete')"
-        />
+        <Button icon="pi pi-trash" severity="danger" rounded text size="small" @click="$emit('delete')" />
       </template>
 
       <!-- Shared Configuration Fields -->
-      <el-select
+      <Select
         v-model="port.portType"
-        size="small"
-        style="width: 64px"
+        :options="PORT_TYPE_OPTIONS"
+        optionLabel="label"
+        optionValue="value"
+        class="w-16"
         @change="$emit('change')"
-      >
-        <el-option
-          v-for="o in PORT_TYPE_OPTIONS"
-          :key="o.value"
-          :label="o.label"
-          :value="o.value"
-        />
-      </el-select>
-
-      <el-input
-        v-model="port.label"
-        size="small"
-        style="width: 170px"
-        @input="$emit('change')"
       />
 
-      <el-select
-        v-model="port.variables"
-        multiple
-        collapse-tags
-        size="small"
-        style="flex: 1"
-        @change="$emit('change')"
-      >
-        <el-option
-          v-for="o in variables"
-          :key="o.name"
-          :label="o.name"
-          :value="o.name"
-        />
-      </el-select>
+      <InputText v-model="port.label" class="w-[170px]" @input="$emit('change')" />
 
-      <el-select
-        v-model="port.multiportType"
-        size="small"
-        style="width: 80px"
+      <Select
+        v-model="port.variables"
+        :options="variables"
+        optionLabel="name"
+        optionValue="name"
+        multiple
+        class="flex-1"
         @change="$emit('change')"
-      >
-        <el-option
-          v-for="o in MULTIPORT_OPTIONS"
-          :key="o.value"
-          :label="o.label"
-          :value="o.value"
-        />
-      </el-select>
+      />
+
+      <Select
+        v-model="port.multiportType"
+        :options="MULTIPORT_OPTIONS"
+        optionLabel="label"
+        optionValue="value"
+        class="w-20"
+        @change="$emit('change')"
+      />
 
       <!-- Right actions for Source Row -->
       <template v-if="side === 'source'">
         <span class="drag-handle" @mousedown.stop="$emit('start-drag', $event)">⠿</span>
-        <el-button
-          type="danger"
-          :icon="Delete"
-          circle
-          plain
-          size="small"
-          @click="$emit('delete')"
-        />
+        <Button icon="pi pi-trash" severity="danger" rounded text size="small" @click="$emit('delete')" />
       </template>
     </div>
 
@@ -110,7 +68,9 @@
 
 <script setup>
 import { computed } from 'vue'
-import { Delete } from '@element-plus/icons-vue'
+import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
+import Select from 'primevue/select'
 import { Handle, Position } from '@vue-flow/core'
 import { PORT_TYPE_OPTIONS, MULTIPORT_OPTIONS, NODE_W } from '../utils/constants'
 
@@ -147,9 +107,7 @@ defineEmits(['change', 'start-drag', 'delete'])
 const rowClass = computed(() => {
   if (props.isConnected) return 'row--connected'
   if (props.isTakenElsewhere) {
-    return props.port.multiportType && props.port.multiportType !== 'None'
-      ? 'row--taken-multi'
-      : 'row--taken'
+    return props.port.multiportType && props.port.multiportType !== 'None' ? 'row--taken-multi' : 'row--taken'
   }
   return 'row--free'
 })
@@ -157,9 +115,7 @@ const rowClass = computed(() => {
 const handleClass = computed(() => {
   if (props.isConnected) return 'handle--connected'
   if (props.isTakenElsewhere) {
-    return props.port.multiportType && props.port.multiportType !== 'None'
-      ? 'handle--taken-multi'
-      : 'handle--taken'
+    return props.port.multiportType && props.port.multiportType !== 'None' ? 'handle--taken-multi' : 'handle--taken'
   }
   return 'handle--free'
 })
