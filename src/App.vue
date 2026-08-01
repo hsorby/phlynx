@@ -8,7 +8,7 @@
         <img src="/phlynxlogo.svg" alt="PhLynx Logo" class="centred-image" />
         <strong>PhLynx v{{ appVersion }}</strong>
       </div>
-      <div class="session-name" @dblclick="startEditing">
+      <div v-show="isWorkspaceActive" class="session-name" @dblclick="startEditing">
        <strong v-if="!isEditing">
           {{ sessionName }}
        </strong> 
@@ -54,6 +54,10 @@ const inputRef = ref(null)
 
 const isDocsActive = computed(() => {
   return route.path.startsWith('/docs')
+})
+
+const isWorkspaceActive = computed(() => {
+  return route.path === '/'
 })
 
 async function startEditing(e) {
