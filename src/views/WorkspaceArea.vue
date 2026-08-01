@@ -13,17 +13,17 @@
           />
           <Button
             label="Load Workspace"
+            size="small"
             variant="text"
-            class="small-font-btn"
             @click="$refs.workspaceFileInput.click()"
           />
 
           <Button
             label="Save Workspace"
+            size="small"
             variant="text"
             @click="handleSaveWorkspace"
             style="margin-left: 10px"
-            class="small-font-btn"
             :disabled="!somethingAvailable"
           />
 
@@ -31,6 +31,7 @@
 
           <Button
             label="Auto Layout"
+            size="small"
             variant="text"
             severity="warn"
             @click="handleAutoLayout"
@@ -39,6 +40,7 @@
 
           <Button
             label="Clear"
+            size="small"
             variant="text"
             severity="danger"
             @click="handleClearWorkspace"
@@ -50,6 +52,7 @@
 
           <Button
             label="Undo"
+            size="small"
             variant="text"
             severity="secondary"
             @click="handleUndo"
@@ -58,6 +61,7 @@
 
           <Button
             label="Redo"
+            size="small"
             variant="text"
             severity="secondary"
             @click="handleRedo"
@@ -67,7 +71,13 @@
 
           <Divider layout="vertical" style="margin: 0 15px" />
 
-          <Button label="Macro Build" variant="text" severity="info" @click="onOpenMacroBuilderDialog" />
+          <Button
+            label="Macro Build"
+            size="small"
+            variant="text"
+            severity="info"
+            @click="onOpenMacroBuilderDialog"
+          />
 
           <Divider layout="vertical" style="margin: 0 15px" />
 
@@ -75,6 +85,7 @@
           <SplitButton
             :label="`Import ${currentImportMode.label}`"
             text
+            size="small"
             :icon="typeof currentImportMode.icon === 'string' ? currentImportMode.icon : undefined"
             :model="importMenuItems"
             severity="secondary"
@@ -106,6 +117,7 @@
           <SplitButton
             :label="`Export ${currentExportMode.label}`"
             text
+            size="small"
             :icon="typeof currentExportMode.icon === 'string' ? currentExportMode.icon : undefined"
             :model="exportMenuItems"
             severity="secondary"
@@ -141,13 +153,14 @@
           severity="secondary"
           text
           rounded
+          size="small"
           @click="toggleDarkMode"
           v-tooltip.bottom="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
           aria-label="Toggle Theme"
           style="margin-right: 12px"
         />
 
-        <a href="https://github.com/physiomelinks/phlynx/issues/new" target="_blank" class="report-link">
+        <a href="https://github.com/physiomelinks/phlynx/issues/new" style="font-size: small;" target="_blank" class="report-link">
           Report Issue
         </a>
       </div>
