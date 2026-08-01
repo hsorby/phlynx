@@ -220,18 +220,9 @@ const extractHeadings = () => {
 
 const scrollToHeading = (id) => {
   const element = document.getElementById(id)
-  const mainElement = document.querySelector('.markdown-body')
 
-  if (element && mainElement) {
-    const elementTop = element.offsetTop
-    const maxScroll = mainElement.scrollHeight - mainElement.clientHeight
-
-    const targetScroll = Math.min(elementTop - 100, maxScroll)
-
-    mainElement.scrollTo({
-      top: Math.max(0, targetScroll),
-      behavior: 'smooth',
-    })
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
     activeHeading.value = id
 
@@ -622,5 +613,14 @@ watch(currentSlug, () => {
   color: var(--p-text-muted-color);
   font-size: 12px;
   font-style: italic;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  scroll-margin-top: 20px;
 }
 </style>
