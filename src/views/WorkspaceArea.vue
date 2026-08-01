@@ -147,10 +147,13 @@
       </div>
 
       <div class="header-right-actions">
+        <a href="https://github.com/physiomelinks/phlynx/issues/new" style="font-size: 13px;" target="_blank" class="report-link">
+          Report Issue
+        </a>
         <!-- Light / Dark Mode Toggle Slider -->
         <div 
           class="theme-slider-container" 
-          style="display: flex; align-items: center; margin-right: 20px; gap: 8px;"
+          style="display: flex; align-items: center; margin-left: 20px; gap: 8px;"
           v-tooltip.bottom="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
         >
           <ToggleSwitch 
@@ -163,10 +166,6 @@
             </template>
           </ToggleSwitch>
         </div>
-
-        <a href="https://github.com/physiomelinks/phlynx/issues/new" style="font-size: small;" target="_blank" class="report-link">
-          Report Issue
-        </a>
       </div>
     </header>
 

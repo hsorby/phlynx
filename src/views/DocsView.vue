@@ -1,20 +1,22 @@
 <template>
-  <div class="docs-page">
+  <div class="docs-page relative-container" >
+    <div class="theme-toggle-wrapper">
+      <ToggleSwitch
+        :model-value="isDarkMode"
+        @change="toggleDarkMode"
+        v-tooltip.bottom="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+        aria-label="Toggle Theme"
+      >
+        <template #handle="{ checked }">
+          <i :class="['pi', checked ? 'pi-moon' : 'pi-sun']" style="font-size: 0.75rem"></i>
+        </template>
+      </ToggleSwitch>
+    </div>
+
     <aside :class="['left-sidebar', { collapsed: isCollapse }]">
       <div class="sidebar-header">
         <h2 v-show="!isCollapse" class="sidebar-title">User Guide</h2>
         <div class="sidebar-header-actions">
-          <Button
-            v-show="!isCollapse"
-            class="theme-toggle-btn"
-            :icon="isDarkMode ? 'pi pi-sun' : 'pi pi-moon'"
-            rounded
-            text
-            severity="secondary"
-            @click="toggleDarkMode"
-            v-tooltip.bottom="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
-            aria-label="Toggle Theme"
-          />
           <Button
             class="collapse-btn"
             :icon="isCollapse ? 'pi pi-angle-right' : 'pi pi-angle-left'"
@@ -88,6 +90,7 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import Button from 'primevue/button'
+import ToggleSwitch from 'primevue/toggleswitch'
 import { useRoute, useRouter } from 'vue-router'
 import { useColorScheme } from '../composables/useColorScheme'
 import githubMarkdownLightCss from 'github-markdown-css/github-markdown-light.css?inline'
@@ -388,6 +391,10 @@ watch(currentSlug, () => {
   width: 64px;
 }
 
+.theme-toggle-switch {
+  margin-right: 8px;
+}
+
 .sidebar-header {
   display: flex;
   align-items: center;
@@ -622,5 +629,18 @@ watch(currentSlug, () => {
 .markdown-body h5,
 .markdown-body h6 {
   scroll-margin-top: 20px;
+}
+
+.relative-container {
+  position: relative;
+}
+
+.theme-toggle-wrapper {
+  position: absolute;
+  top: 11px;
+  right: 16px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
 }
 </style>
