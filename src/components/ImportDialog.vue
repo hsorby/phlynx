@@ -729,12 +729,12 @@ defineExpose({
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
-  background: rgba(255, 255, 255, 0.75);
+  background: var(--p-mask-background, rgba(0, 0, 0, 0.4));
   backdrop-filter: blur(2px);
 }
 
 .loading-text {
-  color: #334155;
+  color: var(--p-text-color);
   font-size: 0.95rem;
 }
 
@@ -760,6 +760,7 @@ defineExpose({
   gap: 0.25rem;
   font-weight: 600;
   margin-bottom: 0.4rem;
+  color: var(--p-text-color);
 }
 
 .field-hint {
@@ -767,7 +768,7 @@ defineExpose({
   align-items: center;
   gap: 4px;
   font-size: 0.8rem;
-  color: #64748b;
+  color: var(--p-text-muted-color);
   margin-top: 0.35rem;
 }
 
@@ -776,24 +777,24 @@ defineExpose({
   align-items: stretch;
   width: 100%;
   min-height: 40px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--p-form-field-border-color, var(--p-content-border-color));
   border-radius: 6px;
-  background-color: #fff;
+  background-color: var(--p-form-field-background, var(--p-content-background));
   overflow: hidden;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .file-input-box:focus-within {
   border-color: var(--p-primary-color);
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25);
+  box-shadow: 0 0 0 1px var(--p-primary-color);
 }
 
 .file-input-box.is-valid {
-  border-color: #16a34a;
+  border-color: var(--p-green-500, #16a34a);
 }
 
 .file-input-box.is-valid:focus-within {
-  box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.25);
+  box-shadow: 0 0 0 1px var(--p-green-500, rgba(22, 163, 74, 0.25));
 }
 
 .file-names-area {
@@ -810,7 +811,7 @@ defineExpose({
 
 .upload-trigger {
   flex-shrink: 0;
-  border-left: 1px solid #e5e7eb;
+  border-left: 1px solid var(--p-form-field-border-color, var(--p-content-border-color));
   display: flex;
   align-items: center;
 }
@@ -828,7 +829,7 @@ defineExpose({
 }
 
 .empty-text {
-  color: #64748b;
+  color: var(--p-text-muted-color);
   font-size: 0.9rem;
   white-space: nowrap;
 }
@@ -865,12 +866,12 @@ defineExpose({
   margin-top: 0.25rem;
   margin-bottom: 0.75rem;
   font-size: 0.8rem;
-  color: #64748b;
+  color: var(--p-text-muted-color);
   text-align: right;
 }
 
 .required-asterisk {
-  color: #dc2626;
+  color: var(--p-red-500, #dc2626);
 }
 
 .validation-status {
@@ -879,6 +880,7 @@ defineExpose({
 
 .message-title {
   font-weight: 600;
+  color: var(--p-text-color);
 }
 
 .message-content {
@@ -888,7 +890,7 @@ defineExpose({
 .missing-resources {
   margin: 0.5rem 0 0 0;
   padding-left: 1rem;
-  color: #475569;
+  color: var(--p-text-muted-color);
 }
 
 .missing-resources li {
@@ -897,13 +899,13 @@ defineExpose({
 
 .component-type-list {
   font-size: 0.8rem;
-  color: #92400e;
+  color: var(--p-amber-500, #d97706);
 }
 
 .config-note {
   margin-top: 0.5rem;
   font-size: 0.9rem;
-  color: #92400e;
+  color: var(--p-amber-500, #d97706);
 }
 
 .dialog-footer {
