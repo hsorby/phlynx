@@ -266,14 +266,13 @@ const handleSave = async (source) => {
   position: relative;
 }
 
-.tag.internal {
-  color: orange;
-  font-weight: bold;
-}
-
-.tag.user {
-  color: green;
-  font-weight: bold;
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--p-text-muted-color);
+  font-size: 0.95rem;
 }
 
 .dialog-footer {
@@ -289,7 +288,13 @@ const handleSave = async (source) => {
   align-items: center;
   gap: 8px;
   margin-right: auto;
-  font-size: 13px;
+  font-size: 0.875rem;
+  color: var(--p-text-color);
+}
+
+.apply-all-checkbox label {
+  cursor: pointer;
+  user-select: none;
 }
 
 .footer-buttons {
