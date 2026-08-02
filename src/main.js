@@ -6,6 +6,7 @@ import Tooltip from 'primevue/tooltip'
 import Ripple from 'primevue/ripple'
 import Aura from '@primevue/themes/aura'
 import ConfirmationService from 'primevue/confirmationservice'
+import ToastService from 'primevue/toastservice'
 import libcellmlPlugin from 'vue3-libcellml.js'
 import GlossaryLink from './components/GlossaryLink.vue'
 
@@ -53,6 +54,7 @@ app.use(PrimeVue, {
   },
 })
 app.use(ConfirmationService)
+app.use(ToastService)
 app.directive('tooltip', Tooltip)
 app.directive('ripple', Ripple)
 app.use(libcellmlPlugin)
