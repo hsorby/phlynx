@@ -1,10 +1,11 @@
 <template>
   <Dialog
     v-model:visible="dialogVisible"
+    header="Edit Parameters"
     modal
     :closable="!isLoading"
     :dismissableMask="!isLoading"
-    :style="{ width: '800px', maxWidth: '95vw' }"
+    :style="{ width: '850px', maxWidth: '95vw' }"
   >
     <div class="dialog-body">
       <div v-if="isLoading" class="loading-overlay">
@@ -15,77 +16,102 @@
       </div>
 
       <template v-if="hasVariables">
-        <div class="toolbar-row">
+        <!-- Action Toolbar -->
+        <div class="toolbar-container">
+          <!-- Search Group -->
           <div class="search-group">
-            <InputText
-              v-model="searchQuery"
-              :placeholder="`Search by variable ${searchColumn} ...`"
-              class="search-input"
+            <div class="search-input-wrapper">
+              <InputText
+                v-model="searchQuery"
+                size="small"
+                :placeholder="`Search by ${searchColumn}...`"
+                class="search-input"
+              />
+              <Button
+                v-if="searchQuery"
+                icon="pi pi-times"
+                text
+                rounded
+                severity="secondary"
+                size="small"
+                class="clear-search-btn"
+                @click="searchQuery = ''"
+              />
+            </div>
+
+            <Select
+              v-model="searchColumn"
+              :options="searchColumnOptions"
+              optionLabel="label"
+              optionValue="value"
+              size="small"
+              class="search-column"
             />
-            <Button v-if="searchQuery" icon="pi pi-times" text rounded severity="secondary" @click="searchQuery = ''" />
           </div>
 
-          <Select
-            v-model="searchColumn"
-            :options="searchColumnOptions"
-            optionLabel="label"
-            optionValue="value"
-            class="search-column"
-          />
+          <!-- Bulk Update Group -->
+          <div class="bulk-controls">
+            <span class="bulk-label">Bulk Type:</span>
+            <Select
+              v-model="bulkTypeValue"
+              size="small"
+              :options="PARAMETER_TYPE_OPTIONS"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="Select type..."
+              class="bulk-select"
+            />
+            <Button
+              size="small"
+              :disabled="selectedRows.length === 0"
+              @click="applyBulkType"
+            >
+              Apply ({{ selectedRows.length }})
+            </Button>
+          </div>
         </div>
 
-        <div class="bulk-controls">
-          <span>Bulk Update Type:</span>
-          <Select
-            v-model="bulkTypeValue"
-            :options="PARAMETER_TYPE_OPTIONS"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="Select type..."
-            class="bulk-select"
-          />
-          <Button :disabled="selectedRows.length === 0" @click="applyBulkType">
-            Apply to {{ selectedRows.length }} selected
-          </Button>
-        </div>
-
+        <!-- Parameters Table -->
         <DataTable
           ref="parametersTable"
           v-model:selection="selectedRows"
           :value="filteredParameterRows"
-          selectionMode="multiple"
           dataKey="name"
           scrollable
-          scrollHeight="400px"
+          scrollHeight="420px"
           tableStyle="min-width: 100%"
           :sortField="sortField"
           :sortOrder="sortOrder"
+          class="p-datatable-sm parameters-table"
           @sort="handleSortChange"
         >
-          <Column selectionMode="multiple" headerStyle="width: 3rem" />
-          <Column field="name" header="Variable" sortable style="width: 180px" />
+          <Column selectionMode="multiple" headerStyle="width: 2.2rem" />
+          
+          <Column field="name" bodyClass="small-text-col" header="Variable" sortable style="min-width: 160px" />
 
-          <Column field="value" header="Value" sortable style="min-width: 220px">
+          <Column field="value" header="Value" sortable style="min-width: 180px">
             <template #body="slotProps">
               <InputText
                 v-if="isEditableVariableType(slotProps.data.type)"
                 v-model="slotProps.data.value"
+                size="small"
                 placeholder="Enter value..."
                 class="w-full"
               />
-              <span v-else>-</span>
+              <span v-else class="text-muted">-</span>
             </template>
           </Column>
 
-          <Column field="units" header="Units" sortable style="width: 150px" />
+          <Column field="units" bodyClass="small-text-col"header="Units" size="small" sortable style="min-width: 120px" />
 
-          <Column field="type" header="Type" sortable style="width: 220px">
+          <Column field="type" header="Type" sortable style="min-width: 210px">
             <template #body="slotProps">
               <Select
                 v-model="slotProps.data.type"
                 :options="PARAMETER_TYPE_OPTIONS"
                 optionLabel="label"
                 optionValue="value"
+                size="small"
                 class="w-full"
               />
             </template>
@@ -96,8 +122,8 @@
 
     <template #footer>
       <div class="dialog-footer">
-        <Button severity="primary" @click="handleConfirm">Save Parameters</Button>
-        <Button severity="secondary" outlined @click="closeDialog">Cancel</Button>
+        <Button severity="secondary" size="small" @click="closeDialog">Cancel</Button>
+        <Button size="small" @click="handleConfirm">Save Parameters</Button>
       </div>
     </template>
   </Dialog>
@@ -111,7 +137,6 @@ import DataTable from 'primevue/datatable'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
-import { useVueFlow } from '@vue-flow/core'
 import { PARAMETER_TYPE_OPTIONS } from '../utils/constants'
 
 import { useAppConfirm } from '../composables/useConfirmDialog'
@@ -166,13 +191,10 @@ const filteredParameterRows = computed(() => {
   }
 
   const query = searchQuery.value.toLowerCase()
-  const columnKey = searchColumn.value // 'name', 'units', or 'type'
+  const columnKey = searchColumn.value
 
   return parameterRows.value.filter((row) => {
-    // Get the value of the selected column safely.
     const targetValue = String(row[columnKey] || '').toLowerCase()
-
-    // Check for match.
     return targetValue.includes(query)
   })
 })
@@ -210,7 +232,6 @@ function loadData() {
   sortOrder.value = 1
 }
 
-// Initialize rows when dialog opens
 watch(
   () => props.modelValue,
   async (isOpen) => {
@@ -232,10 +253,6 @@ watch(
   }
 )
 
-function handleSelectionChange(selection) {
-  selectedRows.value = selection
-}
-
 function applyBulkType() {
   if (!bulkTypeValue.value || selectedRows.value.length === 0) return
 
@@ -248,9 +265,6 @@ function applyBulkType() {
   bulkTypeValue.value = ''
 }
 
-/**
- * Handle manual sorting.
- */
 function handleSortChange(event) {
   const field = event?.sortField || 'type'
   const order = event?.sortOrder === -1 ? -1 : 1
@@ -265,7 +279,6 @@ function closeDialog() {
 }
 
 async function handleConfirm() {
-  // Check if user has selections and a bulk type chosen but hasn't applied
   if (selectedRows.value.length > 0 && bulkTypeValue.value) {
     const proceed = await confirm({
       header: 'Unapplied Bulk Changes',
@@ -276,7 +289,7 @@ async function handleConfirm() {
     })
 
     if (!proceed) {
-      return // User chose to go back, so exit the function without saving.
+      return
     }
   }
 
@@ -298,16 +311,23 @@ async function handleConfirm() {
 <style scoped>
 .dialog-body {
   position: relative;
+  min-height: 250px;
+}
+
+.parameters-table :deep(.small-text-col) {
+  font-size: 0.85rem; /* Adjust font size as needed */
 }
 
 .loading-overlay {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.8);
+  background: color-mix(in srgb, var(--p-content-background, #fff) 80%, transparent);
+  backdrop-filter: blur(2px);
+  border-radius: 6px;
 }
 
 .loading-content {
@@ -316,46 +336,91 @@ async function handleConfirm() {
   align-items: center;
   gap: 8px;
   font-size: 0.95rem;
+  color: var(--p-text-color);
 }
 
 .loading-spinner {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
 }
 
-.toolbar-row {
+/* Toolbar & Action Bar Styling */
+.toolbar-container {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
   align-items: center;
-  margin-bottom: 12px;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  background-color: var(--p-content-hover-background, rgba(0, 0, 0, 0.02));
+  border: 1px solid var(--p-content-border-color, #e5e7eb);
+  border-radius: 8px;
 }
 
 .search-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  flex: 1;
+  min-width: 260px;
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
   flex: 1;
 }
 
 .search-input {
-  flex: 1;
+  width: 100%;
 }
 
-.search-column,
-.bulk-select {
-  width: 140px;
+.clear-search-btn {
+  position: absolute;
+  right: 4px;
+  width: 1.5rem !important;
+  height: 1.5rem !important;
+  padding: 0 !important;
+}
+
+.search-column {
+  width: 100px;
+  flex-shrink: 0;
 }
 
 .bulk-controls {
   display: flex;
-  gap: 12px;
   align-items: center;
-  margin-bottom: 12px;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.bulk-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--p-text-muted-color);
+  white-space: nowrap;
+}
+
+.bulk-select {
+  width: 180px; /* Expanded width to easily fit dropdown text */
+}
+
+/* Helper Utilities */
+.w-full {
+  width: 100%;
+}
+
+.text-muted {
+  color: var(--p-text-muted-color);
+  padding-left: 4px;
 }
 
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
 }
 </style>
