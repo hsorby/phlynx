@@ -90,7 +90,6 @@ export function useConnectionAutoscroll(canvasEl) {
         const jitter = jitterToggle ? 0.1 : -0.1
         const scrollDelta = el.scrollTop - startScrollTop 
 
-        console.log(scrollDelta)
         const eventOpts = {
           clientX: mousePos.x + jitter,
           clientY: mousePos.y + jitter + scrollDelta,
