@@ -1,13 +1,12 @@
 <template>
-  <el-dialog
-    :model-value="modelValue"
-    width="1200px"
-    top="4vh"
-    teleported
-    :show-close="false"
-    :style="{ maxHeight: '92vh' }"
-    @closed="onClosed"
-    @update:model-value="$emit('update:modelValue', $event)"
+  <Dialog
+    v-model:visible="visible"
+    :style="{ width: '1200px', maxHeight: '92vh' }"
+    :draggable="false"
+    :closable="false"
+    :modal="true"
+    :appendTo="'body'"
+    @hide="onClosed"
     @wheel.stop
   >
     <!-- Custom header -->
@@ -26,132 +25,145 @@
       </div>
     </template>
 
+    <div>{{ contentWidth }}</div>
+    <div>{{ midGap }}</div>
+
     <div v-if="sourceNode && targetNode" class="root">
-
-      <!-- Column headers -->
-      <div class="col-headers">
-        <div class="col-header-label source-side">
-          <span class="side-label">SOURCE</span>
-          <div class="col-subheaders">
-            <span style="width:64px">Type</span>
-            <span style="width:170px">Label</span>
-            <span style="flex:1">Variables</span>
-            <span style="width:80px">Multiport</span>
-            <span style="width:28px"></span>
+      <div class="connections-layout" :style="portGridStyle">
+        <!-- Column headers -->
+        <div class="col-headers">
+          <div class="col-header-label source-side">
+            <span class="side-label">SOURCE</span>
+            <div class="col-subheaders port-grid">
+              <span style="width: var(--port-col-type)" class="col-header">Type</span>
+              <span style="width: var(--port-col-label)" class="col-header">Label</span>
+              <span style="width: var(--port-col-variables)" class="col-header">Variables</span>
+              <span style="width: var(--port-col-multiport)" class="col-header">Multiport</span>
+              <span aria-hidden="true" style="width: var(--port-col-handle)"></span>
+              <span aria-hidden="true" style="width: var(--port-col-action)"></span>
+            </div>
+          </div>
+          <div class="mid-spacer" :style="{ minWidth: midGap }"></div>
+          <div class="col-header-label target-side">
+            <span class="side-label">TARGET</span>
+            <div class="col-subheaders port-grid">
+              <span aria-hidden="true" style="width: var(--port-col-handle)"></span>
+              <span aria-hidden="true" style="width: var(--port-col-action)"></span>
+              <span style="width: var(--port-col-type)" class="col-header">Type</span>
+              <span style="width: var(--port-col-label)" class="col-header">Label</span>
+              <span style="width: var(--port-col-variables)" class="col-header">Variables</span>
+              <span style="width: var(--port-col-multiport)" class="col-header">Multiport</span>
+            </div>
           </div>
         </div>
-        <div class="mid-spacer"></div>
-        <div class="col-header-label target-side">
-          <span class="side-label">TARGET</span>
-          <div class="col-subheaders">
-            <span style="width:28px"></span>
-            <span style="width:64px">Type</span>
-            <span style="width:170px">Label</span>
-            <span style="flex:1">Variables</span>
-            <span style="width:80px">Multiport</span>
+
+        <!-- VueFlow canvas -->
+        <div ref="canvasEl" class="flow-canvas" @wheel.stop.prevent="onCanvasWheel">
+          <div :style="{ height: canvasHeight + 'px', position: 'relative' }">
+            <VueFlow
+              :id="FLOW_IDS.EDGE"
+              :nodes="flowNodes"
+              :edges="flowEdges"
+              :nodes-draggable="false"
+              :nodes-connectable="true"
+              :elements-selectable="false"
+              :pan-on-drag="false"
+              :pan-on-scroll="false"
+              :auto-pan-on-node-drag="false"
+              :auto-pan-on-connect="false"
+              :zoom-on-scroll="false"
+              :zoom-on-pinch="false"
+              :zoom-on-double-click="false"
+              :edges-updatable="true"
+              :auto-connect="false"
+              :is-valid-connection="isValidConnection"
+              @connect="onConnect"
+              @edge-update="onEdgeUpdate"
+              @connect-start="onConnectStart"
+              @connect-end="onConnectEnd"
+              @edge-update-start="onEdgeUpdateStart"
+              @edge-update-end="onEdgeUpdateEnd"
+              @node-click="onNodeClick"
+            >
+              <!-- Source port row -->
+              <template #node-sourcePort="{ data }">
+                <PortRow
+                  side="source"
+                  :port="data.port"
+                  :variables="sourceNode.data.variables"
+                  :is-connected="data.isConnected"
+                  :is-taken-elsewhere="data.isTakenElsewhere"
+                  :is-valid-target="validConnectUids.has(data.port._uid)"
+                  :style="rowStyle(data.port._uid, 'source')"
+                  @change="onPortConfigChange"
+                  @start-drag="startDrag($event, data.port._uid, 'source')"
+                  @delete="deletePort(data.port._uid, 'source')"
+                />
+              </template>
+
+              <!-- Target port row -->
+              <template #node-targetPort="{ data }">
+                <PortRow
+                  side="target"
+                  :port="data.port"
+                  :variables="targetNode.data.variables"
+                  :is-connected="data.isConnected"
+                  :is-taken-elsewhere="data.isTakenElsewhere"
+                  :is-valid-target="validConnectUids.has(data.port._uid)"
+                  :style="rowStyle(data.port._uid, 'target')"
+                  @change="onPortConfigChange"
+                  @start-drag="startDrag($event, data.port._uid, 'target')"
+                  @delete="deletePort(data.port._uid, 'target')"
+                />
+              </template>
+
+              <!-- Ghost port row -->
+              <template #node-ghostPort="{ data }">
+                <div class="port-row port-row--ghost" :style="{ width: nodeWidth }">
+                  <template v-if="data.side === 'source'">
+                    <div class="port-controls ghost-controls" @mousedown.stop>
+                      <span class="ghost-label">
+                        <i class="pi pi-plus"></i>
+                        Add Port
+                      </span>
+                    </div>
+                    <Handle
+                      type="source"
+                      id="out"
+                      :position="Position.Right"
+                      :class="[
+                        'port-handle',
+                        draggingFrom?.side === 'target' && draggingFrom?.uid !== 'ghost-tgt'
+                          ? 'handle--valid-target'
+                          : 'handle--free',
+                      ]"
+                    />
+                  </template>
+                  <template v-else>
+                    <Handle
+                      type="target"
+                      id="in"
+                      :position="Position.Left"
+                      :class="[
+                        'port-handle',
+                        draggingFrom?.side === 'source' && draggingFrom?.uid !== 'ghost-src'
+                          ? 'handle--valid-target'
+                          : 'handle--free',
+                      ]"
+                    />
+                    <div class="port-controls ghost-controls" @mousedown.stop>
+                      <span class="ghost-label">
+                        <i class="pi pi-plus"></i>
+                        Add Port
+                      </span>
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </VueFlow>
           </div>
         </div>
       </div>
-
-      <!-- VueFlow canvas -->
-      <div ref="canvasEl" class="flow-canvas" @wheel.stop.prevent="onCanvasWheel">
-        <div :style="{ height: canvasHeight + 'px', position: 'relative' }">
-          <VueFlow
-            :id="FLOW_IDS.EDGE"
-            :nodes="flowNodes"
-            :edges="flowEdges"
-            :nodes-draggable="false"
-            :nodes-connectable="true"
-            :elements-selectable="false"
-            :pan-on-drag="false"
-            :pan-on-scroll="false"
-            :auto-pan-on-node-drag="false"
-            :auto-pan-on-connect="false"
-            :zoom-on-scroll="false"
-            :zoom-on-pinch="false"
-            :zoom-on-double-click="false"
-            :edges-updatable="true"
-            :auto-connect="false"
-            :is-valid-connection="isValidConnection"
-            @connect="onConnect"
-            @edge-update="onEdgeUpdate"
-            @connect-start="onConnectStart"
-            @connect-end="onConnectEnd"
-            @edge-update-start="onEdgeUpdateStart"
-            @edge-update-end="onEdgeUpdateEnd"
-            @node-click="onNodeClick"
-          >
-            <!-- Source port row -->
-            <template #node-sourcePort="{ data }">
-              <PortRow
-                side="source"
-                :port="data.port"
-                :variables="sourceNode.data.variables"
-                :is-connected="data.isConnected"
-                :is-taken-elsewhere="data.isTakenElsewhere"
-                :is-valid-target="validConnectUids.has(data.port._uid)"
-                :style="rowStyle(data.port._uid, 'source')"
-                @change="onPortConfigChange"
-                @start-drag="startDrag($event, data.port._uid, 'source')"
-                @delete="deletePort(data.port._uid, 'source')"
-              />
-            </template>
-
-            <!-- Target port row -->
-            <template #node-targetPort="{ data }">
-              <PortRow
-                side="target"
-                :port="data.port"
-                :variables="targetNode.data.variables"
-                :is-connected="data.isConnected"
-                :is-taken-elsewhere="data.isTakenElsewhere"
-                :is-valid-target="validConnectUids.has(data.port._uid)"
-                :style="rowStyle(data.port._uid, 'target')"
-                @change="onPortConfigChange"
-                @start-drag="startDrag($event, data.port._uid, 'target')"
-                @delete="deletePort(data.port._uid, 'target')"
-              />
-            </template>
-
-            <!-- Ghost port row -->
-            <template #node-ghostPort="{ data }">
-              <div
-                :class="['port-row', data.side === 'source' ? 'port-row--source' : 'port-row--target', 'port-row--ghost']"
-              >
-                <template v-if="data.side === 'source'">
-                  <div class="port-controls ghost-controls" @mousedown.stop>
-                    <span class="ghost-label">
-                      <el-icon><Plus /></el-icon>
-                      Add Port
-                    </span>
-                  </div>
-                  <Handle
-                    type="source"
-                    id="out"
-                    :position="Position.Right"
-                    :class="['port-handle', draggingFrom?.side === 'target' && draggingFrom?.uid !== 'ghost-tgt' ? 'handle--valid-target' : 'handle--free']"
-                  />
-                </template>
-                <template v-else>
-                  <Handle
-                    type="target"
-                    id="in"
-                    :position="Position.Left"
-                    :class="['port-handle', draggingFrom?.side === 'source' && draggingFrom?.uid !== 'ghost-src' ? 'handle--valid-target' : 'handle--free']"
-                  />
-                  <div class="port-controls ghost-controls" @mousedown.stop>
-                    <span class="ghost-label">
-                      <el-icon><Plus /></el-icon>
-                      Add Port
-                    </span>
-                  </div>
-                </template>
-              </div>
-            </template>
-          </VueFlow>
-        </div>
-      </div>
-
       <!-- Legend -->
       <div class="bottom-bar">
         <div class="legend">
@@ -164,39 +176,39 @@
     </div>
 
     <!-- Swap confirmation dialog -->
-    <el-dialog
-      v-model="swapDialog.visible"
-      title="Port already connected"
-      width="380px"
-      :show-close="false"
-      :close-on-click-modal="false"
-      :close-on-press-escape="false"
-      append-to-body
+    <Dialog
+      v-model:visible="swapDialog.visible"
+      header="Port already connected"
+      :style="{ width: '380px' }"
+      :closable="false"
+      :dismissableMask="false"
+      :closeOnEscape="false"
+      :modal="true"
+      :appendTo="'self'"
     >
       <span>This port is already connected. What would you like to do?</span>
       <template #footer>
-        <el-button @click="resolveSwap('cancel')">Cancel</el-button>
-        <el-button @click="resolveSwap('overwrite')">Replace</el-button>
-        <el-button v-if="swapDialog.canSwap" type="primary" @click="resolveSwap('swap')">Swap</el-button>
+        <Button label="Cancel" severity="secondary" text @click="resolveSwap('cancel')" />
+        <Button label="Replace" severity="secondary" @click="resolveSwap('overwrite')" />
+        <Button v-if="swapDialog.canSwap" label="Swap" @click="resolveSwap('swap')" />
       </template>
-    </el-dialog>
+    </Dialog>
 
     <template #footer>
       <div class="dialog-footer">
-        <el-button @click="handleCancel">Cancel</el-button>
-        <el-button type="primary" @click="handleConfirm">Done</el-button>
+        <Button label="Cancel" severity="secondary" text @click="handleCancel" />
+        <Button label="Done" @click="handleConfirm" />
       </div>
     </template>
-  </el-dialog>
+  </Dialog>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { Plus } from '@element-plus/icons-vue'
 import { VueFlow, Position, Handle, useVueFlow } from '@vue-flow/core'
-import {
-  FLOW_IDS, ROW_H, NODE_W, MID_GAP, PAD,
-} from '../utils/constants'
+import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
+import { FLOW_IDS, OUTER_MARGIN, ROW_H, NODE_W, MID_GAP, PAD } from '../utils/constants'
 import { isSingleConnection } from '../utils/edges'
 import { isCompatible } from '../utils/ports'
 import { detachReactivity } from '../utils/reactivity'
@@ -226,11 +238,54 @@ const props = defineProps({
   subgraph: {
     type: Map,
     required: true,
-  }
+  },
 })
+
+const CONTENT_W = OUTER_MARGIN * 2 + NODE_W * 2 + MID_GAP
+const PORT_COLUMN_MODEL = {
+  handle: '20px',
+  action: '32px',
+  type: '64px',
+  label: '170px',
+  variables: '113px', // Would like to do 'minmax(0, 1fr)' but this doesn't work with width style attribute.
+  multiport: '79px',
+  gap: '8px',
+  spacer: '8px',
+}
+const SIDE_CONFIG = {
+  source: {
+    prefix: 'src',
+    x: OUTER_MARGIN,
+    nodeType: 'sourcePort',
+  },
+  target: {
+    prefix: 'tgt',
+    x: OUTER_MARGIN + NODE_W + MID_GAP,
+    nodeType: 'targetPort',
+  },
+}
+const contentWidth = `${OUTER_MARGIN * 2 + NODE_W * 2 + MID_GAP}px`
+const nodeWidth = `${NODE_W}px`
+const midGap = `${MID_GAP}px`
+console.log(`contentWidth = ${contentWidth} = ${OUTER_MARGIN} * 2 + ${NODE_W} * 2 + ${MID_GAP}`)
+
+const portGridStyle = {
+  '--port-col-handle': PORT_COLUMN_MODEL.handle,
+  '--port-col-action': PORT_COLUMN_MODEL.action,
+  '--port-col-type': PORT_COLUMN_MODEL.type,
+  '--port-col-label': PORT_COLUMN_MODEL.label,
+  '--port-col-variables': PORT_COLUMN_MODEL.variables,
+  '--port-col-multiport': PORT_COLUMN_MODEL.multiport,
+  '--port-col-gap': PORT_COLUMN_MODEL.gap,
+  '--port-col-spacer': PORT_COLUMN_MODEL.spacer,
+}
 
 const emit = defineEmits(['update:modelValue', 'confirm'])
 const canvasEl = ref(null)
+const visible = computed({
+  get: () => props.modelValue,
+  set: (value) => emit('update:modelValue', value),
+})
 
 const { updateEdge, getViewport, setViewport } = useVueFlow(FLOW_IDS.EDGE)
 
@@ -238,7 +293,7 @@ const { updateEdge, getViewport, setViewport } = useVueFlow(FLOW_IDS.EDGE)
 const swapDialog = ref({ visible: false, resolve: null })
 
 function askSwapIntent(canSwap = false) {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     swapDialog.value = { visible: true, resolve, canSwap }
   })
 }
@@ -275,22 +330,17 @@ const {
   onPortConfigChange,
 } = useEdgeCouplings(props, askSwapIntent)
 
-const {
-  startDrag,
-  rowStyle,
-} = usePortDrag(localSrcPorts, localTgtPorts, canvasEl)
+const { startDrag, rowStyle } = usePortDrag(localSrcPorts, localTgtPorts, canvasEl)
 
-const {
-  draggingFrom,
-  onConnectStart,
-  onConnectEnd,
-  onEdgeUpdateEnd,
-  onEdgeUpdateStart,
-} = useConnectionAutoscroll(canvasEl, getViewport, setViewport)
+const { draggingFrom, onConnectStart, onConnectEnd, onEdgeUpdateEnd, onEdgeUpdateStart } = useConnectionAutoscroll(
+  canvasEl,
+  getViewport,
+  setViewport
+)
 
 // ─── VueFlow Layout Calculations ─────────────────────────────────────────────
-const canvasHeight = computed(() =>
-  (Math.max(localSrcPorts.value.length, localTgtPorts.value.length, 4) + 1) * ROW_H + PAD * 2
+const canvasHeight = computed(
+  () => (Math.max(localSrcPorts.value.length, localTgtPorts.value.length, 4) + 1) * ROW_H + PAD * 2
 )
 
 // Fully reactive node and edge mappings
@@ -300,15 +350,15 @@ const flowNodes = computed(() => {
 
   const nodes = [...srcNodes, ...tgtNodes]
 
-  ;['source', 'target'].forEach(side => {
+  ;['source', 'target'].forEach((side) => {
     const prefix = side === 'source' ? 'src' : 'tgt'
-    const ports  = side === 'source' ? localSrcPorts.value : localTgtPorts.value
-    const x      = side === 'source' ? 0 : NODE_W + MID_GAP
+    const ports = side === 'source' ? localSrcPorts.value : localTgtPorts.value
+    const x = side === 'source' ? 0 : NODE_W + MID_GAP
     nodes.push({
-      id:       `ghost-${prefix}`,
-      type:     'ghostPort',
+      id: `ghost-${prefix}`,
+      type: 'ghostPort',
       position: { x, y: PAD + ports.length * ROW_H },
-      data:     { side },
+      data: { side },
     })
   })
   return nodes
@@ -342,15 +392,15 @@ const flowEdges = computed(() => {
 
 function buildPortNodes(ports, connectedUids, side) {
   const prefix = side === 'source' ? 'src' : 'tgt'
-  const type   = side === 'source' ? 'sourcePort' : 'targetPort'
-  const x      = side === 'source' ? 0 : NODE_W + MID_GAP
+  const type = side === 'source' ? 'sourcePort' : 'targetPort'
+  const x = side === 'source' ? 0 : NODE_W + MID_GAP
   return ports.map((p, i) => ({
-    id:       `${prefix}-${p._uid}`,
+    id: `${prefix}-${p._uid}`,
     type,
     position: { x, y: PAD + i * ROW_H },
     data: {
-      port:             p,
-      isConnected:      connectedUids.has(p._uid),
+      port: p,
+      isConnected: connectedUids.has(p._uid),
       isTakenElsewhere: takenElsewhereUids.value.has(p._uid),
     },
   }))
@@ -405,7 +455,7 @@ async function onConnect(connection) {
   const srcUid = (connection.source || '').replace('src-', '')
   const tgtUid = (connection.target || '').replace('tgt-', '')
 
-  if (localCouplings.value.some(c => c.srcUid === srcUid && c.tgtUid === tgtUid)) return
+  if (localCouplings.value.some((c) => c.srcUid === srcUid && c.tgtUid === tgtUid)) return
 
   const sp = srcByUid(srcUid)
   const tp = tgtByUid(tgtUid)
@@ -430,7 +480,7 @@ async function onEdgeUpdate({ edge, connection }) {
       const tp = tgtByUid(tUid)
       if (isSingleConnection(tp)) {
         let next = localCouplings.value.filter(
-          c => !(c.srcUid === edge.source.replace('src-', '') && c.tgtUid === edge.target.replace('tgt-', ''))
+          (c) => !(c.srcUid === edge.source.replace('src-', '') && c.tgtUid === edge.target.replace('tgt-', ''))
         )
         next = await evictHandle(tp, tUid, 'target', next)
         if (next === null) return
@@ -444,7 +494,7 @@ async function onEdgeUpdate({ edge, connection }) {
       const sp = srcByUid(sUid)
       if (isSingleConnection(sp)) {
         let next = localCouplings.value.filter(
-          c => !(c.srcUid === edge.source.replace('src-', '') && c.tgtUid === edge.target.replace('tgt-', ''))
+          (c) => !(c.srcUid === edge.source.replace('src-', '') && c.tgtUid === edge.target.replace('tgt-', ''))
         )
         next = await evictHandle(sp, sUid, 'source', next)
         if (next === null) return
@@ -466,11 +516,9 @@ async function onEdgeUpdate({ edge, connection }) {
   const tp = tgtByUid(newTgtUid)
   if (!sp || !tp) return
 
-  let nextCouplings = localCouplings.value.filter(
-    (c) => !(c.srcUid === oldSrcUid && c.tgtUid === oldTgtUid)
-  )
+  let nextCouplings = localCouplings.value.filter((c) => !(c.srcUid === oldSrcUid && c.tgtUid === oldTgtUid))
 
-  const isDuplicate = nextCouplings.some(c => c.srcUid === newSrcUid && c.tgtUid === newTgtUid)
+  const isDuplicate = nextCouplings.some((c) => c.srcUid === newSrcUid && c.tgtUid === newTgtUid)
 
   if (isDuplicate && !isSingleConnection(tp) && !isSingleConnection(sp)) {
     return
@@ -491,20 +539,18 @@ const validConnectUids = computed(() => {
   const { uid, side } = draggingFrom.value
   const isGhost = uid === 'ghost-src' || uid === 'ghost-tgt'
   const candidates = side === 'source' ? localTgtPorts.value : localSrcPorts.value
-  if (isGhost) return new Set(candidates.map(p => p._uid))
+  if (isGhost) return new Set(candidates.map((p) => p._uid))
   const port = portLookup.value.get(uid)?.port
   if (!port) return new Set()
   return new Set(
     candidates
-      .filter(p => {
+      .filter((p) => {
         if (!p.label || !port.label) return false
         if (p.label !== port.label) return false
-        const [srcType, tgtType] = side === 'source'
-          ? [port.portType, p.portType]
-          : [p.portType, port.portType]
+        const [srcType, tgtType] = side === 'source' ? [port.portType, p.portType] : [p.portType, port.portType]
         return isCompatible(srcType, tgtType)
       })
-      .map(p => p._uid)
+      .map((p) => p._uid)
   )
 })
 
@@ -521,7 +567,7 @@ function buildPayload() {
   for (const [edgeId, localEdge] of localSubgraph.value) {
     if (edgeId === activeEdgeId) continue
     const originalCouplings = props.subgraph?.get(edgeId)?.data?.couplings || []
-    const localCouplingsArr  = localEdge?.data?.couplings || []
+    const localCouplingsArr = localEdge?.data?.couplings || []
     if (JSON.stringify(originalCouplings) !== JSON.stringify(localCouplingsArr)) {
       foreignCouplings[edgeId] = localCouplingsArr
     }
@@ -532,12 +578,22 @@ function buildPayload() {
     targetNodeId: props.targetNode.id,
     sourcePorts: detachReactivity(localSrcPorts.value),
     targetPorts: detachReactivity(localTgtPorts.value),
-    couplings: localCouplings.value.map(c => {
+    couplings: localCouplings.value.map((c) => {
       const sp = srcByUid(c.srcUid)
       const tp = tgtByUid(c.tgtUid)
       return {
-        sourcePort: { portType: sp.portType, label: sp.label, variables: sp.variables, multiportType: sp.multiportType },
-        targetPort: { portType: tp.portType, label: tp.label, variables: tp.variables, multiportType: tp.multiportType }
+        sourcePort: {
+          portType: sp.portType,
+          label: sp.label,
+          variables: sp.variables,
+          multiportType: sp.multiportType,
+        },
+        targetPort: {
+          portType: tp.portType,
+          label: tp.label,
+          variables: tp.variables,
+          multiportType: tp.multiportType,
+        },
       }
     }),
     foreignCouplings,
@@ -557,12 +613,18 @@ function onClosed() {
   // cleanup happens in initLocalState on next open
 }
 
-watch(() => props.modelValue, (v) => { if (v) initLocalState() })
+watch(
+  () => props.modelValue,
+  (v) => {
+    if (v) initLocalState()
+  }
+)
 </script>
 
 <style scoped>
 /* ── Dialog header ── */
 .dialog-header {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -586,6 +648,7 @@ watch(() => props.modelValue, (v) => { if (v) initLocalState() })
   align-items: center;
   gap: 10px;
   font-size: 13px;
+  margin-left: auto;
 }
 .node-badge {
   padding: 3px 10px;
@@ -614,9 +677,21 @@ watch(() => props.modelValue, (v) => { if (v) initLocalState() })
   display: flex;
   flex-direction: column;
   gap: 8px;
+  background: blue;
 }
 
+.connections-layout {
+  width: v-bind(contentWidth);
+  margin: 0 auto;
+  background: red;
+}
+:deep(.p-dialog-content) {
+  background: green;
+}
 /* ── Column headers ── */
+.col-header{
+  padding: 0 5px;
+}
 .col-headers {
   display: flex;
   align-items: flex-start;
@@ -627,10 +702,7 @@ watch(() => props.modelValue, (v) => { if (v) initLocalState() })
   display: flex;
   flex-direction: column;
   gap: 4px;
-  width: v-bind('NODE_W + "px"');
-}
-.mid-spacer {
-  width: v-bind('MID_GAP + "px"');
+  width: v-bind(nodeWidth);
 }
 .side-label {
   font-size: 10px;
@@ -642,7 +714,7 @@ watch(() => props.modelValue, (v) => { if (v) initLocalState() })
 .col-subheaders {
   display: flex;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 6px 9px;
   background: #f5f7fa;
   border: 1px solid #e4e7ed;
   border-radius: 4px 4px 0 0;
@@ -668,18 +740,13 @@ watch(() => props.modelValue, (v) => { if (v) initLocalState() })
   display: flex;
   align-items: center;
 }
-.port-row--source {
-  width: v-bind('NODE_W + "px"');
-}
-.port-row--target {
-  width: v-bind('NODE_W + "px"');
-}
 :deep(.port-row--ghost) {
   background: transparent;
   border: 1.5px dashed #dcdfe6;
   opacity: 1;
   cursor: pointer;
   gap: 6px;
+  box-sizing: border-box;
   transition: border-color 0.15s, background 0.15s;
 }
 :deep(.port-row--ghost:hover) {
@@ -747,10 +814,20 @@ watch(() => props.modelValue, (v) => { if (v) initLocalState() })
   border-radius: 50%;
   display: inline-block;
 }
-.dot-connected { background: #409eff; }
-.dot-taken        { background: #e6a23c; border: 1px dashed #e6a23c; }
-.dot-taken-multi  { background: #ffffff; border: 1px solid #c0c4cc; }
-.dot-free      { background: #c0c4cc; }
+.dot-connected {
+  background: #409eff;
+}
+.dot-taken {
+  background: #e6a23c;
+  border: 1px dashed #e6a23c;
+}
+.dot-taken-multi {
+  background: #ffffff;
+  border: 1px solid #c0c4cc;
+}
+.dot-free {
+  background: #c0c4cc;
+}
 
 /* ── Footer ── */
 .dialog-footer {
