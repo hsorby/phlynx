@@ -30,3 +30,6 @@ docs/glossary.json
 
 .changelog/
 stats.html
+
+.env.local
+__pycache__/
