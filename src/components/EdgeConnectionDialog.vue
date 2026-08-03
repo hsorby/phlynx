@@ -227,7 +227,6 @@ const props = defineProps({
   subgraph: { type: Map, required: true },
 })
 
-// Layout spacing dimensions
 const CANVAS_PAD_X = 16
 const MID_GAP_PX = 60
 
@@ -642,7 +641,7 @@ watch(
   display: flex;
   align-items: flex-start;
   width: 100%;
-  padding: 0 16px; /* Aligns header columns to node inset (x = 16px) */
+  padding: 0 16px;
   box-sizing: border-box;
 }
 
@@ -666,6 +665,10 @@ watch(
   padding-left: 2px;
 }
 
+.target-side .side-label {
+  padding-left: 22px; /* Offsets "TARGET" label to match the 20px subheader shift */
+}
+
 .col-subheaders {
   display: grid;
   gap: 6px;
@@ -681,12 +684,15 @@ watch(
   align-items: center;
 }
 
+/* Source side header grid */
 .source-side .col-subheaders {
   grid-template-columns: 60px minmax(0, 1fr) minmax(0, 1.2fr) 85px 16px 28px;
 }
 
+/* Target side header grid + 20px offset */
 .target-side .col-subheaders {
   grid-template-columns: 16px 28px 60px minmax(0, 1fr) minmax(0, 1.2fr) 85px;
+  transform: translateX(20px); 
 }
 
 /* ── Canvas ── */
