@@ -3,7 +3,8 @@
     :visible="modelValue"
     :header="config.title || 'Import File'"
     :style="{ width: '500px' }"
-    :modal="true"
+    modal
+    :dismissableMask="!isLoading"
     :closable="!isLoading"
     :draggable="false"
     @update:visible="

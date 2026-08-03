@@ -6,6 +6,7 @@
     :modal="true"
     :draggable="false"
     :closable="true"
+    :dismissableMask="true"
     :appendTo="'body'"
     :style="{ width: '95vw', maxWidth: '95vw', height: '90vh' }"
     @hide="closeDialog"

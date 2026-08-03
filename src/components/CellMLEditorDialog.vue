@@ -3,6 +3,7 @@
     :visible="modelValue"
     modal
     :header="dialogTitle"
+    :dismissableMask="!loading"
     :style="{ width: '80%' }"
     class="editor-dialog"
     @update:visible="onDialogVisibleChange"
