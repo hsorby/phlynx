@@ -40,7 +40,7 @@
               <span aria-hidden="true" style="width: var(--port-col-action)"></span>
             </div>
           </div>
-          <div class="mid-spacer" :style="{ minWidth: midGap }"></div>
+          <div class="mid-spacer" :style="{ minWidth: midGap, width: midGap }"></div>
           <div class="col-header-label target-side">
             <span class="side-label">TARGET</span>
             <div class="col-subheaders port-grid">
@@ -205,7 +205,7 @@ import { ref, computed, watch } from 'vue'
 import { VueFlow, Position, Handle, useVueFlow } from '@vue-flow/core'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
-import { FLOW_IDS, OUTER_MARGIN, ROW_H, NODE_W, MID_GAP, PAD } from '../utils/constants'
+import { FLOW_IDS, ROW_H, NODE_W, MID_GAP, PAD } from '../utils/constants'
 import { isSingleConnection } from '../utils/edges'
 import { isCompatible } from '../utils/ports'
 import { detachReactivity } from '../utils/reactivity'
@@ -216,53 +216,31 @@ import { usePortDrag } from '../composables/usePortDrag'
 import { useConnectionAutoscroll } from '../composables/useConnectionAutoscroll'
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false,
-  },
-  sourceNode: {
-    type: Object,
-    required: true,
-  },
-  targetNode: {
-    type: Object,
-    required: true,
-  },
-  activeEdge: {
-    type: Object,
-    required: true,
-  },
-  subgraph: {
-    type: Map,
-    required: true,
-  },
+  modelValue: { type: Boolean, default: false },
+  sourceNode: { type: Object, required: true },
+  targetNode: { type: Object, required: true },
+  activeEdge: { type: Object, required: true },
+  subgraph: { type: Map, required: true },
 })
 
-const CONTENT_W = OUTER_MARGIN * 2 + NODE_W * 2 + MID_GAP
 const PORT_COLUMN_MODEL = {
   handle: '20px',
   action: '32px',
   type: '64px',
   label: '170px',
-  variables: '113px', // Would like to do 'minmax(0, 1fr)' but this doesn't work with width style attribute.
+  variables: '113px',
   multiport: '79px',
   gap: '8px',
   spacer: '8px',
   insetX: '9px',
 }
+
 const SIDE_CONFIG = {
-  source: {
-    prefix: 'src',
-    x: OUTER_MARGIN,
-    nodeType: 'sourcePort',
-  },
-  target: {
-    prefix: 'tgt',
-    x: OUTER_MARGIN + NODE_W + MID_GAP,
-    nodeType: 'targetPort',
-  },
+  source: { prefix: 'src', x: 0, nodeType: 'sourcePort' },
+  target: { prefix: 'tgt', x: NODE_W + MID_GAP, nodeType: 'targetPort' },
 }
-const contentWidth = `${OUTER_MARGIN * 2 + NODE_W * 2 + MID_GAP}px`
+
+const contentWidth = `${NODE_W * 2 + MID_GAP}px`
 const nodeWidth = `${NODE_W}px`
 const midGap = `${MID_GAP}px`
 
@@ -286,7 +264,6 @@ const visible = computed({
 
 const { updateEdge, getViewport, setViewport } = useVueFlow(FLOW_IDS.EDGE)
 
-// ─── Dialog Confirmation / Swap Handlers ─────────────────────────────────────
 const swapDialog = ref({ visible: false, resolve: null })
 
 function askSwapIntent(canSwap = false) {
@@ -306,7 +283,6 @@ function onNodeClick({ node }) {
   }
 }
 
-// ─── Composables Setup ────────────────────────────────────────────────────────
 const {
   localSrcPorts,
   localTgtPorts,
@@ -335,12 +311,10 @@ const { draggingFrom, onConnectStart, onConnectEnd, onEdgeUpdateEnd, onEdgeUpdat
   setViewport
 )
 
-// ─── VueFlow Layout Calculations ─────────────────────────────────────────────
 const canvasHeight = computed(
   () => (Math.max(localSrcPorts.value.length, localTgtPorts.value.length, 4) + 1) * ROW_H + PAD * 2
 )
 
-// Fully reactive node and edge mappings
 const flowNodes = computed(() => {
   const srcNodes = buildPortNodes(localSrcPorts.value, connectedSrcUids.value, 'source')
   const tgtNodes = buildPortNodes(localTgtPorts.value, connectedTgtUids.value, 'target')
@@ -348,13 +322,12 @@ const flowNodes = computed(() => {
   const nodes = [...srcNodes, ...tgtNodes]
 
   ;['source', 'target'].forEach((side) => {
-    const prefix = side === 'source' ? 'src' : 'tgt'
+    const config = SIDE_CONFIG[side]
     const ports = side === 'source' ? localSrcPorts.value : localTgtPorts.value
-    const x = side === 'source' ? 0 : NODE_W + MID_GAP
     nodes.push({
-      id: `ghost-${prefix}`,
+      id: `ghost-${config.prefix}`,
       type: 'ghostPort',
-      position: { x, y: PAD + ports.length * ROW_H },
+      position: { x: config.x, y: PAD + ports.length * ROW_H },
       data: { side },
     })
   })
@@ -378,7 +351,7 @@ const flowEdges = computed(() => {
         targetHandle: 'in',
         updatable: true,
         style: {
-          stroke: '#409eff',
+          stroke: 'var(--p-primary-color, #409eff)',
           strokeWidth: 2.5,
         },
       })
@@ -388,13 +361,11 @@ const flowEdges = computed(() => {
 })
 
 function buildPortNodes(ports, connectedUids, side) {
-  const prefix = side === 'source' ? 'src' : 'tgt'
-  const type = side === 'source' ? 'sourcePort' : 'targetPort'
-  const x = side === 'source' ? 0 : NODE_W + MID_GAP
+  const config = SIDE_CONFIG[side]
   return ports.map((p, i) => ({
-    id: `${prefix}-${p._uid}`,
-    type,
-    position: { x, y: PAD + i * ROW_H },
+    id: `${config.prefix}-${p._uid}`,
+    type: config.nodeType,
+    position: { x: config.x, y: PAD + i * ROW_H },
     data: {
       port: p,
       isConnected: connectedUids.has(p._uid),
@@ -403,7 +374,6 @@ function buildPortNodes(ports, connectedUids, side) {
   }))
 }
 
-// ─── Connection Validation ───────────────────────────────────────────────────
 function isValidConnection(connection) {
   if (connection.source === 'ghost-src' && connection.target === 'ghost-tgt') return false
   if (connection.source === 'ghost-src' || connection.target === 'ghost-tgt') return true
@@ -415,7 +385,6 @@ function isValidConnection(connection) {
   return sp.label === tp.label && isCompatible(sp.portType, tp.portType)
 }
 
-// ─── Interaction Handlers ─────────────────────────────────────────────────────
 async function onConnect(connection) {
   const isGhostSrc = connection.source === 'ghost-src'
   const isGhostTgt = connection.target === 'ghost-tgt'
@@ -530,7 +499,6 @@ async function onEdgeUpdate({ edge, connection }) {
   localCouplings.value = nextCouplings
 }
 
-// ─── Connection Drag Tracking ────────────────────────────────────────────────
 const validConnectUids = computed(() => {
   if (!draggingFrom.value) return new Set()
   const { uid, side } = draggingFrom.value
@@ -556,7 +524,6 @@ function onCanvasWheel(event) {
   canvasEl.value.scrollTop += event.deltaY
 }
 
-// ─── Payload Confirmation / Canceling ────────────────────────────────────────
 function buildPayload() {
   const foreignCouplings = {}
   const activeEdgeId = props.activeEdge?.id
@@ -606,9 +573,7 @@ function handleCancel() {
   emit('update:modelValue', false)
 }
 
-function onClosed() {
-  // cleanup happens in initLocalState on next open
-}
+function onClosed() {}
 
 watch(
   () => props.modelValue,
@@ -633,12 +598,12 @@ watch(
   gap: 8px;
   font-size: 17px;
   font-weight: 700;
-  color: #1a1a2e;
+  color: var(--p-text-color, #ffffff);
   letter-spacing: -0.3px;
 }
 .title-icon {
   font-size: 20px;
-  color: #e6a23c;
+  color: var(--p-warn-color, #e6a23c);
 }
 .node-names {
   display: flex;
@@ -655,17 +620,17 @@ watch(
   letter-spacing: 0.3px;
 }
 .source-badge {
-  background: #ecf5ff;
-  color: #409eff;
-  border: 1px solid #b3d8ff;
+  background: color-mix(in srgb, var(--p-primary-color, #409eff) 15%, transparent);
+  color: var(--p-primary-color, #409eff);
+  border: 1px solid color-mix(in srgb, var(--p-primary-color, #409eff) 30%, transparent);
 }
 .target-badge {
-  background: #f0f9eb;
-  color: #67c23a;
-  border: 1px solid #c2e7b0;
+  background: color-mix(in srgb, var(--p-green-500, #67c23a) 15%, transparent);
+  color: var(--p-green-500, #67c23a);
+  border: 1px solid color-mix(in srgb, var(--p-green-500, #67c23a) 30%, transparent);
 }
 .arrow-sep {
-  color: #c0c4cc;
+  color: var(--p-text-muted-color, #909399);
   font-size: 16px;
 }
 
@@ -682,6 +647,7 @@ watch(
   --port-box-sizing: border-box;
   --port-inset-x: 10px;
 }
+
 /* ── Column headers ── */
 .col-header {
   padding: 0 5px;
@@ -690,7 +656,8 @@ watch(
   display: flex;
   align-items: flex-start;
   gap: 0;
-  padding: 0 2px;
+  width: 100%;
+  box-sizing: border-box;
 }
 .col-header-label {
   display: flex;
@@ -702,28 +669,28 @@ watch(
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 1.5px;
-  color: #909399;
+  color: var(--p-text-muted-color, #909399);
   padding-left: 2px;
 }
 .col-subheaders {
   display: flex;
   gap: 8px;
   padding: 6px var(--port-inset-x);
-  background: #f5f7fa;
-  border: 1px solid #e4e7ed;
+  background: color-mix(in srgb, var(--p-text-color, #fff) 4%, var(--p-content-background, #18181b));
+  border: 1px solid var(--p-content-border-color, #27272a);
   border-radius: 4px 4px 0 0;
   font-size: 11px;
   font-weight: 700;
-  color: #909399;
+  color: var(--p-text-muted-color, #909399);
   letter-spacing: 0.3px;
   box-sizing: var(--port-box-sizing);
 }
 
 /* ── Canvas ── */
 .flow-canvas {
-  border: 1px solid #dcdfe6;
+  border: 1px solid var(--p-content-border-color, #27272a);
   border-radius: 0 0 4px 4px;
-  background: #fafafa;
+  background: color-mix(in srgb, var(--p-text-color, #fff) 2%, var(--p-content-background, #18181b));
   max-height: 65vh;
   overflow-y: auto;
   overflow-x: hidden;
@@ -737,7 +704,7 @@ watch(
 }
 :deep(.port-row--ghost) {
   background: transparent;
-  border: 1.5px dashed #dcdfe6;
+  border: 1.5px dashed var(--p-content-border-color, #3f3f46);
   opacity: 1;
   cursor: pointer;
   gap: 6px;
@@ -745,14 +712,14 @@ watch(
   transition: border-color 0.15s, background 0.15s;
 }
 :deep(.port-row--ghost:hover) {
-  border-color: #409eff;
-  background: #ecf5ff;
+  border-color: var(--p-primary-color, #409eff);
+  background: color-mix(in srgb, var(--p-primary-color, #409eff) 12%, transparent);
 }
 .ghost-label {
   gap: 5px;
   font-size: 11px;
   font-weight: 600;
-  color: #c0c4cc;
+  color: var(--p-text-muted-color, #a1a1aa);
   letter-spacing: 0.5px;
   pointer-events: none;
   user-select: none;
@@ -765,7 +732,7 @@ watch(
   width: 100%;
 }
 :deep(.port-row--ghost:hover) .ghost-label {
-  color: #409eff;
+  color: var(--p-primary-color, #409eff);
 }
 
 /* ── Handles ── */
@@ -773,14 +740,26 @@ watch(
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  border: 2px solid white;
+  border: 2px solid var(--p-content-background, #18181b);
   transition: background 0.1s ease;
+  position: absolute !important;
+  top: 50% !important;
+  z-index: 10;
 }
-:deep(.vue-flow__handle-valid) {
-  background: #67c23a;
+
+:deep(.vue-flow__handle-left) {
+  left: 0 !important;
+  transform: translate(-50%, -50%) !important;
 }
+
+:deep(.vue-flow__handle-right) {
+  right: 0 !important;
+  transform: translate(50%, -50%) !important;
+}
+
+:deep(.vue-flow__handle-valid),
 :deep(.handle--valid-target) {
-  background: #67c23a !important;
+  background: var(--p-green-500, #67c23a) !important;
   box-shadow: 0 0 0 3px rgba(103, 194, 58, 0.35);
 }
 
@@ -801,7 +780,7 @@ watch(
   align-items: center;
   gap: 5px;
   font-size: 11px;
-  color: #909399;
+  color: var(--p-text-muted-color, #a1a1aa);
 }
 .legend-dot {
   width: 9px;
@@ -810,18 +789,18 @@ watch(
   display: inline-block;
 }
 .dot-connected {
-  background: #409eff;
+  background: var(--p-primary-color, #409eff);
 }
 .dot-taken {
-  background: #e6a23c;
-  border: 1px dashed #e6a23c;
+  background: var(--p-warn-color, #e6a23c);
+  border: 1px dashed var(--p-warn-color, #e6a23c);
 }
 .dot-taken-multi {
-  background: #ffffff;
-  border: 1px solid #c0c4cc;
+  background: var(--p-content-background, #18181b);
+  border: 1px solid var(--p-content-border-color, #52525b);
 }
 .dot-free {
-  background: #c0c4cc;
+  background: var(--p-text-muted-color, #71717a);
 }
 
 /* ── Footer ── */

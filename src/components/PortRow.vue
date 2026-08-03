@@ -23,19 +23,23 @@
         :options="PORT_TYPE_OPTIONS"
         optionLabel="label"
         optionValue="value"
-        class="w-16"
+        size="small"
         @change="$emit('change')"
       />
 
-      <InputText v-model="port.label" class="w-[170px]" @input="$emit('change')" />
+      <InputText 
+        v-model="port.label"
+        size="small"
+        @input="$emit('change')" 
+      />
 
-      <Select
+      <MultiSelect
         v-model="port.variables"
         :options="variables"
         optionLabel="name"
         optionValue="name"
-        multiple
-        class="flex-1"
+        placeholder="Select variables"
+        size="small"
         @change="$emit('change')"
       />
 
@@ -44,7 +48,7 @@
         :options="MULTIPORT_OPTIONS"
         optionLabel="label"
         optionValue="value"
-        class="w-20"
+        size="small"
         @change="$emit('change')"
       />
 
@@ -71,6 +75,7 @@ import { computed } from 'vue'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
+import MultiSelect from 'primevue/multiselect'
 import { Handle, Position } from '@vue-flow/core'
 import { PORT_TYPE_OPTIONS, MULTIPORT_OPTIONS, NODE_W } from '../utils/constants'
 
@@ -127,8 +132,8 @@ const handleClass = computed(() => {
   display: flex;
   align-items: center;
   border-radius: 4px;
-  border: 1px solid #e4e7ed;
-  background: #fff;
+  border: 1px solid var(--p-content-border-color, #27272a);
+  background: var(--p-content-background, #18181b);
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
   position: relative;
   box-sizing: border-box;
@@ -137,46 +142,85 @@ const handleClass = computed(() => {
 .port-row--target {
   width: v-bind('NODE_W + "px"');
 }
+
+/* Base grid layout for controls */
 .port-controls {
-  display: flex;
+  display: grid;
   gap: 8px;
+  align-items: center;
   width: 100%;
   padding: 6px var(--port-inset-x, 9px);
   pointer-events: auto;
-  box-sizing: var(--port-box-sizing, border-box);
+  box-sizing: border-box;
 }
+
+.port-row--source .port-controls {
+  grid-template-columns: 85px minmax(0, 1.2fr) minmax(0, 1.5fr) 95px 16px 28px;
+}
+
+.port-row--target .port-controls {
+  grid-template-columns: 16px 28px 85px minmax(0, 1.2fr) minmax(0, 1.5fr) 95px;
+}
+
+:deep(.p-select),
+:deep(.p-multiselect),
+:deep(.p-inputtext) {
+  width: 100%;
+}
+
+:deep(.p-inputtext),
+:deep(.p-select-label),
+:deep(.p-multiselect-label),
+:deep(.p-multiselect-token-label) {
+  font-size: 12px !important;
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+  line-height: 1.2;
+}
+
+:deep(.p-multiselect-token) {
+  padding: 2px 6px !important;
+  margin-top: 1px !important;
+  margin-bottom: 1px !important;
+}
+
+:deep(.p-select-dropdown),
+:deep(.p-multiselect-dropdown) {
+  width: 24px !important;
+}
+
 .drag-handle {
   cursor: grab;
-  color: #c0c4cc;
+  color: var(--p-text-muted-color, #71717a);
   font-size: 16px;
-  padding: 0 4px;
+  padding: 0;
   user-select: none;
   line-height: 1;
-  flex-shrink: 0;
   display: inline-flex;
+  justify-content: center;
   align-items: center;
 }
 .drag-handle:hover {
-  color: #409eff;
+  color: var(--p-primary-color, #409eff);
 }
 .drag-handle:active {
   cursor: grabbing;
 }
 
-/* Row states */
+/* Row states adapt seamlessly to light & dark modes using CSS color-mix */
 .row--connected {
-  background: #ecf5ff;
-  border-color: #409eff;
-  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.12);
+  background: color-mix(in srgb, var(--p-primary-color, #409eff) 16%, var(--p-content-background, #18181b));
+  border-color: var(--p-primary-color, #409eff);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--p-primary-color, #409eff) 25%, transparent);
 }
 .row--taken {
-  background: #fdf6ec;
-  border: 1px dashed #e6a23c;
-  opacity: 0.8;
+  background: color-mix(in srgb, var(--p-warn-color, #e6a23c) 16%, var(--p-content-background, #18181b));
+  border: 1px dashed var(--p-warn-color, #e6a23c);
+  opacity: 0.85;
 }
 .row--taken-multi {
-  background: #ffffff;
-  border-color: #dcdfe6;
+  background: var(--p-content-background, #18181b);
+  border-color: var(--p-content-border-color, #3f3f46);
   opacity: 1;
 }
 .row--free {
@@ -185,32 +229,45 @@ const handleClass = computed(() => {
 .row--free:hover,
 .row--free.row--valid-target {
   opacity: 1;
-  border-color: #c0c4cc;
+  border-color: var(--p-primary-color, #409eff);
 }
 
-/* Handles */
 .port-handle {
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  border: 2px solid white;
+  border: 2px solid var(--p-content-background, #18181b);
   transition: background 0.1s ease;
+  position: absolute !important;
+  top: 50% !important;
+  z-index: 10;
 }
+
+.port-row--target .port-handle {
+  left: 0 !important; 
+  transform: translate(-50%, -50%) !important;
+}
+
+.port-row--source .port-handle {
+  right: 0 !important;
+  transform: translate(50%, -50%) !important;
+}
+
 .handle--connected {
-  background: #409eff;
+  background: var(--p-primary-color, #409eff);
 }
 .handle--taken {
-  background: #e6a23c;
+  background: var(--p-warn-color, #e6a23c);
 }
 .handle--taken-multi {
-  background: #ffffff;
-  border: 2px solid #c0c4cc;
+  background: var(--p-content-background, #18181b);
+  border: 2px solid var(--p-text-muted-color, #71717a);
 }
 .handle--free {
-  background: #c0c4cc;
+  background: var(--p-text-muted-color, #71717a);
 }
 .handle--valid-target {
-  background: #67c23a !important;
+  background: var(--p-green-500, #67c23a) !important;
   box-shadow: 0 0 0 3px rgba(103, 194, 58, 0.35);
 }
 </style>
