@@ -4,7 +4,7 @@
     :style="{ width: '1200px', maxHeight: '92vh' }"
     :draggable="false"
     :closable="false"
-    :modal="true"
+    modal
     :appendTo="'body'"
     @hide="onClosed"
     @wheel.stop
@@ -209,7 +209,6 @@ import { ref, computed, watch } from 'vue'
 import { VueFlow, Position, Handle, useVueFlow } from '@vue-flow/core'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
-import Chip from 'primevue/chip'
 import { FLOW_IDS, ROW_H, NODE_W, MID_GAP, PAD } from '../utils/constants'
 import { isSingleConnection } from '../utils/edges'
 import { isCompatible } from '../utils/ports'

@@ -230,7 +230,7 @@
             :default-edge-options="edgeLineOptions"
             :connection-line-options="edgeLineOptions"
             :nodes="nodes"
-            :delete-key-code="['Backspace', 'Delete']"
+            :delete-key-code="dialogVisible ? [] : ['Backspace', 'Delete']"
           >
             <HelperLines :horizontal="helperLineHorizontal" :vertical="helperLineVertical" :alignment="alignment" />
             <MiniMap :pannable="true" :zoomable="true" class="mini-map" />
@@ -468,6 +468,20 @@ const {
   isDragOver,
   createInstanceNode,
 } = useDragAndDrop(pendingHistoryNodes)
+
+const dialogVisible = computed(() => {
+  return (
+    portEditorDialogVisible.value ||
+    cellMLEditorDialogVisible.value ||
+    parameterEditorDialogVisible.value ||
+    saveDialogVisible.value ||
+    importDialogVisible.value ||
+    exportDialogVisible.value ||
+    replacementDialogVisible.value ||
+    macroBuilderDialogVisible.value ||
+    edgeConnectionDialogVisible.value
+  )
+})
 
 /**
  * Shared multi-file notification helper.
