@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: yarn install --frozen-lockfile
+      - run: corepack enable && yarn install --frozen-lockfile
 
       - run: pip install -r tests/requirements.txt
 
