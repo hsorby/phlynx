@@ -155,11 +155,11 @@ const handleClass = computed(() => {
 }
 
 .port-row--source .port-controls {
-  grid-template-columns: 85px minmax(0, 1.2fr) minmax(0, 1.5fr) 95px 16px 28px;
+  grid-template-columns: 60px minmax(0, 1.2fr) minmax(0, 1.5fr) 95px 16px 28px;
 }
 
 .port-row--target .port-controls {
-  grid-template-columns: 16px 28px 85px minmax(0, 1.2fr) minmax(0, 1.5fr) 95px;
+  grid-template-columns: 16px 28px 60px minmax(0, 1.2fr) minmax(0, 1.5fr) 95px;
 }
 
 :deep(.p-select),

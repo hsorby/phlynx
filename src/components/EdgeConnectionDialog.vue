@@ -226,12 +226,12 @@ const props = defineProps({
 const PORT_COLUMN_MODEL = {
   handle: '20px',
   action: '32px',
-  type: '64px',
-  label: '170px',
-  variables: '113px',
-  multiport: '79px',
+  type: '60px',
+  label: '125px',
+  variables: '157px',
+  multiport: '85px',
   gap: '8px',
-  spacer: '8px',
+  spacer: '0px',
   insetX: '9px',
 }
 
