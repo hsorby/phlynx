@@ -878,19 +878,49 @@ defineExpose({
   margin-top: 1rem;
 }
 
+.validation-status :deep(.p-message) {
+  border-radius: 10px;
+}
+
+.validation-status :deep(.p-message-warn) {
+  background: color-mix(in srgb, var(--p-amber-500, #d97706) 10%, var(--p-content-background, #fff));
+  border: 1px solid color-mix(in srgb, var(--p-amber-500, #d97706) 30%, transparent);
+}
+
+.validation-status :deep(.p-message-warn .p-message-icon) {
+  color: var(--p-amber-600, #b45309);
+}
+
+.validation-status :deep(.p-message-success) {
+  background: color-mix(in srgb, var(--p-green-500, #22c55e) 10%, var(--p-content-background, #fff));
+  border: 1px solid color-mix(in srgb, var(--p-green-500, #22c55e) 30%, transparent);
+}
+
+.validation-status :deep(.p-message-success .p-message-icon) {
+  color: var(--p-green-600, #16a34a);
+}
+
+.validation-status :deep(.p-message-success) .message-title {
+  color: var(--p-green-700, #15803d);
+}
+
+.validation-status :deep(.p-message-warn) .message-title {
+  color: var(--p-amber-700, #92400e);
+}
+
 .message-title {
   font-weight: 600;
-  color: var(--p-text-color);
 }
 
 .message-content {
   margin-top: 0.25rem;
+  color: var(--p-text-color);
 }
 
 .missing-resources {
   margin: 0.5rem 0 0 0;
   padding-left: 1rem;
-  color: var(--p-text-muted-color);
+  color: var(--p-text-color);
 }
 
 .missing-resources li {
@@ -899,13 +929,17 @@ defineExpose({
 
 .component-type-list {
   font-size: 0.8rem;
-  color: var(--p-amber-500, #d97706);
+  color: var(--p-text-muted-color);
 }
 
 .config-note {
   margin-top: 0.5rem;
   font-size: 0.9rem;
-  color: var(--p-amber-500, #d97706);
+  color: var(--p-text-muted-color);
+}
+
+.config-note strong {
+  color: var(--p-amber-700, #92400e);
 }
 
 .dialog-footer {
