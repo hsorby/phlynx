@@ -65,9 +65,9 @@ import {
   getModelComponentNames,
   mergeModelComponents,
 } from '../utils/cellml'
-import { useAppConfirm } from '../composables/useConfirmDialog'
+import { useConfirmDialog } from '../composables/useConfirmDialog'
 
-const { alert, confirm } = useAppConfirm()
+const { alert, confirm } = useConfirmDialog()
 
 const props = defineProps({
   modelValue: {

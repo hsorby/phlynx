@@ -389,7 +389,7 @@ import { resolvePortCouplings } from '../utils/edges'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
-import { useAppConfirm } from '../composables/useConfirmDialog'
+import { useConfirmDialog } from '../composables/useConfirmDialog'
 import { relayoutNodes } from '../services/layouts/physics'
 import {
   generateFlattenedModel,
@@ -457,7 +457,7 @@ const {
   vueFlowRef,
 } = useVueFlow(FLOW_IDS.MAIN)
 const { processMacroGeneration } = useMacroGenerator()
-const { confirm } = useAppConfirm()
+const { confirm } = useConfirmDialog()
 
 const pendingHistoryNodes = new Set()
 

@@ -139,7 +139,7 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import { PARAMETER_TYPE_OPTIONS } from '../utils/constants'
 
-import { useAppConfirm } from '../composables/useConfirmDialog'
+import { useConfirmDialog } from '../composables/useConfirmDialog'
 import { useLibraryStore } from '../stores/libraryStore'
 import { isEditableVariableType } from '../utils/variables'
 import phlynxspinner from '/src/assets/phlynxspinner.svg?raw'
@@ -178,7 +178,7 @@ const selectedRows = ref([])
 const bulkTypeValue = ref('')
 const sortField = ref('type')
 const sortOrder = ref(1)
-const { confirm } = useAppConfirm()
+const { confirm } = useConfirmDialog()
 
 const dialogVisible = computed({
   get: () => props.modelValue,

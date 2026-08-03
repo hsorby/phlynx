@@ -8,7 +8,7 @@ import { useConfirm } from 'primevue/useconfirm'
 //   rejectLabel?: string
 // }
 
-export function useAppConfirm() {
+export function useConfirmDialog() {
   const confirm = useConfirm()
 
   function showConfirm(options) {
