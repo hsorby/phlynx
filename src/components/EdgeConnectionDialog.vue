@@ -265,7 +265,6 @@ const SIDE_CONFIG = {
 const contentWidth = `${OUTER_MARGIN * 2 + NODE_W * 2 + MID_GAP}px`
 const nodeWidth = `${NODE_W}px`
 const midGap = `${MID_GAP}px`
-console.log(`contentWidth = ${contentWidth} = ${OUTER_MARGIN} * 2 + ${NODE_W} * 2 + ${MID_GAP}`)
 
 const portGridStyle = {
   '--port-col-handle': PORT_COLUMN_MODEL.handle,
