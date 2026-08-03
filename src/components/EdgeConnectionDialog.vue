@@ -237,7 +237,7 @@ const props = defineProps({
   subgraph: { type: Map, required: true },
 })
 
-const CANVAS_PAD_X = 16
+const CANVAS_PAD_X = 14
 const MID_GAP_PX = 60
 
 const SIDE_CONFIG = {
@@ -759,7 +759,7 @@ watch(
   display: flex;
   align-items: flex-start;
   width: 100%;
-  padding: 0 16px;
+  padding: 0 14px;
   box-sizing: border-box;
 }
 
