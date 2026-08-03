@@ -3,6 +3,7 @@
     v-model:visible="dialogVisible"
     modal
     header="Replace Module"
+    :dismissableMask="true"
     :style="{ width: '700px' }"
     @after-hide="resetForm"
   >

@@ -3,7 +3,8 @@
     :visible="modelValue"
     header="Edit Module Instance"
     :style="{ width: '800px' }"
-    :modal="true"
+    modal
+    :dismissableMask="true"
     @hide="resetForm"
     @update:visible="closeDialog"
     @mousedown.stop

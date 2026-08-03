@@ -6,6 +6,7 @@
     :closable="false"
     modal
     :appendTo="'body'"
+    :dismissableMask="isFlowReady"
     @show="onDialogShow"
     @hide="onClosed"
     @wheel.stop

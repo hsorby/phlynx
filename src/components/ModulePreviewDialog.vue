@@ -1,6 +1,8 @@
 <template>
   <Dialog
     v-model:visible="visible"
+    modal
+    :dismissableMask="true"
     :header="`Preview: ${moduleData?.moduleRef}`"
     :style="{ width: '800px' }"
     :appendTo="'body'"
