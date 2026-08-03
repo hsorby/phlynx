@@ -1,128 +1,119 @@
 <template>
-  <el-dialog
-    :model-value="modelValue"
-    :title="config.title || 'Import File'"
-    width="500px"
-    @closed="closeDialog"
-    @update:model-value="closeDialog"
-    :close-on-click-modal="!isLoading"
-    :close-on-press-escape="!isLoading"
-    :show-close="!isLoading"
+  <Dialog
+    :visible="modelValue"
+    :header="config.title || 'Import File'"
+    :style="{ width: '500px' }"
+    modal
+    :dismissableMask="!isLoading"
+    :closable="!isLoading"
+    :draggable="false"
+    @update:visible="
+      (visible) => {
+        if (!visible) closeDialog()
+      }
+    "
   >
-    <div
-      v-loading="isLoading"
-      :element-loading-text="loadingText"
-      :element-loading-svg="phlynxspinner"
-      element-loading-svg-view-box="0, 0, 100, 100"
-      element-loading-background="var(--el-mask-color-extra-light)"
-    >
-      <el-form label-position="top" :class="{ 'is-loading-content': isLoading }">
+    <div class="dialog-content">
+      <div v-if="isLoading" class="loading-overlay">
+        <ProgressSpinner />
+        <span class="loading-text">{{ loadingText }}</span>
+      </div>
+
+      <form class="import-form" :class="{ 'is-loading-content': isLoading }">
         <div class="form-header" v-if="requiredFieldsCount > 0">
           <span class="required-asterisk">*</span> Indicates required field
         </div>
+
         <div v-for="field in displayFields" :key="field.key" class="field-container">
-          <el-form-item class="form-item" :label="field.label" :required="field?.required ?? true" :class="{ 'is-info': field.limit }">
+          <div class="form-item" :class="{ 'is-info': field.limit }">
+            <label class="field-label">
+              <span>{{ field.label }}</span>
+              <span v-if="field?.required ?? true" class="required-asterisk">*</span>
+            </label>
+
             <div class="upload-row">
               <div class="file-input-box" :class="{ 'is-valid': isFieldReady(field.key) }">
                 <div class="file-names-area" @click.stop>
-                  <span v-if="!formState[field.key]?.files || formState[field.key]?.files.size === 0" class="empty-text">
+                  <span
+                    v-if="!formState[field.key]?.files || formState[field.key]?.files.size === 0"
+                    class="empty-text"
+                  >
                     No file(s) selected
                   </span>
                   <template v-else>
-                    <el-tag
-                      v-for="[filename, fileData] in [...formState[field.key].files].slice(0, MAX_VISIBLE_TAGS)"
+                    <Tag
+                      v-for="[filename, fileData] in [...formState[field.key].files].slice(
+                        0,
+                        isFieldExpanded(field.key) ? formState[field.key].files.size : MAX_VISIBLE_TAGS
+                      )"
                       :key="filename"
-                      :type="fileData.isValid ? 'success' : 'warning'"
+                      :severity="fileData.isValid ? 'success' : 'warning'"
                       closable
                       @close="removeFile(field.key, filename)"
-                      size="small"
-                      effect="light"
                       class="file-tag"
                     >
                       <span class="tag-content">
-                        <el-icon v-if="fileData.isValid" class="tag-icon"><Check /></el-icon>
-                        <el-icon v-else class="tag-icon"><Warning /></el-icon>
+                        <i v-if="fileData.isValid" class="pi pi-check tag-icon" />
+                        <i v-else class="pi pi-exclamation-triangle tag-icon" />
                         <span>{{ filename }}</span>
                       </span>
-                    </el-tag>
+                    </Tag>
 
-                    <el-popover
+                    <Button
                       v-if="formState[field.key].files.size > MAX_VISIBLE_TAGS"
-                      placement="bottom-start"
-                      :width="280"
-                      trigger="click"
+                      class="overflow-tag"
+                      text
+                      size="small"
+                      severity="secondary"
+                      @click.stop="toggleExpandedField(field.key)"
                     >
-                      <template #reference>
-                        <el-tag size="small" type="info" effect="plain" class="overflow-tag" @click.stop>
-                          +{{ formState[field.key].files.size - MAX_VISIBLE_TAGS }} more
-                        </el-tag>
-                      </template>
-                      <div class="overflow-popover">
-                        <el-tag
-                          v-for="[filename, fileData] in [...formState[field.key].files].slice(MAX_VISIBLE_TAGS)"
-                          :key="filename"
-                          :type="fileData.isValid ? 'success' : 'warning'"
-                          closable
-                          @close="removeFile(field.key, filename)"
-                          size="small"
-                          effect="light"
-                          class="overflow-popover-tag"
-                        >
-                          <span class="tag-content">
-                            <el-icon v-if="fileData.isValid" class="tag-icon"><Check /></el-icon>
-                            <el-icon v-else class="tag-icon"><Warning /></el-icon>
-                            <span>{{ filename }}</span>
-                          </span>
-                        </el-tag>
-                      </div>
-                    </el-popover>
+                      {{
+                        isFieldExpanded(field.key)
+                          ? 'Show less'
+                          : `+${formState[field.key].files.size - MAX_VISIBLE_TAGS} more`
+                      }}
+                    </Button>
                   </template>
                 </div>
 
-                <el-upload
-                  ref="uploadRefs"
-                  action="#"
-                  multiple
-                  :limit="field?.limit"
-                  :show-file-list="false"
-                  :auto-upload="false"
-                  :on-exceed="() => handleExceed(field)"
-                  :accept="field.accept"
-                  :on-change="(file) => handleFileChange(file, field)"
-                  class="upload-trigger"
-                >
-                  <el-button
-                    :type="isFieldReady(field.key) ? 'success' : 'primary'"
+                <div class="upload-trigger">
+                  <input
+                    :ref="(el) => setFileInputRef(el, field.key)"
+                    type="file"
+                    :multiple="!(field?.limit === 1)"
+                    :accept="field.accept"
+                    class="hidden-file-input"
+                    @change="(event) => handleFileChange(event, field)"
+                  />
+                  <Button
+                    :severity="isFieldReady(field.key) ? 'success' : 'primary'"
+                    outlined
                     class="browse-button"
-                    plain
+                    @click="triggerFileInput(field.key)"
                   >
-                    <el-icon class="in-button-icon"><Check v-if="isFieldReady(field.key)" /><Upload v-else /></el-icon>
+                    <i class="pi" :class="isFieldReady(field.key) ? 'pi-check' : 'pi-upload'" />
                     Select
-                  </el-button>
-                </el-upload>
-
+                  </Button>
+                </div>
               </div>
             </div>
+
             <div v-if="field.limit" class="field-hint">
-              <el-icon><InfoFilled /></el-icon>
+              <i class="pi pi-info-circle" />
               Up to {{ field.limit }} file{{ field.limit === 1 ? '' : 's' }} allowed
             </div>
-          </el-form-item>
+          </div>
         </div>
 
         <div v-if="importReadiness && formState[IMPORT_KEYS.INSTANCE_ARRAY]?.readiness" class="validation-status">
-          <el-alert
-            v-if="importReadiness.resourcesAreLoaded"
-            title="All Required Resources Available"
-            type="success"
-            :closable="false"
-            show-icon
-          >
-            <template #default> All necessary components and configurations are available. </template>
-          </el-alert>
+          <Message v-if="importReadiness.resourcesAreLoaded" severity="success" :closable="false">
+            <div class="message-title">All Required Resources Available</div>
+            <div class="message-content">All necessary components and configurations are available.</div>
+          </Message>
 
-          <el-alert v-else title="Additional Files Required" type="warning" :closable="false" show-icon>
-            <template #default>
+          <Message v-else severity="warn" :closable="false">
+            <div class="message-title">Additional Files Required</div>
+            <div class="message-content">
               <div>Please provide the following files to complete the import:</div>
               <ul class="missing-resources">
                 <li v-if="importReadiness.missingResources?.math.size > 0" class="config-note">
@@ -136,35 +127,37 @@
                   {{ [...importReadiness.missingResources.modules].join(',') }} and possibly CellML components.
                 </li>
               </ul>
-              <br />
               <div v-if="importReadiness.missingResources?.modules.size > 0" class="config-note">
                 <strong>NOTE:</strong> CellML Component File(s) may be required after providing the configurations.
               </div>
-            </template>
-          </el-alert>
+            </div>
+          </Message>
         </div>
-      </el-form>
+      </form>
     </div>
+
     <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="closeDialog" :disabled="isLoading">Cancel</el-button>
-        <el-button
-          type="primary"
-          @click="handleConfirm"
+      <div class="dialog-footer">
+        <Button label="Cancel" severity="secondary" text :disabled="isLoading" @click="closeDialog" />
+        <Button
+          label="Import"
+          severity="primary"
           :disabled="!isFormValid || isLoading || !importReadiness?.resourcesAreLoaded"
           :loading="isLoading"
-        >
-          Import
-        </el-button>
-      </span>
+          @click="handleConfirm"
+        />
+      </div>
     </template>
-  </el-dialog>
+  </Dialog>
 </template>
 
 <script setup>
 import { computed, nextTick, reactive, ref, watch, toRaw } from 'vue'
-import { ElDialog, ElForm, ElFormItem, ElButton, ElUpload, ElAlert, ElIcon, ElTag, ElPopover } from 'element-plus'
-import { Check, Warning, Upload, InfoFilled } from '@element-plus/icons-vue'
+import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
+import Message from 'primevue/message'
+import ProgressSpinner from 'primevue/progressspinner'
+import Tag from 'primevue/tag'
 
 import { useLibraryStore } from '../stores/libraryStore'
 import { useGtm } from '../composables/useGtm'
@@ -173,7 +166,6 @@ import { IMPORT_KEYS, MAX_VISIBLE_TAGS } from '../utils/constants'
 import { createDynamicFields, checkResourcesAreLoaded } from '../utils/import'
 import { normaliseConfig } from '../utils/config'
 import { processCellMLData } from '../utils/cellml'
-import phlynxspinner from '/src/assets/phlynxspinner.svg?raw'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -190,11 +182,12 @@ const libraryStore = useLibraryStore()
 
 // --- State Management ---
 const formState = reactive({})
-const uploadRefs = ref([])
+const fileInputRefs = ref({})
 const dynamicFields = ref([])
 const importReadiness = ref(null)
 const isLoading = ref(false)
 const loadingText = ref('Loading...')
+const expandedFields = ref(new Set())
 const stagedFiles = ref({
   mathFiles: [], // { filename: string, payload: object }
   configFiles: [], // { filename: string, payload: object }
@@ -204,9 +197,31 @@ function handleExceed(field) {
   nextTick(() => {
     notify.warning({
       title: 'Too Many Files',
-      message: `The limit is ${field.limit}.`
+      message: `The limit is ${field.limit}.`,
     })
   })
+}
+
+function setFileInputRef(el, fieldKey) {
+  if (el) {
+    fileInputRefs.value[fieldKey] = el
+  }
+}
+
+function triggerFileInput(fieldKey) {
+  fileInputRefs.value[fieldKey]?.click()
+}
+
+function toggleExpandedField(fieldKey) {
+  if (expandedFields.value.has(fieldKey)) {
+    expandedFields.value.delete(fieldKey)
+  } else {
+    expandedFields.value.add(fieldKey)
+  }
+}
+
+function isFieldExpanded(fieldKey) {
+  return expandedFields.value.has(fieldKey)
 }
 
 // Handler for removing a file via the tag's close button
@@ -217,9 +232,9 @@ const removeFile = (fieldKey, filename) => {
     fieldState.files.delete(filename)
 
     // Remove from staged files if applicable
-    stagedFiles.value.mathFiles = stagedFiles.value.mathFiles.filter(f => f.filename !== filename)
-    stagedFiles.value.configFiles = stagedFiles.value.configFiles.filter(f => f.filename !== filename)
-  
+    stagedFiles.value.mathFiles = stagedFiles.value.mathFiles.filter((f) => f.filename !== filename)
+    stagedFiles.value.configFiles = stagedFiles.value.configFiles.filter((f) => f.filename !== filename)
+
     // Re-evaluate overall module dependencies
     const instanceArrayPayload = getInstanceArrayPayload()
     if (instanceArrayPayload) {
@@ -272,12 +287,10 @@ const resetForm = (keepInstanceArray = false) => {
   resetFormState(keepInstanceArray)
   unstageFiles()
 
-  // Clear the visual file list in the UI components
-  if (uploadRefs.value) {
-    uploadRefs.value.forEach((uploadInstance) => {
-      uploadInstance?.clearFiles()
-    })
-  }
+  Object.entries(fileInputRefs.value).forEach(([, input]) => {
+    if (input) input.value = ''
+  })
+  expandedFields.value = new Set()
 }
 
 // Initialize formState when config changes
@@ -354,7 +367,7 @@ const getInstanceArrayPayload = () => {
     if (fileData.payload) return fileData.payload
   }
   return null
-}    
+}
 
 // Create a temporary store-like object for validation that includes staged files
 const createTemporaryStore = () => {
@@ -366,16 +379,16 @@ const createTemporaryStore = () => {
   for (const { filename, payload: configs } of stagedFiles.value.configFiles) {
     configs.forEach((config) => {
       const module = normaliseConfig(config)
-      if(!(availableMath.has(module.mathRef))) {
+      if (!availableMath.has(module.mathRef)) {
         module.isStub = true
       }
-      if(!(availableModules.has(module.moduleRef))) {
+      if (!availableModules.has(module.moduleRef)) {
         availableModules.set(module.moduleRef, module)
-        if (!(availableCollections.has(module.mathRef))) {
+        if (!availableCollections.has(module.mathRef)) {
           availableCollections.set(module.mathRef, new Set())
         }
         availableCollections.get(module.mathRef).add(module.moduleRef)
-      } 
+      }
     })
   }
 
@@ -383,7 +396,7 @@ const createTemporaryStore = () => {
   for (const { filename, payload } of stagedFiles.value.mathFiles) {
     payload.forEach((component) => {
       const mathRef = `${filename}:${component.name}`
-      if(!(availableMath.has(mathRef))) {
+      if (!availableMath.has(mathRef)) {
         availableMath.set(mathRef, component.math)
         availableCollections.get(mathRef)?.forEach((moduleRef) => {
           const moduleToUpdate = availableModules.get(moduleRef)
@@ -420,7 +433,7 @@ const checkReadiness = (instanceArrayPayload) => {
 const isFieldReady = (fieldKey) => {
   const fieldState = formState[fieldKey]
   if (!fieldState || fieldState.files.size === 0) return false
-  
+
   const filesAllValid = Array.from(fieldState.files.values()).every((f) => f?.isValid)
   if (!filesAllValid) return false
 
@@ -453,7 +466,7 @@ const isFormValid = computed(() => {
     const fieldState = formState[field.key]
     if (!fieldState || fieldState.files.size === 0) return false
 
-    return Array.from(fieldState.files.values()).every(file => file?.isValid)
+    return Array.from(fieldState.files.values()).every((file) => file?.isValid)
   })
 })
 
@@ -465,88 +478,96 @@ async function parseFile(field, rawFile) {
   return field.parser(rawFile)
 }
 
-const handleFileChange = async (uploadFile, field) => {
-  const rawFile = uploadFile.raw
-  const filename = rawFile.name
+const handleFileChange = async (event, field) => {
+  const selectedFiles = Array.from(event.target.files || [])
+  if (!selectedFiles.length) return
 
-  if (field.processUpload === 'cellml' && !validateCellMLFilename(rawFile)) {
-    return
+  const limit = field?.limit
+  if (limit && selectedFiles.length > limit) {
+    handleExceed(field)
+    selectedFiles.splice(limit)
   }
 
-  if (field.key === IMPORT_KEYS.INSTANCE_ARRAY) {
-    const existingFiles = formState[IMPORT_KEYS.INSTANCE_ARRAY]?.files
-    if (existingFiles?.size > 0 && !existingFiles.has(filename)) {
-      resetForm(/* keepInstanceArray */ true)
-    }
-  }
+  for (const rawFile of selectedFiles) {
+    const filename = rawFile.name
 
-  const state = formState[field.key]
-  state.files.set(filename, { isValid: false, payload: null })
-
-  // Parse and stage ----
-  try {
-    const parsed = await parseFile(field, rawFile)
-
-    state.files.get(filename).payload = parsed?.data ?? parsed // parameter files have different structure
-    state.readiness = parsed?.completionStatus ?? null
-    state.warnings = parsed?.completionStatus?.warnings ?? []
-
-    if (field.processUpload) {
-      stageValidatedFile(field, parsed, filename)
+    if (field.processUpload === 'cellml' && !validateCellMLFilename(rawFile)) {
+      continue
     }
 
-    // Mark valid if staging successfully completes
-    state.files.get(filename).isValid = true
-
-    // Update readiness and UI ---
-    const instanceArrayPayload = getInstanceArrayPayload()
-    if (instanceArrayPayload) {
-      const status = checkReadiness(instanceArrayPayload)
-
-      if (status && !status.resourcesAreLoaded) {
-        await syncDynamicFields(status)
+    if (field.key === IMPORT_KEYS.INSTANCE_ARRAY) {
+      const existingFiles = formState[IMPORT_KEYS.INSTANCE_ARRAY]?.files
+      if (existingFiles?.size > 0 && !existingFiles.has(filename)) {
+        resetForm(/* keepInstanceArray */ true)
       }
+    }
+
+    const state = formState[field.key]
+    state.files.set(filename, { isValid: false, payload: null })
+
+    try {
+      const parsed = await parseFile(field, rawFile)
+
+      state.files.get(filename).payload = parsed?.data ?? parsed // parameter files have different structure
+      state.readiness = parsed?.completionStatus ?? null
+      state.warnings = parsed?.completionStatus?.warnings ?? []
 
       if (field.processUpload) {
-        notifyAfterStaging(field, filename, status)
+        stageValidatedFile(field, parsed, filename)
       }
-    } else {
-      importReadiness.value = {
-        resourcesAreLoaded: true,
-        errors: [],
-        warnings: [],
-      }
-    }
 
-    // Surface any per-file warnings from the parser
-    if (state.warnings.length) {
-      await nextTick()
-      for (const w of state.warnings) {
-        notify.warning({
-          title: 'Import Warning',
-          message: w,
-        })
-      }
-    }
-  } catch (error) {
-    const fileEntry = state.files.get(filename)
-    if (fileEntry) {
-      fileEntry.isValid = false
-      fileEntry.payload = null
-    }
-    state.warnings = []
+      state.files.get(filename).isValid = true
 
-    trackEvent('import_action', {
-      category: 'Import',
-      action: 'import_error',
-      label: field.key || 'unknown_field',
-      file_type: 'various',
-    })
-    notify.error({
-      title: 'Import Error',
-      message: error.message || 'Failed to parse file.',
-    })
+      const instanceArrayPayload = getInstanceArrayPayload()
+      if (instanceArrayPayload) {
+        const status = checkReadiness(instanceArrayPayload)
+
+        if (status && !status.resourcesAreLoaded) {
+          await syncDynamicFields(status)
+        }
+
+        if (field.processUpload) {
+          notifyAfterStaging(field, filename, status)
+        }
+      } else {
+        importReadiness.value = {
+          resourcesAreLoaded: true,
+          errors: [],
+          warnings: [],
+        }
+      }
+
+      if (state.warnings.length) {
+        await nextTick()
+        for (const w of state.warnings) {
+          notify.warning({
+            title: 'Import Warning',
+            message: w,
+          })
+        }
+      }
+    } catch (error) {
+      const fileEntry = state.files.get(filename)
+      if (fileEntry) {
+        fileEntry.isValid = false
+        fileEntry.payload = null
+      }
+      state.warnings = []
+
+      trackEvent('import_action', {
+        category: 'Import',
+        action: 'import_error',
+        label: field.key || 'unknown_field',
+        file_type: 'various',
+      })
+      notify.error({
+        title: 'Import Error',
+        message: error.message || 'Failed to parse file.',
+      })
+    }
   }
+
+  event.target.value = ''
 }
 
 async function updateDynamicFields(completionStatus) {
@@ -561,14 +582,14 @@ function validateCellMLFilename(rawFile) {
   const componentFileIssues = importReadiness.value?.missingResources?.componentFileIssues
   if (!componentFileIssues?.length) return true
 
-  const expectedFilenames = componentFileIssues
-    .filter((issue) => issue.file)
-    .map((issue) => issue.file)
+  const expectedFilenames = componentFileIssues.filter((issue) => issue.file).map((issue) => issue.file)
 
   if (expectedFilenames.length > 0 && !expectedFilenames.includes(rawFile.name)) {
     notify.error({
       title: 'Incorrect File Provided',
-      message: `The configuration expects: "${expectedFilenames.join(', ')}". You provided "${rawFile.name}". This file will not be processed.`,
+      message: `The configuration expects: "${expectedFilenames.join(', ')}". You provided "${
+        rawFile.name
+      }". This file will not be processed.`,
       duration: 6000,
     })
     return false
@@ -578,7 +599,7 @@ function validateCellMLFilename(rawFile) {
 
 async function stageValidatedFile(field, parsedData, filename) {
   if (!field.processUpload) return
-  
+
   const data = parsedData
 
   if (field.processUpload === 'cellml') {
@@ -611,10 +632,10 @@ function notifyAfterStaging(field, filename, status) {
       } else if (relevantIssue.issue === 'filename_mismatch') {
         errorMsg = `The components were found, but the file name must be exactly "${relevantIssue.expectedFile}" as defined in your config.`
       }
-      notify.error({ 
-        title: 'Import Requirement Not Met', 
-        message: errorMsg, 
-        duration: 6000, 
+      notify.error({
+        title: 'Import Requirement Not Met',
+        message: errorMsg,
+        duration: 6000,
       })
     } else if (status.needsComponentFile) {
       notify.warning({
@@ -622,7 +643,7 @@ function notifyAfterStaging(field, filename, status) {
         message: `"${filename}" is valid, but additional CellML components are still required.`,
       })
     } else {
-      notify.success({ 
+      notify.success({
         title: 'CellML Ready',
         message: `${filename} staged successfully.`,
       })
@@ -634,8 +655,8 @@ function notifyAfterStaging(field, filename, status) {
         message: `"${filename}" added, but more configurations are still missing.`,
       })
     } else {
-      notify.success({ 
-        title: 'Success', 
+      notify.success({
+        title: 'Success',
         message: 'All configurations provided.',
       })
     }
@@ -692,12 +713,34 @@ defineExpose({
     closeDialog()
   },
 })
-
 </script>
 
 <style scoped>
+.dialog-content {
+  position: relative;
+  min-height: 220px;
+}
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background: var(--p-mask-background, rgba(0, 0, 0, 0.4));
+  backdrop-filter: blur(2px);
+}
+
+.loading-text {
+  color: var(--p-text-color);
+  font-size: 0.95rem;
+}
+
 .field-container {
-  margin-bottom: var(--el-spacing-small);
+  margin-bottom: 0.75rem;
 }
 
 .upload-row {
@@ -705,49 +748,54 @@ defineExpose({
 }
 
 .form-item {
-  margin-bottom: 32;
+  margin-bottom: 1rem;
 }
 
 .form-item.is-info {
-  margin-bottom: 0;
+  margin-bottom: 0.5rem;
+}
+
+.field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+  color: var(--p-text-color);
 }
 
 .field-hint {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: var(--el-font-size-extra-small);
-  color: var(--el-text-color-placeholder);
-  margin-bottom: 4px;
-}
-
-.field-hint .el-icon {
-  font-size: 12px;
+  font-size: 0.8rem;
+  color: var(--p-text-muted-color);
+  margin-top: 0.35rem;
 }
 
 .file-input-box {
   display: flex;
   align-items: stretch;
   width: 100%;
-  height: 32px;
-  border: 1px solid var(--el-border-color);
-  border-radius: var(--el-border-radius-base);
-  background-color: var(--el-fill-color-blank);
+  min-height: 40px;
+  border: 1px solid var(--p-form-field-border-color, var(--p-content-border-color));
+  border-radius: 6px;
+  background-color: var(--p-form-field-background, var(--p-content-background));
   overflow: hidden;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .file-input-box:focus-within {
-  border-color: var(--el-color-primary);
-  box-shadow: 0 0 0 1px var(--el-color-primary-light-7);
+  border-color: var(--p-primary-color);
+  box-shadow: 0 0 0 1px var(--p-primary-color);
 }
 
 .file-input-box.is-valid {
-  border-color: var(--el-color-success);
+  border-color: var(--p-green-500, #16a34a);
 }
 
 .file-input-box.is-valid:focus-within {
-  box-shadow: 0 0 0 1px var(--el-color-success-light-5);
+  box-shadow: 0 0 0 1px var(--p-green-500, rgba(22, 163, 74, 0.25));
 }
 
 .file-names-area {
@@ -757,19 +805,20 @@ defineExpose({
   gap: 4px;
   padding: 0 8px;
   min-width: 0;
-  margin-bottom: 0;
   overflow: hidden;
   cursor: default;
+  flex-wrap: wrap;
 }
 
 .upload-trigger {
   flex-shrink: 0;
-  border-left: 1px solid var(--el-border-color);
+  border-left: 1px solid var(--p-form-field-border-color, var(--p-content-border-color));
+  display: flex;
+  align-items: center;
 }
 
-.upload-trigger :deep(.el-upload) {
-  display: flex;
-  height: 100%;
+.hidden-file-input {
+  display: none;
 }
 
 .browse-button {
@@ -781,8 +830,8 @@ defineExpose({
 }
 
 .empty-text {
-  color: var(--el-text-color-placeholder);
-  font-size: var(--el-font-size-small);
+  color: var(--p-text-muted-color);
+  font-size: 0.9rem;
   white-space: nowrap;
 }
 
@@ -810,128 +859,100 @@ defineExpose({
 }
 
 .tag-icon {
-  font-size: 14px;
+  font-size: 0.9rem;
   flex-shrink: 0;
 }
 
-.overflow-popover {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.overflow-popover-tag {
-  width: 100%;
-}
-
-.overflow-popover-tag :deep(.el-tag__content) {
-  flex: 1;
-  min-width: 0;
-}
-
 .form-header {
-  margin-top: var(--el-spacing-mini);
-  margin-bottom: var(--el-spacing-base);
-  font-size: var(--el-font-size-extra-small);
-  color: var(--el-text-color-secondary);
+  margin-top: 0.25rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--p-text-muted-color);
   text-align: right;
 }
 
-/* .validation-status {
-  margin-top: var(--el-spacing-large);
-  margin-bottom: var(--el-spacing-base);
-} */
-
 .required-asterisk {
-  color: var(--el-color-danger);
+  color: var(--p-red-500, #dc2626);
+}
+
+.validation-status {
+  margin-top: 1rem;
+}
+
+.validation-status :deep(.p-message) {
+  border-radius: 10px;
+}
+
+.validation-status :deep(.p-message-warn) {
+  background: color-mix(in srgb, var(--p-amber-500, #d97706) 10%, var(--p-content-background, #fff));
+  border: 1px solid color-mix(in srgb, var(--p-amber-500, #d97706) 30%, transparent);
+}
+
+.validation-status :deep(.p-message-warn .p-message-icon) {
+  color: var(--p-amber-600, #b45309);
+}
+
+.validation-status :deep(.p-message-success) {
+  background: color-mix(in srgb, var(--p-green-500, #22c55e) 10%, var(--p-content-background, #fff));
+  border: 1px solid color-mix(in srgb, var(--p-green-500, #22c55e) 30%, transparent);
+}
+
+.validation-status :deep(.p-message-success .p-message-icon) {
+  color: var(--p-green-600, #16a34a);
+}
+
+.validation-status :deep(.p-message-success) .message-title {
+  color: var(--p-green-700, #15803d);
+}
+
+.validation-status :deep(.p-message-warn) .message-title {
+  color: var(--p-amber-700, #92400e);
+}
+
+.message-title {
+  font-weight: 600;
+}
+
+.message-content {
+  margin-top: 0.25rem;
+  color: var(--p-text-color);
 }
 
 .missing-resources {
-  margin: var(--el-spacing-small) 0 0 0;
-  padding-left: 20px;
-  color: var(--el-text-color-regular);
+  margin: 0.5rem 0 0 0;
+  padding-left: 1rem;
+  color: var(--p-text-color);
 }
 
 .missing-resources li {
-  margin: 4px 0;
-}
-
-.issue-list-container {
-  margin-top: var(--el-spacing-mini, 4px);
-}
-
-.component-issue-item {
-  font-size: var(--el-font-size-extra-small);
-  margin: 2px 0;
-  color: var(--el-color-warning);
-}
-
-.component-issue-item::first-letter {
-  color: var(--el-color-warning);
+  margin: 0.25rem 0;
 }
 
 .component-type-list {
-  font-size: var(--el-font-size-extra-small);
-  color: var(--el-text-color-warning);
+  font-size: 0.8rem;
+  color: var(--p-text-muted-color);
 }
 
 .config-note {
-  margin-top: var(--el-spacing-base);
-  font-size: var(--el-font-size-small);
-  color: var(--el-color-warning);
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--p-text-muted-color);
 }
 
-.in-button-icon {
-  margin-right: 7px;
+.config-note strong {
+  color: var(--p-amber-700, #92400e);
 }
 
-.mismatch-warning {
-  margin-top: var(--el-spacing-small);
-  color: var(--el-color-warning);
-  font-weight: bold;
-  font-size: var(--el-font-size-small);
-}
-
-:deep(.el-alert__description) {
-  margin-top: 5px;
-  line-height: 1.6;
-}
-
-:deep(.el-loading-spinner svg) {
-  width: 120px;
-  height: 120px;
-  animation: breathe 2s ease-in-out infinite !important;
-  transform-origin: center;
-}
-
-:deep(.el-loading-spinner) {
-  transform: translateY(-35%);
+.dialog-footer {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-:deep(.el-loading-text) {
-  color: var(--el-text-color-primary);
-  font-size: var(--el-font-size-base);
-  margin-top: var(--el-spacing-small);
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 .is-loading-content {
   opacity: 0.2;
   pointer-events: none;
   filter: grayscale(40%);
-  transition: opacity var(--el-transition-duration), filter var(--el-transition-duration);
-}
-
-@keyframes breathe {
-  0%,
-  100% {
-    transform: scale(0.95);
-  }
-
-  50% {
-    transform: scale(1.05);
-  }
+  transition: opacity 0.2s ease, filter 0.2s ease;
 }
 </style>

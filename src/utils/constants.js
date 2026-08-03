@@ -37,9 +37,10 @@ export const AFFINE_UNIT_CONVERSIONS = {
 }
 
 // Edge connection dialog parameters
+export const OUTER_MARGIN = 24
 export const ROW_H    = 52          // px per port row
 export const NODE_W   = 540         // px per column
-export const MID_GAP  = 75           // px between columns
+export const MID_GAP  = 75          // px between columns
 export const PAD      = 10          // top/bottom canvas padding
 export const AUTOSCROLL_ZONE = 60   // px from canvas edge that triggers autoscroll
 export const AUTOSCROLL_SPEED = 10  // max px per frame

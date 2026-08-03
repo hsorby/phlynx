@@ -1,12 +1,12 @@
 <template>
-  <el-dialog
-    :model-value="modelValue"
-    :title="dialogTitle"
-    width="80%"
-    top="5vh"
+  <Dialog
+    :visible="modelValue"
+    modal
+    :header="dialogTitle"
+    :dismissableMask="!loading"
+    :style="{ width: '80%' }"
     class="editor-dialog"
-    :before-close="handleBeforeClose"
-    @update:model-value="(val) => emit('update:modelValue', val)"
+    @update:visible="onDialogVisibleChange"
   >
     <div class="editor-container">
       <div v-if="loading" class="loading">Loading CellML source...</div>
@@ -25,34 +25,35 @@
     <template #footer>
       <div class="dialog-footer">
         <!-- "Apply to all" checkbox — only shown when sibling nodes exist -->
-        <el-tooltip
+        <div
           v-if="siblingCount > 0"
-          :content="`Also update ${siblingCount} other node${siblingCount !== 1 ? 's' : ''} using ${componentName} from ${componentFile}`"
-          placement="top"
-          effect="light"
+          class="apply-all-checkbox"
+          :title="`Also update ${siblingCount} other node${
+            siblingCount !== 1 ? 's' : ''
+          } using ${componentName} from ${componentFile}`"
         >
-          <el-checkbox v-model="applyToAll" class="apply-all-checkbox">
-            Apply to all instances
-            <el-tag size="small" type="info" style="margin-left: 6px">
-              {{ siblingCount + 1 }}
-            </el-tag>
-          </el-checkbox>
-        </el-tooltip>
+          <Checkbox v-model="applyToAll" binary inputId="applyToAll" />
+          <label for="applyToAll">Apply to all instances</label>
+          <Tag severity="info" :value="String(siblingCount + 1)" />
+        </div>
 
         <div class="footer-buttons">
-          <el-button @click="handleCancel">Cancel</el-button>
-          <el-button type="primary" @click="handleSave('button')" :disabled="!isDirty">
-            Save Changes
-          </el-button>
+          <Button label="Cancel" text @click="handleCancel" />
+          <Button label="Save Changes" @click="handleSave('button')" :disabled="!isDirty" />
         </div>
       </div>
     </template>
-  </el-dialog>
+  </Dialog>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { ElButton, ElCheckbox, ElDialog, ElMessageBox, ElTag, ElTooltip } from 'element-plus'
+
+import Button from 'primevue/button'
+import Checkbox from 'primevue/checkbox'
+import Dialog from 'primevue/dialog'
+import Tag from 'primevue/tag'
+
 import { useVueFlow } from '@vue-flow/core'
 import CellMLTextEditor from './CellMLTextEditor.vue'
 import { useLibraryStore } from '../stores/libraryStore'
@@ -65,6 +66,9 @@ import {
   getModelComponentNames,
   mergeModelComponents,
 } from '../utils/cellml'
+import { useConfirmDialog } from '../composables/useConfirmDialog'
+
+const { alert, confirm } = useConfirmDialog()
 
 const props = defineProps({
   modelValue: {
@@ -97,11 +101,11 @@ const originalModel = ref('')
 const applyToAll = ref(false)
 
 const componentFile = computed(() => {
-  return props.mathRef?.split(":")[0]
+  return props.mathRef?.split(':')[0]
 })
 
 const componentName = computed(() => {
-  return props.mathRef?.split(":")[1]
+  return props.mathRef?.split(':')[1]
 })
 
 const isDirty = computed(() => {
@@ -124,16 +128,16 @@ const siblingCount = computed(() => {
 const siblings = computed(() => {
   if (!componentName.value || !componentFile.value) return []
 
-  return nodes.value
-    .filter((n) =>
-      n.id !== props.id &&
-      n.data?.mathRef === props.mathRef
-    )
-    .map((n) => n.id)
+  return nodes.value.filter((n) => n.id !== props.id && n.data?.mathRef === props.mathRef).map((n) => n.id)
 })
 
 // Reset checkbox when dialog opens for a new node.
-watch(() => props.modelValue, () => { applyToAll.value = false })
+watch(
+  () => props.modelValue,
+  () => {
+    applyToAll.value = false
+  }
+)
 
 // ── Load content when dialog opens ──────────────────────────────────────────
 
@@ -160,17 +164,31 @@ const handleEditorReady = (canonicalMath) => {
   originalModel.value = canonicalMath
 }
 
-const checkDirtyAndProceed = (confirmAction) => {
-  if (isDirty.value) {
-    ElMessageBox.confirm('You have unsaved changes. Are you sure you want to close?', 'Warning', { type: 'warning' })
-      .then(() => confirmAction())
-      .catch(() => {})
-  } else {
+const checkDirtyAndProceed = async (confirmAction) => {
+  const confirmed = isDirty.value
+    ? await confirm({
+        header: 'Warning',
+        message: 'You have unsaved changes. Are you sure you want to close?',
+        severity: 'warning',
+        acceptLabel: 'Close',
+        rejectLabel: 'Cancel',
+      })
+    : true
+
+  if (confirmed) {
     confirmAction()
   }
 }
 
-const handleBeforeClose = (done) => checkDirtyAndProceed(done)
+const onDialogVisibleChange = (visible) => {
+  if (visible) {
+    emit('update:modelValue', true)
+    return
+  }
+
+  handleCancel()
+}
+
 const handleCancel = () => checkDirtyAndProceed(() => emit('update:modelValue', false))
 
 // ── Save ─────────────────────────────────────────────────────────────────────
@@ -186,7 +204,7 @@ const handleSave = async (source) => {
 
   const componentNames = getModelComponentNames(currentModel.value)
   if (!componentNames || componentNames.length === 0) {
-    ElMessageBox.alert('Could not find a valid component name in the model.', 'Parse Error', { type: 'error' })
+    window.alert('Could not find a valid component name in the model.')
     return
   }
   const newComponentName = componentNames[0].trim()
@@ -195,11 +213,11 @@ const handleSave = async (source) => {
   try {
     const mathRefExists = store.availableMath.has(newMathRef)
     if (mathRefExists) {
-      ElMessageBox.alert( 
-        `Name clash detected, please rename the component in the editor before saving.`,
-        'Name Conflict',
-        { type: 'error' }
-      )
+      await alert({
+        header: 'Name Conflict',
+        message: 'Name clash detected, please rename the component in the editor before saving.',
+        severity: 'error',
+      })
       return
     } else {
       store.addMath(newMathRef, currentModel.value)
@@ -227,7 +245,11 @@ const handleSave = async (source) => {
     emit('update:modelValue', false)
   } catch (error) {
     console.error(error)
-    ElMessageBox.alert(`Failed to save changes: ${error.message}`, 'Save Error', { type: 'error' })
+    await alert({
+      header: 'Save Error',
+      message: `Failed to save changes: ${error.message}`,
+      severity: 'error',
+    })
   }
 }
 </script>
@@ -245,14 +267,13 @@ const handleSave = async (source) => {
   position: relative;
 }
 
-.tag.internal {
-  color: orange;
-  font-weight: bold;
-}
-
-.tag.user {
-  color: green;
-  font-weight: bold;
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--p-text-muted-color);
+  font-size: 0.95rem;
 }
 
 .dialog-footer {
@@ -264,8 +285,17 @@ const handleSave = async (source) => {
 }
 
 .apply-all-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-right: auto;
-  font-size: 13px;
+  font-size: 0.875rem;
+  color: var(--p-text-color);
+}
+
+.apply-all-checkbox label {
+  cursor: pointer;
+  user-select: none;
 }
 
 .footer-buttons {

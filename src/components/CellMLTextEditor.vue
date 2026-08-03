@@ -26,10 +26,11 @@
 </template>
 
 <script setup>
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Codemirror } from 'vue-codemirror'
 import { basicSetup } from 'codemirror'
 import { keymap } from '@codemirror/view'
+import { oneDark } from '@codemirror/theme-one-dark' 
 import 'katex/dist/katex.min.css'
 
 import { CellMLTextGenerator } from 'cellml-text-editor'
@@ -52,11 +53,7 @@ const generator = new CellMLTextGenerator()
 const parser = new CellMLTextParser()
 const latexGen = new CellMLLatexGenerator()
 
-// Set once at creation from the model this instance was mounted with.
-// The parent forces a remount (via :key="mathRef") whenever the target
-// model changes, so this never needs to react to prop changes later.
 const cellmlText = ref(generator.generate(props.modelValue))
-
 const errors = ref([])
 const latexContainer = ref(null)
 
@@ -65,13 +62,20 @@ let currentDoc = null
 const cursorLine = ref(1)
 const latexPreview = ref('')
 
+// ── Dynamic Dark Mode Detection ─────────────────────────────────────────────
+const isDarkMode = ref(false)
+let observer = null
+
+const checkDarkMode = () => {
+  isDarkMode.value = document.documentElement.classList.contains('p-dark')
+}
+
 const handleStateUpdate = (viewUpdate) => {
   if (viewUpdate.selectionSet || viewUpdate.docChanged) {
     const state = viewUpdate.state
     const pos = state.selection.main.head
     const line = state.doc.lineAt(pos)
 
-    // Update cursorLine for your LaTeX preview logic
     cursorLine.value = line.number
     updatePreview()
   }
@@ -86,19 +90,18 @@ const shiftSpaceKeymap = keymap.of([
   },
 ])
 
-const extensions = [basicSetup, cellml(), shiftSpaceKeymap]
+// Dynamically inject theme extensions based on light vs. dark mode
+const extensions = computed(() => {
+  const base = [basicSetup, cellml(), shiftSpaceKeymap]
+  return isDarkMode.value ? [...base, oneDark] : base
+})
 
-const updatePreview = async() => {
+const updatePreview = async () => {
   if (!currentDoc) return
 
   const katex = (await katexPromise).default
+  const equations = Array.from(currentDoc.getElementsByTagNameNS('*', 'apply'))
 
-  // Find the equation that matches this line
-  // We look for elements with 'data-source-location' close to our cursor
-  // (Simple implementation: Exact match or nearest previous match)
-  const equations = Array.from(currentDoc.getElementsByTagNameNS('*', 'apply')) // get all apply nodes
-
-  // Find the node with the highest line number that is <= cursorLine
   let bestMatch = null
 
   for (let i = 0; i < equations.length; i++) {
@@ -108,24 +111,18 @@ const updatePreview = async() => {
     const loc = eq.getAttribute('data-source-location')
     if (!loc) continue
 
-    // Parse the range.
     const [startStr, endStr] = loc.split('-')
     const start = parseInt(startStr || '0', 10)
     const end = endStr ? parseInt(endStr, 10) : start
 
-    // If we've passed the cursor line, we can stop.
-    if (start > cursorLine.value) {
-      break
-    }
+    if (start > cursorLine.value) break
 
-    // Check if the cursor is inside the range.
     if (cursorLine.value >= start && cursorLine.value <= end) {
       bestMatch = eq
       break
     }
   }
 
-  // Convert to LaTeX.
   if (bestMatch) {
     const latex = latexGen.convert(bestMatch)
     latexPreview.value = latex
@@ -136,13 +133,12 @@ const updatePreview = async() => {
         const content = container.querySelector('.katex-html')
 
         if (content) {
-          const containerWidth = container.clientWidth - 30 // width minus padding
+          const containerWidth = container.clientWidth - 30
           const contentWidth = content.scrollWidth
 
-          // Calculate scale to fit width
           if (contentWidth > containerWidth) {
             const scale = containerWidth / contentWidth
-            content.style.transform = `scale(${scale * 0.95})` // 95% for margin
+            content.style.transform = `scale(${scale * 0.95})`
             content.style.transformOrigin = 'center center'
           } else {
             content.style.transform = 'none'
@@ -186,6 +182,10 @@ watch(cellmlText, (newText) => {
 })
 
 onMounted(() => {
+  checkDarkMode()
+  observer = new MutationObserver(checkDarkMode)
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+
   try {
     const parsed = parser.parse(cellmlText.value)
     errors.value = parsed.errors
@@ -195,13 +195,14 @@ onMounted(() => {
       emit('ready', parsed.xml)
     }
   } catch (e) {
-    // Do nothing for invalid syntax on initial load.
+    // Do nothing for initial syntax load
   }
 
   window.addEventListener('keydown', handleKeyDown)
 })
 
 onUnmounted(() => {
+  if (observer) observer.disconnect()
   window.removeEventListener('keydown', handleKeyDown)
 })
 </script>
@@ -212,20 +213,12 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 20px;
+  padding: 16px;
   font-family: sans-serif;
   box-sizing: border-box;
   position: relative;
-}
-
-/* Fixed preview at the top */
-.fixed-preview {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: white;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background-color: var(--p-content-background, transparent);
+  color: var(--p-text-color);
 }
 
 /* Panel structure for Editor */
@@ -234,28 +227,52 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  /* Prevents panels from expanding beyond container */
+  gap: 12px;
 }
 
-.editor-panel {
-  flex: 1;
-  overflow: hidden;
+.panel h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--p-text-color);
 }
 
+/* CodeMirror Base Styling */
 :deep(.cm-editor) {
   flex: 1;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 14px;
   overflow: hidden;
-  /* Ensure border-radius is applied to scrolling content */
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background-color: var(--p-content-background);
+  color: var(--p-text-color);
+  border: 1px solid var(--p-content-border-color);
 }
 
 :deep(.cm-scroller) {
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
-/* Preserve indentation spacing */
+/* CodeMirror Gutters */
+:deep(.cm-gutters) {
+  background-color: color-mix(in srgb, var(--p-content-background) 92%, var(--p-text-color));
+  color: var(--p-text-muted-color);
+  border-right: 1px solid var(--p-content-border-color);
+}
+
+:deep(.cm-activeLine) {
+  background-color: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
+}
+
+:deep(.cm-activeLineGutter) {
+  background-color: color-mix(in srgb, var(--p-primary-color) 20%, transparent);
+  color: var(--p-text-color);
+}
+
+:deep(.cm-cursor) {
+  border-left-color: var(--p-text-color);
+}
+
 :deep(.cm-content) {
   tab-size: 4;
 }
@@ -264,18 +281,23 @@ onUnmounted(() => {
   white-space: pre-wrap !important;
 }
 
-/* Formatting for the LaTeX Preview area */
+/* LaTeX Preview Area - Adapts to Dark Mode */
 .preview-pane {
-  height: 120px;
+  height: 110px;
   padding: 15px;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  background-color: color-mix(in srgb, var(--p-content-background) 96%, var(--p-text-color));
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5em;
+  font-size: 1.4em;
   overflow: hidden;
+  color: var(--p-text-color);
+}
+
+.preview-pane :deep(.katex) {
+  color: var(--p-text-color) !important;
 }
 
 .preview-pane :deep(.katex-display) {
@@ -287,24 +309,65 @@ onUnmounted(() => {
 }
 
 .placeholder {
-  color: #ccc;
+  color: var(--p-text-muted-color);
   font-style: italic;
-  font-size: 0.8em;
+  font-size: 0.85em;
 }
 
-/* Error banner styling */
+/* Error Banner styling for Light/Dark Mode */
 .error-banner {
-  background-color: #ffebee;
-  color: #c62828;
+  background-color: color-mix(in srgb, var(--p-red-500, #ef4444) 15%, var(--p-content-background));
+  color: var(--p-red-400, #f87171);
   padding: 10px 15px;
-  border: 1px solid #ef9a9a;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.9em;
-  height: 120px;
+  border: 1px solid color-mix(in srgb, var(--p-red-500, #ef4444) 35%, transparent);
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  height: 110px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   overflow-y: auto;
+}
+
+/* ==========================================================================
+   CodeMirror Dark Mode Overrides (Selection, Gutters, Tokens)
+   ========================================================================== */
+
+:root.p-dark :deep(.cm-editor),
+:root.dark :deep(.cm-editor) {
+  background-color: #1e1e2e !important;
+  color: #cdd6f4 !important;
+}
+
+:root.p-dark :deep(.cm-focused .cm-selectionBackground),
+:root.p-dark :deep(.cm-selectionBackground),
+:root.dark :deep(.cm-selectionBackground) {
+  background-color: rgba(69, 71, 90, 0.7) !important;
+}
+
+:root.p-dark :deep(.cm-gutters),
+:root.dark :deep(.cm-gutters) {
+  background-color: #181825 !important;
+  color: #6c7086 !important;
+  border-right: 1px solid #313244 !important;
+}
+
+:root.p-dark :deep(.cm-cursor),
+:root.dark :deep(.cm-cursor) {
+  border-left-color: #f5e0dc !important;
+}
+
+/* Syntax Highlighting Token Overrides */
+:root.p-dark :deep(.cm-editor),
+:root.dark :deep(.cm-editor) {
+  .tok-keyword, .cm-keyword { color: #f38ba8 !important; font-weight: 600; }
+  .tok-string, .cm-string { color: #a6e3a1 !important; }
+  .tok-number, .cm-number, .tok-atom, .cm-atom { color: #fab387 !important; }
+  .tok-comment, .cm-comment { color: #6c7086 !important; font-style: italic; }
+  .tok-operator, .cm-operator, .tok-punctuation, .cm-punctuation { color: #89dceb !important; }
+  .tok-variableName, .cm-variableName { color: #cdd6f4 !important; }
+  .tok-typeName, .cm-typeName, .tok-className, .cm-className { color: #94e2d5 !important; }
+  .tok-propertyName, .cm-propertyName, .tok-attributeName, .cm-attributeName { color: #89b4fa !important; }
 }
 </style>

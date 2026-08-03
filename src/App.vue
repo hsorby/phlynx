@@ -1,6 +1,37 @@
 <template>
   <div class="app-layout">
-    <el-header class="global-nav">
+    <Toast position="top-right" :style="{ top: '150px' }">
+    <template #message="slotProps">
+      <div class="p-toast-message-text" style="flex: 1">
+        
+        <!-- Summary / Title -->
+        <div 
+          v-if="slotProps.message.summary" 
+          class="p-toast-summary font-bold" 
+          style="line-height: 1.2; margin-bottom: 4px;"
+        >
+          {{ slotProps.message.summary }}
+        </div>
+
+        <!-- Detail / Message Content -->
+        <div 
+          class="p-toast-detail" 
+          style="line-height: 1.5;"
+        >
+          <component 
+            v-if="typeof slotProps.message.detail === 'object'" 
+            :is="slotProps.message.detail" 
+          />
+          <div 
+            v-else 
+            v-html="slotProps.message.detail" 
+          />
+        </div>
+
+      </div>
+    </template>
+  </Toast>
+    <header class="global-nav">
       <!-- <div class="image-container">
         
       </div> -->
@@ -8,18 +39,18 @@
         <img src="/phlynxlogo.svg" alt="PhLynx Logo" class="centred-image" />
         <strong>PhLynx v{{ appVersion }}</strong>
       </div>
-      <div class="session-name" @dblclick="startEditing">
+      <div v-show="isWorkspaceActive" class="session-name" @dblclick="startEditing">
        <strong v-if="!isEditing">
           {{ sessionName }}
        </strong> 
-        <el-input v-else ref="inputRef" v-model="editingValue" @blur="saveEdit" @keyup.enter="saveEdit" @keyup.esc="cancelEdit"/>
+        <InputText v-else ref="inputRef" v-model="editingValue" @blur="saveEdit" @keyup.enter="saveEdit" @keyup.esc="cancelEdit"/>
       </div>
       <nav>
         <router-link to="/">Workspace</router-link>
         <router-link to="/docs/" :class="{ 'force-active': isDocsActive }">User Guide</router-link>
         <router-link to="/about">About</router-link>
       </nav>
-    </el-header>
+    </header>
 
     <div class="view-container">
       <router-view v-slot="{ Component }">
@@ -28,13 +59,19 @@
         </keep-alive>
       </router-view>
     </div>
+    <ConfirmDialog />
   </div>
 </template>
 
 <script setup>
 import { computed, ref, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
+import InputText from 'primevue/inputtext'
+
 import { useLibraryStore } from './stores/libraryStore'
+
+import ConfirmDialog from './components/ConfirmDialog.vue'
+import { Toast } from 'primevue'
 
 const appVersion = __APP_VERSION__ + __BUILD_STATE_MARKER__
 const route = useRoute()
@@ -50,6 +87,10 @@ const isDocsActive = computed(() => {
   return route.path.startsWith('/docs')
 })
 
+const isWorkspaceActive = computed(() => {
+  return route.path === '/'
+})
+
 async function startEditing(e) {
   e.stopPropagation()
 
@@ -57,8 +98,11 @@ async function startEditing(e) {
   isEditing.value = true
 
   await nextTick()
-  inputRef.value?.focus()
-  inputRef.value?.select()
+  // InputText may or may not expose focus()/select() directly depending on
+  // version, so fall back to the underlying native input element.
+  const el = inputRef.value?.$el ?? inputRef.value
+  el?.focus()
+  el?.select()
 }
 
 function saveEdit() {
@@ -89,18 +133,19 @@ function cancelEdit() {
 }
 
 .global-nav {
-  background-color: #333;
-  color: white;
+  background-color: var(--p-surface-900);
+  color: var(--p-surface-0);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
   padding-bottom: 0.5rem;
   padding-top: 0.5rem;
+  position: relative;
 }
 
 .global-nav nav a {
-  color: #ddd;
+  color: var(--p-surface-300);
   text-decoration: none;
   margin-left: 20px;
   font-size: 0.9rem;
@@ -109,7 +154,7 @@ function cancelEdit() {
 
 .global-nav nav a.router-link-active,
 .global-nav nav a.force-active {
-  color: #409eff;
+  color: var(--p-primary-color);
   pointer-events: none;
   cursor: default;
 }
@@ -134,13 +179,28 @@ function cancelEdit() {
 
 .session-name {
   cursor: text;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 240px;
+  text-align: center;
 }
 
 .session-name:hover {
-  color: #409eff;
+  color: var(--p-primary-color);
 }
 
-.session-name {
-  min-width: 200px;
+.session-name strong {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.session-name .p-inputtext {
+  width: 100%;
+  text-align: center;
+  box-sizing: border-box;
 }
 </style>

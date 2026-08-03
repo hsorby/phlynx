@@ -7,148 +7,117 @@
     @contextmenu.stop.prevent="openContextMenu"
     @mousedown.capture="StopDrag"
   >
-    <NodeResizer min-width="180" min-height="105" :is-visible="selected" />
+    <NodeResizer min-width="200" min-height="120" :is-visible="selected" />
 
-    <el-card :class="[domainTypeClass, 'instance-card']" shadow="hover">
+    <div :class="[domainTypeClass, 'instance-card']">
       <div v-if="isMissingParameters" class="status-indicator">
-        <el-tooltip content="At least one parameter has not been assigned a value" placement="top" effect="light">
-          <el-icon class="warning-icon">
-            <WarningFilled />
-          </el-icon>
-        </el-tooltip>
+        <i
+          class="pi pi-exclamation-triangle warning-icon"
+          v-tooltip.top="'At least one parameter has not been assigned a value'"
+        ></i>
       </div>
 
       <div class="instance-name" @dblclick="startEditing">
         <span v-if="!isEditing">
           {{ data.name }}
         </span>
-        <el-input v-else ref="inputRef" v-model="editingName" size="small" @blur="saveEdit" @keyup.enter="saveEdit" />
+        <InputText v-else ref="inputRef" v-model="editingName" size="small" @blur="saveEdit" @keyup.enter="saveEdit" />
       </div>
 
       <div class="instance-label">{{ instanceLabel }}</div>
       <div class="button-group">
-        <el-tooltip
-          effect="dark"
-          content="Set key (colour)"
-          placement="bottom"
-          :show-after="300"
-          :auto-close="1200"
-        >
-          <el-dropdown trigger="click" @command="handleSetDomainType" @visible-change="(val) => isDropdownOpen = val">
-            <el-button size="small" circle class="instance-button">
-              <el-icon><Key /></el-icon>
-            </el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="membrane">Membrane</el-dropdown-item>
-                <el-dropdown-item command="process">Process</el-dropdown-item>
-                <el-dropdown-item command="compartment">Compartment</el-dropdown-item>
-                <el-dropdown-item command="protein">Protein</el-dropdown-item>
-                <el-dropdown-item command="undefined" divided>Reset to Default</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </el-tooltip>
-
-        <el-tooltip
-            class="box-item"
-            effect="dark"
-            content="Add port node"
-            placement="bottom"
-            :show-after="300"
-            :auto-close="1200"
-        >
-          <el-dropdown trigger="click" @command="addHandle({ side: $event })">
-          
-            <el-button size="small" circle class="instance-button">
-              <el-icon><Place /></el-icon>
-            </el-button>
-          
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="left">Left</el-dropdown-item>
-                <el-dropdown-item command="right">Right</el-dropdown-item>
-                <el-dropdown-item command="top">Top</el-dropdown-item>
-                <el-dropdown-item command="bottom">Bottom</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </el-tooltip>
-        <el-tooltip
-            class="box-item"
-            effect="dark"
-            content="Edit port labels"
-            placement="bottom"
-            :show-after="300"
-            :auto-close="1200"
-        >
-          <el-button
-            size="small"
-            circle
-            @click="openPortEditDialog"
-            class="instance-button"
-          >
-            <el-icon><Edit /></el-icon>
-          </el-button>
-        </el-tooltip>
-
-        <el-tooltip
-            class="box-item"
-            effect="dark"
-            content="Edit parameters"
-            placement="bottom"
-            :show-after="300"
-            :auto-close="1200"
-        >
-          <el-button size="small" circle @click="openParameterEditDialog" class="instance-button">
-            <el-icon><Operation /></el-icon>
-          </el-button>
-        </el-tooltip>
-
-        <el-tooltip
-            class="box-item"
-            effect="dark"
-            content="Edit CellML Text"
-            placement="bottom"
-            :show-after="300"
-            :auto-close="1200"
-        >
-          <el-button
-            size="small"
-            circle
-            @click="openCellmlEditDialog"
-            class="instance-button"
-            :show-after="300"
-            :auto-close="1200"
-          >
-            <el-icon><CellMLIcon /></el-icon>
-          </el-button>
-        </el-tooltip>
-      </div>
-    </el-card>
-
-    <template v-for="handle in data.handles" :key="handle.uid" class="handle">
-      <el-tooltip class="box-item" effect="dark" :content="handle.name" placement="bottom" :show-after="1000">
-        <Handle
-          :id="getHandleId(handle)"
-          :ref="'handle_' + handle.side + '_' + handle.uid"
-          :position="handlePosition(handle.side)"
-          :style="getHandleStyle(handle, data.handles)"
-          class="handle"
+        <Button
+          rounded
+          iconOnly
+          size="small"
+          severity="secondary"
+          class="instance-button"
+          icon="pi pi-key"
+          @click="toggleDomainMenu"
+          v-tooltip.bottom="{ value: 'Set key (colour)', showDelay: 300 }"
+          aria-haspopup="true"
+          :aria-controls="domainMenuId"
         />
-        <template #content>
-          <el-button
-            class="delete-handle-btn"
-            type="danger"
-            :icon="Delete"
-            circle
-            plain
-            size="small"
-            @click.stop="removeHandle(handle.uid)"
-          />
-        </template>
-      </el-tooltip>
-    </template>
+        <Menu :id="domainMenuId" ref="domainMenuRef" :model="domainTypeMenuItems" popup class="content-fit-menu" />
+
+        <Button
+          rounded
+          iconOnly
+          size="small"
+          severity="secondary"
+          class="instance-button"
+          icon="pi pi-map-marker"
+          @click="togglePortMenu"
+          v-tooltip.bottom="{ value: 'Add handle', showDelay: 300 }"
+          aria-haspopup="true"
+          :aria-controls="portMenuId"
+        />
+        <Menu :id="portMenuId" ref="portMenuRef" :model="portMenuItems" popup class="content-fit-menu" />
+
+        <Button
+          rounded
+          iconOnly
+          size="small"
+          severity="secondary"
+          class="instance-button"
+          icon="pi pi-pencil"
+          @click="openPortEditDialog"
+          v-tooltip.bottom="{ value: 'Edit ports', showDelay: 300 }"
+        />
+
+        <Button
+          rounded
+          iconOnly
+          size="small"
+          severity="secondary"
+          class="instance-button"
+          icon="pi pi-sliders-h"
+          @click="openParameterEditDialog"
+          v-tooltip.bottom="{ value: 'Edit parameters', showDelay: 300 }"
+        />
+
+        <Button
+          rounded
+          iconOnly
+          size="small"
+          severity="secondary"
+          class="instance-button"
+          @click="openCellmlEditDialog"
+          v-tooltip.bottom="{ value: 'Edit CellML Text', showDelay: 300 }"
+        >
+          <template #icon>
+            <CellMLIcon class="p-button-icon" />
+          </template>
+        </Button>
+      </div>
+    </div>
+
+    <template v-for="handle in data.handles" :key="handle.uid">
+      <Handle
+        :id="getHandleId(handle)"
+        :ref="'handle_' + handle.side + '_' + handle.uid"
+        :position="handlePosition(handle.side)"
+        class="handle"
+        :style="getHandleStyle(handle, data.handles)"
+        v-tooltip.bottom="{ value: handle.name, showDelay: 1000 }"
+        @mouseenter="onHandleEnter(handle.uid)"
+        @mouseleave="onHandleLeave"
+      >
+        <Button
+          v-show="hoveredHandleUid === handle.uid"
+          :class="['delete-handle-popover-btn', 'popover-' + handle.side]"
+          icon="pi pi-trash"
+          severity="danger"
+          rounded
+          text
+          size="small"
+          @mouseenter="onHandleEnter(handle.uid)"
+          @mouseleave="onHandleLeave"
+          @mousedown.stop
+          @click.stop="removeHandle(handle.uid)"
+        />
+      </Handle>
+  </template>
   </div>
 </template>
 
@@ -156,7 +125,9 @@
 import { computed, nextTick, ref } from 'vue'
 import { Handle, useVueFlow } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
-import { Delete, Edit, Key, Place, WarningFilled, Operation } from '@element-plus/icons-vue'
+import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
+import Menu from 'primevue/menu'
 import CellMLIcon from './icons/CellMLIcon.vue'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
@@ -194,6 +165,9 @@ const emit = defineEmits([
   'open-context-menu',
 ])
 
+const domainMenuId = `domain-type-menu-${props.id}`
+const portMenuId = `port-menu-${props.id}`
+
 async function openPortEditDialog() {
   emit('open-port-editor-dialog', {
     id: props.id,
@@ -222,7 +196,7 @@ function openParameterEditDialog() {
 }
 
 const instanceLabel = computed(() => {
-  return `${props.data.mathRef.split(':')[1]} [${props.data.mathRef.split(':')[0]}]`
+  return `${props.data.mathRef.split(':')[1]} — ${props.data.mathRef.split(':')[0]}`
 })
 
 const domainTypeClass = computed(() => {
@@ -245,15 +219,64 @@ const isMissingParameters = computed(() => {
   return false
 })
 
-function handleSetDomainType(typeCommand) {
-  const newType = typeCommand === 'undefined' ? undefined : typeCommand
+function handleSetDomainType(newType) {
   updateNodeData(props.id, { domainType: newType })
 }
+
+const domainMenuRef = ref(null)
+function toggleDomainMenu(event) {
+  domainMenuRef.value?.toggle(event)
+}
+const domainTypeMenuItems = [
+  { label: 'Membrane', command: () => handleSetDomainType('membrane') },
+  { label: 'Process', command: () => handleSetDomainType('process') },
+  { label: 'Compartment', command: () => handleSetDomainType('compartment') },
+  { label: 'Protein', command: () => handleSetDomainType('protein') },
+  { separator: true },
+  { label: 'Reset to Default', command: () => handleSetDomainType(undefined) },
+]
+
+const portMenuRef = ref(null)
+function togglePortMenu(event) {
+  portMenuRef.value?.toggle(event)
+}
+const portMenuItems = [
+  { label: 'Left', command: () => addHandle({ side: 'left' }) },
+  { label: 'Right', command: () => addHandle({ side: 'right' }) },
+  { label: 'Top', command: () => addHandle({ side: 'top' }) },
+  { label: 'Bottom', command: () => addHandle({ side: 'bottom' }) },
+]
 
 const applyHandles = async (handlesToSet) => {
   updateNodeData(props.id, { handles: handlesToSet })
   await nextTick()
   updateNodeInternals(props.id)
+}
+
+const hoveredHandleUid = ref(null)
+let enterTimeout = null
+let leaveTimeout = null
+
+function onHandleEnter(uid) {
+  // 1. Cancel the hide timer if the user quickly moved back
+  clearTimeout(leaveTimeout) 
+  
+  // 2. Only start the show timer if the button isn't already visible
+  if (hoveredHandleUid.value !== uid) {
+    enterTimeout = setTimeout(() => {
+      hoveredHandleUid.value = uid
+    }, 1000) // Adjust this value (in milliseconds) to change how long they must hover
+  }
+}
+
+function onHandleLeave() {
+  // 1. Cancel the show timer if they moved their mouse away before it appeared
+  clearTimeout(enterTimeout) 
+  
+  // 2. Start the hide timer (gives a 150ms grace period to move the mouse to the button)
+  leaveTimeout = setTimeout(() => {
+    hoveredHandleUid.value = null
+  }, 150) 
 }
 
 async function removeHandle(handleIdToRemove) {
@@ -326,7 +349,7 @@ const addHandle = async (handleToAdd) => {
 
 const isEditing = ref(false)
 const editingName = ref('')
-const inputRef = ref(null) 
+const inputRef = ref(null)
 
 async function startEditing(event) {
   event.stopPropagation()
@@ -335,7 +358,9 @@ async function startEditing(event) {
   editingName.value = props.data.name
 
   await nextTick()
-  inputRef.value?.focus()
+  // InputText may or may not expose focus() directly depending on version,
+  // so fall back to the underlying native input element.
+  ;(inputRef.value?.$el ?? inputRef.value)?.focus()
 }
 
 function StopDrag(event) {
@@ -377,11 +402,30 @@ function openContextMenu(event) {
     id: props.id,
   })
 }
-
 </script>
 
 <style lang="scss" scoped>
 @import '../assets/vueflowhandle.css';
+
+.handle {
+  width: 14px !important;
+  height: 14px !important;
+  border-radius: 50% !important; 
+}
+
+.instance-name {
+  min-height: 2.5rem; 
+  display: flex;
+  align-items: center;
+  width: 100%; 
+  margin-bottom: -4px;
+}
+
+.instance-name :deep(.p-inputtext) {
+  width: 100%;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
 
 .instance-node {
   display: block;
@@ -391,7 +435,6 @@ function openContextMenu(event) {
   border-radius: 10px;
 }
 
-.instance-node > .el-card,
 .instance-card {
   width: 100%;
   height: 100%;
@@ -399,35 +442,112 @@ function openContextMenu(event) {
   border-radius: 10px;
   box-sizing: border-box;
   position: relative;
-  border: 3px solid rgba(0,0,0,0.04);
+  background: var(--p-content-background);
+  color: var(--p-text-color);
+  border: 3px solid color-mix(in srgb, var(--p-text-color) 4%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--p-text-color) 6%, transparent);
+  transition: box-shadow 120ms ease;
+  padding: 0.75rem;
+}
+
+.instance-card:hover {
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--p-text-color) 12%, transparent);
 }
 
 .status-indicator {
   position: absolute;
-  top: 0px;
-  right: 0px;
+  top: 3px;
+  right: 3px;
   z-index: 10;
-  background-color: white;
+  background-color: color-mix(in srgb, var(--p-orange-500) 20%, var(--p-content-background));
   border-radius: 50%;
   width: 20px;
   height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 4px color-mix(in srgb, var(--p-text-color) 10%, transparent);
 }
 
 .warning-icon {
-  color: var(--el-color-warning);
+  color: var(--p-orange-500);
   font-size: 18px;
   cursor: help;
+}
 
-  &:hover {
-    color: var(--el-color-warning-dark-2);
-  }
+.warning-icon:hover {
+  color: var(--p-orange-600);
 }
 
 .instance-button {
   margin: 0;
+  flex-shrink: 0; 
+
+  width: 1.75rem !important;
+  height: 1.75rem !important;
+  padding: 0 !important;
+}
+
+.instance-button :deep(.p-button-icon),
+.instance-button :deep(i) {
+  font-size: 0.75rem !important;
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.button-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Base appearance for the popover */
+.delete-handle-popover-btn {
+  position: absolute;
+  background-color: var(--p-content-background);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--p-text-color) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--p-text-color) 10%, transparent);
+  z-index: 20;
+  cursor: pointer;
+}
+
+/* Position for Top handles (Appears above) */
+.popover-top {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, calc(-100% - 14px));
+}
+
+/* Position for Bottom handles (Appears below) */
+.popover-bottom {
+  top: 50%;
+  left: 50%;
+  /* Pushes it down */
+  transform: translate(-50%, 14px);
+}
+
+/* Position for Left handles (Appears to the left) */
+.popover-left {
+  top: 50%;
+  left: 50%;
+  transform: translate(calc(-100% - 14px), -50%);
+}
+
+/* Position for Right handles (Appears to the right) */
+.popover-right {
+  top: 50%;
+  left: 50%;
+  transform: translate(14px, -50%);
+}
+
+</style>
+
+<style>
+.content-fit-menu {
+  width: max-content !important; 
+  min-width: 0 !important; 
+}
+.vue-flow__node {
+  background: transparent !important;
 }
 </style>

@@ -1,143 +1,122 @@
 <template>
-  <el-dialog :model-value="modelValue" title="Edit Module Instance" width="800px" teleported @closed="resetForm"
-    @update:model-value="closeDialog" @mousedown.stop @wheel.stop>
-    <el-form :model="editableData" label-position="left" @submit.prevent="handleConfirm">
-      <el-form-item label="Instance Name">
-        <el-input v-model="editableData.name" placeholder="Enter instance name" />
-      </el-form-item>
-
-     <el-divider />
-
-      <label class="el-form-label">Ports:</label>
-      <el-table
-        :data="editableData.ports"
-        style="width: 100%; margin-top: 10px"
-        empty-text="No port labels added"
-      >
-        <!-- Type -->
-        <el-table-column label="Type" width="80">
-          <template #default="scope">
-            <el-select v-model="scope.row.portType" size="small">
-              <el-option
-                v-for="option in PORT_TYPE_OPTIONS"
-                :key="option.value"
-                :label="option.label"
-                :value="option.value"
-              />
-            </el-select>
-          </template>
-        </el-table-column>
-
-        <!-- Label -->
-        <el-table-column label="Label" width="250">
-          <template #default="scope">
-            <el-input
-              v-model="scope.row.label"
-              size="small"
-              placeholder="Enter label"
-            />
-          </template>
-        </el-table-column>
-
-        <!-- Variables -->
-        <el-table-column label="Variable(s)" min-width="150">
-          <template #default="scope">
-            <el-select
-              v-model="scope.row.variables"
-              multiple
-              collapse-tags
-              collapse-tags-tooltip
-              size="small"
-              placeholder="Select variables"
-              style="width: 100%"
-            >
-              <el-option
-                v-for="variable in props.variables"
-                :key="variable.name"
-                :label="variable.name"
-                :value="variable.name"
-                :disabled="isVariableDisabled(variable.name, scope.row.variables)"
-              />
-            </el-select>
-          </template>
-        </el-table-column>
-
-        <!-- Multiport -->
-        <el-table-column label="Multiport" width="100">
-          <template #default="scope">
-            <div style="display: flex; flex-direction: column; gap: 5px">
-              <el-select
-                v-model="scope.row.multiportType"
-                size="small"
-                placeholder="Select"
-                style="width: 100%"
-              >
-                <el-option
-                  v-for="option in MULTIPORT_OPTIONS"
-                  :key="option.value"
-                  :label="option.label"
-                  :value="option.value"
-                  :disabled="option.value === 'Sum' && scope.row.option?.length > 1"
-                />
-              </el-select>
-              <div
-                v-if="scope.row.multiport === 'Multiply'"
-                style="display: flex; align-items: center; gap: 5px"
-              >
-                <span class="multiply-prefix">&times;</span>
-                <el-input-number
-                  v-model="scope.row.multiplyFactor"
-                  :controls="false"
-                  size="small"
-                  placeholder="1"
-                  style="width: 100%"
-                />
-              </div>
-            </div>
-          </template>
-        </el-table-column>
-
-        <!-- Delete -->
-        <el-table-column label="" width="60" align="center">
-          <template #default="scope">
-            <el-button
-              type="danger"
-              :icon="Delete"
-              circle
-              plain
-              size="small"
-              @click="deletePort(scope.$index)"
-            />
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <!-- Add Button -->
-      <div style="margin-top: 12px">
-        <el-tooltip content="Add Port Label" placement="bottom" :show-after="1000">
-          <el-button
-            type="success"
-            :icon="Plus"
-            plain
-            circle
-            @click="addPort"
-          />
-        </el-tooltip>
+  <Dialog
+    :visible="modelValue"
+    header="Edit Module Instance"
+    :style="{ width: '800px' }"
+    modal
+    :dismissableMask="true"
+    @hide="resetForm"
+    @update:visible="closeDialog"
+    @mousedown.stop
+    @wheel.stop
+  >
+    <form class="space-y-4" @submit.prevent="handleConfirm">
+      <div class="form-field">
+        <label class="form-label">Instance Name</label>
+        <InputText v-model="editableData.name" placeholder="Enter instance name" class="w-full" />
       </div>
-    </el-form>
+
+      <Divider />
+
+      <label class="form-label">Ports:</label>
+      <div v-if="editableData.ports.length" class="mt-2 overflow-x-auto">
+        <DataTable :value="editableData.ports" size="small" stripedRows>
+          <Column header="Type" style="width: 80px">
+            <template #body="slotProps">
+              <Select
+                v-model="slotProps.data.portType"
+                :options="PORT_TYPE_OPTIONS"
+                optionLabel="label"
+                optionValue="value"
+                class="w-full"
+              />
+            </template>
+          </Column>
+
+          <Column header="Label" style="width: 250px">
+            <template #body="slotProps">
+              <InputText v-model="slotProps.data.label" placeholder="Enter label" class="w-full" />
+            </template>
+          </Column>
+
+          <Column header="Variable(s)" style="min-width: 180px">
+            <template #body="slotProps">
+              <Select
+                v-model="slotProps.data.variables"
+                :options="props.variables"
+                optionLabel="name"
+                optionValue="name"
+                multiple
+                placeholder="Select variables"
+                class="w-full"
+              />
+            </template>
+          </Column>
+
+          <Column header="Multiport" style="width: 120px">
+            <template #body="slotProps">
+              <div class="flex flex-col gap-2">
+                <Select
+                  v-model="slotProps.data.multiportType"
+                  :options="MULTIPORT_OPTIONS"
+                  optionLabel="label"
+                  optionValue="value"
+                  placeholder="Select"
+                  class="w-full"
+                />
+                <div v-if="slotProps.data.multiportType === 'Multiply'" class="flex items-center gap-2">
+                  <span class="multiply-prefix">&times;</span>
+                  <InputNumber
+                    v-model="slotProps.data.multiplyFactor"
+                    :showButtons="false"
+                    placeholder="1"
+                    class="w-full"
+                  />
+                </div>
+              </div>
+            </template>
+          </Column>
+
+          <Column header="" style="width: 60px">
+            <template #body="slotProps">
+              <Button
+                icon="pi pi-trash"
+                severity="danger"
+                rounded
+                text
+                size="small"
+                @click="deletePort(editableData.ports.indexOf(slotProps.data))"
+              />
+            </template>
+          </Column>
+        </DataTable>
+      </div>
+      <div v-else class="mt-2 text-sm text-slate-500">No port labels added</div>
+
+      <div class="mt-3">
+        <Button icon="pi pi-plus" severity="success" rounded outlined @click="addPort" />
+      </div>
+    </form>
+
     <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="closeDialog">Cancel</el-button>
-        <el-button type="primary" @click="handleConfirm"> Confirm </el-button>
-      </span>
+      <div class="dialog-footer">
+        <Button label="Cancel" severity="secondary" text @click="closeDialog" />
+        <Button label="Confirm" severity="primary" @click="handleConfirm" />
+      </div>
     </template>
-  </el-dialog>
+  </Dialog>
 </template>
 
 <script setup>
 import { computed, reactive, watch } from 'vue'
-import { ElDialog, ElForm, ElFormItem, ElInput, ElButton, ElInputNumber } from 'element-plus'
-import { Delete, Plus } from '@element-plus/icons-vue'
+import Button from 'primevue/button'
+import Column from 'primevue/column'
+import DataTable from 'primevue/datatable'
+import Dialog from 'primevue/dialog'
+import Divider from 'primevue/divider'
+import InputNumber from 'primevue/inputnumber'
+import InputText from 'primevue/inputtext'
+import Select from 'primevue/select'
 import { useGtm } from '../composables/useGtm'
 import { notify } from '../utils/notify'
 import { sanitiseName } from '../utils/nodes'
@@ -161,7 +140,7 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
-  initialPorts: { 
+  initialPorts: {
     type: Array,
     default: () => [],
   },
@@ -205,35 +184,31 @@ function handleConfirm() {
   }
   editableData.name = sanitisedName
 
-  const nameExists = props.existingNames.some(
-    (name) => name === editableData.name && name !== props.initialName
-  )
-  
+  const nameExists = props.existingNames.some((name) => name === editableData.name && name !== props.initialName)
+
   if (nameExists) {
     notify.error({ message: 'An instance with this name already exists.' })
     return
   }
 
-  const finalPorts = editableData.ports.filter(
-    (p) => p.variables && p.label && p.label.trim()
-  )
+  const finalPorts = editableData.ports.filter((p) => p.variables && p.label && p.label.trim())
 
-  const invalidFactor = finalPorts.find(
-    (p) => p.multiportType === 'Multiply' && (isEmpty(p.multiplyFactor))
-  )
-  
+  const invalidFactor = finalPorts.find((p) => p.multiportType === 'Multiply' && isEmpty(p.multiplyFactor))
+
   if (invalidFactor) {
-    notify.error({ message: `Port "${invalidFactor.label}" has Multiply selected but the scale factor is missing or zero.` })
+    notify.error({
+      message: `Port "${invalidFactor.label}" has Multiply selected but the scale factor is missing or zero.`,
+    })
     return
   }
 
   trackEvent('edit_module_action', {
     category: 'EditModule',
     action: 'edit_module',
-    label: editableData.name, 
-    file_type: 'JSON'
+    label: editableData.name,
+    file_type: 'JSON',
   })
-  
+
   emit('confirm', {
     name: editableData.name,
     id: props.id,
@@ -254,7 +229,7 @@ watch(
 )
 
 watch(
-  () => editableData.ports.map(p => p.variable),
+  () => editableData.ports.map((p) => p.variable),
   (newVariables) => {
     newVariables.forEach((varName, i) => {
       if (varName?.length > 1 && editableData.ports[i].multiportType === 'Sum') {
@@ -266,7 +241,7 @@ watch(
 )
 
 watch(
-  () => editableData.ports.map(p => p.multiportType),
+  () => editableData.ports.map((p) => p.multiportType),
   (newMultiports) => {
     newMultiports.forEach((mp, i) => {
       if (mp !== 'Multiply') {
@@ -312,20 +287,27 @@ function deletePort(index) {
 </script>
 
 <style scoped>
-.el-form-item {
-  margin-bottom: 15px;
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.el-form-label {
+.form-label {
   font-weight: 600;
-  margin-bottom: 12px;
   font-size: 16px;
   display: block;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 .multiply-prefix {
   font-size: 12px;
   font-weight: 600;
-  color: var(--el-color-info);
+  color: var(--p-text-muted-color);
 }
 </style>

@@ -1,203 +1,233 @@
 <template>
-  <el-container style="height: 100%; display: flex; flex-direction: column; flex-grow: 1">
-    <el-header class="app-header">
+  <div class="app-layout-container">
+    <header class="app-header">
       <div class="file-uploads">
         <div class="file-io-buttons">
-          <el-upload
-            action="#"
-            :auto-upload="false"
-            :on-change="handleLoadWorkspace"
-            :show-file-list="false"
+          <!-- Hidden File Input for Workspace Load -->
+          <input
+            ref="workspaceFileInput"
+            type="file"
             accept=".json"
-          >
-            <el-button type="success">Load Workspace</el-button>
-          </el-upload>
+            style="display: none"
+            @change="handleLoadWorkspace"
+          />
+          <Button
+            label="Load Workspace"
+            size="small"
+            variant="text"
+            @click="$refs.workspaceFileInput.click()"
+          />
 
-          <el-button
-            type="success"
+          <Button
+            label="Save Workspace"
+            size="small"
+            variant="text"
             @click="handleSaveWorkspace"
             style="margin-left: 10px"
             :disabled="!somethingAvailable"
-          >
-            Save Workspace
-          </el-button>
+          />
 
-          <el-divider direction="vertical" style="margin: 10 15px" />
+          <Divider layout="vertical" style="margin: 0 15px" />
 
-          <el-button
-            type="warning"
-            plain
+          <Button
+            label="Auto Layout"
+            size="small"
+            variant="text"
+            severity="warn"
             @click="handleAutoLayout"
-            style="margin-left: 0px"
             :disabled="!somethingAvailable"
-          >
-            Auto Layout
-          </el-button>
+          />
 
-          <el-button
-            type="danger"
-            plain
+          <Button
+            label="Clear"
+            size="small"
+            variant="text"
+            severity="danger"
             @click="handleClearWorkspace"
             style="margin-left: 10px"
             :disabled="!somethingAvailable"
-          >
-            Clear
-          </el-button>
+          />
 
-          <el-divider direction="vertical" style="margin: 0 15px" />
+          <Divider layout="vertical" style="margin: 0 15px" />
 
-          <el-button type="info" @click="handleUndo" :disabled="!historyStore.canUndo"> Undo </el-button>
+          <Button
+            label="Undo"
+            size="small"
+            variant="text"
+            severity="secondary"
+            @click="handleUndo"
+            :disabled="!historyStore.canUndo"
+          />
 
-          <el-button type="info" @click="handleRedo" style="margin-left: 10px" :disabled="!historyStore.canRedo">
-            Redo
-          </el-button>
+          <Button
+            label="Redo"
+            size="small"
+            variant="text"
+            severity="secondary"
+            @click="handleRedo"
+            style="margin-left: 10px"
+            :disabled="!historyStore.canRedo"
+          />
 
-          <el-divider direction="vertical" style="margin: 0 15px" />
+          <Divider layout="vertical" style="margin: 0 15px" />
 
-          <el-button type="primary" @click="onOpenMacroBuilderDialog"> Macro Build </el-button>
+          <Button
+            label="Macro Build"
+            size="small"
+            variant="text"
+            severity="info"
+            @click="onOpenMacroBuilderDialog"
+          />
 
-          <el-divider direction="vertical" style="margin: 0 15px" />
+          <Divider layout="vertical" style="margin: 0 15px" />
 
-          <el-dropdown
-            ref="importDropdownRef"
-            split-button
-            type="info"
+          <!-- Import Dropdown / SplitButton -->
+          <SplitButton
+            :label="`Import ${currentImportMode.label}`"
+            text
+            size="small"
+            :icon="typeof currentImportMode.icon === 'string' ? currentImportMode.icon : undefined"
+            :model="importMenuItems"
+            severity="secondary"
             @click="triggerCurrentImport"
-            @command="handleImportCommand"
+            :disabled="currentImportMode.disabled"
+            v-tooltip.bottom="
+              currentImportMode.disabled ? 'The Import option is disabled because CellML library is not ready yet.' : ''
+            "
           >
-            <el-tooltip :disabled="!currentImportMode.disabled" placement="bottom">
-              <div>
-                <el-tooltip placement="bottom" :auto-close="1200">
-                  <span class="import-button-content">
-                    Import
-                    <el-icon class="el-icon--right">
-                      <component :is="currentImportMode.icon" />
-                    </el-icon>
-                  </span>
-                  <template #content> Import {{ currentImportMode.label }} </template>
-                </el-tooltip>
-              </div>
-              <template #content>
-                <p>
-                  The
-                  <strong>{{ currentImportMode.label }}</strong>
-                  import option is disabled because the CellML library is not ready yet. Please wait a moment and try
-                  again.
-                </p>
-              </template>
-            </el-tooltip>
-
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item
-                  v-for="option in importOptions"
-                  :key="option.key"
-                  :command="option"
-                  :disabled="option.disabled"
-                >
-                  <el-icon><component :is="option.icon" /></el-icon>
-                  {{ option.label }}
-                </el-dropdown-item>
-              </el-dropdown-menu>
+            <!-- Main Button Icon (for custom Vue component icons) -->
+            <template #icon v-if="typeof currentImportMode.icon !== 'string'">
+              <component :is="currentImportMode.icon" class="p-button-icon p-button-icon-left" />
             </template>
-          </el-dropdown>
 
-          <el-dropdown
-            ref="exportDropdownRef"
-            split-button
-            type="info"
+            <!-- Dropdown Menu Item Icons -->
+            <template #item="{ item, props }">
+              <a class="p-menuitem-link" v-ripple v-bind="props.action">
+                <!-- If icon is a Vue component -->
+                <component :is="item.icon" v-if="typeof item.icon !== 'string'" class="p-menuitem-icon" />
+                <!-- If icon is a PrimeIcon class string -->
+                <span v-else :class="[item.icon, 'p-menuitem-icon']"></span>
+
+                <span class="p-menuitem-text">{{ item.label }}</span>
+              </a>
+            </template>
+          </SplitButton>
+
+          <!-- Export Dropdown / SplitButton -->
+          <SplitButton
+            :label="`Export ${currentExportMode.label}`"
+            text
+            size="small"
+            :icon="typeof currentExportMode.icon === 'string' ? currentExportMode.icon : undefined"
+            :model="exportMenuItems"
+            severity="secondary"
             style="margin-left: 10px"
             @click="triggerCurrentExport"
-            @command="handleExportCommand"
-            :disabled="!somethingAvailable"
+            :disabled="!somethingAvailable || currentExportMode.disabled"
+            v-tooltip.bottom="!somethingAvailable || currentExportMode.disabled ? cellMlExportTooltip : ''"
           >
-            <el-tooltip :disabled="!currentExportMode.disabled" placement="bottom" :auto-close="2400">
-              <div>
-                <el-tooltip placement="bottom" :disabled="currentExportMode.disabled" :auto-close="1200">
-                  <span class="export-button-content">
-                    Export
-                    <el-icon class="el-icon--right">
-                      <component :is="currentExportMode.icon" />
-                    </el-icon>
-                  </span>
-                  <template #content> Export {{ currentExportMode.label }} </template>
-                </el-tooltip>
-              </div>
-              <template #content>
-                {{ cellMlExportTooltip }}
-              </template>
-            </el-tooltip>
-
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item
-                  v-for="option in exportOptions"
-                  :key="option.key"
-                  :command="option"
-                  :disabled="option.disabled"
-                >
-                  <el-icon><component :is="option.icon" /></el-icon>
-                  {{ option.label }}
-                </el-dropdown-item>
-              </el-dropdown-menu>
+            <!-- Main Button Icon (for custom Vue component icons) -->
+            <template #icon v-if="typeof currentExportMode.icon !== 'string'">
+              <component :is="currentExportMode.icon" class="p-button-icon p-button-icon-left" />
             </template>
-          </el-dropdown>
+
+            <!-- Dropdown Menu Item Icons -->
+            <template #item="{ item, props }">
+              <a class="p-menuitem-link" v-ripple v-bind="props.action">
+                <!-- If icon is a Vue component -->
+                <component :is="item.icon" v-if="typeof item.icon !== 'string'" class="p-menuitem-icon" />
+                <!-- If icon is a PrimeIcon class string -->
+                <span v-else :class="[item.icon, 'p-menuitem-icon']"></span>
+
+                <span class="p-menuitem-text">{{ item.label }}</span>
+              </a>
+            </template>
+          </SplitButton>
         </div>
       </div>
-      <div>
-        <el-link type="primary" href="https://github.com/physiomelinks/phlynx/issues/new" target="_blank">
+
+      <div class="header-right-actions">
+        <a href="https://github.com/physiomelinks/phlynx/issues/new" style="font-size: 13px;" target="_blank" class="report-link">
           Report Issue
-        </el-link>
-      </div>
-    </el-header>
-
-    <el-container style="flex-grow: 1; min-height: 0">
-      <el-aside :width="asideWidth + 'px'" class="module-aside">
-        <h4 style="margin-top: 0">Available Modules</h4>
-        <LibraryArea />
-      </el-aside>
-
-      <div class="resize-handle" @mousedown="startResize">
-        <el-icon class="handle-icon"><DCaret /></el-icon>
-      </div>
-
-      <el-main class="workbench-main">
-        <div class="workspace-search-container" :class="{ 'search-inactive': !searchBarFocused && !searchQuery }">
-          <el-input
-            v-model="searchQuery"
-            placeholder="Search modules..."
-            :prefix-icon="Search"
-            clearable
-            class="workspace-search-input"
-            @input="handleSearchInput"
-            @focus="searchBarFocused = true"
-            @blur="searchBarFocused = false"
+        </a>
+        <!-- Light / Dark Mode Toggle Slider -->
+        <div 
+          class="theme-slider-container" 
+          style="display: flex; align-items: center; margin-left: 20px; gap: 8px;"
+          v-tooltip.bottom="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+        >
+          <ToggleSwitch 
+            :model-value="isDarkMode" 
+            @change="toggleDarkMode" 
+            aria-label="Toggle Theme"
           >
-            <template #suffix>
-              <div class="search-suffix-content">
-                <span v-if="searchQuery && matchCount !== null" class="search-match-count">
-                  {{ matchCount }} match{{ matchCount !== 1 ? 'es' : '' }}
-                </span>
-                <div v-if="searchQuery && matchCount >= 1" class="search-nav-buttons">
-                  <el-button
-                    v-if="matchCount > 1"
-                    :icon="ArrowUp"
-                    size="small"
-                    text
-                    @click="cycleToPreviousMatch"
-                    title="Previous match (Shift+Enter)"
-                  />
-                  <el-button
-                    :icon="ArrowDown"
-                    size="small"
-                    text
-                    @click="cycleToNextMatch"
-                    :title="matchCount === 1 ? 'Zoom to match (Enter)' : 'Next match (Enter)'"
-                  />
-                </div>
-              </div>
+            <template #handle="{ checked }">
+              <i :class="['pi', checked ? 'pi-moon' : 'pi-sun']" style="font-size: 0.75rem"></i>
             </template>
-          </el-input>
+          </ToggleSwitch>
+        </div>
+      </div>
+    </header>
+
+    <div class="app-body-container">
+      <ResizableLibraryPanel title="Available Modules" :initial-width="300" :min-width="150" :max-width="400">
+        <LibraryArea />
+      </ResizableLibraryPanel>
+
+      <main class="workbench-main">
+        <div class="workspace-search-container" :class="{ 'search-inactive': !searchBarFocused && !searchQuery }">
+          <div class="workspace-search-input-wrapper">
+            <IconField iconPosition="left" class="workspace-search-input">
+              <InputIcon class="pi pi-search" />
+              <InputText
+                v-model="searchQuery"
+                placeholder="Search modules..."
+                @input="handleSearchInput"
+                @focus="searchBarFocused = true"
+                @blur="searchBarFocused = false"
+              />
+            </IconField>
+            <i
+              v-if="searchQuery"
+              class="pi pi-times cursor-pointer search-clear-icon"
+              @click="clearSearch"
+            />
+          </div>
+          <div v-if="searchQuery" class="search-suffix-content">
+            <div class="search-suffix-header">
+              <span v-if="matchCount !== null" class="search-match-count">
+                {{ matchCount }} match{{ matchCount !== 1 ? 'es' : '' }}
+              </span>
+              <div v-if="matchCount >= 1" class="search-nav-buttons">
+                <Button
+                  v-if="matchCount > 1"
+                  icon="pi pi-chevron-up"
+                  size="small"
+                  text
+                  @click="cycleToPreviousMatch"
+                  title="Previous match (Shift+Enter)"
+                />
+                <Button
+                  icon="pi pi-chevron-down"
+                  size="small"
+                  text
+                  @click="cycleToNextMatch"
+                  :title="matchCount === 1 ? 'Zoom to match (Enter)' : 'Next match (Enter)'"
+                />
+              </div>
+            </div>
+            <ul v-if="matchCount >= 1" class="search-match-list">
+              <li
+                v-for="(node, index) in matchingNodesList"
+                :key="node.id"
+                class="search-match-item"
+                :class="{ active: index === currentMatchIndex }"
+                @click="selectMatch(index)"
+              >
+                {{ node.data?.name || node.data?.moduleRef || node.id }}
+              </li>
+            </ul>
+          </div>
         </div>
 
         <div class="dnd-flow" @drop="onDrop">
@@ -209,18 +239,20 @@
             @edges-change="onEdgeChange"
             @edge-double-click="onEdgeDoubleClick"
             @pane-context-menu="onPaneContextMenu"
+            @pane-click="onPaneClick"
+            class="main-flow"
             :max-zoom="1.5"
             :min-zoom="0.1"
             :default-edge-options="edgeLineOptions"
             :connection-line-options="edgeLineOptions"
             :nodes="nodes"
-            :delete-key-code="['Backspace', 'Delete']"
+            :delete-key-code="dialogVisible ? [] : ['Backspace', 'Delete']"
           >
             <HelperLines :horizontal="helperLineHorizontal" :vertical="helperLineVertical" :alignment="alignment" />
-            <MiniMap :pannable="true" :zoomable="true" />
+            <MiniMap :pannable="true" :zoomable="true" class="mini-map" />
             <Controls>
               <ControlButton :disabled="screenshotDisabled" title="PNG Screenshot" @click="doPngScreenshot">
-                <CameraFilled />
+                <i class="pi pi-image"></i>
               </ControlButton>
             </Controls>
             <template #node-instanceNode="props">
@@ -241,9 +273,12 @@
             </Workbench>
           </VueFlow>
         </div>
-      </el-main>
-    </el-container>
-  </el-container>
+      </main>
+    </div>
+  </div>
+
+  <!-- PrimeVue Confirmation Dialog Service component -->
+  <ConfirmDialog />
 
   <PortEditorDialog
     v-model="portEditorDialogVisible"
@@ -255,7 +290,7 @@
     @confirm="onPortEditConfirm"
   />
 
-  <CellMLEditorDialog 
+  <CellMLEditorDialog
     v-model="cellMLEditorDialogVisible"
     :id="currentEditingNode?.id"
     :name="currentEditingNode?.name"
@@ -264,7 +299,7 @@
     @save="handleCellMLSave"
   />
 
-  <ParameterEditorDialog 
+  <ParameterEditorDialog
     v-model="parameterEditorDialogVisible"
     :id="currentEditingNode?.id"
     :variables="currentEditingNode?.variables"
@@ -320,9 +355,6 @@
 </template>
 
 <script>
-// This is a separate script block just for naming the component.
-// This is to help when building a production build with minification
-// for the Keep-Alive functionality.
 export default {
   name: 'WorkspaceArea',
 }
@@ -331,18 +363,15 @@ export default {
 <script setup>
 import { computed, h, inject, markRaw, nextTick, onMounted, onUnmounted, ref, watch, watchPostEffect } from 'vue'
 import { useVueFlow, VueFlow } from '@vue-flow/core'
-import {
-  DCaret,
-  CameraFilled,
-  Search,
-  ArrowUp,
-  ArrowDown,
-  Menu as IconModuleArray,
-  Operation as IconParameters,
-  Setting as IconModuleConfig,
-} from '@element-plus/icons-vue'
-import { ElMessageBox } from 'element-plus'
-import CellMLIcon from '../components/icons/CellMLIcon.vue'
+
+import Button from 'primevue/button'
+import SplitButton from 'primevue/splitbutton'
+import Divider from 'primevue/divider'
+import InputText from 'primevue/inputtext'
+import IconField from 'primevue/iconfield'
+import InputIcon from 'primevue/inputicon'
+import ConfirmDialog from 'primevue/confirmdialog'
+import ToggleSwitch from 'primevue/toggleswitch'
 
 import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -353,9 +382,10 @@ import useDragAndDrop from '../composables/useDnD'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
 import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
-import { useResizableAside } from '../composables/useResizableAside'
+import { useColorScheme } from '../composables/useColorScheme'
 import { useGtm } from '../composables/useGtm'
 import LibraryArea from '../components/LibraryArea.vue'
+import ResizableLibraryPanel from '../components/ResizableLibraryPanel.vue'
 import Workbench from '../components/WorkbenchArea.vue'
 import InstanceNode from '../components/InstanceNode.vue'
 import ImportDialog from '../components/ImportDialog.vue'
@@ -375,8 +405,15 @@ import { resolvePortCouplings } from '../utils/edges'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
+import { useConfirmDialog } from '../composables/useConfirmDialog'
 import { relayoutNodes } from '../services/layouts/physics'
-import { generateFlattenedModel, initLibCellML, processCellMLData, extractVariablesFromMath, extractComponentsFromCellmlString } from '../utils/cellml'
+import {
+  generateFlattenedModel,
+  initLibCellML,
+  processCellMLData,
+  extractVariablesFromMath,
+  extractComponentsFromCellmlString,
+} from '../utils/cellml'
 import {
   edgeLineOptions,
   CELLML_FILE_TYPES,
@@ -388,7 +425,7 @@ import {
   DEFAULT_FILE_NAME,
   NEW_INSTANCE_MODULE_REF,
   FORMAT_VERSION,
-  DEFAULT_PROJECT_TYPE
+  DEFAULT_PROJECT_TYPE,
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId } from '../utils/edges'
@@ -400,11 +437,16 @@ import {
   getFileHandle,
   writeFileHandle,
   ensureExtension,
-  legacyDownload
+  legacyDownload,
 } from '../utils/save'
 import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
 import PortEditorDialog from '../components/PortEditorDialog.vue'
+import CellMLIcon from '../components/icons/CellMLIcon.vue'
+
+const workspaceFileInput = ref(null)
+
+const { isDarkMode, toggleDarkMode } = useColorScheme()
 
 const {
   addEdges,
@@ -431,10 +473,31 @@ const {
   vueFlowRef,
 } = useVueFlow(FLOW_IDS.MAIN)
 const { processMacroGeneration } = useMacroGenerator()
+const { confirm } = useConfirmDialog()
 
 const pendingHistoryNodes = new Set()
 
-const { onDragOver: onDragOverModule, onDrop: onDropModule, onDragLeave, isDragOver, createInstanceNode } = useDragAndDrop(pendingHistoryNodes)
+const {
+  onDragOver: onDragOverModule,
+  onDrop: onDropModule,
+  onDragLeave,
+  isDragOver,
+  createInstanceNode,
+} = useDragAndDrop(pendingHistoryNodes)
+
+const dialogVisible = computed(() => {
+  return (
+    portEditorDialogVisible.value ||
+    cellMLEditorDialogVisible.value ||
+    parameterEditorDialogVisible.value ||
+    saveDialogVisible.value ||
+    importDialogVisible.value ||
+    exportDialogVisible.value ||
+    replacementDialogVisible.value ||
+    macroBuilderDialogVisible.value ||
+    edgeConnectionDialogVisible.value
+  )
+})
 
 /**
  * Shared multi-file notification helper.
@@ -442,7 +505,10 @@ const { onDragOver: onDragOverModule, onDrop: onDropModule, onDragLeave, isDragO
  * human-readable description of what was loaded (e.g. "3 modules and 2 units").
  * Titles are customisable so each import type can use its own wording.
  */
-const notifyMultiFileResults = (results, { successTitle, partialTitle = 'Partial Import', failTitle = 'Import Failed' }) => {
+const notifyMultiFileResults = (
+  results,
+  { successTitle, partialTitle = 'Partial Import', failTitle = 'Import Failed' }
+) => {
   const succeeded = results.filter((r) => r.ok)
   const failed = results.length - succeeded.length
   const fileWord = (n) => `${n} file${n !== 1 ? 's' : ''}`
@@ -450,7 +516,10 @@ const notifyMultiFileResults = (results, { successTitle, partialTitle = 'Partial
   if (succeeded.length > 0 && failed === 0) {
     notify.success({ title: successTitle, message: `Loaded from ${fileWord(succeeded.length)}.` })
   } else if (succeeded.length > 0) {
-    notify.warning({ title: partialTitle, message: `Loaded from ${fileWord(succeeded.length)}. ${fileWord(failed)} failed.` })
+    notify.warning({
+      title: partialTitle,
+      message: `Loaded from ${fileWord(succeeded.length)}. ${fileWord(failed)} failed.`,
+    })
   } else {
     notify.error({ title: failTitle, message: `Failed to load all ${fileWord(failed)}.` })
   }
@@ -483,69 +552,62 @@ const loadCellMLFiles = async (entries) => {
   if (entries.length === 1) {
     const entry = entries[0]
     const content = entry instanceof File ? await readFileAsText(entry) : entry.content
-    const cellmlPayload = parseCellMLConnections(content, entry.name) // { nodes, modules, edges }
+    const cellmlPayload = parseCellMLConnections(content, entry.name)
 
     if (cellmlPayload.edges.length > 0) {
       if (nodes.value.length > 0) {
-        try {
-          await ElMessageBox.confirm(
-            'The workspace already contains nodes. What would you like to do?',
-            'Workspace Not Empty',
-            {
-              distinguishCancelAndClose: true,
-              confirmButtonText: 'Overwrite',
-              cancelButtonText: 'Add to Workspace',
-              type: 'warning',
+        const overwrite = await confirm({
+          header: 'Workspace Not Empty',
+          message: 'The workspace already contains nodes. What would you like to do?',
+          severity: 'warning',
+          acceptLabel: 'Overwrite',
+          rejectLabel: 'Add to Workspace',
+        })
+
+        if (!overwrite) {
+          // Snapshot current workspace before wiping it
+          const snapshot = toObject()
+
+          // Load new graph into clean workspace using the normal path
+          const result = await loadCellMLData(content, entry.name, { notify: false })
+          await loadFromCellML(cellmlPayload, entry.name)
+
+          // Remap snapshotted node IDs to avoid clashes with newly loaded nodes
+          const existingIds = new Set(nodes.value.map((n) => n.id))
+          const idRemap = new Map()
+
+          const restoredNodes = snapshot.nodes.map((n) => {
+            let newId = n.id
+            let counter = 1
+            while (existingIds.has(newId)) {
+              newId = `${n.id}_${counter++}`
             }
-          )
-          // confirmed — overwrite, fall through to normal loadFromCellML below
-        } catch (action) {
-          if (action === 'cancel') {
-            // Snapshot current workspace before wiping it
-            const snapshot = toObject()
+            existingIds.add(newId)
+            idRemap.set(n.id, newId)
 
-            // Load new graph into clean workspace using the normal path
-            const result = await loadCellMLData(content, entry.name, { notify: false })
-            await loadFromCellML(cellmlPayload, entry.name)
+            return {
+              ...n,
+              id: newId,
+              position: { x: n.position.x + 1500, y: n.position.y },
+              data: { ...n.data, name: newId },
+            }
+          })
 
-            // Remap snapshotted node IDs to avoid clashes with newly loaded nodes
-            const existingIds = new Set(nodes.value.map((n) => n.id))
-            const idRemap = new Map()
+          // Remap edge source/target to use new IDs
+          const restoredEdges = snapshot.edges.map((e) => ({
+            ...e,
+            id: `${e.id}_restored_${crypto.randomUUID()}`,
+            source: idRemap.get(e.source) ?? e.source,
+            target: idRemap.get(e.target) ?? e.target,
+          }))
 
-            const restoredNodes = snapshot.nodes.map((n) => {
-              let newId = n.id
-              let counter = 1
-              while (existingIds.has(newId)) {
-                newId = `${n.id}_${counter++}`
-              }
-              existingIds.add(newId)
-              idRemap.set(n.id, newId)
+          addNodes(restoredNodes)
+          addEdges(restoredEdges)
 
-              return {
-                ...n,
-                id: newId,
-                position: { x: n.position.x + 1500, y: n.position.y },
-                data: { ...n.data, name: newId },
-              }
-            })
-
-            // Remap edge source/target to use new IDs
-            const restoredEdges = snapshot.edges.map((e) => ({
-              ...e,
-              id: `${e.id}_restored_${crypto.randomUUID()}`,
-              source: idRemap.get(e.source) ?? e.source,
-              target: idRemap.get(e.target) ?? e.target,
-            }))
-
-            addNodes(restoredNodes)
-            addEdges(restoredEdges)
-
-            return [result]
-          }
-          // 'close' — user dismissed with X, do nothing
-          return []
+          return [result]
         }
       }
+
       // Register modules/units in the store first, then build the graph.
       const result = await loadCellMLData(content, entry.name, { notify: false })
       await loadFromCellML(cellmlPayload, entry.name)
@@ -553,7 +615,7 @@ const loadCellMLFiles = async (entries) => {
 
       return [result]
     }
-    // No connections — fall through to the standard module-registration path
+    // No connections — fall through to the standard module-registration path - TODO - might be nice to still drop single modules into workspace
     try {
       const result = await loadCellMLData(content, entry.name)
       return [result]
@@ -584,11 +646,16 @@ const loadCellMLFiles = async (entries) => {
     const summary = [
       totalModules > 0 ? `${totalModules} module${totalModules !== 1 ? 's' : ''}` : '',
       totalUnits > 0 ? `${totalUnits} unit${totalUnits !== 1 ? 's' : ''}` : '',
-    ].filter(Boolean).join(' and ')
+    ]
+      .filter(Boolean)
+      .join(' and ')
     if (succeeded.length > 0 && failed === 0) {
       notify.success({ title: 'CellML Files Loaded', message: `Loaded ${summary} from ${fileWord(succeeded.length)}.` })
     } else if (succeeded.length > 0) {
-      notify.warning({ title: 'Partial Import', message: `Loaded ${summary} from ${fileWord(succeeded.length)}. ${fileWord(failed)} failed.` })
+      notify.warning({
+        title: 'Partial Import',
+        message: `Loaded ${summary} from ${fileWord(succeeded.length)}. ${fileWord(failed)} failed.`,
+      })
     } else {
       notify.error({ title: 'Import Failed', message: `Failed to load all ${fileWord(failed)}.` })
     }
@@ -621,12 +688,18 @@ const onDrop = async (event) => {
     const cellmlFiles = Array.from(files).filter((f) => f.name.toLowerCase().endsWith('.cellml'))
 
     if (cellmlFiles.length === 0) {
-      notify.warning({ title: 'Unsupported File Type', message: 'Only .cellml files can be dropped onto the workspace.' })
+      notify.warning({
+        title: 'Unsupported File Type',
+        message: 'Only .cellml files can be dropped onto the workspace.',
+      })
       return
     }
 
     if (libcellml.status !== 'ready') {
-      notify.warning({ title: 'CellML Library Not Ready', message: 'Please wait for the CellML library to finish loading and try again.' })
+      notify.warning({
+        title: 'CellML Library Not Ready',
+        message: 'Please wait for the CellML library to finish loading and try again.',
+      })
       return
     }
 
@@ -641,12 +714,9 @@ const { loadFromInstanceArray } = useLoadFromInstanceArray()
 const { loadFromCellML } = useLoadFromCellML()
 const { capture } = useScreenshot()
 const { trackEvent } = useGtm()
-const { width: asideWidth, startResize } = useResizableAside(300, 150, 400)
-
 const helperLineHorizontal = ref(null)
 const helperLineVertical = ref(null)
 const alignment = ref('edge')
-const importDropdownRef = ref(null)
 
 const libraryStore = useLibraryStore()
 
@@ -692,17 +762,17 @@ const searchQuery = ref('')
 const matchCount = ref(null)
 const matchingNodeIds = ref(new Set())
 const searchBarFocused = ref(false)
+
 const currentMatchIndex = ref(0)
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
-
 const somethingAvailable = computed(() => nodes.value.length > 0)
 
 const importOptions = computed(() => [
   {
     key: IMPORT_KEYS.INSTANCE_ARRAY,
     label: 'Instance Array',
-    icon: markRaw(IconModuleArray),
+    icon: 'pi pi-th-large',
     disabled: false,
   },
   {
@@ -714,15 +784,15 @@ const importOptions = computed(() => [
   {
     key: IMPORT_KEYS.MODULE_CONFIG,
     label: 'Module Config',
-    icon: markRaw(IconModuleConfig),
+    icon: 'pi pi-sliders-v',
     disabled: libcellml.status !== 'ready',
   },
   {
     key: IMPORT_KEYS.PARAMETER,
     label: 'Parameters',
-    icon: markRaw(IconParameters),
+    icon: 'pi pi-sliders-h',
     disabled: false,
-  }
+  },
 ])
 currentImportMode.value = importOptions.value[0]
 
@@ -737,11 +807,29 @@ const exportOptions = computed(() => [
   {
     key: EXPORT_KEYS.CA,
     label: 'Circulatory Autogen',
-    icon: markRaw(IconModuleArray),
+    icon: 'pi pi-box',
     disabled: !somethingAvailable.value,
     suffix: '.zip',
   },
 ])
+
+const importMenuItems = computed(() =>
+  importOptions.value.map((opt) => ({
+    label: opt.label,
+    icon: opt.icon,
+    disabled: opt.disabled,
+    command: () => handleImportCommand(opt),
+  }))
+)
+
+const exportMenuItems = computed(() =>
+  exportOptions.value.map((opt) => ({
+    label: opt.label,
+    icon: opt.icon,
+    disabled: opt.disabled,
+    command: () => handleExportCommand(opt),
+  }))
+)
 
 const cellMlExportTooltip = computed(() => {
   const prefix = 'The CellML export option is disabled because '
@@ -824,6 +912,17 @@ function selectAllNodes() {
   })
 }
 
+const clearSearch = () => {
+  searchQuery.value = ''
+  handleSearchInput()
+}
+
+const onPaneClick = () => {
+  if (searchQuery.value) {
+    clearSearch()
+  }
+}
+
 const handleSearchInput = () => {
   if (!searchQuery.value.trim()) {
     matchingNodeIds.value.clear()
@@ -849,6 +948,20 @@ const handleSearchInput = () => {
   matchingNodeIds.value = matches
   matchCount.value = matches.size
   currentMatchIndex.value = 0
+}
+
+const matchingNodesList = computed(() =>
+  Array.from(matchingNodeIds.value)
+    .map((id) => findNode(id))
+    .filter(Boolean)
+)
+
+const selectMatch = (index) => {
+  const matchArray = Array.from(matchingNodeIds.value)
+  if (index < 0 || index >= matchArray.length) return
+
+  currentMatchIndex.value = index
+  zoomToNode(matchArray[index])
 }
 
 const cycleToNextMatch = () => {
@@ -1144,7 +1257,7 @@ const onEdgeChange = (changes) => {
       redo: () => removeEdges(idsToRemove),
     })
   }
-  
+
   if (selectChanges.length) {
     historyStore.addCommand(createSelectCommand(selectChanges, findEdge))
   }
@@ -1170,7 +1283,7 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
       // Register units with the store
       if (unitsCount > 0) {
         libraryStore.addUnitsFile({
-          componentFile: filename, 
+          componentFile: filename,
           model: result.units.model,
         })
       }
@@ -1188,7 +1301,9 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
         if (componentCount > 0 && unitsCount > 0) {
           notify.success({
             title: 'CellML File Loaded',
-            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} and ${unitsCount} unit${unitsCount !== 1 ? 's' : ''} from ${filename}.`,
+            message: `Loaded ${componentCount} component${componentCount !== 1 ? 's' : ''} and ${unitsCount} unit${
+              unitsCount !== 1 ? 's' : ''
+            } from ${filename}.`,
           })
         } else if (componentCount > 0) {
           notify.success({
@@ -1232,7 +1347,7 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
 
 const loadParametersData = async (content, filename, { notify: shouldNotify = true, trackEvents = true } = {}) => {
   try {
-    const variableCatalogue = new Set() 
+    const variableCatalogue = new Set()
     const nodeMap = new Map(nodes.value.map((n) => [n.data.name, n]))
     let totalLocal = 0
 
@@ -1245,10 +1360,7 @@ const loadParametersData = async (content, filename, { notify: shouldNotify = tr
         .filter((entry) => entry.variable_name.trimEnd().endsWith(instance))
         .map((entry) => ({
           ...entry,
-          name: entry.variable_name
-            .trimEnd()
-            .slice(0, -instance.length)
-            .replace(/_+$/, '')
+          name: entry.variable_name.trimEnd().slice(0, -instance.length).replace(/_+$/, ''),
         }))
 
       const paramsByName = new Map(instanceParameters.map((p) => [p.name.trim(), p]))
@@ -1376,11 +1488,9 @@ const handleImportCommand = (option) => {
 
 async function onImportConfirm(importPayload, updateProgress) {
   if (currentImportMode.value.key === IMPORT_KEYS.INSTANCE_ARRAY) {
-
     const instanceArrayFiles = importPayload.get(IMPORT_KEYS.INSTANCE_ARRAY)
     const [[, instanceData]] = instanceArrayFiles
     const instances = instanceData.payload
-
     const parametersFiles = importPayload.get(IMPORT_KEYS.PARAMETER)
 
     if (!instances || instances.length === 0) {
@@ -1416,7 +1526,10 @@ async function onImportConfirm(importPayload, updateProgress) {
       })
     }
   } else if (currentImportMode.value.key === IMPORT_KEYS.CELLML_FILE) {
-    const entries = [...importPayload.get(IMPORT_KEYS.CELLML_FILE)].map(([name, data]) => ({ name, content: data?.payload }))
+    const entries = [...importPayload.get(IMPORT_KEYS.CELLML_FILE)].map(([name, data]) => ({
+      name,
+      content: data?.payload,
+    }))
     await loadCellMLFiles(entries)
   } else if (currentImportMode.value.key === IMPORT_KEYS.MODULE_CONFIG) {
     const multiFile = importPayload.size > 1
@@ -1438,9 +1551,8 @@ async function onImportConfirm(importPayload, updateProgress) {
     if (multiFile) {
       notifyMultiFileResults(results, { successTitle: 'Parameters Loaded' })
     }
-  } else {
-    console.log("Cannot get here this shouldn't be an import:", currentImportMode.value.key)
   }
+
   if (importDialogRef.value) {
     importDialogRef.value.finishLoading()
   }
@@ -1450,9 +1562,7 @@ const performExport = async () => {
   currentExportKey.value = currentExportMode.value.key
 
   const baseName = libraryStore.lastExportName || DEFAULT_FILE_NAME
-  const fileTypes = currentExportKey.value === EXPORT_KEYS.CELLML
-    ? CELLML_FILE_TYPES
-    : ZIP_FILE_TYPES
+  const fileTypes = currentExportKey.value === EXPORT_KEYS.CELLML ? CELLML_FILE_TYPES : ZIP_FILE_TYPES
 
   // Get handle first
   const result = await getFileHandle(baseName, fileTypes, currentExportMode.value.suffix)
@@ -1509,9 +1619,7 @@ function filterConfig(config, validPortNames, validVariableNames, updatedModule)
     const existingNames = new Set(config.variables_and_units.map((e) => e[0]))
 
     // Use validVariableNames here, not validPortNames
-    config.variables_and_units = config.variables_and_units.filter((entry) =>
-      validVariableNames.has(entry[0])
-    )
+    config.variables_and_units = config.variables_and_units.filter((entry) => validVariableNames.has(entry[0]))
 
     if (updatedModule?.variables) {
       const newEntries = updatedModule.variables
@@ -1524,7 +1632,7 @@ function filterConfig(config, validPortNames, validVariableNames, updatedModule)
 }
 
 function updateVariablesFromMath(node, updatedMath) {
-  const existingVariables = new Map(node.data.variables.map(v => [v.name, v]))
+  const existingVariables = new Map(node.data.variables.map((v) => [v.name, v]))
   const updatedVariables = extractVariablesFromMath(updatedMath)
 
   node.data.variables = updatedVariables.map((updated) => {
@@ -1539,18 +1647,18 @@ function updateVariablesFromMath(node, updatedMath) {
       return {
         name: updated.name,
         units: updated.units,
-        access: "access", 
+        access: 'access',
         value: null,
         type: null,
       }
-    } 
+    }
   })
 }
 
 function cleanPorts(currentNode) {
   const validVariables = new Set(currentNode.data.variables.map((v) => v.name))
-  currentNode.data.ports = currentNode.data.ports.filter(port =>
-    (port.variables || []).every(v => validVariables.has(v))
+  currentNode.data.ports = currentNode.data.ports.filter((port) =>
+    (port.variables || []).every((v) => validVariables.has(v))
   )
 }
 
@@ -1562,7 +1670,7 @@ function cleanPorts(currentNode) {
  * 3. updating graph nodes to match new ports.
  */
 async function handleCellMLSave(saveData) {
-  const { id, updateAll, mathRef, math, siblings, variables } = saveData
+  const { id, updateAll, mathRef, math, siblings } = saveData
 
   // Update math references
   updateNodeData(id, { mathRef })
@@ -1587,13 +1695,11 @@ async function handleCellMLSave(saveData) {
   }
 
   // Update edge couplings
-  recomputeEdgeCouplings(id) 
+  recomputeEdgeCouplings(id)
 
   notify.success({
     title: 'CellML Updated',
-    message: `Updated ${updatedCount} node${
-      updatedCount !== 1 ? 's' : ''
-    } to ${mathRef.split(":").pop()}.`,
+    message: `Updated ${updatedCount} node${updatedCount !== 1 ? 's' : ''} to ${mathRef.split(':').pop()}.`,
   })
 }
 
@@ -1725,7 +1831,7 @@ function indexRemoveEdge(change) {
 function buildEdgeSubgraph(activeEdge) {
   const adjacentIds = new Set([
     ...(nodeEdgeIndex.value.get(activeEdge.source) || []),
-    ...(nodeEdgeIndex.value.get(activeEdge.target) || [])
+    ...(nodeEdgeIndex.value.get(activeEdge.target) || []),
   ])
 
   const edgeSubgraph = new Map()
@@ -1749,7 +1855,14 @@ function onEdgeDoubleClick({ edge }) {
   edgeConnectionDialogVisible.value = true
 }
 
-function onEdgeConnectionConfirm({ sourceNodeId, targetNodeId, sourcePorts, targetPorts, couplings, foreignCouplings }) {
+function onEdgeConnectionConfirm({
+  sourceNodeId,
+  targetNodeId,
+  sourcePorts,
+  targetPorts,
+  couplings,
+  foreignCouplings,
+}) {
   // Update ports on both nodes
   updateNodeData(sourceNodeId, { ports: sourcePorts })
   updateNodeData(targetNodeId, { ports: targetPorts })
@@ -1781,7 +1894,7 @@ function onOpenReplacementDialog(eventPayload) {
 }
 
 async function onReplaceConfirm(updatedData) {
-  const { id } = currentEditingNode.value 
+  const { id } = currentEditingNode.value
   if (!id) return
   updateNodeData(id, updatedData)
   replacementDialogVisible.value = false
@@ -1899,15 +2012,9 @@ async function onExportConfirm(fileName, handle) {
       ? await generateExportZip(finalName, nodes.value, edges.value, libraryStore)
       : generateFlattenedModel(nodes.value, edges.value, libraryStore)
 
-    const result = await saveWithDialog(
-      blob,
-      handle,
-      finalName,
-      currentExportMode.value.suffix
-    )
+    const result = await saveWithDialog(blob, handle, finalName, currentExportMode.value.suffix)
 
     libraryStore.setLastExportName(result.savedName)
-
     notification.close()
 
     let exportMessage = ''
@@ -1922,7 +2029,7 @@ async function onExportConfirm(fileName, handle) {
           {
             href: `https://opencor.ws/app/?opencor://openFile/#${dataUri}`,
             rel: 'noopener noreferrer',
-            style: { color: 'var(--el-color-primary)', fontWeight: 'bold' },
+            style: { color: 'var(--p-primary-color)', fontWeight: 'bold' },
             target: '_blank',
           },
           'OpenCOR'
@@ -1978,7 +2085,7 @@ function recomputeMissingCouplings() {
   const targetInCount = new Map()
 
   for (const edge of edges.value) {
-    if (edge.data?.couplings?.length) continue  // already has valid couplings
+    if (edge.data?.couplings?.length) continue // already has valid couplings
 
     const sourceNode = nodeMap.get(edge.source)
     const targetNode = nodeMap.get(edge.target)
@@ -2037,7 +2144,10 @@ const onSaveConfirm = async (fileName) => {
 /**
  * Reads a JSON file and restores the application state.
  */
-function handleLoadWorkspace(file) {
+function handleLoadWorkspace(event) {
+  const file = event.target?.files?.[0] || event.raw || event
+  if (!file) return
+
   const reader = new FileReader()
   const { clearWorkspace } = useClearWorkspace()
 
@@ -2057,7 +2167,6 @@ function handleLoadWorkspace(file) {
       await clearWorkspace()
 
       setViewport(migratedState.flow.viewport)
-
       fromObject(migratedState.flow)
 
       // Rebuild the edge index so the EdgeConnectionDialog subgraph is correct.
@@ -2087,7 +2196,7 @@ function handleLoadWorkspace(file) {
     }
   }
 
-  reader.readAsText(file.raw)
+  reader.readAsText(file)
 }
 
 const handleUndo = () => {
@@ -2167,7 +2276,7 @@ const copySelection = async () => {
   try {
     await navigator.clipboard.writeText(JSON.stringify(payload))
   } catch (err) {
-    console.warn("Clipboard write failed", err)
+    console.warn('Clipboard write failed', err)
   }
 }
 
@@ -2182,7 +2291,7 @@ const pasteSelection = async (atMouse = false) => {
       sourceClipboard = parsed
     }
   } catch (err) {
-    // Ignore clipboard read errors (browser permissions etc)
+    // Ignore clipboard read errors
   }
 
   if (!sourceClipboard.nodes || sourceClipboard.nodes.length === 0) return
@@ -2191,7 +2300,7 @@ const pasteSelection = async (atMouse = false) => {
     for (const entry of Object.values(sourceClipboard.storeSnapshot)) {
       if (!libraryStore.availableModules.has(entry.moduleRef)) {
         libraryStore.addModule(entry.module)
-      } 
+      }
       if (!libraryStore.availableMath.has(entry.mathRef)) {
         libraryStore.addMath(entry.mathRef, entry.math)
       }
@@ -2207,8 +2316,6 @@ const pasteSelection = async (atMouse = false) => {
   if (atMouse) {
     // Convert screen mouse pixels to graph coordinates (handling zoom/pan)
     const mouseFlowPos = screenToFlowCoordinate(mousePosition.value)
-
-    // Find the center of the nodes currently in the clipboard
     const clipboardCenter = getBoundingCenter(sourceClipboard.nodes)
 
     // Calculate difference to move center -> mouse
@@ -2216,7 +2323,6 @@ const pasteSelection = async (atMouse = false) => {
     dy = mouseFlowPos.y - clipboardCenter.y
   }
 
-  // Create a mapping of Old ID -> New ID.
   const idMap = {}
   const nodeIdSet = nodes.value.map((n) => n.id)
   const edgeIdSet = edges.value.map((e) => e.id)
@@ -2229,10 +2335,7 @@ const pasteSelection = async (atMouse = false) => {
     idMap[node.id] = newId
     nodeIdSet.push(newId)
 
-    const finalName = generateUniqueInstanceName(
-      node.data.name,
-      namesSet
-    )
+    const finalName = generateUniqueInstanceName(node.data.name, namesSet)
     namesSet.add(finalName)
 
     // Create the new node with offset position.
@@ -2281,7 +2384,7 @@ const pasteSelection = async (atMouse = false) => {
 const handleKeyDown = (event) => {
   // Check if user is typing in an input field (don't trigger copy/paste then)
   if (['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
-    // Allow Enter/Shift+Enter in search input for navigation
+    // Allow Enter/Shift+Enter/Escape in search input for navigation
     if (event.target.closest('.workspace-search-input')) {
       if (event.key === 'Enter') {
         event.preventDefault()
@@ -2290,6 +2393,10 @@ const handleKeyDown = (event) => {
         } else {
           cycleToNextMatch()
         }
+      } else if (event.key === 'Escape' && searchQuery.value) {
+        event.preventDefault()
+        clearSearch()
+        event.target.blur?.()
       }
     }
     return
@@ -2302,7 +2409,7 @@ const handleKeyDown = (event) => {
   if (cellMLEditorDialogVisible.value) return
   if (event.target.closest('.cm-editor')) return
 
-  const isCtrl = event.ctrlKey || event.metaKey // metaKey for Mac Cmd
+  const isCtrl = event.ctrlKey || event.metaKey
   const isShift = event.shiftKey
 
   if (isCtrl && event.key.toLowerCase() === 'c') {
@@ -2360,8 +2467,8 @@ const handleKeyDown = (event) => {
     document.querySelector('.workspace-search-input input')?.focus()
   }
 
-  if (event.key === 'Escape' && searchQuery.value && !['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
-    searchQuery.value = ''
+  if (event.key === 'Escape' && searchQuery.value) {
+    clearSearch()
   }
 }
 
@@ -2414,7 +2521,6 @@ onMounted(async () => {
 
   // Load the manifest and the libCellML WebAssembly module.
   const [manifest, instance] = await Promise.all([loadManifest(), libcellmlReadyPromise])
-
   initLibCellML(instance)
 
   // const printPurgeUrl = false
@@ -2500,27 +2606,6 @@ onUnmounted(() => {
   document.removeEventListener('mousemove', onMouseMove)
 })
 
-watchPostEffect(() => {
-  // Safety check: ensure component is mounted
-  if (!importDropdownRef.value || !importDropdownRef.value.$el) return
-
-  // Find the FIRST button inside the split-dropdown (The Action Button)
-  // The second button is the trigger arrow, which we want to leave alone.
-  const actionBtn = importDropdownRef.value.$el.querySelector('button:first-child')
-
-  if (!actionBtn) return
-
-  // Toggle the Element Plus 'is-disabled' class and native attribute
-  if (currentImportMode.value.disabled) {
-    actionBtn.classList.add('is-disabled')
-    actionBtn.setAttribute('disabled', 'disabled') // Disables clicks & hover styles
-  } else {
-    actionBtn.classList.remove('is-disabled')
-    actionBtn.removeAttribute('disabled')
-  }
-})
-
-// Watch for node changes to re-apply search filter
 watch(
   nodes,
   () => {
@@ -2533,45 +2618,139 @@ watch(
 </script>
 
 <style>
+/* ==========================================================================
+   1. App Layout, Header & Sidebar
+   ========================================================================== */
+.app-layout-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  background-color: var(--p-content-background);
+  color: var(--p-text-color);
+}
+
 .app-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #dcdfe6;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--p-content-border-color);
+  background-color: var(--p-content-background);
 }
 
-.file-uploads {
+.p-dark .app-header {
+  background-color: var(--p-surface-900);
+  border-bottom-color: var(--p-surface-800);
+}
+
+.file-uploads,
+.file-io-buttons,
+.header-right-actions {
   display: flex;
+  align-items: center;
 }
 
+.report-link {
+  color: var(--p-primary-color);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.report-link:hover {
+  text-decoration: underline;
+}
+
+.app-body-container {
+  display: flex;
+  flex-grow: 1;
+  min-height: 0;
+}
+
+/* ==========================================================================
+   2. Workbench Main Canvas
+   ========================================================================== */
 .workbench-main {
   position: relative;
-  background-color: #f4f4f5;
   overflow: hidden;
   padding: 0;
+  flex-grow: 1;
 }
 
+/* Tutorial Slate Background for Dark Mode */
+.p-dark .workbench-main {
+  background-color: #2d3748;
+  color: #fffffb;
+}
+
+/* Vue Flow Edges */
 .vue-flow__connection-path,
 .vue-flow__edge-path {
   stroke-width: 5px;
 }
 
 .vue-flow__edge.selected .vue-flow__edge-path {
-  stroke: #409eff; /* Element Plus primary color */
+  stroke: var(--p-primary-color);
   stroke-width: 7px;
 }
 
-.file-io-buttons {
-  display: flex;
-  align-items: center;
+/* ==========================================================================
+   3. Vue Flow Elements (Tutorial Dark Colors)
+   ========================================================================== */
+/* Controls Toolbar Container */
+.p-dark .vue-flow__controls {
+  background-color: #333;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
-.import-button-content {
-  display: flex;
-  align-items: center;
+/* Controls Buttons */
+.p-dark .vue-flow__controls-button {
+  background-color: #333;
+  color: #fffffb;
+  fill: #fffffb;
+  border: none;
 }
 
-/* Search bar styles */
+/* Hover & Active States (Prevents white background) */
+.p-dark .vue-flow__controls-button:hover,
+.p-dark .vue-flow__controls-button:active,
+.p-dark .vue-flow__controls-button.active {
+  background-color: #4d4d4d;
+  color: #fffffb;
+  fill: #fffffb;
+}
+
+/* Disabled Controls Button */
+.p-dark .vue-flow__controls-button:disabled {
+  background-color: #333;
+  color: #fffffb;
+  fill: #fffffb;
+  opacity: 0.4;
+}
+
+/* Nodes */
+.p-dark .vue-flow__node {
+  background-color: #4a5568;
+  color: #fffffb;
+}
+
+.p-dark .vue-flow__node.selected {
+  background-color: #333;
+  box-shadow: 0 0 0 2px #2563eb;
+}
+
+/* Edge Labels */
+.p-dark .vue-flow__edge-textbg {
+  fill: #292524;
+}
+
+.p-dark .vue-flow__edge-text {
+  fill: #fffffb;
+}
+
+/* ==========================================================================
+   4. Search Bar & Highlights
+   ========================================================================== */
 .workspace-search-container {
   position: absolute;
   top: 16px;
@@ -2579,33 +2758,67 @@ watch(
   z-index: 10;
   width: 300px;
   transition: opacity 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .workspace-search-container.search-inactive {
-  opacity: 0.4;
+  opacity: 0.5;
 }
 
 .workspace-search-container:hover {
   opacity: 1;
 }
 
+.workspace-search-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
 .workspace-search-input {
-  background: white;
-  border-radius: 4px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  width: 100%;
+}
+
+.workspace-search-input :deep(.p-inputtext) {
+  padding-right: 28px;
+}
+
+.search-clear-icon {
+  position: absolute;
+  top: 50%;
+  right: 0.75rem;
+  transform: translateY(-50%);
+  color: var(--p-text-muted-color);
+  font-size: 0.875rem;
+  z-index: 1;
+}
+
+.search-clear-icon:hover {
+  color: var(--p-text-color);
 }
 
 .search-match-count {
   font-size: 12px;
-  color: #909399;
+  color: var(--p-text-muted-color);
   padding-right: 8px;
 }
 
 .search-suffix-content {
   display: flex;
+  flex-direction: column;
+  background: var(--p-content-background);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--p-text-color) 15%, transparent);
+  overflow: hidden;
+}
+
+.search-suffix-header {
+  display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 4px;
-  padding-right: 8px;
+  padding: 4px 8px;
 }
 
 .search-nav-buttons {
@@ -2613,19 +2826,46 @@ watch(
   gap: 2px;
 }
 
-.search-nav-buttons .el-button {
+.search-match-list {
+  list-style: none;
+  margin: 0;
   padding: 4px;
-  min-height: unset;
+  max-height: 168px;
+  overflow-y: auto;
+  border-top: 1px solid var(--p-content-border-color, color-mix(in srgb, var(--p-text-color) 10%, transparent));
 }
 
-/* Node filtering styles */
+.search-match-item {
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--p-text-color);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-match-item:hover {
+  background: color-mix(in srgb, var(--p-text-color) 6%, transparent);
+}
+
+.search-match-item.active {
+  background: color-mix(in srgb, var(--p-primary-color) 15%, transparent);
+  color: var(--p-primary-color);
+  font-weight: 600;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
 .node-search-match {
   opacity: 1 !important;
   transition: opacity 0.2s ease;
-  outline: 3px solid #409eff;
+  outline: 3px solid var(--p-primary-color);
   outline-offset: 2px;
   border-radius: 4px;
-  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.2);
 }
 
 .node-search-dimmed {
