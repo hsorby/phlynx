@@ -176,42 +176,57 @@
 
       <main class="workbench-main">
         <div class="workspace-search-container" :class="{ 'search-inactive': !searchBarFocused && !searchQuery }">
-          <IconField iconPosition="left" class="workspace-search-input">
-            <InputIcon class="pi pi-search" />
-            <InputText
-              v-model="searchQuery"
-              placeholder="Search modules..."
-              @input="handleSearchInput"
-              @focus="searchBarFocused = true"
-              @blur="searchBarFocused = false"
-            />
-            <InputIcon
+          <div class="workspace-search-input-wrapper">
+            <IconField iconPosition="left" class="workspace-search-input">
+              <InputIcon class="pi pi-search" />
+              <InputText
+                v-model="searchQuery"
+                placeholder="Search modules..."
+                @input="handleSearchInput"
+                @focus="searchBarFocused = true"
+                @blur="searchBarFocused = false"
+              />
+            </IconField>
+            <i
               v-if="searchQuery"
-              class="pi pi-times cursor-pointer"
-              @click="handleSearchInput()"
+              class="pi pi-times cursor-pointer search-clear-icon"
+              @click="clearSearch"
             />
-          </IconField>
+          </div>
           <div v-if="searchQuery" class="search-suffix-content">
-            <span v-if="matchCount !== null" class="search-match-count">
-              {{ matchCount }} match{{ matchCount !== 1 ? 'es' : '' }}
-            </span>
-            <div v-if="matchCount >= 1" class="search-nav-buttons">
-              <Button
-                v-if="matchCount > 1"
-                icon="pi pi-chevron-up"
-                size="small"
-                text
-                @click="cycleToPreviousMatch"
-                title="Previous match (Shift+Enter)"
-              />
-              <Button
-                icon="pi pi-chevron-down"
-                size="small"
-                text
-                @click="cycleToNextMatch"
-                :title="matchCount === 1 ? 'Zoom to match (Enter)' : 'Next match (Enter)'"
-              />
+            <div class="search-suffix-header">
+              <span v-if="matchCount !== null" class="search-match-count">
+                {{ matchCount }} match{{ matchCount !== 1 ? 'es' : '' }}
+              </span>
+              <div v-if="matchCount >= 1" class="search-nav-buttons">
+                <Button
+                  v-if="matchCount > 1"
+                  icon="pi pi-chevron-up"
+                  size="small"
+                  text
+                  @click="cycleToPreviousMatch"
+                  title="Previous match (Shift+Enter)"
+                />
+                <Button
+                  icon="pi pi-chevron-down"
+                  size="small"
+                  text
+                  @click="cycleToNextMatch"
+                  :title="matchCount === 1 ? 'Zoom to match (Enter)' : 'Next match (Enter)'"
+                />
+              </div>
             </div>
+            <ul v-if="matchCount >= 1" class="search-match-list">
+              <li
+                v-for="(node, index) in matchingNodesList"
+                :key="node.id"
+                class="search-match-item"
+                :class="{ active: index === currentMatchIndex }"
+                @click="selectMatch(index)"
+              >
+                {{ node.data?.name || node.data?.moduleRef || node.id }}
+              </li>
+            </ul>
           </div>
         </div>
 
@@ -224,6 +239,7 @@
             @edges-change="onEdgeChange"
             @edge-double-click="onEdgeDoubleClick"
             @pane-context-menu="onPaneContextMenu"
+            @pane-click="onPaneClick"
             class="main-flow"
             :max-zoom="1.5"
             :min-zoom="0.1"
@@ -896,6 +912,17 @@ function selectAllNodes() {
   })
 }
 
+const clearSearch = () => {
+  searchQuery.value = ''
+  handleSearchInput()
+}
+
+const onPaneClick = () => {
+  if (searchQuery.value) {
+    clearSearch()
+  }
+}
+
 const handleSearchInput = () => {
   if (!searchQuery.value.trim()) {
     matchingNodeIds.value.clear()
@@ -921,6 +948,20 @@ const handleSearchInput = () => {
   matchingNodeIds.value = matches
   matchCount.value = matches.size
   currentMatchIndex.value = 0
+}
+
+const matchingNodesList = computed(() =>
+  Array.from(matchingNodeIds.value)
+    .map((id) => findNode(id))
+    .filter(Boolean)
+)
+
+const selectMatch = (index) => {
+  const matchArray = Array.from(matchingNodeIds.value)
+  if (index < 0 || index >= matchArray.length) return
+
+  currentMatchIndex.value = index
+  zoomToNode(matchArray[index])
 }
 
 const cycleToNextMatch = () => {
@@ -2343,7 +2384,7 @@ const pasteSelection = async (atMouse = false) => {
 const handleKeyDown = (event) => {
   // Check if user is typing in an input field (don't trigger copy/paste then)
   if (['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
-    // Allow Enter/Shift+Enter in search input for navigation
+    // Allow Enter/Shift+Enter/Escape in search input for navigation
     if (event.target.closest('.workspace-search-input')) {
       if (event.key === 'Enter') {
         event.preventDefault()
@@ -2352,6 +2393,10 @@ const handleKeyDown = (event) => {
         } else {
           cycleToNextMatch()
         }
+      } else if (event.key === 'Escape' && searchQuery.value) {
+        event.preventDefault()
+        clearSearch()
+        event.target.blur?.()
       }
     }
     return
@@ -2422,8 +2467,8 @@ const handleKeyDown = (event) => {
     document.querySelector('.workspace-search-input input')?.focus()
   }
 
-  if (event.key === 'Escape' && searchQuery.value && !['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
-    searchQuery.value = ''
+  if (event.key === 'Escape' && searchQuery.value) {
+    clearSearch()
   }
 }
 
@@ -2726,8 +2771,31 @@ watch(
   opacity: 1;
 }
 
+.workspace-search-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
 .workspace-search-input {
   width: 100%;
+}
+
+.workspace-search-input :deep(.p-inputtext) {
+  padding-right: 28px;
+}
+
+.search-clear-icon {
+  position: absolute;
+  top: 50%;
+  right: 0.75rem;
+  transform: translateY(-50%);
+  color: var(--p-text-muted-color);
+  font-size: 0.875rem;
+  z-index: 1;
+}
+
+.search-clear-icon:hover {
+  color: var(--p-text-color);
 }
 
 .search-match-count {
@@ -2738,18 +2806,54 @@ watch(
 
 .search-suffix-content {
   display: flex;
+  flex-direction: column;
+  background: var(--p-content-background);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--p-text-color) 15%, transparent);
+  overflow: hidden;
+}
+
+.search-suffix-header {
+  display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
-  background: var(--p-content-background);
   padding: 4px 8px;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--p-text-color) 15%, transparent);
 }
 
 .search-nav-buttons {
   display: flex;
   gap: 2px;
+}
+
+.search-match-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  max-height: 168px;
+  overflow-y: auto;
+  border-top: 1px solid var(--p-content-border-color, color-mix(in srgb, var(--p-text-color) 10%, transparent));
+}
+
+.search-match-item {
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--p-text-color);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-match-item:hover {
+  background: color-mix(in srgb, var(--p-text-color) 6%, transparent);
+}
+
+.search-match-item.active {
+  background: color-mix(in srgb, var(--p-primary-color) 15%, transparent);
+  color: var(--p-primary-color);
+  font-weight: 600;
 }
 
 .cursor-pointer {
