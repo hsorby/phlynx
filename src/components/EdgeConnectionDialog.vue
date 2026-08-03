@@ -25,9 +25,6 @@
       </div>
     </template>
 
-    <div>{{ contentWidth }}</div>
-    <div>{{ midGap }}</div>
-
     <div v-if="sourceNode && targetNode" class="root">
       <div class="connections-layout" :style="portGridStyle">
         <!-- Column headers -->
@@ -251,6 +248,7 @@ const PORT_COLUMN_MODEL = {
   multiport: '79px',
   gap: '8px',
   spacer: '8px',
+  insetX: '9px',
 }
 const SIDE_CONFIG = {
   source: {
@@ -677,19 +675,16 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: blue;
 }
 
 .connections-layout {
   width: v-bind(contentWidth);
   margin: 0 auto;
-  background: red;
-}
-:deep(.p-dialog-content) {
-  background: green;
+  --port-box-sizing: border-box;
+  --port-inset-x: 10px;
 }
 /* ── Column headers ── */
-.col-header{
+.col-header {
   padding: 0 5px;
 }
 .col-headers {
@@ -714,7 +709,7 @@ watch(
 .col-subheaders {
   display: flex;
   gap: 8px;
-  padding: 6px 9px;
+  padding: 6px var(--port-inset-x);
   background: #f5f7fa;
   border: 1px solid #e4e7ed;
   border-radius: 4px 4px 0 0;
@@ -722,6 +717,7 @@ watch(
   font-weight: 700;
   color: #909399;
   letter-spacing: 0.3px;
+  box-sizing: var(--port-box-sizing);
 }
 
 /* ── Canvas ── */

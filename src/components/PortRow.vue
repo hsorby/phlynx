@@ -131,6 +131,7 @@ const handleClass = computed(() => {
   background: #fff;
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
   position: relative;
+  box-sizing: border-box;
 }
 .port-row--source,
 .port-row--target {
@@ -140,8 +141,9 @@ const handleClass = computed(() => {
   display: flex;
   gap: 8px;
   width: 100%;
-  padding: 0 10px;
+  padding: 6px var(--port-inset-x, 9px);
   pointer-events: auto;
+  box-sizing: var(--port-box-sizing, border-box);
 }
 .drag-handle {
   cursor: grab;
