@@ -6,7 +6,7 @@
       type="target"
       id="in"
       :position="Position.Left"
-      :class="['port-handle', handleClass, { 'handle--valid-target': isValidTarget }]"
+      :class="['port-handle', 'handle--left', handleClass, { 'handle--valid-target': isValidTarget }]"
     />
 
     <!-- Controls Container -->
@@ -65,7 +65,7 @@
       type="source"
       id="out"
       :position="Position.Right"
-      :class="['port-handle', handleClass, { 'handle--valid-target': isValidTarget }]"
+      :class="['port-handle', 'handle--right', handleClass, { 'handle--valid-target': isValidTarget }]"
     />
   </div>
 </template>
@@ -77,7 +77,7 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import MultiSelect from 'primevue/multiselect'
 import { Handle, Position } from '@vue-flow/core'
-import { PORT_TYPE_OPTIONS, MULTIPORT_OPTIONS, NODE_W } from '../utils/constants'
+import { PORT_TYPE_OPTIONS, MULTIPORT_OPTIONS } from '../utils/constants'
 
 const props = defineProps({
   side: {
@@ -128,6 +128,7 @@ const handleClass = computed(() => {
 
 <style scoped>
 .port-row {
+  width: 520px !important;
   height: 44px;
   display: flex;
   align-items: center;
@@ -136,36 +137,32 @@ const handleClass = computed(() => {
   background: var(--p-content-background, #18181b);
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
   position: relative;
-  box-sizing: border-box;
-}
-.port-row--source,
-.port-row--target {
-  width: v-bind('NODE_W + "px"');
+  box-sizing: border-box !important;
 }
 
-/* Base grid layout for controls */
 .port-controls {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
   width: 100%;
-  padding: 6px var(--port-inset-x, 9px);
-  pointer-events: auto;
-  box-sizing: border-box;
+  padding: 0 8px;
+  box-sizing: border-box !important;
 }
 
 .port-row--source .port-controls {
-  grid-template-columns: 60px minmax(0, 1.2fr) minmax(0, 1.5fr) 95px 16px 28px;
+  grid-template-columns: 60px minmax(0, 1fr) minmax(0, 1.2fr) 85px 16px 28px;
 }
 
 .port-row--target .port-controls {
-  grid-template-columns: 16px 28px 60px minmax(0, 1.2fr) minmax(0, 1.5fr) 95px;
+  grid-template-columns: 16px 28px 60px minmax(0, 1fr) minmax(0, 1.2fr) 85px;
 }
 
+/* CRITICAL: Prevents PrimeVue controls from stretching grid tracks past 520px */
 :deep(.p-select),
 :deep(.p-multiselect),
 :deep(.p-inputtext) {
-  width: 100%;
+  width: 100% !important;
+  min-width: 0 !important;
 }
 
 :deep(.p-inputtext),
@@ -207,7 +204,6 @@ const handleClass = computed(() => {
   cursor: grabbing;
 }
 
-/* Row states adapt seamlessly to light & dark modes using CSS color-mix */
 .row--connected {
   background: color-mix(in srgb, var(--p-primary-color, #409eff) 16%, var(--p-content-background, #18181b));
   border-color: var(--p-primary-color, #409eff);
@@ -243,12 +239,12 @@ const handleClass = computed(() => {
   z-index: 10;
 }
 
-.port-row--target .port-handle {
+.handle--left {
   left: 0 !important; 
   transform: translate(-50%, -50%) !important;
 }
 
-.port-row--source .port-handle {
+.handle--right {
   right: 0 !important;
   transform: translate(50%, -50%) !important;
 }
