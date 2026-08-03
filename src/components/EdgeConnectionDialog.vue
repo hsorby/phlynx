@@ -364,7 +364,7 @@ const {
   onPortConfigChange,
 } = useEdgeCouplings(props, askSwapIntent)
 
-const { startDrag, rowStyle } = usePortDrag(localSrcPorts, localTgtPorts, canvasEl)
+const { dragState, dragOffsetY, startDrag, rowStyle } = usePortDrag(localSrcPorts, localTgtPorts, canvasEl)
 
 const { draggingFrom, onConnectStart, onConnectEnd, onEdgeUpdateEnd, onEdgeUpdateStart } = useConnectionAutoscroll(
   canvasEl,
@@ -639,6 +639,22 @@ function onClosed() {
 isFlowReady.value = false
   emit('update:modelValue', false)
 }
+
+watch(dragOffsetY, () => {
+  if (dragState.value.active) {
+    refreshNodeInternals()
+  }
+})
+
+watch(
+  () => dragState.value.active,
+  async (active) => {
+    if (!active) {
+      await nextTick()
+      refreshNodeInternals()
+    }
+  }
+)
 
 watch(
   () => props.modelValue,
