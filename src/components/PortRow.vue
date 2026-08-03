@@ -157,7 +157,6 @@ const handleClass = computed(() => {
   grid-template-columns: 16px 28px 60px minmax(0, 1fr) minmax(0, 1.2fr) 85px;
 }
 
-/* CRITICAL: Prevents PrimeVue controls from stretching grid tracks past 520px */
 :deep(.p-select),
 :deep(.p-multiselect),
 :deep(.p-inputtext) {

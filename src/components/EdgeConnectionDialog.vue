@@ -67,99 +67,109 @@
         <!-- VueFlow canvas -->
         <div ref="canvasEl" class="flow-canvas" @wheel.stop.prevent="onCanvasWheel">
           <div :style="{ height: canvasHeight + 'px', position: 'relative' }">
-            <VueFlow
-              :id="FLOW_IDS.EDGE"
-              :nodes="flowNodes"
-              :edges="flowEdges"
-              :nodes-draggable="false"
-              :nodes-connectable="true"
-              :elements-selectable="false"
-              :pan-on-drag="false"
-              :pan-on-scroll="false"
-              :auto-pan-on-node-drag="false"
-              :auto-pan-on-connect="false"
-              :zoom-on-scroll="false"
-              :zoom-on-pinch="false"
-              :zoom-on-double-click="false"
-              :edges-updatable="true"
-              :auto-connect="false"
-              :is-valid-connection="isValidConnection"
-              @connect="onConnect"
-              @edge-update="onEdgeUpdate"
-              @connect-start="onConnectStart"
-              @connect-end="onConnectEnd"
-              @edge-update-start="onEdgeUpdateStart"
-              @edge-update-end="onEdgeUpdateEnd"
-              @node-click="onNodeClick"
-            >
-              <!-- Source port row -->
-              <template #node-sourcePort="{ data }">
-                <PortRow
-                  side="source"
-                  :port="data.port"
-                  :variables="sourceNode.data.variables"
-                  :is-connected="data.isConnected"
-                  :is-taken-elsewhere="data.isTakenElsewhere"
-                  :is-valid-target="validConnectUids.has(data.port._uid)"
-                  :style="rowStyle(data.port._uid, 'source')"
-                  @change="onPortConfigChange"
-                  @start-drag="startDrag($event, data.port._uid, 'source')"
-                  @delete="deletePort(data.port._uid, 'source')"
-                />
-              </template>
-
-              <!-- Target port row -->
-              <template #node-targetPort="{ data }">
-                <PortRow
-                  side="target"
-                  :port="data.port"
-                  :variables="targetNode.data.variables"
-                  :is-connected="data.isConnected"
-                  :is-taken-elsewhere="data.isTakenElsewhere"
-                  :is-valid-target="validConnectUids.has(data.port._uid)"
-                  :style="rowStyle(data.port._uid, 'target')"
-                  @change="onPortConfigChange"
-                  @start-drag="startDrag($event, data.port._uid, 'target')"
-                  @delete="deletePort(data.port._uid, 'target')"
-                />
-              </template>
-
-              <!-- Ghost port row -->
-              <template #node-ghostPort="{ data }">
-                <div class="ghost-node">
-                  <Handle
-                    v-if="data.side === 'target'"
-                    type="target"
-                    id="in"
-                    :position="Position.Left"
-                    :class="[
-                      'port-handle',
-                      'handle--left',
-                      draggingFrom?.side === 'source' && draggingFrom?.uid !== 'ghost-src'
-                        ? 'handle--valid-target'
-                        : 'handle--free',
-                    ]"
+            <!-- Loading Overlay -->
+            <Transition name="fade">
+              <div v-if="!isFlowReady" class="flow-loading-overlay">
+                <i class="pi pi-spin pi-spinner loading-icon" />
+                <span>Initializing connections...</span>
+              </div>
+            </Transition>
+            <Transition name="fade">
+              <VueFlow
+                v-if="isFlowReady"
+                :id="FLOW_IDS.EDGE"
+                :nodes="flowNodes"
+                :edges="flowEdges"
+                :nodes-draggable="false"
+                :nodes-connectable="true"
+                :elements-selectable="false"
+                :pan-on-drag="false"
+                :pan-on-scroll="false"
+                :auto-pan-on-node-drag="false"
+                :auto-pan-on-connect="false"
+                :zoom-on-scroll="false"
+                :zoom-on-pinch="false"
+                :zoom-on-double-click="false"
+                :edges-updatable="true"
+                :auto-connect="false"
+                :is-valid-connection="isValidConnection"
+                @connect="onConnect"
+                @edge-update="onEdgeUpdate"
+                @connect-start="onConnectStart"
+                @connect-end="onConnectEnd"
+                @edge-update-start="onEdgeUpdateStart"
+                @edge-update-end="onEdgeUpdateEnd"
+                @node-click="onNodeClick"
+              >
+                <!-- Source port row -->
+                <template #node-sourcePort="{ data }">
+                  <PortRow
+                    side="source"
+                    :port="data.port"
+                    :variables="sourceNode.data.variables"
+                    :is-connected="data.isConnected"
+                    :is-taken-elsewhere="data.isTakenElsewhere"
+                    :is-valid-target="validConnectUids.has(data.port._uid)"
+                    :style="rowStyle(data.port._uid, 'source')"
+                    @change="onPortConfigChange"
+                    @start-drag="startDrag($event, data.port._uid, 'source')"
+                    @delete="deletePort(data.port._uid, 'source')"
                   />
-                  <div class="ghost-label">
-                    <i class="pi pi-plus"></i>
-                    <span>Add Port</span>
+                </template>
+
+                <!-- Target port row -->
+                <template #node-targetPort="{ data }">
+                  <PortRow
+                    side="target"
+                    :port="data.port"
+                    :variables="targetNode.data.variables"
+                    :is-connected="data.isConnected"
+                    :is-taken-elsewhere="data.isTakenElsewhere"
+                    :is-valid-target="validConnectUids.has(data.port._uid)"
+                    :style="rowStyle(data.port._uid, 'target')"
+                    @change="onPortConfigChange"
+                    @start-drag="startDrag($event, data.port._uid, 'target')"
+                    @delete="deletePort(data.port._uid, 'target')"
+                  />
+                </template>
+
+                <!-- Ghost port row -->
+                <template #node-ghostPort="{ data }">
+                  <div class="ghost-node">
+                    <Handle
+                      v-if="data.side === 'target'"
+                      type="target"
+                      id="in"
+                      :position="Position.Left"
+                      :class="[
+                        'port-handle',
+                        'handle--left',
+                        draggingFrom?.side === 'source' && draggingFrom?.uid !== 'ghost-src'
+                          ? 'handle--valid-target'
+                          : 'handle--free',
+                      ]"
+                    />
+                    <div class="ghost-label">
+                      <i class="pi pi-plus"></i>
+                      <span>Add Port</span>
+                    </div>
+                    <Handle
+                      v-if="data.side === 'source'"
+                      type="source"
+                      id="out"
+                      :position="Position.Right"
+                      :class="[
+                        'port-handle',
+                        'handle--right',
+                        draggingFrom?.side === 'target' && draggingFrom?.uid !== 'ghost-tgt'
+                          ? 'handle--valid-target'
+                          : 'handle--free',
+                      ]"
+                    />
                   </div>
-                  <Handle
-                    v-if="data.side === 'source'"
-                    type="source"
-                    id="out"
-                    :position="Position.Right"
-                    :class="[
-                      'port-handle',
-                      'handle--right',
-                      draggingFrom?.side === 'target' && draggingFrom?.uid !== 'ghost-tgt'
-                        ? 'handle--valid-target'
-                        : 'handle--free',
-                    ]"
-                  />
-                </div>
-              </template>
-            </VueFlow>
+                </template>
+              </VueFlow>
+            </Transition>
           </div>
         </div>
       </div>
@@ -242,6 +252,8 @@ const visible = computed({
   set: (value) => emit('update:modelValue', value),
 })
 
+const isFlowReady = ref(false)
+
 const { getViewport, setViewport, updateNodeInternals } = useVueFlow(FLOW_IDS.EDGE)
 
 const swapDialog = ref({ visible: false, resolve: null })
@@ -265,17 +277,70 @@ function onNodeClick({ node }) {
 
 async function refreshNodeInternals() {
   await nextTick()
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      const nodeIds = flowNodes.value.map((n) => n.id)
-      if (nodeIds.length > 0) {
-        updateNodeInternals(nodeIds)
+  const nodeIds = flowNodes.value.map((n) => n.id)
+  if (nodeIds.length > 0) {
+    updateNodeInternals(nodeIds)
+  }
+}
+
+/**
+ * Resolves when an element's DOM bounding rect stops changing
+ * (i.e. after CSS transitions/animations fully finish).
+ */
+function waitUntilStable(el, maxTimeout = 500) {
+  return new Promise((resolve) => {
+    if (!el) return resolve()
+
+    let lastRect = ''
+    let stableFrames = 0
+    let rafId = null
+    let timerId = null
+
+    const cleanup = () => {
+      if (rafId) cancelAnimationFrame(rafId)
+      if (timerId) clearTimeout(timerId)
+    }
+
+    const check = () => {
+      const rect = el.getBoundingClientRect()
+      const currentRect = `${rect.width},${rect.height},${rect.top},${rect.left}`
+
+      if (rect.width > 0 && rect.height > 0 && currentRect === lastRect) {
+        stableFrames++
+        if (stableFrames >= 3) {
+          cleanup()
+          return resolve()
+        }
+      } else {
+        stableFrames = 0
+        lastRect = currentRect
       }
-    })
+
+      rafId = requestAnimationFrame(check)
+    }
+
+    timerId = setTimeout(() => {
+      cleanup()
+      resolve()
+    }, maxTimeout)
+
+    rafId = requestAnimationFrame(check)
   })
 }
 
-function onDialogShow() {
+async function onDialogShow() {
+  isFlowReady.value = false
+  initLocalState()
+  await nextTick()
+
+  // 1. Wait until the dialog entrance animation finishes completely
+  await waitUntilStable(canvasEl.value, 400)
+  
+  // 2. Mount VueFlow
+  isFlowReady.value = true
+
+  // 3. Force handle positions recalculation on mount
+  await nextTick()
   refreshNodeInternals()
 }
 
@@ -566,17 +631,20 @@ function handleConfirm() {
 }
 
 function handleCancel() {
+  isFlowReady.value = false
   emit('update:modelValue', false)
 }
 
-function onClosed() {}
+function onClosed() {
+isFlowReady.value = false
+  emit('update:modelValue', false)
+}
 
 watch(
   () => props.modelValue,
   (v) => {
     if (v) {
       initLocalState()
-      refreshNodeInternals()
     }
   }
 )
@@ -591,6 +659,40 @@ watch(
 </script>
 
 <style scoped>
+
+/* ── Loading Overlay ── */
+.flow-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--p-content-background, #18181b) 85%, transparent);
+  backdrop-filter: blur(4px);
+  z-index: 20;
+  color: var(--p-text-muted-color, #909399);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.loading-icon {
+  font-size: 22px;
+  color: var(--p-primary-color, #409eff);
+}
+
+/* ── Smooth Fade Transitions ── */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.25s ease-in-out;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
 /* ── Dialog header ── */
 .dialog-header {
   width: 100%;
