@@ -10,7 +10,7 @@
     <div class="dialog-body">
       <div v-if="isLoading" class="loading-overlay">
         <div class="loading-content">
-          <img :src="phlynxspinner" alt="Loading" class="loading-spinner" />
+          <ProgressSpinner style="width: 44px; height: 44px" strokeWidth="4" />
           <span>{{ loadingText }}</span>
         </div>
       </div>
@@ -137,6 +137,7 @@ import DataTable from 'primevue/datatable'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
+import ProgressSpinner from 'primevue/progressspinner'
 import { PARAMETER_TYPE_OPTIONS } from '../utils/constants'
 
 import { useConfirmDialog } from '../composables/useConfirmDialog'
@@ -339,11 +340,6 @@ async function handleConfirm() {
   gap: 8px;
   font-size: 0.95rem;
   color: var(--p-text-color);
-}
-
-.loading-spinner {
-  width: 44px;
-  height: 44px;
 }
 
 /* Toolbar & Action Bar Styling */
