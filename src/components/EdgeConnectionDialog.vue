@@ -37,7 +37,7 @@
         <!-- Column headers -->
         <div class="col-headers">
           <div class="col-header-label source-side">
-            <span class="side-label">SOURCE</span>
+            <span class="side-label">SOURCE: {{ sourceNode.data.name }}</span>
             <div class="col-subheaders">
               <span class="col-header">Type</span>
               <span class="col-header">Label</span>
@@ -52,7 +52,7 @@
           <div class="mid-spacer"></div>
 
           <div class="col-header-label target-side">
-            <span class="side-label">TARGET</span>
+            <span class="side-label">TARGET: {{ targetNode.data.name }}</span>
             <div class="col-subheaders">
               <span aria-hidden="true"></span>
               <span aria-hidden="true"></span>
@@ -781,6 +781,7 @@ watch(
   letter-spacing: 1.5px;
   color: var(--p-text-muted-color, #909399);
   padding-left: 2px;
+  text-transform: uppercase;
 }
 
 .target-side .side-label {
