@@ -256,13 +256,15 @@ watch(
 function applyBulkType() {
   if (!bulkTypeValue.value || selectedRows.value.length === 0) return
 
-  selectedRows.value.forEach((row) => {
-    row.type = bulkTypeValue.value
-  })
+  const targetType = bulkTypeValue.value
+  const rowsToUpdate = [...selectedRows.value]
 
-  parametersTable.value?.clearSelection()
   selectedRows.value = []
   bulkTypeValue.value = ''
+
+  rowsToUpdate.forEach((row) => {
+    row.type = targetType
+  })
 }
 
 function handleSortChange(event) {
