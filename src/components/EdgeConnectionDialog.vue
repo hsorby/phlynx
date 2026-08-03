@@ -18,9 +18,13 @@
         </div>
 
         <div class="node-names" v-if="sourceNode && targetNode">
-          <span class="node-badge source-badge">{{ sourceNode.data.name }}</span>
+          <Chip
+            :label="sourceNode.data.name"
+            style="background: color-mix(in srgb, var(--p-primary-color, #409eff) 15%, transparent); color: var(--p-primary-color, #409eff); border: 1px solid color-mix(in srgb, var(--p-primary-color, #409eff) 30%, transparent);"></Chip>
           <span class="arrow-sep">→</span>
-          <span class="node-badge target-badge">{{ targetNode.data.name }}</span>
+          <Chip
+            :label="targetNode.data.name"
+            style="background: color-mix(in srgb, var(--p-secondary-color, #409eff) 15%, transparent); color: var(--p-secondary-color, #409eff); border: 1px solid color-mix(in srgb, var(--p-secondary-color, #409eff) 30%, transparent);"></Chip>
         </div>
       </div>
     </template>
@@ -205,6 +209,7 @@ import { ref, computed, watch } from 'vue'
 import { VueFlow, Position, Handle, useVueFlow } from '@vue-flow/core'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
+import Chip from 'primevue/chip'
 import { FLOW_IDS, ROW_H, NODE_W, MID_GAP, PAD } from '../utils/constants'
 import { isSingleConnection } from '../utils/edges'
 import { isCompatible } from '../utils/ports'
