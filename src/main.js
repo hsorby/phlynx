@@ -1,6 +1,5 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import ElementPlus from 'element-plus'
 import PrimeVue from 'primevue/config'
 import Tooltip from 'primevue/tooltip'
 import Ripple from 'primevue/ripple'
@@ -31,16 +30,8 @@ const pinia = createPinia()
 
 app.use(pinia)
 app.use(router)
-app.use(ElementPlus)
 app.use(PrimeVue, {
   ripple: true,
-  zIndex: {
-    // align zIndex with element plus TODO - remove once finished
-    modal: 3000,
-    overlay: 3000,
-    menu: 3000,
-    tooltip: 3000,
-  },
   theme: {
     preset: Aura,
     options: {
@@ -48,7 +39,7 @@ app.use(PrimeVue, {
       cssLayer: {
         name: 'primevue',
         /* Add this strict order for Tailwind v4 compatibility */
-        order: 'theme, base, element-plus, primevue, utilities',
+        order: 'theme, base, primevue, utilities',
       },
     },
   },
