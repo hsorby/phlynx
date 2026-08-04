@@ -201,7 +201,6 @@ const instanceLabel = computed(() => {
 })
 
 const domainTypeClass = computed(() => {
-  console.log('props.data.domainType:', props.data.domainType)
   return props.data.domainType ? `domain-type-${props.data.domainType}` : 'domain-type-default'
 })
 
