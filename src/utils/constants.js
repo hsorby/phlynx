@@ -6,6 +6,8 @@ export const HANDLE_VARIANT = {
   DEFAULT: 'default', 
   GHOST: 'ghost',      
 }
+export const NUM_GHOST_HANDLES = 16
+
 export const USER_MODULES_FILE = 'User_Modules.cellml'
 export const NEW_INSTANCE_MODULE_REF = 'new_module:phlynx'
 
@@ -19,7 +21,6 @@ export const edgeLineOptions = {
   markerEnd: markerEnd,
   style: {
     strokeWidth: 5,
-    // stroke: '#b1b1b7', // Can customize color if desired.
   },
 }
 export const FLOW_IDS = {
