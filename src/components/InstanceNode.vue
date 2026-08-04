@@ -142,7 +142,7 @@ import { TARGET_HANDLE_TYPE, SOURCE_HANDLE_TYPE, HANDLE_VARIANT } from '../utils
 import { useHandleActivation } from '../composables/useHandleActivation'
 
 const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } = useVueFlow()
-const { beginGhostActivation } = useHandleActivation()
+const { beginGhostActivation, activateHandle } = useHandleActivation()
 const historyStore = useFlowHistoryStore()
 const libraryStore = useLibraryStore()
 
