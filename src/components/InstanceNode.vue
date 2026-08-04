@@ -305,7 +305,9 @@ async function removeHandle(handleIdToRemove) {
   const edgesSnapshot = connectedEdges.map((edge) => detachReactivity(edge))
 
   // Define New Handles (for Redo)
-  const newHandles = props.data.handles.filter((h) => h.uid !== handleIdToRemove)
+  const newHandles = props.data.handles.map(
+    (h) => h.uid === handleIdToRemove ? { ...h, variant: HANDLE_VARIANT.GHOST } : h
+  )
 
   // Add Composite Command to History
   historyStore.executeAndAddCommand({
