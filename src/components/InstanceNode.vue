@@ -334,8 +334,27 @@ async function removeHandle(handleIdToRemove) {
 }
 
 const addHandle = async (handleToAdd) => {
-  const handle = props.data.handles.find((h) => h.side === handleToAdd.side && h.variant === HANDLE_VARIANT.GHOST)
-  activateHandle(props.id, handle.uid)
+  const handlesOnSide = props.data.handles.filter((h) => h.side === handleToAdd.side)
+  const center = (handlesOnSide.length - 1) / 2
+
+  let mostCentralGhost = null
+  let smallestDistance = Infinity
+
+  handlesOnSide.forEach((h, index) => {
+    if (h.variant !== HANDLE_VARIANT.GHOST) return
+
+    const distance = Math.abs(index - center)
+    if (distance < smallestDistance) {
+      smallestDistance = distance
+      mostCentralGhost = h
+    }
+  })
+
+  if (!mostCentralGhost) {
+    return
+  }
+
+  await activateHandle(props.id, mostCentralGhost.uid)
 }
 
 const isEditing = ref(false)
