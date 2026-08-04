@@ -66,11 +66,18 @@ function parseInstanceNames(connectedInstances) {
   )
 }
 
-export function buildHandles(instance) {
+/**
+ * Creates a list of handles for an instance node given the instance ref 
+ * defined in an instance array file.
+ * 
+ * @param {object} instanceRef 
+ * @returns {[handle]} handle 
+ */
+export function buildHandles(instanceRef) {
   const handles = []
 
-  if (instance.inp_instances) {
-    const inputs = parseInstanceNames(instance.inp_instances)
+  if (instanceRef.inp_instances) {
+    const inputs = parseInstanceNames(instanceRef.inp_instances)
     inputs.forEach((name) => {
       handles.push({
         uid: crypto.randomUUID(),
@@ -81,8 +88,8 @@ export function buildHandles(instance) {
     })
   }
 
-  if (instance.out_instances) {
-    const outputs = parseInstanceNames(instance.out_instances)
+  if (instanceRef.out_instances) {
+    const outputs = parseInstanceNames(instanceRef.out_instances)
     outputs.forEach((name) => {
       handles.push({
         uid: crypto.randomUUID(),
