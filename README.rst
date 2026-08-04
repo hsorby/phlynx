@@ -151,3 +151,12 @@ We can use the `--output` option to save the generated code to a file and then e
     playwright codegen --target python --output tests/playwright/test_generated.py http://localhost:5173
 
 We can then adapt the generated code to create a Python unittest test that can be run from the `run_all_tests.py` script in the `tests` directory.
+
+Then use the `convert_codegen.py` script to convert the generated code to a unittest test. For example:
+
+.. code-block:: bash
+    python tests/convert_codegen.py \
+        --input tests/playwright/test_generated.py \
+        --output tests/playwright/test_documentation.py \
+        --class DocumentationNavigation \
+        --test documentation_navigation
