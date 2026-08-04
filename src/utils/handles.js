@@ -1,5 +1,11 @@
 import { Position } from '@vue-flow/core'
-import { HANDLE_SIDES, SOURCE_HANDLE_PRIORITY, TARGET_HANDLE_PRIORITY } from './constants'
+import {
+  HANDLE_SIDES,
+  SOURCE_HANDLE_PRIORITY,
+  TARGET_HANDLE_PRIORITY,
+  TARGET_HANDLE_TYPE,
+  SOURCE_HANDLE_TYPE
+} from './constants'
 
 export function randomHandleSide() {
     return HANDLE_SIDES[Math.floor(Math.random() * HANDLE_SIDES.length)]
@@ -49,4 +55,41 @@ export function getHandleStyle(handle, allHandles) {
   return {
     top: `calc(50% + ${offset}px)`,
   }
+}
+
+
+function parseInstanceNames(connectedInstances) {
+  return Array.from(
+    new Set(connectedInstances?.trim().split(/\s+/).filter(Boolean) ?? [])
+  )
+}
+
+export function buildHandles(instance) {
+  const handles = []
+
+  if (instance.inp_instances) {
+    const inputs = parseInstanceNames(instance.inp_instances)
+    inputs.forEach((name) => {
+      handles.push({
+        uid: crypto.randomUUID(),
+        type: TARGET_HANDLE_TYPE,
+        side: 'left',
+        name,
+      })
+    })
+  }
+
+  if (instance.out_instances) {
+    const outputs = parseInstanceNames(instance.out_instances)
+    outputs.forEach((name) => {
+      handles.push({
+        uid: crypto.randomUUID(),
+        type: SOURCE_HANDLE_TYPE,
+        side: 'right',
+        name,
+      })
+    })
+  }
+
+  return handles
 }

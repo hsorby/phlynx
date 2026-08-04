@@ -1,5 +1,4 @@
-import { buildHandles } from './buildPorts'
-import { getHandleId } from '../../utils/handles'
+import { getHandleId, buildHandles } from '../../utils/handles'
 import { MAIN_NODE_TYPE, SOURCE_HANDLE_TYPE, TARGET_HANDLE_TYPE } from '../../utils/constants'
 import { extractVariablesFromMath } from '../../utils/cellml'
 import { resolvePortCouplings, checkAndClaimCouplings, buildUsedPortKeys } from '../../utils/edges'
