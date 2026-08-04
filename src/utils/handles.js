@@ -95,15 +95,14 @@ export function buildHandles(instanceRef) {
   return handles
 }
 
-export function buildGhostHandles(count = 16) {
-  const perSide = Math.floor(count / HANDLE_SIDES.length)
-  const remainder = count % HANDLE_SIDES.length
-
+export function buildGhostHandles(countTopBot = 5, countSides = 4) {
   const handles = []
 
   HANDLE_SIDES.forEach((side, sideIndex) => {
-    // spread any remainder across the first few sides so odd counts still work
-    const n = perSide + (sideIndex < remainder ? 1 : 0)
+    let n = countTopBot
+    if (side === "left" || side === "right"){
+      n = countSides
+    }
 
     for (let i = 0; i < n; i++) {
       handles.push({

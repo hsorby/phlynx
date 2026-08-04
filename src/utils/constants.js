@@ -6,7 +6,8 @@ export const HANDLE_VARIANT = {
   DEFAULT: 'default', 
   GHOST: 'ghost',      
 }
-export const NUM_GHOST_HANDLES = 16
+export const NUM_GHOST_HANDLES_SIDES = 4
+export const NUM_GHOST_HANDLES_TOP_BOT = 6
 export const HANDLE_SPACING = 30
 
 export const USER_MODULES_FILE = 'User_Modules.cellml'

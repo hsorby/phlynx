@@ -1,6 +1,12 @@
 import { useVueFlow } from '@vue-flow/core'
 import { ref, shallowRef, watch } from 'vue'
-import { GHOST_MODULE_FILENAME, GHOST_NODE_TYPE, MAIN_NODE_TYPE, NUM_GHOST_HANDLES } from '../utils/constants'
+import {
+  GHOST_MODULE_FILENAME,
+  GHOST_NODE_TYPE,
+  MAIN_NODE_TYPE,
+  NUM_GHOST_HANDLES_SIDES,
+  NUM_GHOST_HANDLES_TOP_BOT
+} from '../utils/constants'
 import { getId as getNextNodeId } from '../utils/nodes'
 import { generateUniqueInstanceName, findAnyNode } from '../utils/nodes'
 import { buildInstance } from '../services/import/buildWorkflow'
@@ -88,7 +94,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
     const instanceName = moduleData.moduleRef.includes(":") ? moduleData.moduleRef.split(":")[0] : moduleData.moduleRef
     const finalName = generateUniqueInstanceName(instanceName, existingNames)
 
-    const allHandles = [...handles, ...buildGhostHandles(NUM_GHOST_HANDLES)]
+    const allHandles = [...handles, ...buildGhostHandles(NUM_GHOST_HANDLES_TOP_BOT, NUM_GHOST_HANDLES_SIDES)]
 
     const componentFile = moduleData.mathRef.split(":")[0]
     const nodeType = componentFile === GHOST_MODULE_FILENAME ? GHOST_NODE_TYPE : MAIN_NODE_TYPE
