@@ -71,6 +71,9 @@ export default defineConfig({
     },
   },
   server: {
+    watch: {
+      ignored: ['**/tests/playwright/**'],
+    },
     fs: {
       // Allow serving files from one level up to the project root
       // allow: [
@@ -80,6 +83,6 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: 'happy-dom'
-  }
+    environment: 'happy-dom',
+  },
 })

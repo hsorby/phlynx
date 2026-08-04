@@ -31,5 +31,7 @@ docs/glossary.json
 .changelog/
 stats.html
 
+# Testing files
 .env.local
 __pycache__/
+tests/playwright/test_generated.py
