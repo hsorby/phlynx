@@ -33,7 +33,7 @@ export function handlePosition(side) {
 
 export function getHandleStyle(handle, allHandles) {
   const handlesOfSameType = allHandles.filter(
-    (h) => h.side === handle.side && h.variant === handle.variant
+    (h) => h.side === handle.side 
   )
   const n = handlesOfSameType.length
 

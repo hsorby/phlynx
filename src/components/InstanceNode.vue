@@ -102,6 +102,7 @@
         v-tooltip.bottom="{ value: handle.name, showDelay: 1000 }"
         @mouseenter="onHandleEnter(handle.uid)"
         @mouseleave="onHandleLeave"
+        @pointerdown="handle.variant === HANDLE_VARIANT.GHOST && activateHandle(props.id, handle.uid)"
       >
         <Button
           v-show="hoveredHandleUid === handle.uid"
@@ -137,9 +138,11 @@ import { notify } from '../utils/notify'
 import { isEditableVariableType, isEmpty } from '../utils/variables'
 import '../assets/vueflownode.css'
 import { detachReactivity } from '../utils/reactivity'
-import { TARGET_HANDLE_TYPE, SOURCE_HANDLE_TYPE } from '../utils/constants'
+import { TARGET_HANDLE_TYPE, SOURCE_HANDLE_TYPE, HANDLE_VARIANT } from '../utils/constants'
+import { useHandleActivation } from '../composables/useHandleActivation'
 
 const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } = useVueFlow()
+const { activateHandle } = useHandleActivation()
 const historyStore = useFlowHistoryStore()
 const libraryStore = useLibraryStore()
 
