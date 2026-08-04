@@ -6,9 +6,9 @@ export const HANDLE_VARIANT = {
   DEFAULT: 'default', 
   GHOST: 'ghost',      
 }
-export const NUM_GHOST_HANDLES_SIDES = 4
-export const NUM_GHOST_HANDLES_TOP_BOT = 8
-export const HANDLE_SPACING = 30
+export const NUM_GHOST_HANDLES_SIDES = 5
+export const NUM_GHOST_HANDLES_TOP_BOT = 7
+export const HANDLE_SPACING = 25
 
 export const USER_MODULES_FILE = 'User_Modules.cellml'
 export const NEW_INSTANCE_MODULE_REF = 'new_module:phlynx'

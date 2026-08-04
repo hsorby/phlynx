@@ -58,44 +58,65 @@ function parseInstanceNames(connectedInstances) {
   )
 }
 
-/**
- * Creates a list of handles for an instance node given the instance ref 
- * defined in an instance array file.
- * 
- * @param {object} instanceRef 
- * @returns {[handle]} handle 
- */
-export function buildHandles(instanceRef) {
-  const handles = []
+export function findMostCentralGhostHandle(side, allHandles) {
+  const handlesOnSide = allHandles.filter((h) => h.side === side)
+  const center = (handlesOnSide.length - 1) / 2
 
-  if (instanceRef.inp_instances) {
-    const inputs = parseInstanceNames(instanceRef.inp_instances)
-    inputs.forEach((name) => {
-      handles.push({
-        uid: crypto.randomUUID(),
-        type: TARGET_HANDLE_TYPE,
-        side: 'left',
-        name,
-      })
+  let mostCentral = null
+  let smallestDistance = Infinity
+
+  handlesOnSide.forEach((h, index) => {
+    if (h.variant !== HANDLE_VARIANT.GHOST) return
+    const distance = Math.abs(index - center)
+    if (distance < smallestDistance) {
+      smallestDistance = distance
+      mostCentral = h
+    }
+  })
+
+  return mostCentral
+}
+
+export function buildHandles(instanceRef, ghostHandles) {
+  const handles = ghostHandles.map((h) => ({ ...h }))
+
+  const promote = (names, type, side) => {
+    names.forEach((name) => {
+      const ghost = findMostCentralGhostHandle(side, handles)
+
+      if (!ghost) {
+        console.warn(
+          `[buildHandles] No free "${side}" ghost slot for "${name}" on instance ` +
+            `"${instanceRef.name}" — exceeds the per-edge handle limit. Adding an overflow handle.`
+        )
+        handles.push({
+          uid: crypto.randomUUID(),
+          type,
+          side,
+          name,
+          variant: HANDLE_VARIANT.DEFAULT,
+        })
+        return
+      }
+
+      ghost.type = type
+      ghost.name = name
+      ghost.variant = HANDLE_VARIANT.DEFAULT
     })
   }
 
+  if (instanceRef.inp_instances) {
+    promote(parseInstanceNames(instanceRef.inp_instances), TARGET_HANDLE_TYPE, 'top')
+  }
+
   if (instanceRef.out_instances) {
-    const outputs = parseInstanceNames(instanceRef.out_instances)
-    outputs.forEach((name) => {
-      handles.push({
-        uid: crypto.randomUUID(),
-        type: SOURCE_HANDLE_TYPE,
-        side: 'right',
-        name,
-      })
-    })
+    promote(parseInstanceNames(instanceRef.out_instances), SOURCE_HANDLE_TYPE, 'bottom')
   }
 
   return handles
 }
 
-export function buildGhostHandles(countTopBot = 5, countSides = 4) {
+export function buildGhostHandles(countTopBot = 7, countSides = 5) {
   const handles = []
 
   HANDLE_SIDES.forEach((side, sideIndex) => {

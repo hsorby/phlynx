@@ -132,7 +132,7 @@ import Menu from 'primevue/menu'
 import CellMLIcon from './icons/CellMLIcon.vue'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
-import { getHandleId, getHandleStyle, handlePosition } from '../utils/handles'
+import { getHandleId, getHandleStyle, handlePosition, findMostCentralGhostHandle } from '../utils/handles'
 import { sanitiseName } from '../utils/nodes'
 import { notify } from '../utils/notify'
 import { isEditableVariableType, isEmpty } from '../utils/variables'
@@ -334,21 +334,7 @@ async function removeHandle(handleIdToRemove) {
 }
 
 const addHandle = async (handleToAdd) => {
-  const handlesOnSide = props.data.handles.filter((h) => h.side === handleToAdd.side)
-  const center = (handlesOnSide.length - 1) / 2
-
-  let mostCentralGhost = null
-  let smallestDistance = Infinity
-
-  handlesOnSide.forEach((h, index) => {
-    if (h.variant !== HANDLE_VARIANT.GHOST) return
-
-    const distance = Math.abs(index - center)
-    if (distance < smallestDistance) {
-      smallestDistance = distance
-      mostCentralGhost = h
-    }
-  })
+  const mostCentralGhost = findMostCentralGhostHandle(handleToAdd.side, props.data.handles)
 
   if (!mostCentralGhost) {
     return
@@ -426,8 +412,8 @@ function openContextMenu(event) {
 }
 
 .vue-flow__handle.handle--ghost {
-  width: 30px;
-  height: 30px;
+  width: 25px;
+  height: 25px;
   border-radius: 50%;
   background: transparent;
   border: none;

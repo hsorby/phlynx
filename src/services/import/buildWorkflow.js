@@ -1,4 +1,4 @@
-import { getHandleId, buildHandles } from '../../utils/handles'
+import { getHandleId, buildHandles, buildGhostHandles } from '../../utils/handles'
 import { MAIN_NODE_TYPE, SOURCE_HANDLE_TYPE, TARGET_HANDLE_TYPE } from '../../utils/constants'
 import { extractVariablesFromMath } from '../../utils/cellml'
 import { resolvePortCouplings, checkAndClaimCouplings, buildUsedPortKeys } from '../../utils/edges'
@@ -49,8 +49,9 @@ function buildInstances(instanceRefs, availableModules, currentNodes, progressCa
     }
 
     const nodeType = MAIN_NODE_TYPE
-    const handles = buildHandles(instanceRef)
-
+    const ghostHandles = buildGhostHandles()
+    const handles = buildHandles(instanceRef, ghostHandles)
+    
     let position = null
     if (instanceRef.x !== undefined && instanceRef.y !== undefined) {
       position = { x: instanceRef.x, y: instanceRef.y }
