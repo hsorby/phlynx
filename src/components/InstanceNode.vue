@@ -289,7 +289,7 @@ function onHandleLeave() {
 async function removeHandle(handleIdToRemove) {
   const oldHandles = detachReactivity(props.data.handles)
 
-  const handle = oldHandles.find((p) => p.uid === handleIdToRemove)
+  const handle = oldHandles.find((h) => h.uid === handleIdToRemove)
   if (!handle) return
 
   const handleId = getHandleId(handle)
@@ -334,26 +334,8 @@ async function removeHandle(handleIdToRemove) {
 }
 
 const addHandle = async (handleToAdd) => {
-  const oldHandles = [...props.data.handles]
-
-  const newHandle = {
-    ...handleToAdd,
-    uid: crypto.randomUUID(),
-  }
-
-  const newHandles = [...props.data.handles, newHandle]
-
-  await applyHandles(newHandles)
-
-  historyStore.addCommand({
-    type: 'add-handle',
-    undo: async () => {
-      applyHandles(oldHandles)
-    },
-    redo: async () => {
-      applyHandles(newHandles)
-    },
-  })
+  const handle = props.data.handles.find((h) => h.side === handleToAdd.side && h.variant === HANDLE_VARIANT.GHOST)
+  activateHandle(props.id, handle.uid)
 }
 
 const isEditing = ref(false)
