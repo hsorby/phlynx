@@ -105,7 +105,7 @@
         @pointerdown="handle.variant === HANDLE_VARIANT.GHOST && activateHandle(props.id, handle.uid)"
       >
         <Button
-          v-show="hoveredHandleUid === handle.uid"
+          v-show="hoveredHandleUid === handle.uid && handle.variant !== HANDLE_VARIANT.GHOST"
           :class="['delete-handle-popover-btn', 'popover-' + handle.side]"
           icon="pi pi-trash"
           severity="danger"
