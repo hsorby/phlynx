@@ -96,22 +96,22 @@ div.instance-name,
   background: #f5f7fa;
 }
 
-.domain-type-default.el-card {
-  background-color: #ffffff;
+.domain-type-default.instance-card {
+  background-color: var(--p-content-background);
 }
 
-.domain-type-compartment.el-card {
+.domain-type-compartment.instance-card {
   background-color: #ffe7e1;
 }
 
-.domain-type-membrane.el-card {
+.domain-type-membrane.instance-card {
   background-color: #ffe2ec;
 }
 
-.domain-type-process.el-card {
+.domain-type-process.instance-card {
   background-color: #e1edff;
 }
 
-.domain-type-protein.el-card {
+.domain-type-protein.instance-card {
   background-color: #d1fff0;
 }
