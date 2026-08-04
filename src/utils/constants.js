@@ -2,6 +2,10 @@ import { MarkerType } from '@vue-flow/core'
 
 export const SOURCE_HANDLE_TYPE = 'source'
 export const TARGET_HANDLE_TYPE = 'target'
+export const HANDLE_VARIANT = {
+  DEFAULT: 'default', 
+  GHOST: 'ghost',      
+}
 export const USER_MODULES_FILE = 'User_Modules.cellml'
 export const NEW_INSTANCE_MODULE_REF = 'new_module:phlynx'
 

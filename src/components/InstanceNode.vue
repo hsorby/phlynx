@@ -97,7 +97,7 @@
         :id="getHandleId(handle)"
         :ref="'handle_' + handle.side + '_' + handle.uid"
         :position="handlePosition(handle.side)"
-        class="handle"
+        :class="['handle', `handle--${handle.variant || 'default'}`]"
         :style="getHandleStyle(handle, data.handles)"
         v-tooltip.bottom="{ value: handle.name, showDelay: 1000 }"
         @mouseenter="onHandleEnter(handle.uid)"
@@ -224,9 +224,11 @@ function handleSetDomainType(newType) {
 }
 
 const domainMenuRef = ref(null)
+
 function toggleDomainMenu(event) {
   domainMenuRef.value?.toggle(event)
 }
+
 const domainTypeMenuItems = [
   { label: 'Membrane', command: () => handleSetDomainType('membrane') },
   { label: 'Process', command: () => handleSetDomainType('process') },
@@ -237,9 +239,11 @@ const domainTypeMenuItems = [
 ]
 
 const portMenuRef = ref(null)
+
 function togglePortMenu(event) {
   portMenuRef.value?.toggle(event)
 }
+
 const portMenuItems = [
   { label: 'Left', command: () => addHandle({ side: 'left' }) },
   { label: 'Right', command: () => addHandle({ side: 'right' }) },
@@ -407,12 +411,31 @@ function openContextMenu(event) {
 <style lang="scss" scoped>
 @import '../assets/vueflowhandle.css';
 
-.handle {
-  width: 14px !important;
-  height: 14px !important;
-  border-radius: 50% !important; 
+.vue-flow__handle.handle--default {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--p-text-color);
+  opacity: 1;
 }
 
+.vue-flow__handle.handle--ghost {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  opacity: 0;
+  pointer-events: auto;
+}
+
+.vue-flow__handle.handle--ghost:hover,
+.vue-flow__handle.handle--ghost.valid {
+  background-color: rgba(34, 197, 94, 0.15);
+  border-color: #22c55e;  
+  border-style: solid;
+  opacity: 1;
+}
 .instance-name {
   min-height: 2.5rem; 
   display: flex;

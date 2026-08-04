@@ -4,7 +4,8 @@ import {
   SOURCE_HANDLE_PRIORITY,
   TARGET_HANDLE_PRIORITY,
   TARGET_HANDLE_TYPE,
-  SOURCE_HANDLE_TYPE
+  SOURCE_HANDLE_TYPE,
+  HANDLE_VARIANT,
 } from './constants'
 
 export function randomHandleSide() {
@@ -31,7 +32,9 @@ export function handlePosition(side) {
 }
 
 export function getHandleStyle(handle, allHandles) {
-  const handlesOfSameType = allHandles.filter((h) => h.side === handle.side)
+  const handlesOfSameType = allHandles.filter(
+    (h) => h.side === handle.side && h.variant === handle.variant
+  )
   const n = handlesOfSameType.length
 
   // Space between each port.
@@ -56,7 +59,6 @@ export function getHandleStyle(handle, allHandles) {
     top: `calc(50% + ${offset}px)`,
   }
 }
-
 
 function parseInstanceNames(connectedInstances) {
   return Array.from(
@@ -90,6 +92,29 @@ export function buildHandles(instance) {
       })
     })
   }
+
+  return handles
+}
+
+export function buildGhostHandles(count = 16) {
+  const perSide = Math.floor(count / HANDLE_SIDES.length)
+  const remainder = count % HANDLE_SIDES.length
+
+  const handles = []
+
+  HANDLE_SIDES.forEach((side, sideIndex) => {
+    // spread any remainder across the first few sides so odd counts still work
+    const n = perSide + (sideIndex < remainder ? 1 : 0)
+
+    for (let i = 0; i < n; i++) {
+      handles.push({
+        uid: crypto.randomUUID(),
+        side,
+        name: '',
+        variant: HANDLE_VARIANT.GHOST,
+      })
+    }
+  })
 
   return handles
 }
