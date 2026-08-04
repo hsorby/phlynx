@@ -102,7 +102,7 @@
         v-tooltip.bottom="{ value: handle.name, showDelay: 1000 }"
         @mouseenter="onHandleEnter(handle.uid)"
         @mouseleave="onHandleLeave"
-        @pointerdown="handle.variant === HANDLE_VARIANT.GHOST && activateHandle(props.id, handle.uid)"
+        @pointerdown="handle.variant === HANDLE_VARIANT.GHOST && beginGhostActivation(props.id, handle.uid)"
       >
         <Button
           v-show="hoveredHandleUid === handle.uid && handle.variant !== HANDLE_VARIANT.GHOST"
@@ -142,7 +142,7 @@ import { TARGET_HANDLE_TYPE, SOURCE_HANDLE_TYPE, HANDLE_VARIANT } from '../utils
 import { useHandleActivation } from '../composables/useHandleActivation'
 
 const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } = useVueFlow()
-const { activateHandle } = useHandleActivation()
+const { beginGhostActivation } = useHandleActivation()
 const historyStore = useFlowHistoryStore()
 const libraryStore = useLibraryStore()
 

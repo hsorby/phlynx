@@ -465,6 +465,7 @@ const {
   getSelectedEdges,
   nodes,
   onConnect,
+  onConnectEnd,
   removeEdges,
   removeNodes,
   screenToFlowCoordinate,
@@ -487,7 +488,7 @@ const {
   createInstanceNode,
 } = useDragAndDrop(pendingHistoryNodes)
 
-const { activateHandle } = useHandleActivation()
+const { activateHandle, confirmActivation, revertPendingGhostIfUnused } = useHandleActivation()
 
 const dialogVisible = computed(() => {
   return (
@@ -853,6 +854,10 @@ const currentExportMode = computed(() => {
   return found || exportOptions.value[0]
 })
 
+onConnectEnd(() => {
+  revertPendingGhostIfUnused()
+})
+
 onConnect((connection) => {
   const sourceNode = findNode(connection.source)
   const targetNode = findNode(connection.target)
@@ -878,6 +883,7 @@ onConnect((connection) => {
     targetIndex
   )
 
+  confirmActivation()
   if (connection.sourceHandle) {
     activateHandle(connection.source, getHandleUidFromHandleId(connection.sourceHandle))
   }
