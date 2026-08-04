@@ -135,9 +135,10 @@ import { getHandleId, getHandleStyle, handlePosition } from '../utils/handles'
 import { sanitiseName } from '../utils/nodes'
 import { notify } from '../utils/notify'
 import { isEditableVariableType, isEmpty } from '../utils/variables'
-import '../assets/vueflownode.css'
 import { detachReactivity } from '../utils/reactivity'
 import { TARGET_HANDLE_TYPE, SOURCE_HANDLE_TYPE } from '../utils/constants'
+
+import '../assets/vueflownode.css'
 
 const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } = useVueFlow()
 const historyStore = useFlowHistoryStore()
@@ -200,6 +201,7 @@ const instanceLabel = computed(() => {
 })
 
 const domainTypeClass = computed(() => {
+  console.log('props.data.domainType:', props.data.domainType)
   return props.data.domainType ? `domain-type-${props.data.domainType}` : 'domain-type-default'
 })
 
@@ -442,7 +444,6 @@ function openContextMenu(event) {
   border-radius: 10px;
   box-sizing: border-box;
   position: relative;
-  background: var(--p-content-background);
   color: var(--p-text-color);
   border: 3px solid color-mix(in srgb, var(--p-text-color) 4%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--p-text-color) 6%, transparent);
