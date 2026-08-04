@@ -379,6 +379,7 @@ import { MiniMap } from '@vue-flow/minimap'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import useDragAndDrop from '../composables/useDnD'
+import { useHandleActivation } from '../composables/useHandleActivation'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
 import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
@@ -443,6 +444,7 @@ import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
 import PortEditorDialog from '../components/PortEditorDialog.vue'
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
+import { getHandleId, getHandleUidFromHandleId } from '../utils/handles'
 
 const workspaceFileInput = ref(null)
 
@@ -484,6 +486,8 @@ const {
   isDragOver,
   createInstanceNode,
 } = useDragAndDrop(pendingHistoryNodes)
+
+const { activateHandle } = useHandleActivation()
 
 const dialogVisible = computed(() => {
   return (
@@ -873,6 +877,14 @@ onConnect((connection) => {
     sourceIndex,
     targetIndex
   )
+
+  if (connection.sourceHandle) {
+    activateHandle(connection.source, getHandleUidFromHandleId(connection.sourceHandle))
+  }
+
+  if (connection.targetHandle) {
+    activateHandle(connection.target, getHandleUidFromHandleId(connection.targetHandle))
+  }
 
   const newEdge = {
     ...connection,

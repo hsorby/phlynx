@@ -9,11 +9,15 @@ import {
 } from './constants'
 
 export function randomHandleSide() {
-    return HANDLE_SIDES[Math.floor(Math.random() * HANDLE_SIDES.length)]
+  return HANDLE_SIDES[Math.floor(Math.random() * HANDLE_SIDES.length)]
 }
 
 export function getHandleId(handle) {
-    return `handle_${handle.uid}`
+  return `handle_${handle.uid}`
+}
+
+export function getHandleUidFromHandleId(handleId) {
+  return handleId.replace("handle_", "")
 }
 
 export function handlePosition(side) {
