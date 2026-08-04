@@ -6,6 +6,7 @@ import {
   TARGET_HANDLE_TYPE,
   SOURCE_HANDLE_TYPE,
   HANDLE_VARIANT,
+  HANDLE_SPACING,
 } from './constants'
 
 export function randomHandleSide() {
@@ -36,32 +37,19 @@ export function handlePosition(side) {
 }
 
 export function getHandleStyle(handle, allHandles) {
-  const handlesOfSameType = allHandles.filter(
-    (h) => h.side === handle.side 
-  )
+  const handlesOfSameType = allHandles.filter((h) => h.side === handle.side)
   const n = handlesOfSameType.length
 
-  // Space between each port.
-  const handleSpacing = 16
   const positionIndex = handlesOfSameType.findIndex((h) => h.uid === handle.uid)
-
-  // guard: if not found, fall back to 0
   const safeIndex = positionIndex === -1 ? 0 : positionIndex
 
-  // This calculates the offset from the center
-  const offset = handleSpacing * (positionIndex - (n - 1) / 2)
+  const offset = HANDLE_SPACING * (safeIndex - (n - 1) / 2)
 
   if (['top', 'bottom'].includes(handle.side)) {
-    // Let CSS calculate the 50% mark and apply the offset
-    return {
-      left: `calc(50% + ${offset}px)`,
-    }
+    return { left: `calc(50% + ${offset}px)` }
   }
 
-  // Let CSS calculate the 50% mark and apply the offset
-  return {
-    top: `calc(50% + ${offset}px)`,
-  }
+  return { top: `calc(50% + ${offset}px)` }
 }
 
 function parseInstanceNames(connectedInstances) {

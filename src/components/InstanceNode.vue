@@ -425,8 +425,8 @@ function openContextMenu(event) {
 }
 
 .vue-flow__handle.handle--ghost {
-  width: 40px;
-  height: 40px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   background: transparent;
   border: none;
@@ -441,6 +441,7 @@ function openContextMenu(event) {
   border-style: solid;
   opacity: 1;
 }
+
 .instance-name {
   min-height: 2.5rem; 
   display: flex;

@@ -7,6 +7,7 @@ export const HANDLE_VARIANT = {
   GHOST: 'ghost',      
 }
 export const NUM_GHOST_HANDLES = 16
+export const HANDLE_SPACING = 30
 
 export const USER_MODULES_FILE = 'User_Modules.cellml'
 export const NEW_INSTANCE_MODULE_REF = 'new_module:phlynx'
