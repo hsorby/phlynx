@@ -488,7 +488,8 @@ const {
   createInstanceNode,
 } = useDragAndDrop(pendingHistoryNodes)
 
-const { activateHandle, confirmActivation, revertPendingGhostIfUnused } = useHandleActivation()
+const { activateHandle, confirmActivation, revertPendingGhostIfUnused, revertHandlesForEdge, reactivateEdgeHandles } =
+  useHandleActivation()
 
 const dialogVisible = computed(() => {
   return (
@@ -889,7 +890,10 @@ onConnect(async (connection) => {
 
     removeEdges(pendingEdge.id) 
 
-    if (!shouldReplace) return  
+    if (!shouldReplace) {
+      
+      return  
+    }
     removeEdges(duplicate.id)    
   }
 
@@ -1298,9 +1302,19 @@ const onEdgeChange = (changes) => {
   if (removeChanges.length) {
     const edgesToRestore = removeChanges.map((change) => change.edge)
     const idsToRemove = removeChanges.map((change) => change.edge.id)
+
+    // Ghost out any handle that no longer has an edge attached
+    edgesToRestore.forEach((edge) => revertHandlesForEdge(edge, idsToRemove))
+
     historyStore.addCommand({
-      undo: () => addEdges(edgesToRestore),
-      redo: () => removeEdges(idsToRemove),
+      undo: () => {
+        addEdges(edgesToRestore)
+        edgesToRestore.forEach(reactivateEdgeHandles)
+      },
+      redo: () => {
+        removeEdges(idsToRemove)
+        edgesToRestore.forEach((edge) => revertHandlesForEdge(edge, idsToRemove))
+      },
     })
   }
 
