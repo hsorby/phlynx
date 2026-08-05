@@ -137,7 +137,6 @@ onConnect((connection) => {
 
   if (connection.targetHandle) { 
     const targetNode = findNode(connection.target)
-    console.log(targetNode)
     if (targetNode.type === GHOST_NODE_TYPE) {
       activateHandle(connection.source, getHandleUidFromHandleId(connection.targetHandle))
     } else {
