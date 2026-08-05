@@ -16,14 +16,15 @@
       <!-- <button debug>Debug</button>  -->
     </Card>
 
-    <template v-for="handle in targetHandles" :key="handle.uid" class="handle">
+    <template v-for="handle in targetHandles" :key="handle.uid">
       <Handle
         :id="getHandleId(handle)"
         :position="handlePosition(handle.side)"
+        :class="['handle', `handle--${handle.variant || 'default'}`]"
         :style="getHandleStyle(handle, targetHandles)"
-        class="port-handle"
-      />
-    </template>
+      >
+      </Handle>
+  </template>
   </div>
 </template>
 
@@ -71,6 +72,31 @@ const nodeStyle = computed(() => {
 </script>
 
 <style scoped>
+.vue-flow__handle.handle--default {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--p-text-color);
+  opacity: 1;
+}
+
+.vue-flow__handle.handle--ghost {
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  opacity: 0;
+  pointer-events: auto;
+}
+
+.vue-flow__handle.handle--ghost.valid {
+  background-color: rgba(34, 197, 94, 0.15);
+  border-color: #22c55e;  
+  border-style: solid;
+  opacity: 1;
+}
+
 /* Visual styling to make it look "Ghostly" */
 .ghost-card {
   --p-card-color: #1f2937;
