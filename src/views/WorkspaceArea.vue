@@ -870,12 +870,17 @@ onConnect(async (connection) => {
     (e) => e.source === connection.source && e.target === connection.target
   )
 
+  const duplicateSnapshot = duplicate ? detachReactivity(duplicate) : null
+
   if (duplicate) {
     const pendingEdge = {
       ...connection,
       id: `pending--${connection.source}--${connection.target}`,
       style: { strokeDasharray: '8 8', opacity: 0.4 }, // visually mark "unconfirmed"
     }
+
+    // Prevents addition to history store.
+    suppressedEdgeIds.add(pendingEdge.id)
     addEdges(pendingEdge)
 
     const shouldReplace = await confirm({
@@ -889,12 +894,13 @@ onConnect(async (connection) => {
     })
 
     removeEdges(pendingEdge.id) 
+    suppressedEdgeIds.delete(pendingEdge.id)
 
-    if (!shouldReplace) {
-      
-      return  
-    }
-    removeEdges(duplicate.id)    
+    if (!shouldReplace) return
+
+    suppressedEdgeIds.add(duplicate.id)
+    removeEdges(duplicate.id)
+    revertHandlesForEdge(duplicateSnapshot)
   }
 
   // Derive ordinal indices from the existing edge graph:
@@ -935,7 +941,33 @@ onConnect(async (connection) => {
     },
   }
 
-  addEdges(newEdge)
+  if (duplicateSnapshot) {
+    suppressedEdgeIds.add(newEdge.id)
+    addEdges(newEdge)
+    suppressedEdgeIds.delete(duplicateSnapshot.id)
+    suppressedEdgeIds.delete(newEdge.id)
+
+    // A single undo step for the whole replace: undo brings the old edge
+    // (and its handle activation) back and removes the new one; redo does
+    // the reverse. 
+    historyStore.addCommand({
+      type: 'replace-edge',
+      undo: () => {
+        removeEdges(newEdge.id)
+        revertHandlesForEdge(newEdge)
+        addEdges(duplicateSnapshot)
+        reactivateEdgeHandles(duplicateSnapshot)
+      },
+      redo: () => {
+        removeEdges(duplicateSnapshot.id)
+        revertHandlesForEdge(duplicateSnapshot)
+        addEdges(newEdge)
+        reactivateEdgeHandles(newEdge)
+      },
+    })
+  } else {
+    addEdges(newEdge)
+  }
 })
 
 const createSelectCommand = (changes, findFn) => {
@@ -1268,6 +1300,9 @@ const onNodeChange = (changes) => {
   applyNodeChanges(changes)
 }
 
+// Ignore pending edges in history store
+const suppressedEdgeIds = new Set()
+
 const onEdgeChange = (changes) => {
   if (historyStore.isUndoRedoing) {
     // If we are currently undoing/redoing, bypass history tracking
@@ -1280,10 +1315,14 @@ const onEdgeChange = (changes) => {
   changes.forEach((c) => {
     if (c.type === 'remove') {
       indexRemoveEdge(c)
-      removeChanges.push({ edge: snapshotEdge(c) })
+      if (!suppressedEdgeIds.has(c.id)) {
+        removeChanges.push({ edge: snapshotEdge(c) })
+      }
     } else if (c.type === 'add') {
       indexAddEdge(c.item)
-      addChanges.push({ edge: snapshotEdge(c) })
+      if (!suppressedEdgeIds.has(c.item.id)) {
+        addChanges.push({ edge: snapshotEdge(c) })
+      }
     } else if (c.type === 'select' && undoRedoSelection) {
       const edge = findEdge(c.id)
       selectChanges.push({ id: c.id, from: edge.selected, to: c.selected })
