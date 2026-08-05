@@ -77,7 +77,7 @@ import GhostSetupModal from './GhostSetupDialog.vue'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useGtm } from '../composables/useGtm'
 import useDragAndDrop from '../composables/useDnD'
-import { useHandleActivation } from '../composables/useHandleActivation'
+import { useHandleManagement } from '../composables/useHandleManagement'
 import {
   edgeLineOptions,
   FLOW_IDS,
@@ -99,7 +99,7 @@ const previousNodes = new Set()
 const { onDrop, isGhostSetupOpen, pendingGhostNodeId } = useDragAndDrop(previousNodes)
 const { trackEvent } = useGtm()
 
-const { revertPendingGhostIfUnused, confirmActivation, activateHandle } = useHandleActivation()
+const { revertPendingGhostIfUnused, confirmActivation, activateHandle } = useHandleManagement()
 
 const libraryStore = useLibraryStore()
 

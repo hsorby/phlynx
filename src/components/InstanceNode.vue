@@ -139,10 +139,10 @@ import { isEditableVariableType, isEmpty } from '../utils/variables'
 import '../assets/vueflownode.css'
 import { detachReactivity } from '../utils/reactivity'
 import { TARGET_HANDLE_TYPE, SOURCE_HANDLE_TYPE, HANDLE_VARIANT } from '../utils/constants'
-import { useHandleActivation } from '../composables/useHandleActivation'
+import { useHandleManagement } from '../composables/useHandleManagement'
 
 const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } = useVueFlow()
-const { beginGhostActivation, activateHandle } = useHandleActivation()
+const { beginGhostActivation, activateHandle } = useHandleManagement()
 const historyStore = useFlowHistoryStore()
 const libraryStore = useLibraryStore()
 

@@ -7,11 +7,11 @@ import { detachReactivity } from '../utils/reactivity'
 
 const pendingGhostRevert = ref(null)
 
-export function useHandleActivation() {
+export function useHandleManagement() {
   const { getNodes, updateNodeData, updateNodeInternals, edges } = useVueFlow()
   const historyStore = useFlowHistoryStore()
 
-  async function setHandleVariant(nodeId, handleUid, variant) {
+  async function setHandleVariant(nodeId, handleUid, variant, { trackHistory = true } = {}) {
     const node = getNodes.value.find((n) => n.id === nodeId)
     if (!node) return
 
@@ -31,20 +31,25 @@ export function useHandleActivation() {
 
     await apply(newHandles)
 
-    historyStore.addCommand({
-      type: `set-handle-variant-${variant}`,
-      undo: () => apply(oldHandles),
-      redo: () => apply(newHandles),
-    })
+    // Skip history for: 
+    // (a) provisional preview changes the caller has explicitly opted out of 
+    // (b) changes happening as a side effect of an undo/redo replay 
+    if (trackHistory && !historyStore.isUndoRedoing) {
+      historyStore.addCommand({
+        type: `set-handle-variant-${variant}`,
+        undo: () => apply(oldHandles),
+        redo: () => apply(newHandles),
+      })
+    }
   }
 
-  async function activateHandle(nodeId, handleUid) {
-    await setHandleVariant(nodeId, handleUid, HANDLE_VARIANT.DEFAULT)
+  async function activateHandle(nodeId, handleUid, options) {
+    await setHandleVariant(nodeId, handleUid, HANDLE_VARIANT.DEFAULT, options)
   }
 
   function beginGhostActivation(nodeId, handleUid) {
     pendingGhostRevert.value = { nodeId, handleUid }
-    activateHandle(nodeId, handleUid)
+    activateHandle(nodeId, handleUid, { trackHistory: false })
   }
 
   function confirmActivation() {
@@ -54,11 +59,14 @@ export function useHandleActivation() {
   /**
    * Reverts a single handle to the ghost variant, but only if no remaining
    * edge still terminates on it. `excludeEdgeIds` lets callers check this
-   * *before* the edge(s) being removed have actually left `edges.value`
-   * (e.g. inside onEdgeChange, ahead of applyEdgeChanges), so the check
-   * doesn't see its own soon-to-be-removed edge as "still in use".
+   * before the edge(s) being removed have actually left `edges.value`, so the 
+   * check doesn't see its own soon-to-be-removed edge as "still in use".
    */
-  async function revertHandleIfUnused(nodeId, handleUid, { excludeEdgeIds = [] } = {}) {
+  async function revertHandleIfUnused(
+    nodeId,
+    handleUid,
+    { excludeEdgeIds = [], trackHistory = true } = {}
+  ) {
     const node = getNodes.value.find((n) => n.id === nodeId)
     const handle = node?.data.handles.find((h) => h.uid === handleUid)
     if (!handle) return
@@ -72,7 +80,7 @@ export function useHandleActivation() {
     )
 
     if (!hasEdge) {
-      await setHandleVariant(nodeId, handleUid, HANDLE_VARIANT.GHOST)
+      await setHandleVariant(nodeId, handleUid, HANDLE_VARIANT.GHOST, { trackHistory })
     }
   }
 
@@ -82,7 +90,7 @@ export function useHandleActivation() {
     const { nodeId, handleUid } = pendingGhostRevert.value
     pendingGhostRevert.value = null
 
-    await revertHandleIfUnused(nodeId, handleUid)
+    await revertHandleIfUnused(nodeId, handleUid, { trackHistory: false })
   }
 
   /**
@@ -90,26 +98,30 @@ export function useHandleActivation() {
    * elsewhere). Pass the edge's own id(s) in excludeEdgeIds when calling
    * this ahead of the edge actually being removed from edges.value.
    */
-  async function revertHandlesForEdge(edge, excludeEdgeIds = [edge.id]) {
+  async function revertHandlesForEdge(edge, excludeEdgeIds = [edge.id], { trackHistory = true } = {}) {
     if (edge.sourceHandle) {
       await revertHandleIfUnused(edge.source, getHandleUidFromHandleId(edge.sourceHandle), {
         excludeEdgeIds,
+        trackHistory,
       })
     }
     if (edge.targetHandle) {
       await revertHandleIfUnused(edge.target, getHandleUidFromHandleId(edge.targetHandle), {
         excludeEdgeIds,
+        trackHistory,
       })
     }
   }
 
-  /** Re-activates both ends of a restored edge, e.g. on undo of a removal. */
-  async function reactivateEdgeHandles(edge) {
+  /**
+   * Re-activates both ends of a restored edge (e.g., on undo of a removal).
+   */
+  async function reactivateEdgeHandles(edge, { trackHistory = true } = {}) {
     if (edge.sourceHandle) {
-      await activateHandle(edge.source, getHandleUidFromHandleId(edge.sourceHandle))
+      await activateHandle(edge.source, getHandleUidFromHandleId(edge.sourceHandle), { trackHistory })
     }
     if (edge.targetHandle) {
-      await activateHandle(edge.target, getHandleUidFromHandleId(edge.targetHandle))
+      await activateHandle(edge.target, getHandleUidFromHandleId(edge.targetHandle), { trackHistory })
     }
   }
 

@@ -362,7 +362,7 @@ export default {
 
 <script setup>
 import { computed, h, inject, markRaw, nextTick, onMounted, onUnmounted, ref, watch, watchPostEffect } from 'vue'
-import { connectionExists, useVueFlow, VueFlow } from '@vue-flow/core'
+import { connectionExists, useHandle, useVueFlow, VueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
 import SplitButton from 'primevue/splitbutton'
@@ -379,7 +379,7 @@ import { MiniMap } from '@vue-flow/minimap'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import useDragAndDrop from '../composables/useDnD'
-import { useHandleActivation } from '../composables/useHandleActivation'
+import { useHandleManagement } from '../composables/useHandleManagement'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
 import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
@@ -489,7 +489,7 @@ const {
 } = useDragAndDrop(pendingHistoryNodes)
 
 const { activateHandle, confirmActivation, revertPendingGhostIfUnused, revertHandlesForEdge, reactivateEdgeHandles } =
-  useHandleActivation()
+  useHandleManagement()
 
 const dialogVisible = computed(() => {
   return (
@@ -893,7 +893,7 @@ onConnect(async (connection) => {
       rejectLabel: 'Cancel',
     })
 
-    removeEdges(pendingEdge.id) 
+    removeEdges(pendingEdge.id)
     suppressedEdgeIds.delete(pendingEdge.id)
 
     if (!shouldReplace) return
@@ -954,15 +954,15 @@ onConnect(async (connection) => {
       type: 'replace-edge',
       undo: () => {
         removeEdges(newEdge.id)
-        revertHandlesForEdge(newEdge)
+        revertHandlesForEdge(newEdge, [newEdge.id], { trackHistory: false })
         addEdges(duplicateSnapshot)
-        reactivateEdgeHandles(duplicateSnapshot)
+        reactivateEdgeHandles(duplicateSnapshot, { trackHistory: false })
       },
       redo: () => {
         removeEdges(duplicateSnapshot.id)
-        revertHandlesForEdge(duplicateSnapshot)
+        revertHandlesForEdge(duplicateSnapshot, [duplicateSnapshot.id], { trackHistory: false })
         addEdges(newEdge)
-        reactivateEdgeHandles(newEdge)
+        reactivateEdgeHandles(newEdge, { trackHistory: false })
       },
     })
   } else {
@@ -1300,7 +1300,6 @@ const onNodeChange = (changes) => {
   applyNodeChanges(changes)
 }
 
-// Ignore pending edges in history store
 const suppressedEdgeIds = new Set()
 
 const onEdgeChange = (changes) => {
@@ -1333,8 +1332,16 @@ const onEdgeChange = (changes) => {
     const edgesToRestore = addChanges.map((change) => change.edge)
     const idsToRemove = addChanges.map((change) => change.edge.id)
     historyStore.addCommand({
-      undo: () => removeEdges(idsToRemove),
-      redo: () => addEdges(edgesToRestore),
+      undo: () => {
+        removeEdges(idsToRemove)
+        edgesToRestore.forEach((edge) =>
+          revertHandlesForEdge(edge, idsToRemove, { trackHistory: false })
+        )
+      },
+      redo: () => {
+        addEdges(edgesToRestore)
+        edgesToRestore.forEach((edge) => reactivateEdgeHandles(edge, { trackHistory: false }))
+      },
     })
   }
 
@@ -1342,17 +1349,21 @@ const onEdgeChange = (changes) => {
     const edgesToRestore = removeChanges.map((change) => change.edge)
     const idsToRemove = removeChanges.map((change) => change.edge.id)
 
-    // Ghost out any handle that no longer has an edge attached
+    // Ghost out any handle that no longer has an edge attached to it. 
+    // excludeEdgeIds is passed because edges.value hasn't actually 
+    // dropped these ids yet at this point.
     edgesToRestore.forEach((edge) => revertHandlesForEdge(edge, idsToRemove))
 
     historyStore.addCommand({
       undo: () => {
         addEdges(edgesToRestore)
-        edgesToRestore.forEach(reactivateEdgeHandles)
+        edgesToRestore.forEach((edge) => reactivateEdgeHandles(edge, { trackHistory: false }))
       },
       redo: () => {
         removeEdges(idsToRemove)
-        edgesToRestore.forEach((edge) => revertHandlesForEdge(edge, idsToRemove))
+        edgesToRestore.forEach((edge) =>
+          revertHandlesForEdge(edge, idsToRemove, { trackHistory: false })
+        )
       },
     })
   }
