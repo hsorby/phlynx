@@ -77,6 +77,7 @@ import GhostSetupModal from './GhostSetupDialog.vue'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useGtm } from '../composables/useGtm'
 import useDragAndDrop from '../composables/useDnD'
+import { useHandleActivation } from '../composables/useHandleActivation'
 import {
   edgeLineOptions,
   FLOW_IDS,
@@ -88,13 +89,16 @@ import {
   markerEnd,
 } from '../utils/constants'
 import { detachReactivity } from '../utils/reactivity'
+import { getHandleUidFromHandleId } from '../utils/handles.js'
 
-const { addEdges, edges, findNode, nodes, onConnect, onDragLeave, onNodeChange, onEdgeChange, removeNodes } =
+const { addEdges, edges, findNode, nodes, onConnect, onConnectEnd, onDragLeave, onNodeChange, onEdgeChange, removeNodes } =
   useVueFlow(FLOW_IDS.MACRO)
 
 const previousNodes = new Set()
 const { onDrop, isGhostSetupOpen, pendingGhostNodeId } = useDragAndDrop(previousNodes)
 const { trackEvent } = useGtm()
+
+const { revertPendingGhostIfUnused, confirmActivation, activateHandle } = useHandleActivation()
 
 const libraryStore = useLibraryStore()
 
@@ -124,6 +128,16 @@ const macroEdgeOptions = {
 }
 
 onConnect((connection) => {
+
+  confirmActivation()
+  if (connection.sourceHandle) {
+    activateHandle(connection.target, getHandleUidFromHandleId(connection.source))
+  }
+
+  if (connection.targetHandle) {
+    activateHandle(connection.source, getHandleUidFromHandleId(connection.targetHandle))
+  }
+
   // Match what we specify in connectionLineOptions.
   const newEdge = {
     ...connection,
@@ -131,6 +145,10 @@ onConnect((connection) => {
   }
 
   addEdges(newEdge)
+})
+
+onConnectEnd(() => {
+  revertPendingGhostIfUnused()
 })
 
 function onOpenEditDialog(eventPayload) {
