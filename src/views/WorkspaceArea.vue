@@ -362,7 +362,7 @@ export default {
 
 <script setup>
 import { computed, h, inject, markRaw, nextTick, onMounted, onUnmounted, ref, watch, watchPostEffect } from 'vue'
-import { useVueFlow, VueFlow } from '@vue-flow/core'
+import { connectionExists, useVueFlow, VueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
 import SplitButton from 'primevue/splitbutton'
@@ -858,12 +858,40 @@ onConnectEnd(() => {
   revertPendingGhostIfUnused()
 })
 
-onConnect((connection) => {
+onConnect(async (connection) => {
   const sourceNode = findNode(connection.source)
   const targetNode = findNode(connection.target)
 
   if (!sourceNode || !targetNode) return
   if (sourceNode === targetNode) return
+
+  const duplicate = edges.value.find(
+    (e) => e.source === connection.source && e.target === connection.target
+  )
+
+  if (duplicate) {
+    const pendingEdge = {
+      ...connection,
+      id: `pending--${connection.source}--${connection.target}`,
+      style: { strokeDasharray: '8 8', opacity: 0.4 }, // visually mark "unconfirmed"
+    }
+    addEdges(pendingEdge)
+
+    const shouldReplace = await confirm({
+      header: 'Connection already exists',
+      message:
+        'A connection already exists between these instances. Do you wish to replace it?\n\n' +
+        'If you select Cancel, the new connection will be discarded and the existing connection will remain.',
+      severity: 'warning',
+      acceptLabel: 'Replace',
+      rejectLabel: 'Cancel',
+    })
+
+    removeEdges(pendingEdge.id) 
+
+    if (!shouldReplace) return  
+    removeEdges(duplicate.id)    
+  }
 
   // Derive ordinal indices from the existing edge graph:
   //   sourceIndex = how many edges already leave from this source node
