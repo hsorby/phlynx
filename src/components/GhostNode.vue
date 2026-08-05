@@ -22,8 +22,7 @@
         :position="handlePosition(handle.side)"
         :class="['handle', `handle--${handle.variant || 'default'}`]"
         :style="getHandleStyle(handle, targetHandles)"
-      >
-      </Handle>
+      />
   </template>
   </div>
 </template>
