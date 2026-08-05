@@ -23,7 +23,7 @@
         :class="['handle', `handle--${handle.variant || 'default'}`]"
         :style="getHandleStyle(handle, targetHandles)"
       />
-  </template>
+    </template>
   </div>
 </template>
 
