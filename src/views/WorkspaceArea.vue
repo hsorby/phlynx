@@ -362,7 +362,7 @@ export default {
 
 <script setup>
 import { computed, h, inject, markRaw, nextTick, onMounted, onUnmounted, ref, watch, watchPostEffect } from 'vue'
-import { connectionExists, useHandle, useVueFlow, VueFlow } from '@vue-flow/core'
+import { connectionExists, useVueFlow, VueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
 import SplitButton from 'primevue/splitbutton'
@@ -872,6 +872,22 @@ onConnect(async (connection) => {
 
   const duplicateSnapshot = duplicate ? detachReactivity(duplicate) : null
 
+  const sourceHandleUid = connection.sourceHandle
+    ? getHandleUidFromHandleId(connection.sourceHandle)
+    : null
+  const targetHandleUid = connection.targetHandle
+    ? getHandleUidFromHandleId(connection.targetHandle)
+    : null
+
+  confirmActivation()
+
+  if (sourceHandleUid) {
+    activateHandle(connection.source, sourceHandleUid, { trackHistory: false })
+  }
+  if (targetHandleUid) {
+    activateHandle(connection.target, targetHandleUid, { trackHistory: false })
+  }
+
   if (duplicate) {
     const pendingEdge = {
       ...connection,
@@ -896,7 +912,12 @@ onConnect(async (connection) => {
     removeEdges(pendingEdge.id)
     suppressedEdgeIds.delete(pendingEdge.id)
 
-    if (!shouldReplace) return
+    if (!shouldReplace) {
+      // No edge new is being created so revert the handles activated above.
+      if (sourceHandleUid) revertHandleIfUnused(connection.source, sourceHandleUid)
+      if (targetHandleUid) revertHandleIfUnused(connection.target, targetHandleUid)
+      return
+    }
 
     suppressedEdgeIds.add(duplicate.id)
     removeEdges(duplicate.id)
@@ -921,15 +942,6 @@ onConnect(async (connection) => {
     targetIndex
   )
 
-  confirmActivation()
-  if (connection.sourceHandle) {
-    activateHandle(connection.source, getHandleUidFromHandleId(connection.sourceHandle))
-  }
-
-  if (connection.targetHandle) {
-    activateHandle(connection.target, getHandleUidFromHandleId(connection.targetHandle))
-  }
-
   const newEdge = {
     ...connection,
     ...edgeLineOptions,
@@ -949,7 +961,7 @@ onConnect(async (connection) => {
 
     // A single undo step for the whole replace: undo brings the old edge
     // (and its handle activation) back and removes the new one; redo does
-    // the reverse. 
+    // the reverse. No pending edge involved on either side.
     historyStore.addCommand({
       type: 'replace-edge',
       undo: () => {
