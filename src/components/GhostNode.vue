@@ -95,7 +95,7 @@ watch(
   background: transparent;
   border: none;
   opacity: 0;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .vue-flow__handle.handle--ghost.valid {
