@@ -29,7 +29,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, watch, nextTick } from 'vue'
 
 import Card from 'primevue/card'
 
@@ -37,7 +37,7 @@ import { useVueFlow, Handle } from '@vue-flow/core'
 import { getHandleId, getHandleStyle, handlePosition } from '../utils/handles'
 
 const props = defineProps(['id', 'data'])
-const { findNode } = useVueFlow()
+const { findNode, updateNodeInternals } = useVueFlow()
 
 const ghostLabel = computed(() => {
   return `${props.data.mathRef.split(':')[1]} [${props.data.mathRef.split(':')[0]}]`
@@ -69,6 +69,14 @@ const nodeStyle = computed(() => {
     height: `${node.dimensions.height}px`,
   }
 })
+
+watch(
+  targetHandles,
+  async () => {
+    await nextTick() 
+    updateNodeInternals([props.id])
+  }
+)
 </script>
 
 <style scoped>

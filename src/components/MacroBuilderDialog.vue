@@ -85,6 +85,7 @@ import {
   GHOST_MODULE_DEFINITION,
   GHOST_MODULE_FILENAME,
   GHOST_MODULE_REF,
+  GHOST_NODE_TYPE,
   MACRO_BUILDER_ARROW,
   markerEnd,
 } from '../utils/constants'
@@ -131,11 +132,17 @@ onConnect((connection) => {
 
   confirmActivation()
   if (connection.sourceHandle) {
-    activateHandle(connection.target, getHandleUidFromHandleId(connection.source))
+    activateHandle(connection.source, getHandleUidFromHandleId(connection.sourceHandle))
   }
 
-  if (connection.targetHandle) {
-    activateHandle(connection.source, getHandleUidFromHandleId(connection.targetHandle))
+  if (connection.targetHandle) { 
+    const targetNode = findNode(connection.target)
+    console.log(targetNode)
+    if (targetNode.type === GHOST_NODE_TYPE) {
+      activateHandle(connection.source, getHandleUidFromHandleId(connection.targetHandle))
+    } else {
+      activateHandle(connection.target, getHandleUidFromHandleId(connection.targetHandle))
+    }
   }
 
   // Match what we specify in connectionLineOptions.
