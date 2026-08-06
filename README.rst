@@ -127,10 +127,20 @@ Then prepare playwright for testing by running the following command:
 
     playwright install --with-deps chromium
 
-Create a .env.local file in the root directory of the project and add the following line to specify the base URL for testing:
+Create a .env.local file in the root directory (or the tests directory) of the project and add the following line to specify the base URL for testing:
 
 .. code-block:: bash
 
+    PHLYNX_BASE_URL=http://localhost:5173
+
+Adding this line to the .env.local file will override the default base URL and allow the tests to run against the local development server.
+If you want to run the tests against a different URL, simply change the value of PHLYNX_BASE_URL accordingly.
+
+The default environment variables set in the tests/.env file are:
+
+.. code-block:: bash
+
+    HEADLESS_MODE=True
     PHLYNX_BASE_URL=http://localhost:5173
 
 Then run the tests using the following command:
@@ -152,7 +162,7 @@ We can use the `--output` option to save the generated code to a file and then e
 
 We can then adapt the generated code to create a Python unittest test that can be run from the `run_all_tests.py` script in the `tests` directory.
 
-Then use the `convert_codegen.py` script to convert the generated code to a unittest test. For example:
+An alternative method is to use the `convert_codegen.py` script to convert the generated code to a unittest test. For example:
 
 .. code-block:: bash
     python tests/convert_codegen.py \
@@ -160,3 +170,8 @@ Then use the `convert_codegen.py` script to convert the generated code to a unit
         --output tests/playwright/test_documentation.py \
         --class DocumentationNavigation \
         --test documentation_navigation
+
+This script will create a new test class called `TestDocumentationNavigation` in the `test_documentation.py` file, with a test method called `test_documentation_navigation`.
+The script will create this file if it does not already exist.
+Also, if the specified class already exists in the output file, the script will add the new test method to that class.
+If the specified test method already exists in the class, the script will throw an error to avoid overwriting existing code.
