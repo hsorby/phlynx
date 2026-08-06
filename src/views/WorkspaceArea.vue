@@ -79,6 +79,14 @@
             @click="onOpenMacroBuilderDialog"
           />
 
+          <Button
+            label="Sim. Settings"
+            size="small"
+            variant="text"
+            severity="info"
+            @click="onOpenSimSettingsDialog"
+          />
+
           <Divider layout="vertical" style="margin: 0 15px" />
 
           <!-- Import Dropdown / SplitButton -->
@@ -332,6 +340,12 @@
     @edit-node="onOpenPortEditorDialog"
   />
 
+  <SimSettingsDialog
+    v-model="simSettingsDialogVisible"
+    :settings="simSettings"
+    @confirm="onSimSettingsConfirm"
+  />
+
   <ImportDialog
     ref="importDialogRef"
     v-model="importDialogVisible"
@@ -392,6 +406,7 @@ import ImportDialog from '../components/ImportDialog.vue'
 import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
 import SaveDialog from '../components/SaveDialog.vue'
 import MacroBuilderDialog from '../components/MacroBuilderDialog.vue'
+import SimSettingsDialog from '../components/SimSettingsDialog.vue'
 import EdgeConnectionDialog from '../components/EdgeConnectionDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
 import PaneContextMenu from '../components/PaneContextMenu.vue'
@@ -495,6 +510,7 @@ const dialogVisible = computed(() => {
     exportDialogVisible.value ||
     replacementDialogVisible.value ||
     macroBuilderDialogVisible.value ||
+    simSettingsDialogVisible.value ||
     edgeConnectionDialogVisible.value
   )
 })
@@ -730,6 +746,7 @@ const importDialogVisible = ref(false)
 const exportDialogVisible = ref(false)
 const replacementDialogVisible = ref(false)
 const macroBuilderDialogVisible = ref(false)
+const simSettingsDialogVisible = ref(false)
 const edgeConnectionDialogVisible = ref(false)
 const edgeDialogSourceNode = ref({})
 const edgeDialogTargetNode = ref({})
@@ -764,6 +781,14 @@ const matchingNodeIds = ref(new Set())
 const searchBarFocused = ref(false)
 
 const currentMatchIndex = ref(0)
+
+const simSettings = ref({
+  timeStep: 0.01,
+  duration: 1.0,
+  solver: 'CVODE',
+  tolerance: 1e-6,
+  maxSteps: 10000,
+})
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
@@ -1712,6 +1737,10 @@ function onOpenMacroBuilderDialog() {
   macroBuilderDialogVisible.value = true
 }
 
+function onOpenSimSettingsDialog() {
+  simSettingsDialogVisible.value = true
+}
+
 /**
  * Recomputes couplings on every edge touching a given node, using the node's
  * current ports. Call this after any operation that changes ports on
@@ -1774,6 +1803,11 @@ const nodeRefs = ref({})
 async function onMacroBuilderGenerate(data) {
   handleMacroGeneration(data)
   macroBuilderDialogVisible.value = false
+}
+
+async function onSimSettingsConfirm(data) {
+  simSettings.value = { ...simSettings.value, ...data }
+  simSettingsDialogVisible.value = false
 }
 
 function handleMacroGeneration(macroPayload) {
