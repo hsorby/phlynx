@@ -65,6 +65,45 @@
             <span class="subtle">{{ visibleRows.length }} shown of {{ variableRows.length }} total</span>
           </div>
 
+          <div class="bulk-toolbar" v-if="visibleRows.length > 0">
+            <label class="bulk-select-all">
+              <Checkbox :modelValue="allVisibleSelected" binary @update:modelValue="toggleSelectAllVisible" />
+              <span>Select all shown</span>
+            </label>
+            <span class="bulk-count">{{ selectedVisibleCount }} selected</span>
+            <Button
+              label="Clear Selection"
+              icon="pi pi-eraser"
+              text
+              severity="secondary"
+              :disabled="selectedVisibleCount === 0"
+              @click="clearSelection"
+            />
+            <Select
+              v-model="bulkGroupId"
+              :options="assignGroupOptions"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="Assign selected to group"
+              class="bulk-group-select"
+            />
+            <Button
+              label="Assign Selected"
+              icon="pi pi-check"
+              text
+              :disabled="selectedVisibleCount === 0 || !bulkGroupId"
+              @click="assignSelectedToGroup"
+            />
+            <Button
+              label="Move To Ungrouped"
+              icon="pi pi-minus-circle"
+              text
+              severity="contrast"
+              :disabled="selectedVisibleCount === 0"
+              @click="moveSelectedToUngrouped"
+            />
+          </div>
+
           <div v-if="visibleRows.length === 0" class="empty-state">
             No variables match the current type visibility filters.
           </div>
@@ -73,6 +112,7 @@
             <table class="vars-table">
               <thead>
                 <tr>
+                  <th style="width: 56px">Sel</th>
                   <th style="width: 70px">Plot</th>
                   <th>Node</th>
                   <th>Variable</th>
@@ -83,6 +123,9 @@
               </thead>
               <tbody>
                 <tr v-for="row in visibleRows" :key="row.key">
+                  <td>
+                    <Checkbox v-model="row.selected" binary />
+                  </td>
                   <td>
                     <Checkbox v-model="row.plot" binary @change="onPlotToggle(row)" />
                   </td>
@@ -160,7 +203,13 @@
             </div>
             <div class="field">
               <label>Tolerance</label>
-              <InputNumber v-model="settingsPayload.tolerance" :min="0" :minFractionDigits="0" :maxFractionDigits="12" fluid />
+              <InputNumber
+                v-model="settingsPayload.tolerance"
+                :min="0"
+                :minFractionDigits="0"
+                :maxFractionDigits="12"
+                fluid
+              />
             </div>
             <div class="field">
               <label>Max Steps</label>
@@ -237,6 +286,7 @@ const isLoading = ref(false)
 const loadingText = ref('Preparing variable list...')
 const newGroupName = ref('')
 const plotGroups = ref([])
+const bulkGroupId = ref(null)
 let loadCycle = 0
 
 const typeFilters = ref({
@@ -256,6 +306,19 @@ const groupOptions = computed(() => {
 
 const visibleRows = computed(() => {
   return variableRows.value.filter((row) => Boolean(typeFilters.value[row.type]))
+})
+
+const selectedVisibleCount = computed(() => {
+  return visibleRows.value.filter((row) => row.selected).length
+})
+
+const allVisibleSelected = computed(() => {
+  if (visibleRows.value.length === 0) return false
+  return visibleRows.value.every((row) => row.selected)
+})
+
+const assignGroupOptions = computed(() => {
+  return plotGroups.value.map((group) => ({ label: group.name, value: group.id }))
 })
 
 // --- State Management ---
@@ -314,6 +377,7 @@ function buildVariableRows(nodes, selectedByKey) {
         type,
         plot: existing?.plot ?? defaultPlotted,
         groupId: existing?.groupId ?? (defaultPlotted ? defaultGroupId : null),
+        selected: false,
       })
     }
   }
@@ -368,6 +432,7 @@ function addGroup() {
 
 function removeGroup(groupId) {
   plotGroups.value = plotGroups.value.filter((group) => group.id !== groupId)
+  if (bulkGroupId.value === groupId) bulkGroupId.value = null
   variableRows.value.forEach((row) => {
     if (row.groupId === groupId) row.groupId = null
   })
@@ -381,6 +446,54 @@ function onPlotToggle(row) {
 
   if (!row.groupId) {
     row.groupId = plotGroups.value[0]?.id || null
+  }
+}
+
+function toggleSelectAllVisible(nextValue) {
+  visibleRows.value.forEach((row) => {
+    row.selected = Boolean(nextValue)
+  })
+}
+
+function assignSelectedToGroup() {
+  if (!bulkGroupId.value) return
+
+  let updatedCount = 0
+  visibleRows.value.forEach((row) => {
+    if (!row.selected) return
+    row.plot = true
+    row.groupId = bulkGroupId.value
+    updatedCount += 1
+  })
+
+  if (updatedCount > 0) {
+    notify.success({
+      title: 'Bulk Assign Applied',
+      message: `Assigned ${updatedCount} variable${updatedCount === 1 ? '' : 's'} to selected group.`,
+    })
+  }
+}
+
+function clearSelection() {
+  visibleRows.value.forEach((row) => {
+    row.selected = false
+  })
+}
+
+function moveSelectedToUngrouped() {
+  let updatedCount = 0
+  visibleRows.value.forEach((row) => {
+    if (!row.selected) return
+    row.plot = true
+    row.groupId = null
+    updatedCount += 1
+  })
+
+  if (updatedCount > 0) {
+    notify.success({
+      title: 'Bulk Ungroup Applied',
+      message: `Moved ${updatedCount} variable${updatedCount === 1 ? '' : 's'} to ungrouped.`,
+    })
   }
 }
 
@@ -523,6 +636,26 @@ const closeDialog = () => {
   border-radius: 16px;
   padding: 3px 6px 3px 10px;
   background: #f8f9fb;
+}
+.bulk-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.bulk-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.bulk-count {
+  font-size: 12px;
+  color: #606266;
+}
+.bulk-group-select {
+  width: 260px;
 }
 .vars-table-wrap {
   max-height: 320px;
