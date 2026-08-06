@@ -4,7 +4,7 @@
     modal
     :header="dialogTitle"
     :dismissableMask="!loading"
-    :style="{ width: '92vw', maxWidth: '1500px' }"
+    :style="{ width: '95vw', maxWidth: '1680px' }"
     class="module-editor-dialog"
     @update:visible="onDialogVisibleChange"
   >
@@ -13,9 +13,9 @@
       <span>Loading instance data...</span>
     </div>
 
-    <div v-else class="editor-grid">
+    <div v-else class="editor-grid" ref="editorGridRef" :class="{ 'is-dragging': dragging }">
       <!-- LEFT COLUMN: CellML Text Editor -->
-      <div class="pane left-pane">
+      <div class="pane left-pane" :style="leftPaneStyle">
         <div class="editor-wrapper">
           <CellMLTextEditor
             :key="mathRef"
@@ -27,9 +27,47 @@
         </div>
       </div>
 
+      <!-- RESIZE HANDLE (also carries the collapse/expand control) -->
+      <div
+        class="resizer"
+        :class="{ 'resizer--collapsed': rightCollapsed }"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize editor and parameter panels"
+        tabindex="0"
+        @pointerdown="startResize"
+        @dblclick="resetSplit"
+        @keydown.left.prevent="nudgeSplit(-2)"
+        @keydown.right.prevent="nudgeSplit(2)"
+      >
+        <div class="resizer-grip"></div>
+        <button
+          type="button"
+          class="resizer-toggle"
+          :title="rightCollapsed ? 'Expand parameter/port panel' : 'Collapse parameter/port panel'"
+          :aria-label="rightCollapsed ? 'Expand panel' : 'Collapse panel'"
+          @pointerdown.stop
+          @click.stop="toggleRightPanel"
+        >
+          <i :class="rightCollapsed ? 'pi pi-angle-left' : 'pi pi-angle-right'"></i>
+        </button>
+      </div>
+
       <!-- RIGHT COLUMN: Parameter & Port Tabs -->
-      <div class="pane right-pane">
-        <Tabs v-model:value="activeTab">
+      <div class="pane right-pane" :class="{ 'right-pane--collapsed': rightCollapsed }">
+        <!-- Collapsed rail: just a slim strip with a vertical label, click to expand -->
+        <button
+          v-if="rightCollapsed"
+          type="button"
+          class="collapsed-rail"
+          @click="toggleRightPanel"
+        >
+          <span class="collapsed-rail-label">
+            {{ activeTab === 'parameters' ? `Parameters (${parameterRows.length})` : `Ports (${editablePorts.length})` }}
+          </span>
+        </button>
+
+        <Tabs v-else v-model:value="activeTab" class="right-pane-tabs">
           <TabList>
             <Tab value="parameters">
               <i class="pi pi-sliders-h tab-icon"></i>
@@ -43,112 +81,116 @@
 
           <TabPanels class="tab-panels-container">
             <!-- TAB 1: PARAMETER EDITOR -->
-            <TabPanel value="parameters">
-              <div class="toolbar-container">
-                <div class="search-group">
-                  <div class="search-input-wrapper">
-                    <InputText
-                      v-model="searchQuery"
-                      size="small"
-                      :placeholder="`Search by ${searchColumn}...`"
-                      class="search-input"
-                    />
-                    <Button
-                      v-if="searchQuery"
-                      icon="pi pi-times"
-                      text
-                      rounded
-                      severity="secondary"
-                      size="small"
-                      class="clear-search-btn"
-                      @click="searchQuery = ''"
-                    />
-                  </div>
-                  <Select
-                    v-model="searchColumn"
-                    :options="searchColumnOptions"
-                    optionLabel="label"
-                    optionValue="value"
-                    size="small"
-                    class="search-column"
-                  />
-                </div>
-
-                <div class="bulk-controls">
-                  <span class="bulk-label">Bulk Type:</span>
-                  <Select
-                    v-model="bulkTypeValue"
-                    size="small"
-                    :options="PARAMETER_TYPE_OPTIONS"
-                    optionLabel="label"
-                    optionValue="value"
-                    placeholder="Select type..."
-                    class="bulk-select"
-                  />
-                  <Button
-                    size="small"
-                    :disabled="selectedRows.length === 0"
-                    @click="applyBulkType"
-                  >
-                    Apply ({{ selectedRows.length }})
-                  </Button>
-                </div>
-              </div>
-
-              <DataTable
-                ref="parametersTable"
-                v-model:selection="selectedRows"
-                :value="filteredParameterRows"
-                dataKey="name"
-                scrollable
-                scrollHeight="480px"
-                tableStyle="min-width: 100%"
-                :sortField="sortField"
-                :sortOrder="sortOrder"
-                class="p-datatable-sm parameters-table"
-                @sort="handleSortChange"
-              >
-                <Column selectionMode="multiple" headerStyle="width: 2.2rem" />
-                <Column field="name" bodyClass="small-text-col" header="Name" sortable style="min-width: 140px" />
-                <Column field="value" header="Value" sortable style="min-width: 150px">
-                  <template #body="slotProps">
-                    <InputText
-                      v-if="isEditableVariableType(slotProps.data.type)"
-                      v-model="slotProps.data.value"
-                      size="small"
-                      placeholder="Enter value..."
-                      class="w-full"
-                    />
-                    <span v-else class="text-muted">-</span>
-                  </template>
-                </Column>
-                <Column field="units" bodyClass="small-text-col" header="Units" sortable style="min-width: 100px" />
-                <Column field="type" header="Type" sortable style="min-width: 180px">
-                  <template #body="slotProps">
+            <TabPanel value="parameters" class="tab-panel-flex">
+              <div class="parameters-tab-body">
+                <div class="toolbar-container">
+                  <div class="search-group">
+                    <div class="search-input-wrapper">
+                      <InputText
+                        v-model="searchQuery"
+                        size="small"
+                        :placeholder="`Search by ${searchColumn}...`"
+                        class="search-input"
+                      />
+                      <Button
+                        v-if="searchQuery"
+                        icon="pi pi-times"
+                        text
+                        rounded
+                        severity="secondary"
+                        size="small"
+                        class="clear-search-btn"
+                        @click="searchQuery = ''"
+                      />
+                    </div>
                     <Select
-                      v-model="slotProps.data.type"
-                      :options="PARAMETER_TYPE_OPTIONS"
+                      v-model="searchColumn"
+                      :options="searchColumnOptions"
                       optionLabel="label"
                       optionValue="value"
                       size="small"
-                      class="w-full"
+                      class="search-column"
                     />
-                  </template>
-                </Column>
-              </DataTable>
+                  </div>
+
+                  <div class="bulk-controls">
+                    <span class="bulk-label">Bulk Type:</span>
+                    <Select
+                      v-model="bulkTypeValue"
+                      size="small"
+                      :options="PARAMETER_TYPE_OPTIONS"
+                      optionLabel="label"
+                      optionValue="value"
+                      placeholder="Select type..."
+                      class="bulk-select"
+                    />
+                    <Button
+                      size="small"
+                      :disabled="selectedRows.length === 0"
+                      @click="applyBulkType"
+                    >
+                      Apply ({{ selectedRows.length }})
+                    </Button>
+                  </div>
+                </div>
+
+                <div class="table-flex-wrapper">
+                  <DataTable
+                    ref="parametersTable"
+                    v-model:selection="selectedRows"
+                    :value="filteredParameterRows"
+                    dataKey="name"
+                    scrollable
+                    scrollHeight="flex"
+                    tableStyle="min-width: 100%"
+                    :sortField="sortField"
+                    :sortOrder="sortOrder"
+                    class="p-datatable-sm parameters-table"
+                    @sort="handleSortChange"
+                  >
+                    <Column selectionMode="multiple" headerStyle="width: 2.2rem" />
+                    <Column field="name" bodyClass="small-text-col" header="Name" sortable style="min-width: 150px" />
+                    <Column field="value" header="Value" sortable style="min-width: 160px">
+                      <template #body="slotProps">
+                        <InputText
+                          v-if="isEditableVariableType(slotProps.data.type)"
+                          v-model="slotProps.data.value"
+                          size="small"
+                          placeholder="Enter value..."
+                          class="w-full"
+                        />
+                        <span v-else class="text-muted">-</span>
+                      </template>
+                    </Column>
+                    <Column field="units" bodyClass="small-text-col" header="Units" sortable style="min-width: 110px" />
+                    <Column field="type" header="Type" sortable style="min-width: 200px">
+                      <template #body="slotProps">
+                        <Select
+                          v-model="slotProps.data.type"
+                          :options="PARAMETER_TYPE_OPTIONS"
+                          optionLabel="label"
+                          optionValue="value"
+                          size="small"
+                          class="w-full"
+                        />
+                      </template>
+                    </Column>
+                  </DataTable>
+                </div>
+              </div>
             </TabPanel>
 
             <!-- TAB 2: PORT EDITOR -->
-            <TabPanel value="ports">
+            <TabPanel value="ports" class="tab-panel-flex">
               <div class="ports-tab-body">
                 <div class="ports-header">
                   <label class="form-label">Port Definitions</label>
                   <Button icon="pi pi-plus" label="Add Port" severity="success" size="small" rounded outlined @click="addPort" />
                 </div>
 
-                <div v-if="editablePorts.length" class="mt-2 overflow-x-auto">
-                  <DataTable :value="editablePorts" size="small" stripedRows scrollable scrollHeight="380px">
-                    <Column header="Type" style="width: 110px">
+                <div v-if="editablePorts.length" class="table-flex-wrapper">
+                  <DataTable :value="editablePorts" size="small" stripedRows scrollable scrollHeight="flex">
+                    <Column header="Type" style="min-width: 160px">
                       <template #body="slotProps">
                         <Select
                           v-model="slotProps.data.portType"
@@ -161,13 +203,13 @@
                       </template>
                     </Column>
 
-                    <Column header="Label" style="width: 160px">
+                    <Column header="Label" style="min-width: 170px">
                       <template #body="slotProps">
                         <InputText v-model="slotProps.data.label" placeholder="Enter label" size="small" class="w-full" />
                       </template>
                     </Column>
 
-                    <Column header="Variable(s)" style="min-width: 160px">
+                    <Column header="Variable(s)" style="min-width: 220px">
                       <template #body="slotProps">
                         <Select
                           v-model="slotProps.data.variables"
@@ -182,7 +224,7 @@
                       </template>
                     </Column>
 
-                    <Column header="Multiport" style="width: 130px">
+                    <Column header="Multiport" style="min-width: 190px">
                       <template #body="slotProps">
                         <div class="flex flex-col gap-1">
                           <Select
@@ -208,7 +250,7 @@
                       </template>
                     </Column>
 
-                    <Column header="" style="width: 50px">
+                    <Column header="" style="width: 56px">
                       <template #body="slotProps">
                         <Button
                           icon="pi pi-trash"
@@ -255,7 +297,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
@@ -331,6 +373,93 @@ const sortOrder = ref(1)
 // Port & Instance State
 const editableName = ref('')
 const editablePorts = ref([])
+
+// ── Split / Collapse State ──────────────────────────────────────────────────
+const SPLIT_STORAGE_KEY = 'instanceEditorDialog.leftPanePercent'
+const DEFAULT_LEFT_PERCENT = 55
+const MIN_LEFT_PERCENT = 32
+const MAX_LEFT_PERCENT = 72
+
+function loadStoredSplit() {
+  try {
+    const stored = Number(window.localStorage.getItem(SPLIT_STORAGE_KEY))
+    if (Number.isFinite(stored) && stored >= MIN_LEFT_PERCENT && stored <= MAX_LEFT_PERCENT) {
+      return stored
+    }
+  } catch (e) {
+    // localStorage unavailable (e.g. private browsing) - fall back to default
+  }
+  return DEFAULT_LEFT_PERCENT
+}
+
+const editorGridRef = ref(null)
+const leftPercent = ref(loadStoredSplit())
+const rightCollapsed = ref(false)
+const dragging = ref(false)
+
+const leftPaneStyle = computed(() => {
+  if (rightCollapsed.value) return { flex: '1 1 auto' }
+  return { flex: `0 0 ${leftPercent.value}%` }
+})
+
+function clampPercent(value) {
+  return Math.min(MAX_LEFT_PERCENT, Math.max(MIN_LEFT_PERCENT, value))
+}
+
+function updateSplitFromClientX(clientX) {
+  const grid = editorGridRef.value
+  if (!grid) return
+  const rect = grid.getBoundingClientRect()
+  if (!rect.width) return
+  const percent = ((clientX - rect.left) / rect.width) * 100
+  leftPercent.value = clampPercent(percent)
+}
+
+function persistSplit() {
+  try {
+    window.localStorage.setItem(SPLIT_STORAGE_KEY, String(leftPercent.value))
+  } catch (e) {
+    // ignore storage errors
+  }
+}
+
+function onResizeMove(event) {
+  if (!dragging.value) return
+  updateSplitFromClientX(event.clientX)
+}
+
+function stopResize() {
+  if (!dragging.value) return
+  dragging.value = false
+  window.removeEventListener('pointermove', onResizeMove)
+  persistSplit()
+}
+
+function startResize(event) {
+  if (rightCollapsed.value) return
+  dragging.value = true
+  event.target?.setPointerCapture?.(event.pointerId)
+  window.addEventListener('pointermove', onResizeMove)
+  window.addEventListener('pointerup', stopResize, { once: true })
+}
+
+function nudgeSplit(delta) {
+  leftPercent.value = clampPercent(leftPercent.value + delta)
+  persistSplit()
+}
+
+function resetSplit() {
+  leftPercent.value = DEFAULT_LEFT_PERCENT
+  persistSplit()
+}
+
+function toggleRightPanel() {
+  rightCollapsed.value = !rightCollapsed.value
+}
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pointermove', onResizeMove)
+})
 
 // ── Computed ─────────────────────────────────────────────────────────────────
 const componentFile = computed(() => props.mathRef?.split(':')[0])
@@ -555,12 +684,22 @@ async function handleSave() {
 </script>
 
 <style scoped>
+/* ── Design tokens (kept local to this dialog for consistent typography) ── */
 .editor-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  height: 72vh;
-  min-height: 550px;
+  --dlg-fs-label: 0.875rem;   /* 14px - field/section labels */
+  --dlg-fs-body: 0.875rem;    /* 14px - table cells, inputs */
+  --dlg-fs-small: 0.8125rem;  /* 13px - secondary/meta text */
+  --dlg-fs-tiny: 0.75rem;     /* 12px - badges, prefixes only */
+
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  height: clamp(520px, 78vh, 940px);
+}
+
+.editor-grid.is-dragging {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .pane {
@@ -571,13 +710,12 @@ async function handleSave() {
   border-radius: 8px;
   padding: 12px;
   overflow: hidden;
+  min-width: 0;
+  min-height: 0;
 }
 
-.pane-title {
-  font-weight: 600;
-  font-size: 0.95rem;
-  margin-bottom: 8px;
-  color: var(--p-text-color);
+.left-pane {
+  min-width: 340px;
 }
 
 .editor-wrapper {
@@ -585,20 +723,173 @@ async function handleSave() {
   min-height: 0;
 }
 
-.tab-icon {
-  margin-right: 6px;
-  font-size: 0.85rem;
+/* ── Resize handle between the two panes; also hosts the collapse/expand button ── */
+.resizer {
+  position: relative;
+  flex: 0 0 14px;
+  margin: 0 -3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  z-index: 2;
+  touch-action: none;
+}
+
+.resizer--collapsed {
+  cursor: pointer;
+}
+
+.resizer-grip {
+  width: 4px;
+  height: 48px;
+  border-radius: 3px;
+  background: var(--p-content-border-color);
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.resizer--collapsed .resizer-grip {
+  opacity: 0.35;
+}
+
+.resizer:hover .resizer-grip,
+.resizer:focus-visible .resizer-grip {
+  background: var(--p-primary-color);
+}
+
+.resizer:focus-visible {
+  outline: none;
+}
+
+.resizer-toggle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 999px;
+  background: var(--p-content-background);
+  color: var(--p-text-muted-color);
+  cursor: pointer;
+  z-index: 3;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.resizer:hover .resizer-toggle,
+.resizer:focus-visible .resizer-toggle,
+.resizer--collapsed .resizer-toggle {
+  opacity: 1;
+}
+
+.resizer-toggle:hover {
+  color: var(--p-text-color);
+  background: var(--p-content-hover-background, rgba(0, 0, 0, 0.04));
+}
+
+/* ── Right pane / collapse behaviour ── */
+.right-pane {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 360px;
+  transition: min-width 0.15s ease, flex-basis 0.15s ease;
+}
+
+.right-pane--collapsed {
+  flex: 0 0 32px;
+  min-width: 32px;
+  padding: 8px 4px;
+  align-items: center;
+}
+
+.collapsed-rail {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.collapsed-rail-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: var(--dlg-fs-label);
+  font-weight: 600;
+  color: var(--p-text-muted-color);
+  white-space: nowrap;
+}
+
+/* ── Tabs: make the whole chain fill available height so the scroll ── */
+/* region reaches the bottom of the panel instead of leaving blank   */
+/* space underneath it on taller screens.                            */
+.right-pane-tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.right-pane-tabs :deep(.p-tablist) {
+  flex-shrink: 0;
 }
 
 .tab-panels-container {
   flex: 1;
-  overflow-y: auto;
+  min-height: 0;
   padding-top: 12px;
+}
+
+.right-pane-tabs :deep(.p-tabpanels) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tab-panel-flex {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.right-pane-tabs :deep(.p-tabpanel) {
+  height: 100%;
+}
+
+.parameters-tab-body,
+.ports-tab-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.table-flex-wrapper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-icon {
+  margin-right: 6px;
+  font-size: var(--dlg-fs-small);
 }
 
 /* Parameters Tab Styles */
 .toolbar-container {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -613,6 +904,7 @@ async function handleSave() {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .search-input-wrapper {
@@ -628,9 +920,9 @@ async function handleSave() {
   height: 1.25rem !important;
 }
 
-.search-column { width: 90px; }
-.bulk-select { width: 140px; }
-.bulk-label { font-size: 0.8rem; color: var(--p-text-muted-color); }
+.search-column { width: 130px; }
+.bulk-select { width: 180px; }
+.bulk-label { font-size: var(--dlg-fs-small); color: var(--p-text-muted-color); white-space: nowrap; }
 
 /* Ports Tab Styles */
 .form-field {
@@ -641,7 +933,7 @@ async function handleSave() {
 
 .form-label {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: var(--dlg-fs-label);
 }
 
 .ports-header {
@@ -649,23 +941,40 @@ async function handleSave() {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
+  flex-shrink: 0;
 }
 
 .empty-state {
   color: var(--p-text-muted-color);
-  font-size: 0.85rem;
+  font-size: var(--dlg-fs-small);
   margin-top: 16px;
   text-align: center;
 }
 
 .multiply-prefix {
-  font-size: 12px;
+  font-size: var(--dlg-fs-tiny);
   font-weight: 600;
   color: var(--p-text-muted-color);
 }
 
 .w-full { width: 100%; }
 .text-muted { color: var(--p-text-muted-color); }
+
+/* Normalise table typography - DataTable renders these cells directly */
+/* in our own template output (not teleported), so :deep() reaches them. */
+.right-pane :deep(.p-datatable) {
+  font-size: var(--dlg-fs-body);
+}
+
+.right-pane :deep(.p-datatable-thead > tr > th) {
+  font-size: var(--dlg-fs-small);
+  font-weight: 600;
+}
+
+.right-pane :deep(.p-select-label),
+.right-pane :deep(.p-inputtext) {
+  font-size: var(--dlg-fs-body);
+}
 
 /* Footer */
 .dialog-footer {
@@ -698,4 +1007,29 @@ async function handleSave() {
   gap: 12px;
 }
 
+@media (max-width: 900px) {
+  .editor-grid {
+    flex-direction: column;
+    height: auto;
+    max-height: 78vh;
+  }
+
+  .left-pane {
+    min-width: 0;
+    flex-basis: 45vh !important;
+  }
+
+  .resizer {
+    display: none;
+  }
+
+  .right-pane {
+    flex-basis: 45vh !important;
+    min-width: 0;
+  }
+
+  .right-pane--collapsed {
+    display: none;
+  }
+}
 </style>
