@@ -11,12 +11,7 @@
             style="display: none"
             @change="handleLoadWorkspace"
           />
-          <Button
-            label="Load Workspace"
-            size="small"
-            variant="text"
-            @click="$refs.workspaceFileInput.click()"
-          />
+          <Button label="Load Workspace" size="small" variant="text" @click="$refs.workspaceFileInput.click()" />
 
           <Button
             label="Save Workspace"
@@ -71,16 +66,11 @@
 
           <Divider layout="vertical" style="margin: 0 15px" />
 
-          <Button
-            label="Macro Build"
-            size="small"
-            variant="text"
-            severity="info"
-            @click="onOpenMacroBuilderDialog"
-          />
+          <Button label="Macro Build" size="small" variant="text" severity="info" @click="onOpenMacroBuilderDialog" />
 
           <Button
             label="Sim. Settings"
+            :disabled="!somethingAvailable"
             size="small"
             variant="text"
             severity="info"
@@ -155,20 +145,21 @@
       </div>
 
       <div class="header-right-actions">
-        <a href="https://github.com/physiomelinks/phlynx/issues/new" style="font-size: 13px;" target="_blank" class="report-link">
+        <a
+          href="https://github.com/physiomelinks/phlynx/issues/new"
+          style="font-size: 13px"
+          target="_blank"
+          class="report-link"
+        >
           Report Issue
         </a>
         <!-- Light / Dark Mode Toggle Slider -->
-        <div 
-          class="theme-slider-container" 
-          style="display: flex; align-items: center; margin-left: 20px; gap: 8px;"
+        <div
+          class="theme-slider-container"
+          style="display: flex; align-items: center; margin-left: 20px; gap: 8px"
           v-tooltip.bottom="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
         >
-          <ToggleSwitch 
-            :model-value="isDarkMode" 
-            @change="toggleDarkMode" 
-            aria-label="Toggle Theme"
-          >
+          <ToggleSwitch :model-value="isDarkMode" @change="toggleDarkMode" aria-label="Toggle Theme">
             <template #handle="{ checked }">
               <i :class="['pi', checked ? 'pi-moon' : 'pi-sun']" style="font-size: 0.75rem"></i>
             </template>
@@ -195,11 +186,7 @@
                 @blur="searchBarFocused = false"
               />
             </IconField>
-            <i
-              v-if="searchQuery"
-              class="pi pi-times cursor-pointer search-clear-icon"
-              @click="clearSearch"
-            />
+            <i v-if="searchQuery" class="pi pi-times cursor-pointer search-clear-icon" @click="clearSearch" />
           </div>
           <div v-if="searchQuery" class="search-suffix-content">
             <div class="search-suffix-header">
@@ -314,11 +301,7 @@
     @save="handleParameterSave"
   />
 
-  <SaveDialog
-    v-model="saveDialogVisible"
-    :default-name="libraryStore.lastSaveName"
-    @confirm="onSaveConfirm"
-  />
+  <SaveDialog v-model="saveDialogVisible" :default-name="libraryStore.lastSaveName" @confirm="onSaveConfirm" />
 
   <SaveDialog
     v-model="exportDialogVisible"
@@ -343,6 +326,7 @@
   <SimSettingsDialog
     v-model="simSettingsDialogVisible"
     :settings="simSettings"
+    :nodes="nodes"
     @confirm="onSimSettingsConfirm"
   />
 
@@ -353,10 +337,7 @@
     @confirm="onImportConfirm"
   />
 
-  <PaneContextMenu
-    ref="contextMenuRef"
-    :items="contextMenuItems"
-  />
+  <PaneContextMenu ref="contextMenuRef" :items="contextMenuItems" />
 
   <EdgeConnectionDialog
     v-model="edgeConnectionDialogVisible"
@@ -783,8 +764,10 @@ const searchBarFocused = ref(false)
 const currentMatchIndex = ref(0)
 
 const simSettings = ref({
-  timeStep: 0.01,
-  duration: 1.0,
+  timeStep: 0.0,
+  pointInterval: 0.01,
+  startingPoint: 0.0,
+  endingPoint: 10.0,
   solver: 'CVODE',
   tolerance: 1e-6,
   maxSteps: 10000,
@@ -1806,6 +1789,7 @@ async function onMacroBuilderGenerate(data) {
 }
 
 async function onSimSettingsConfirm(data) {
+  console.log('Sim settings updated:', data)
   simSettings.value = { ...simSettings.value, ...data }
   simSettingsDialogVisible.value = false
 }
