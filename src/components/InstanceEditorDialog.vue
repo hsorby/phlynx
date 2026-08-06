@@ -142,15 +142,15 @@
                     dataKey="name"
                     scrollable
                     scrollHeight="flex"
-                    tableStyle="min-width: 100%"
+                    tableStyle="min-width: 520px"
                     :sortField="sortField"
                     :sortOrder="sortOrder"
                     class="p-datatable-sm parameters-table"
                     @sort="handleSortChange"
                   >
                     <Column selectionMode="multiple" headerStyle="width: 2.2rem" />
-                    <Column field="name" bodyClass="small-text-col" header="Name" sortable style="min-width: 150px" />
-                    <Column field="value" header="Value" sortable style="min-width: 160px">
+                    <Column field="name" bodyClass="small-text-col" header="Name" sortable style="min-width: 120px" />
+                    <Column field="value" header="Value" sortable style="min-width: 120px">
                       <template #body="slotProps">
                         <InputText
                           v-if="isEditableVariableType(slotProps.data.type)"
@@ -163,7 +163,7 @@
                       </template>
                     </Column>
                     <Column field="units" bodyClass="small-text-col" header="Units" sortable style="min-width: 110px" />
-                    <Column field="type" header="Type" sortable style="min-width: 200px">
+                    <Column field="type" header="Type" sortable style="min-width: 170px">
                       <template #body="slotProps">
                         <Select
                           v-model="slotProps.data.type"
@@ -189,8 +189,8 @@
                 </div>
 
                 <div v-if="editablePorts.length" class="table-flex-wrapper">
-                  <DataTable :value="editablePorts" size="small" stripedRows scrollable scrollHeight="flex">
-                    <Column header="Type" style="min-width: 160px">
+                  <DataTable :value="editablePorts" size="small" stripedRows scrollHeight="flex">
+                    <Column header="Type" style="min-width: 50px">
                       <template #body="slotProps">
                         <Select
                           v-model="slotProps.data.portType"
@@ -211,20 +211,20 @@
 
                     <Column header="Variable(s)" style="min-width: 220px">
                       <template #body="slotProps">
-                        <Select
+                        <MultiSelect
                           v-model="slotProps.data.variables"
                           :options="variables"
                           optionLabel="name"
                           optionValue="name"
-                          multiple
                           size="small"
                           placeholder="Select variables"
                           class="w-full"
+                          :maxSelectedLabels="3"
                         />
                       </template>
                     </Column>
 
-                    <Column header="Multiport" style="min-width: 190px">
+                    <Column header="Multiport" style="min-width: 50px">
                       <template #body="slotProps">
                         <div class="flex flex-col gap-1">
                           <Select
@@ -310,6 +310,7 @@ import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import ProgressSpinner from 'primevue/progressspinner'
 import Select from 'primevue/select'
+import MultiSelect from 'primevue/multiselect'
 import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
 import TabPanel from 'primevue/tabpanel'
@@ -377,7 +378,7 @@ const editablePorts = ref([])
 // ── Split / Collapse State ──────────────────────────────────────────────────
 const SPLIT_STORAGE_KEY = 'instanceEditorDialog.leftPanePercent'
 const DEFAULT_LEFT_PERCENT = 55
-const MIN_LEFT_PERCENT = 32
+const MIN_LEFT_PERCENT = 40
 const MAX_LEFT_PERCENT = 72
 
 function loadStoredSplit() {
@@ -498,7 +499,12 @@ watch(
 
       // Load Instance & Port data
       editableName.value = props.initialName
-      editablePorts.value = detachReactivity(props.initialPorts || [])
+      editablePorts.value = detachReactivity(props.initialPorts || []).map((port) => ({
+        ...port,
+        variables: Array.isArray(port.variables)
+          ? port.variables.map((v) => (typeof v === 'object' && v !== null ? v.name : v))
+          : []
+      }))
 
       // Load Parameters
       parameterRows.value = props.variables.map((row) => ({
