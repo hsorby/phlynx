@@ -1,5 +1,5 @@
 <template>
-  <div class="container">
+  <div class="container" ref="rootRef">
     <div class="panel">
       <div v-if="errors.length > 0" class="error-banner">
         <div v-for="(err, index) in errors" :key="index">
@@ -56,11 +56,16 @@ const latexGen = new CellMLLatexGenerator()
 const cellmlText = ref(generator.generate(props.modelValue))
 const errors = ref([])
 const latexContainer = ref(null)
+const rootRef = ref(null)
 
 let debouncer = null
 let currentDoc = null
+let resizeObserver = null
+let resizeRaf = null
 const cursorLine = ref(1)
 const latexPreview = ref('')
+
+const MIN_FIT_SCALE = 0.55
 
 // ── Dynamic Dark Mode Detection ─────────────────────────────────────────────
 const isDarkMode = ref(false)
@@ -96,6 +101,33 @@ const extensions = computed(() => {
   return isDarkMode.value ? [...base, oneDark] : base
 })
 
+const applyFitScale = () => {
+  const container = latexContainer.value
+  if (!container) return
+
+  const content = container.querySelector('.katex-html')
+  if (!content) return
+
+  const containerWidth = container.clientWidth - 30
+  if (containerWidth <= 0) return
+
+  const contentWidth = content.scrollWidth
+
+  if (contentWidth > containerWidth) {
+    const rawScale = containerWidth / contentWidth
+    const scale = Math.max(rawScale * 0.95, MIN_FIT_SCALE)
+    content.style.transform = `scale(${scale})`
+    content.style.transformOrigin = 'center center'
+  } else {
+    content.style.transform = 'none'
+  }
+}
+
+const scheduleFitScale = () => {
+  if (resizeRaf) cancelAnimationFrame(resizeRaf)
+  resizeRaf = requestAnimationFrame(applyFitScale)
+}
+
 const updatePreview = async () => {
   if (!currentDoc) return
 
@@ -128,23 +160,7 @@ const updatePreview = async () => {
     latexPreview.value = latex
     if (latexContainer.value) {
       katex.render(latex, latexContainer.value, { throwOnError: false, displayMode: true })
-      nextTick(() => {
-        const container = latexContainer.value
-        const content = container.querySelector('.katex-html')
-
-        if (content) {
-          const containerWidth = container.clientWidth - 30
-          const contentWidth = content.scrollWidth
-
-          if (contentWidth > containerWidth) {
-            const scale = containerWidth / contentWidth
-            content.style.transform = `scale(${scale * 0.95})`
-            content.style.transformOrigin = 'center center'
-          } else {
-            content.style.transform = 'none'
-          }
-        }
-      })
+      nextTick(applyFitScale)
     }
   } else {
     latexPreview.value = ''
@@ -199,10 +215,16 @@ onMounted(() => {
   }
 
   window.addEventListener('keydown', handleKeyDown)
+  if (rootRef.value && typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(scheduleFitScale)
+    resizeObserver.observe(rootRef.value)
+  }
 })
 
 onUnmounted(() => {
   if (observer) observer.disconnect()
+  if (resizeObserver) resizeObserver.disconnect()
+  if (resizeRaf) cancelAnimationFrame(resizeRaf)
   window.removeEventListener('keydown', handleKeyDown)
 })
 </script>
@@ -228,6 +250,7 @@ onUnmounted(() => {
   flex-direction: column;
   min-height: 0;
   gap: 12px;
+  --eq-preview-height: clamp(170px, 24vh, 280px);
 }
 
 .panel h3 {
@@ -283,7 +306,7 @@ onUnmounted(() => {
 
 /* LaTeX Preview Area - Adapts to Dark Mode */
 .preview-pane {
-  height: 110px;
+  height: var(--eq-preview-height);
   padding: 15px;
   background-color: color-mix(in srgb, var(--p-content-background) 96%, var(--p-text-color));
   border: 1px solid var(--p-content-border-color);
@@ -292,8 +315,23 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   font-size: 1.4em;
-  overflow: hidden;
+  overflow: auto;
   color: var(--p-text-color);
+  scrollbar-width: thin;
+}
+
+.preview-pane::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.preview-pane::-webkit-scrollbar-thumb {
+  background-color: var(--p-content-border-color);
+  border-radius: 4px;
+}
+
+.preview-pane::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .preview-pane :deep(.katex) {
@@ -323,7 +361,7 @@ onUnmounted(() => {
   border-radius: 6px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.85em;
-  height: 110px;
+  height: var(--eq-preview-height);
   display: flex;
   flex-direction: column;
   justify-content: center;
