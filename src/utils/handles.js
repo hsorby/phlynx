@@ -137,3 +137,11 @@ export function buildGhostHandles(countTopBot = 7, countSides = 5) {
 
   return handles
 }
+
+export function isCornerHandle(handle, allHandles) {
+  const handlesOfSameType = allHandles.filter((h) => h.side === handle.side)
+  const n = handlesOfSameType.length
+  const positionIndex = handlesOfSameType.findIndex((h) => h.uid === handle.uid)
+
+  return positionIndex === 0 || positionIndex === n - 1
+}

@@ -99,13 +99,13 @@
         :position="handlePosition(handle.side)"
         :class="['handle',
         `handle--${handle.variant|| 'default'}`,
-        { 'handle--inert': handle.variant === HANDLE_VARIANT.GHOST && selected },
+        { 'handle--inert': handle.variant === HANDLE_VARIANT.GHOST && selected && isCornerHandle(handle, data.handles)},
         ]"
         :style="getHandleStyle(handle, data.handles)"
         v-tooltip.bottom="{ value: handle.name, showDelay: 1000 }"
         @mouseenter="onHandleEnter(handle.uid)"
         @mouseleave="onHandleLeave"
-        @pointerdown="!selected && handle.variant === HANDLE_VARIANT.GHOST && beginGhostActivation(props.id, handle.uid)"
+        @pointerdown="(!selected && isCornerHandle(handle, data.handles)) && handle.variant === HANDLE_VARIANT.GHOST && beginGhostActivation(props.id, handle.uid)"
       >
         <Button
           v-show="hoveredHandleUid === handle.uid && handle.variant !== HANDLE_VARIANT.GHOST"
@@ -135,7 +135,7 @@ import Menu from 'primevue/menu'
 import CellMLIcon from './icons/CellMLIcon.vue'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
-import { getHandleId, getHandleStyle, handlePosition, findMostCentralGhostHandle } from '../utils/handles'
+import { getHandleId, getHandleStyle, handlePosition, findMostCentralGhostHandle, isCornerHandle } from '../utils/handles'
 import { sanitiseName } from '../utils/nodes'
 import { notify } from '../utils/notify'
 import { isEditableVariableType, isEmpty } from '../utils/variables'
