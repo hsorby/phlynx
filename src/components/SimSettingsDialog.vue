@@ -21,203 +21,240 @@
         </div>
       </div>
 
-      <template v-else>
-        <section class="block">
-          <div class="block-header">
-            <h4>Variable Visibility</h4>
-            <span class="subtle">Choose which variable types are shown in the table.</span>
-          </div>
-          <div class="type-filters">
-            <label v-for="type in variableTypeOptions" :key="type.value" class="type-filter-item">
-              <Checkbox v-model="typeFilters[type.value]" binary />
-              <span>{{ type.label }}</span>
-            </label>
-          </div>
-        </section>
-
-        <section class="block">
-          <div class="block-header">
-            <h4>Plot Groups</h4>
-            <span class="subtle">Variables in the same group are plotted together.</span>
-          </div>
-          <div class="group-toolbar">
-            <InputText v-model="newGroupName" placeholder="New group name (e.g. Pressure)" class="group-name-input" />
-            <Button label="Add Group" icon="pi pi-plus" text @click="addGroup" />
-          </div>
-          <div class="group-list">
-            <div v-for="group in plotGroups" :key="group.id" class="group-chip">
-              <span>{{ group.name }}</span>
-              <Button
-                icon="pi pi-times"
-                rounded
-                text
-                severity="secondary"
-                size="small"
-                @click="removeGroup(group.id)"
-              />
+      <TabView v-else v-model:activeIndex="activeTabIndex" class="sim-settings-tabs">
+        <TabPanel header="Plot Setup">
+          <section class="block">
+            <div class="block-header">
+              <h4>Variable Visibility</h4>
+              <span class="subtle">Choose which variable types are shown in the table.</span>
             </div>
-          </div>
-        </section>
-
-        <section class="block">
-          <div class="block-header">
-            <h4>Variables To Plot</h4>
-            <span class="subtle">{{ visibleRows.length }} shown of {{ variableRows.length }} total</span>
-          </div>
-
-          <div class="bulk-toolbar" v-if="visibleRows.length > 0">
-            <label class="bulk-select-all">
-              <Checkbox :modelValue="allVisibleSelected" binary @update:modelValue="toggleSelectAllVisible" />
-              <span>Select all shown</span>
-            </label>
-            <span class="bulk-count">{{ selectedVisibleCount }} selected</span>
-            <Button
-              label="Clear Selection"
-              icon="pi pi-eraser"
-              text
-              severity="secondary"
-              :disabled="selectedVisibleCount === 0"
-              @click="clearSelection"
-            />
-            <Select
-              v-model="bulkGroupId"
-              :options="assignGroupOptions"
-              optionLabel="label"
-              optionValue="value"
-              placeholder="Assign selected to group"
-              class="bulk-group-select"
-            />
-            <Button
-              label="Assign Selected"
-              icon="pi pi-check"
-              text
-              :disabled="selectedVisibleCount === 0 || !bulkGroupId"
-              @click="assignSelectedToGroup"
-            />
-            <Button
-              label="Move To Ungrouped"
-              icon="pi pi-minus-circle"
-              text
-              severity="contrast"
-              :disabled="selectedVisibleCount === 0"
-              @click="moveSelectedToUngrouped"
-            />
-          </div>
-
-          <div v-if="visibleRows.length === 0" class="empty-state">
-            No variables match the current type visibility filters.
-          </div>
-
-          <div v-else class="vars-table-wrap">
-            <table class="vars-table">
-              <thead>
-                <tr>
-                  <th style="width: 56px">Sel</th>
-                  <th style="width: 70px">Plot</th>
-                  <th>Node</th>
-                  <th>Variable</th>
-                  <th style="width: 170px">Type</th>
-                  <th style="width: 120px">Units</th>
-                  <th style="width: 250px">Group</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in visibleRows" :key="row.key">
-                  <td>
-                    <Checkbox v-model="row.selected" binary />
-                  </td>
-                  <td>
-                    <Checkbox v-model="row.plot" binary @change="onPlotToggle(row)" />
-                  </td>
-                  <td>{{ row.nodeName }}</td>
-                  <td>{{ row.variableName }}</td>
-                  <td>
-                    <Tag :value="row.type" severity="secondary" />
-                  </td>
-                  <td>{{ row.units || '-' }}</td>
-                  <td>
-                    <Select
-                      v-model="row.groupId"
-                      :options="groupOptions"
-                      optionLabel="label"
-                      optionValue="value"
-                      placeholder="Select group"
-                      :disabled="!row.plot"
-                      class="w-full"
-                    />
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section class="block">
-          <div class="block-header">
-            <h4>Simulation Parameters</h4>
-            <span class="subtle">Secondary settings passed through to OpenCOR config export.</span>
-          </div>
-          <div class="settings-grid">
-            <div class="field">
-              <label>Time Step</label>
-              <InputNumber
-                v-model="settingsPayload.timeStep"
-                :min="0"
-                :minFractionDigits="0"
-                :maxFractionDigits="8"
-                fluid
-              />
+            <div class="type-filters">
+              <label v-for="type in variableTypeOptions" :key="type.value" class="type-filter-item">
+                <Checkbox v-model="typeFilters[type.value]" binary />
+                <span>{{ type.label }}</span>
+              </label>
             </div>
-            <div class="field">
-              <label>Point Interval</label>
-              <InputNumber
-                v-model="settingsPayload.pointInterval"
-                :min="0"
-                :minFractionDigits="0"
-                :maxFractionDigits="8"
-                fluid
-              />
+          </section>
+
+          <section class="block">
+            <div class="block-header">
+              <h4>Plot Groups</h4>
+              <span class="subtle">Variables in the same group are plotted together.</span>
             </div>
-            <div class="field">
-              <label>Starting Point</label>
-              <InputNumber
-                v-model="settingsPayload.startingPoint"
-                :minFractionDigits="0"
-                :maxFractionDigits="8"
-                fluid
-              />
+            <div class="group-toolbar">
+              <InputText v-model="newGroupName" placeholder="New group name (e.g. Pressure)" class="group-name-input" />
+              <Button label="Add Group" icon="pi pi-plus" text @click="addGroup" />
             </div>
-            <div class="field">
-              <label>Ending Point</label>
-              <InputNumber v-model="settingsPayload.endingPoint" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+            <div class="group-list">
+              <div v-for="group in plotGroups" :key="group.id" class="group-chip">
+                <span>{{ group.name }}</span>
+                <Button
+                  icon="pi pi-times"
+                  rounded
+                  text
+                  severity="secondary"
+                  size="small"
+                  @click="removeGroup(group.id)"
+                />
+              </div>
             </div>
-            <div class="field">
-              <label>Solver</label>
+          </section>
+
+          <section class="block">
+            <div class="block-header">
+              <h4>Variables To Plot</h4>
+              <span class="subtle">{{ visibleRows.length }} shown of {{ variableRows.length }} total</span>
+            </div>
+
+            <div class="filter-toolbar" v-if="variableRows.length > 0">
               <Select
-                v-model="settingsPayload.solver"
-                :options="solverOptions"
+                v-model="selectedNode"
+                :options="nodeFilterOptions"
                 optionLabel="label"
                 optionValue="value"
-                fluid
+                placeholder="Filter by node"
+                class="filter-select"
+              />
+              <!-- <Select
+                v-model="selectedVariable"
+                :options="variableFilterOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Filter by variable"
+                class="filter-select"
+              /> -->
+              <InputText v-model="nodeSearch" placeholder="Search node name..." class="filter-input" />
+              <InputText v-model="variableSearch" placeholder="Search variable name..." class="filter-input" />
+              <Button
+                label="Reset Filters"
+                icon="pi pi-filter-slash"
+                text
+                severity="secondary"
+                @click="resetVariableFilters"
               />
             </div>
-            <div class="field">
-              <label>Tolerance</label>
-              <InputNumber
-                v-model="settingsPayload.tolerance"
-                :min="0"
-                :minFractionDigits="0"
-                :maxFractionDigits="12"
-                fluid
+
+            <div class="bulk-toolbar" v-if="visibleRows.length > 0">
+              <label class="bulk-select-all">
+                <Checkbox :modelValue="allVisibleSelected" binary @update:modelValue="toggleSelectAllVisible" />
+                <span>Select all shown</span>
+              </label>
+              <span class="bulk-count">{{ selectedVisibleCount }} selected</span>
+              <Button
+                label="Clear Selection"
+                icon="pi pi-eraser"
+                text
+                severity="secondary"
+                :disabled="selectedVisibleCount === 0"
+                @click="clearSelection"
+              />
+              <Select
+                v-model="bulkGroupId"
+                :options="assignGroupOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Assign selected to group"
+                class="bulk-group-select"
+              />
+              <Button
+                label="Assign Selected"
+                icon="pi pi-check"
+                text
+                :disabled="selectedVisibleCount === 0 || !bulkGroupId"
+                @click="assignSelectedToGroup"
+              />
+              <Button
+                label="Move To Ungrouped"
+                icon="pi pi-minus-circle"
+                text
+                severity="contrast"
+                :disabled="selectedVisibleCount === 0"
+                @click="moveSelectedToUngrouped"
               />
             </div>
-            <div class="field">
-              <label>Max Steps</label>
-              <InputNumber v-model="settingsPayload.maxSteps" :min="1" :useGrouping="false" fluid />
+
+            <div v-if="visibleRows.length === 0" class="empty-state">
+              No variables match the current type visibility filters.
             </div>
-          </div>
-        </section>
-      </template>
+
+            <div v-else class="vars-table-wrap">
+              <table class="vars-table">
+                <thead>
+                  <tr>
+                    <th style="width: 56px">Sel</th>
+                    <th style="width: 70px">Plot</th>
+                    <th>Node</th>
+                    <th>Variable</th>
+                    <th style="width: 170px">Type</th>
+                    <th style="width: 120px">Units</th>
+                    <th style="width: 250px">Group</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in visibleRows" :key="row.key">
+                    <td>
+                      <Checkbox v-model="row.selected" binary />
+                    </td>
+                    <td>
+                      <Checkbox v-model="row.plot" binary @change="onPlotToggle(row)" />
+                    </td>
+                    <td>{{ row.nodeName }}</td>
+                    <td>{{ row.variableName }}</td>
+                    <td>
+                      <Tag :value="row.type" severity="secondary" />
+                    </td>
+                    <td>{{ row.units || '-' }}</td>
+                    <td>
+                      <Select
+                        v-model="row.groupId"
+                        :options="groupOptions"
+                        optionLabel="label"
+                        optionValue="value"
+                        placeholder="Select group"
+                        :disabled="!row.plot"
+                        class="w-full"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </TabPanel>
+
+        <TabPanel header="Simulation Parameters">
+          <section class="block">
+            <div class="block-header">
+              <h4>Simulation Parameters</h4>
+              <span class="subtle">Secondary settings passed through to OpenCOR config export.</span>
+            </div>
+            <div class="settings-grid">
+              <div class="field">
+                <label>Time Step</label>
+                <InputNumber
+                  v-model="settingsPayload.timeStep"
+                  :min="0"
+                  :minFractionDigits="0"
+                  :maxFractionDigits="8"
+                  fluid
+                />
+              </div>
+              <div class="field">
+                <label>Point Interval</label>
+                <InputNumber
+                  v-model="settingsPayload.pointInterval"
+                  :min="0"
+                  :minFractionDigits="0"
+                  :maxFractionDigits="8"
+                  fluid
+                />
+              </div>
+              <div class="field">
+                <label>Starting Point</label>
+                <InputNumber
+                  v-model="settingsPayload.startingPoint"
+                  :minFractionDigits="0"
+                  :maxFractionDigits="8"
+                  fluid
+                />
+              </div>
+              <div class="field">
+                <label>Ending Point</label>
+                <InputNumber
+                  v-model="settingsPayload.endingPoint"
+                  :minFractionDigits="0"
+                  :maxFractionDigits="8"
+                  fluid
+                />
+              </div>
+              <div class="field">
+                <label>Solver</label>
+                <Select
+                  v-model="settingsPayload.solver"
+                  :options="solverOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  fluid
+                />
+              </div>
+              <div class="field">
+                <label>Tolerance</label>
+                <InputNumber
+                  v-model="settingsPayload.tolerance"
+                  :min="0"
+                  :minFractionDigits="0"
+                  :maxFractionDigits="12"
+                  fluid
+                />
+              </div>
+              <div class="field">
+                <label>Max Steps</label>
+                <InputNumber v-model="settingsPayload.maxSteps" :min="1" :useGrouping="false" fluid />
+              </div>
+            </div>
+          </section>
+        </TabPanel>
+      </TabView>
     </div>
 
     <template #footer>
@@ -240,14 +277,21 @@ import InputText from 'primevue/inputtext'
 import ProgressSpinner from 'primevue/progressspinner'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
+import TabPanel from 'primevue/tabpanel'
+import TabView from 'primevue/tabview'
 
 import { notify } from '../utils/notify'
+import { BASELINE_SIMULATION_SETTINGS } from '../utils/constants'
 
 const props = defineProps({
   modelValue: Boolean,
-  settings: {
+  simulationSettings: {
     type: Object,
     required: true,
+  },
+  plotConfig: {
+    type: Object,
+    default: () => ({}),
   },
   nodes: {
     type: Array,
@@ -256,16 +300,6 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue', 'confirm'])
-
-const DEFAULT_SETTINGS = {
-  timeStep: 0.0,
-  pointInterval: 0.01,
-  startingPoint: 0.0,
-  endingPoint: 10.0,
-  solver: 'CVODE',
-  tolerance: 1e-6,
-  maxSteps: 10000,
-}
 
 const variableTypeOptions = [
   { label: 'Variables', value: 'variable' },
@@ -280,13 +314,18 @@ const solverOptions = [
   { label: 'Runge Kutta 4', value: 'RungeKutta4' },
 ]
 
-const settingsPayload = ref({ ...DEFAULT_SETTINGS })
+const settingsPayload = ref({ ...BASELINE_SIMULATION_SETTINGS })
 const variableRows = ref([])
 const isLoading = ref(false)
 const loadingText = ref('Preparing variable list...')
 const newGroupName = ref('')
 const plotGroups = ref([])
 const bulkGroupId = ref(null)
+const selectedNode = ref(null)
+const selectedVariable = ref(null)
+const nodeSearch = ref('')
+const variableSearch = ref('')
+const activeTabIndex = ref(0)
 let loadCycle = 0
 
 const typeFilters = ref({
@@ -305,7 +344,40 @@ const groupOptions = computed(() => {
 })
 
 const visibleRows = computed(() => {
-  return variableRows.value.filter((row) => Boolean(typeFilters.value[row.type]))
+  const nodeTerm = nodeSearch.value.trim().toLowerCase()
+  const variableTerm = variableSearch.value.trim().toLowerCase()
+
+  return variableRows.value.filter((row) => {
+    if (!typeFilters.value[row.type]) return false
+    if (selectedNode.value && row.nodeName !== selectedNode.value) return false
+    if (selectedVariable.value && row.variableName !== selectedVariable.value) return false
+    if (nodeTerm && !row.nodeName.toLowerCase().includes(nodeTerm)) return false
+    if (variableTerm && !row.variableName.toLowerCase().includes(variableTerm)) return false
+    return true
+  })
+})
+
+const nodeFilterOptions = computed(() => {
+  const unique = new Set(variableRows.value.map((row) => row.nodeName))
+  const options = [{ label: 'All nodes', value: null }]
+  Array.from(unique)
+    .sort((a, b) => a.localeCompare(b))
+    .forEach((name) => options.push({ label: name, value: name }))
+  return options
+})
+
+const variableFilterOptions = computed(() => {
+  let pool = variableRows.value
+  if (selectedNode.value) {
+    pool = pool.filter((row) => row.nodeName === selectedNode.value)
+  }
+
+  const unique = new Set(pool.map((row) => row.variableName))
+  const options = [{ label: 'All variables', value: null }]
+  Array.from(unique)
+    .sort((a, b) => a.localeCompare(b))
+    .forEach((name) => options.push({ label: name, value: name }))
+  return options
 })
 
 const selectedVisibleCount = computed(() => {
@@ -332,9 +404,19 @@ watch(
   }
 )
 
+watch(selectedNode, () => {
+  if (!selectedVariable.value) return
+  const stillValid = variableRows.value.some(
+    (row) => row.variableName === selectedVariable.value && (!selectedNode.value || row.nodeName === selectedNode.value)
+  )
+  if (!stillValid) {
+    selectedVariable.value = null
+  }
+})
+
 function cloneSettings(input) {
   return {
-    ...DEFAULT_SETTINGS,
+    ...BASELINE_SIMULATION_SETTINGS,
     ...(input || {}),
   }
 }
@@ -396,9 +478,9 @@ async function initialiseDialog() {
   isLoading.value = true
   loadingText.value = 'Preparing simulation settings...'
 
-  settingsPayload.value = cloneSettings(props.settings)
+  settingsPayload.value = cloneSettings(props.simulationSettings)
 
-  const existingPlotConfig = props.settings?.plotConfig || {}
+  const existingPlotConfig = props.simulationSettings?.plotConfig || {}
   plotGroups.value = normaliseGroups(existingPlotConfig.groups)
 
   const selectedByKey = new Map((existingPlotConfig.selections || []).map((selection) => [selection.key, selection]))
@@ -410,6 +492,7 @@ async function initialiseDialog() {
 
   loadingText.value = 'Scanning nodes and variables...'
   variableRows.value = buildVariableRows(props.nodes, selectedByKey)
+  resetVariableFilters()
 
   if (variableRows.value.length === 0) {
     notify.info({
@@ -419,6 +502,13 @@ async function initialiseDialog() {
   }
 
   isLoading.value = false
+}
+
+function resetVariableFilters() {
+  selectedNode.value = null
+  selectedVariable.value = null
+  nodeSearch.value = ''
+  variableSearch.value = ''
 }
 
 function addGroup() {
@@ -543,7 +633,8 @@ const handleConfirm = () => {
     }))
 
   emit('confirm', {
-    ...settingsPayload.value,
+    simulationSettings: settingsPayload.value,
+    // ...settingsPayload.value,
     plotConfig: {
       groups: plotGroups.value,
       groupedSelections: groupsWithVariables,
@@ -565,6 +656,12 @@ const closeDialog = () => {
   flex-direction: column;
   gap: 14px;
   min-height: 300px;
+}
+:deep(.sim-settings-tabs .p-tabview-panels) {
+  padding: 12px 0 0;
+}
+.sim-settings-tabs {
+  width: 100%;
 }
 .loading-state {
   display: flex;
@@ -643,6 +740,19 @@ const closeDialog = () => {
   gap: 10px;
   margin-bottom: 8px;
   flex-wrap: wrap;
+}
+.filter-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.filter-select {
+  width: 220px;
+}
+.filter-input {
+  width: 220px;
 }
 .bulk-select-all {
   display: inline-flex;

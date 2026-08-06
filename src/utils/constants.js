@@ -199,3 +199,13 @@ export const ZIP_FILE_TYPES = [
 export const HANDLE_SIDES = ["left", "right", "top", "bottom"]
 export const SOURCE_HANDLE_PRIORITY = ["right", "bottom", "top", "left"]
 export const TARGET_HANDLE_PRIORITY = ["left", "top", "bottom", "right"]
+
+export const BASELINE_SIMULATION_SETTINGS = {
+  timeStep: 0.0,
+  pointInterval: 0.01,
+  startingPoint: 0.0,
+  endingPoint: 10.0,
+  solver: 'CVODE',
+  tolerance: 1e-6,
+  maxSteps: 10000,
+}

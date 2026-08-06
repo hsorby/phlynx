@@ -325,7 +325,8 @@
 
   <SimSettingsDialog
     v-model="simSettingsDialogVisible"
-    :settings="simSettings"
+    :simulationSettings="simSettings"
+    :plotConfig="plotConfig"
     :nodes="nodes"
     @confirm="onSimSettingsConfirm"
   />
@@ -772,6 +773,7 @@ const simSettings = ref({
   tolerance: 1e-6,
   maxSteps: 10000,
 })
+const plotConfig = ref({})
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
@@ -1790,7 +1792,8 @@ async function onMacroBuilderGenerate(data) {
 
 async function onSimSettingsConfirm(data) {
   console.log('Sim settings updated:', data)
-  simSettings.value = { ...simSettings.value, ...data }
+  simSettings.value = data.simulationSettings
+  plotConfig.value = data.plotConfig
   simSettingsDialogVisible.value = false
 }
 
