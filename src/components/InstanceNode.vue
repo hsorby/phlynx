@@ -61,34 +61,9 @@
           severity="secondary"
           class="instance-button"
           icon="pi pi-pencil"
-          @click="openPortEditDialog"
-          v-tooltip.bottom="{ value: 'Edit ports', showDelay: 300 }"
+          @click="openInstanceEditor('parameters')"
+          v-tooltip.bottom="{ value: 'Edit instance', showDelay: 300 }"
         />
-
-        <Button
-          rounded
-          iconOnly
-          size="small"
-          severity="secondary"
-          class="instance-button"
-          icon="pi pi-sliders-h"
-          @click="openParameterEditDialog"
-          v-tooltip.bottom="{ value: 'Edit parameters', showDelay: 300 }"
-        />
-
-        <Button
-          rounded
-          iconOnly
-          size="small"
-          severity="secondary"
-          class="instance-button"
-          @click="openCellmlEditDialog"
-          v-tooltip.bottom="{ value: 'Edit CellML Text', showDelay: 300 }"
-        >
-          <template #icon>
-            <CellMLIcon class="p-button-icon" />
-          </template>
-        </Button>
       </div>
     </div>
 
@@ -160,39 +135,22 @@ const props = defineProps({
 })
 
 const emit = defineEmits([
-  'open-cellml-editor-dialog',
-  'open-port-editor-dialog',
-  'open-parameter-editor-dialog',
+  'open-instance-editor',
   'open-context-menu',
 ])
 
 const domainMenuId = `domain-type-menu-${props.id}`
 const portMenuId = `port-menu-${props.id}`
 
-async function openPortEditDialog() {
-  emit('open-port-editor-dialog', {
-    id: props.id,
-    handles: props.data.handles,
-    initialName: props.data.name,
-    initialPorts: props.data.ports,
-    variables: props.data.variables,
-  })
-}
-
-function openCellmlEditDialog() {
-  emit('open-cellml-editor-dialog', {
+function openInstanceEditor(defaultTab = 'parameters') {
+  emit('open-instance-editor', {
     id: props.id,
     name: props.data.name,
     mathRef: props.data.mathRef,
     variables: props.data.variables,
-  })
-}
-
-function openParameterEditDialog() {
-  emit('open-parameter-editor-dialog', {
-    id: props.id,
-    variables: props.data.variables,
-    mathRef: props.data.mathRef,
+    ports: props.data.ports,
+    handles: props.data.handles,
+    defaultTab,
   })
 }
 
