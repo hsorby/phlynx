@@ -488,7 +488,14 @@ const {
   createInstanceNode,
 } = useDragAndDrop(pendingHistoryNodes)
 
-const { activateHandle, confirmActivation, revertPendingGhostIfUnused, revertHandlesForEdge, reactivateEdgeHandles } =
+const {
+  activateHandle,
+  confirmActivation,
+  revertPendingGhostIfUnused,
+  revertHandlesForEdge,
+  reactivateEdgeHandles,
+  revertHandleIfUnused,
+} =
   useHandleManagement()
 
 const dialogVisible = computed(() => {
@@ -913,9 +920,8 @@ onConnect(async (connection) => {
     suppressedEdgeIds.delete(pendingEdge.id)
 
     if (!shouldReplace) {
-      // No edge new is being created so revert the handles activated above.
-      if (sourceHandleUid) revertHandleIfUnused(connection.source, sourceHandleUid)
-      if (targetHandleUid) revertHandleIfUnused(connection.target, targetHandleUid)
+      if (sourceHandleUid) revertHandleIfUnused(connection.source, sourceHandleUid, { trackHistory: false })
+      if (targetHandleUid) revertHandleIfUnused(connection.target, targetHandleUid, { trackHistory: false })
       return
     }
 
