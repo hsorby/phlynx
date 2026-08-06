@@ -97,12 +97,15 @@
         :id="getHandleId(handle)"
         :ref="'handle_' + handle.side + '_' + handle.uid"
         :position="handlePosition(handle.side)"
-        :class="['handle', `handle--${handle.variant || 'default'}`]"
+        :class="['handle',
+        `handle--${handle.variant|| 'default'}`,
+        { 'handle--inert': handle.variant === HANDLE_VARIANT.GHOST && selected },
+        ]"
         :style="getHandleStyle(handle, data.handles)"
         v-tooltip.bottom="{ value: handle.name, showDelay: 1000 }"
         @mouseenter="onHandleEnter(handle.uid)"
         @mouseleave="onHandleLeave"
-        @pointerdown="handle.variant === HANDLE_VARIANT.GHOST && beginGhostActivation(props.id, handle.uid)"
+        @pointerdown="handle.variant === !selected && HANDLE_VARIANT.GHOST && beginGhostActivation(props.id, handle.uid)"
       >
         <Button
           v-show="hoveredHandleUid === handle.uid && handle.variant !== HANDLE_VARIANT.GHOST"
@@ -427,6 +430,10 @@ function openContextMenu(event) {
   border-color: #22c55e;  
   border-style: solid;
   opacity: 1;
+}
+
+.vue-flow__handle.handle--ghost.handle--inert {
+  pointer-events: none;
 }
 
 .instance-name {
