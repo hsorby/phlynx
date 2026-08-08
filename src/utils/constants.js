@@ -26,9 +26,9 @@ export const FLOW_IDS = {
 
 export const PARAMETER_TYPE_OPTIONS = [
   { value: 'constant', label: 'constant' },
-  { value: 'global_constant', label: 'global_constant' },
+  { value: 'global_constant', label: 'global' },
   { value: 'variable', label: 'variable' },
-  { value: 'boundary_condition', label: 'boundary_condition' },
+  { value: 'boundary_condition', label: 'boundary' },
 ]
 
 export const AFFINE_UNIT_CONVERSIONS = {
