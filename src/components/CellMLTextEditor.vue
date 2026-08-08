@@ -9,10 +9,35 @@
       <div v-else class="preview-pane" ref="latexContainer"></div>
 
       <div class="panel">
-        <h3>CellML Text</h3>
+        <div class="panel-header">
+          <h3>CellML Text</h3>
+          <div class="font-size-control" role="group" aria-label="Editor font size">
+            <button
+              type="button"
+              class="font-size-btn"
+              :disabled="fontSize <= MIN_FONT_SIZE"
+              title="Decrease font size"
+              aria-label="Decrease font size"
+              @click="decreaseFontSize"
+            >
+              <i class="pi pi-minus" style="font-size: 0.7rem"></i>
+            </button>
+            <span class="font-size-value">{{ fontSize }}px</span>
+            <button
+              type="button"
+              class="font-size-btn"
+              :disabled="fontSize >= MAX_FONT_SIZE"
+              title="Increase font size"
+              aria-label="Increase font size"
+              @click="increaseFontSize"
+            >
+              <i class="pi pi-plus" style="font-size: 0.7rem"></i>
+            </button>
+          </div>
+        </div>
         <codemirror
           v-model="cellmlText"
-          :style="{ height: '400px' }"
+          :style="{ height: '400px', '--cm-font-size': fontSize + 'px' }"
           :autofocus="true"
           :indent-with-tab="true"
           :tab-size="2"
@@ -66,6 +91,42 @@ const cursorLine = ref(1)
 const latexPreview = ref('')
 
 const MIN_FIT_SCALE = 0.55
+const MIN_FONT_SIZE = 10
+const MAX_FONT_SIZE = 20
+const FONT_SIZE_STORAGE_KEY = 'cellml-editor-font-size'
+const DEFAULT_FONT_SIZE = 12.5
+
+function loadStoredFontSize() {
+  try {
+    const stored = Number(window.localStorage.getItem(FONT_SIZE_STORAGE_KEY))
+    if (stored && stored >= MIN_FONT_SIZE && stored <= MAX_FONT_SIZE) {
+      return stored
+    }
+  } catch (e) {
+    // localStorage unavailable (e.g. private browsing) - fall back to default
+  }
+  return DEFAULT_FONT_SIZE
+}
+
+const fontSize = ref(loadStoredFontSize())
+
+function persistFontSize() {
+  try {
+    window.localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(fontSize.value))
+  } catch (e) {
+    // ignore storage errors
+  }
+}
+
+function increaseFontSize() {
+  fontSize.value = Math.min(MAX_FONT_SIZE, fontSize.value + 1)
+  persistFontSize()
+}
+
+function decreaseFontSize() {
+  fontSize.value = Math.max(MIN_FONT_SIZE, fontSize.value - 1)
+  persistFontSize()
+}
 
 // ── Dynamic Dark Mode Detection ─────────────────────────────────────────────
 const isDarkMode = ref(false)
@@ -260,11 +321,59 @@ onUnmounted(() => {
   color: var(--p-text-color);
 }
 
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.font-size-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.font-size-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--p-text-muted-color);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.font-size-btn:hover:not(:disabled) {
+  background: var(--p-content-hover-background, rgba(255, 255, 255, 0.06));
+  color: var(--p-text-color);
+}
+
+.font-size-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.font-size-value {
+  font-size: 0.75rem;
+  color: var(--p-text-muted-color);
+  min-width: 2.6em;
+  text-align: center;
+  user-select: none;
+}
+
 /* CodeMirror Base Styling */
 :deep(.cm-editor) {
   flex: 1;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--cm-font-size, 11.5px);
   overflow: hidden;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   background-color: var(--p-content-background);
