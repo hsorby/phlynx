@@ -4,7 +4,7 @@
     modal
     :header="dialogTitle"
     :dismissableMask="!loading"
-    :style="{ width: '95vw', maxWidth: '1680px' }"
+    :style="{ width: '95vw', maxWidth: '1680px', height: '90vh', maxHeight: '960px' }"
     class="module-editor-dialog"
     @update:visible="onDialogVisibleChange"
   >
@@ -163,7 +163,7 @@
                       </template>
                     </Column>
                     <Column field="units" bodyClass="small-text-col" header="Units" sortable style="min-width: 110px" />
-                    <Column field="type" header="Type" sortable style="min-width: 170px">
+                    <Column field="type" header="Type" sortable style="min-width: 120px">
                       <template #body="slotProps">
                         <Select
                           v-model="slotProps.data.type"
@@ -189,8 +189,15 @@
                 </div>
 
                 <div v-if="editablePorts.length" class="table-flex-wrapper">
-                  <DataTable :value="editablePorts" size="small" stripedRows scrollHeight="flex">
-                    <Column header="Type" style="min-width: 50px">
+                  <DataTable
+                    :value="editablePorts"
+                    size="small"
+                    stripedRows
+                    scrollable
+                    scrollHeight="flex"
+                    tableStyle="min-width: 580px"
+                  >
+                    <Column header="Type" style="min-width: 90px">
                       <template #body="slotProps">
                         <Select
                           v-model="slotProps.data.portType"
@@ -203,13 +210,13 @@
                       </template>
                     </Column>
 
-                    <Column header="Label" style="min-width: 170px">
+                    <Column header="Label" style="min-width: 140px">
                       <template #body="slotProps">
                         <InputText v-model="slotProps.data.label" placeholder="Enter label" size="small" class="w-full" />
                       </template>
                     </Column>
 
-                    <Column header="Variable(s)" style="min-width: 220px">
+                    <Column header="Variable(s)" style="min-width: 180px">
                       <template #body="slotProps">
                         <MultiSelect
                           v-model="slotProps.data.variables"
@@ -224,7 +231,7 @@
                       </template>
                     </Column>
 
-                    <Column header="Multiport" style="min-width: 50px">
+                    <Column header="Multiport" style="min-width: 110px">
                       <template #body="slotProps">
                         <div class="flex flex-col gap-1">
                           <Select
@@ -250,7 +257,7 @@
                       </template>
                     </Column>
 
-                    <Column header="" style="width: 56px">
+                    <Column header="" style="width: 56px; min-width: 56px">
                       <template #body="slotProps">
                         <Button
                           icon="pi pi-trash"
@@ -377,8 +384,8 @@ const editablePorts = ref([])
 
 // ── Split / Collapse State ──────────────────────────────────────────────────
 const SPLIT_STORAGE_KEY = 'instanceEditorDialog.leftPanePercent'
-const DEFAULT_LEFT_PERCENT = 55
-const MIN_LEFT_PERCENT = 40
+const DEFAULT_LEFT_PERCENT = 48
+const MIN_LEFT_PERCENT = 32
 const MAX_LEFT_PERCENT = 72
 
 function loadStoredSplit() {
@@ -593,8 +600,8 @@ const onDialogVisibleChange = (visible) => {
 async function handleCancel() {
   if (isDirty.value) {
     const confirmed = await confirm({
-      header: 'Unsaved CellML Changes',
-      message: 'You have modified CellML code. Are you sure you want to discard changes?',
+      header: 'Unsaved Changes',
+      message: 'Are you sure you want to discard changes?',
       severity: 'warning',
       acceptLabel: 'Discard & Close',
       rejectLabel: 'Cancel',
@@ -690,6 +697,21 @@ async function handleSave() {
 </script>
 
 <style scoped>
+.module-editor-dialog {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.module-editor-dialog :deep(.p-dialog-content) {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  padding-bottom: 16px !important;
+}
+
 /* ── Design tokens (kept local to this dialog for consistent typography) ── */
 .editor-grid {
   --dlg-fs-label: 0.875rem;   /* 14px - field/section labels */
@@ -700,7 +722,9 @@ async function handleSave() {
   display: flex;
   align-items: stretch;
   gap: 0;
-  height: clamp(520px, 78vh, 940px);
+  flex: 1 1 auto;
+  min-height: 0;
+  height: clamp(520px, 69vh, 940px);
 }
 
 .editor-grid.is-dragging {
@@ -727,6 +751,7 @@ async function handleSave() {
 .editor-wrapper {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 /* ── Resize handle between the two panes; also hosts the collapse/expand button ── */
@@ -784,7 +809,7 @@ async function handleSave() {
   cursor: pointer;
   z-index: 3;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-  opacity: 0;
+  opacity: 0.55;
   transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
 }
 
@@ -803,7 +828,7 @@ async function handleSave() {
 .right-pane {
   position: relative;
   flex: 1 1 auto;
-  min-width: 360px;
+  min-width: 300px;
   transition: min-width 0.15s ease, flex-basis 0.15s ease;
 }
 
@@ -885,6 +910,22 @@ async function handleSave() {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.table-flex-wrapper :deep(.p-datatable) {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+.table-flex-wrapper :deep(.p-datatable-table-container),
+.table-flex-wrapper :deep(.p-datatable-wrapper) {
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  overflow-y: auto !important;
 }
 
 .tab-icon {
@@ -895,11 +936,9 @@ async function handleSave() {
 /* Parameters Tab Styles */
 .toolbar-container {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 8px 10px;
   margin-bottom: 12px;
   background-color: var(--p-content-hover-background, rgba(0, 0, 0, 0.02));
   border: 1px solid var(--p-content-border-color);
@@ -909,7 +948,10 @@ async function handleSave() {
 .search-group, .bulk-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+}
+
+.search-group {
   flex-wrap: wrap;
 }
 
@@ -917,6 +959,12 @@ async function handleSave() {
   position: relative;
   display: flex;
   align-items: center;
+  flex: 1 1 160px;
+  min-width: 120px;
+}
+
+.search-input-wrapper :deep(.p-inputtext) {
+  width: 100%;
 }
 
 .clear-search-btn {
@@ -926,7 +974,17 @@ async function handleSave() {
   height: 1.25rem !important;
 }
 
-.search-column { width: 130px; }
+.bulk-controls {
+  padding-top: 8px;
+  border-top: 1px solid var(--p-content-border-color);
+  flex-wrap: wrap;
+}
+
+.bulk-controls .bulk-select {
+  margin-right: auto;
+}
+
+.search-column { width: 130px; flex: 0 0 auto; }
 .bulk-select { width: 180px; }
 .bulk-label { font-size: var(--dlg-fs-small); color: var(--p-text-muted-color); white-space: nowrap; }
 
@@ -1016,8 +1074,6 @@ async function handleSave() {
 @media (max-width: 900px) {
   .editor-grid {
     flex-direction: column;
-    height: auto;
-    max-height: 78vh;
   }
 
   .left-pane {
