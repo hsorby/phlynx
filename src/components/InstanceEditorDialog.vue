@@ -15,7 +15,7 @@
 
     <div v-else class="editor-grid" ref="editorGridRef" :class="{ 'is-dragging': dragging }">
       <!-- LEFT COLUMN: CellML Text Editor -->
-      <div class="pane left-pane" :style="leftPaneStyle">
+      <div class="pane left-pane" :style="leftPaneStyle" :class="{ 'left-pane--collapsed': rightCollapsed }">
         <div class="editor-wrapper">
           <CellMLTextEditor
             :key="mathRef"
@@ -619,6 +619,7 @@ async function handleSave() {
     activeTab.value = 'ports'
     return
   }
+
   const sanitised = sanitiseName(editableName.value)
   if (!sanitised) {
     notify.error({ message: 'Instance name is invalid.' })
@@ -698,9 +699,10 @@ async function handleSave() {
 
 <style scoped>
 .module-editor-dialog {
-  display: flex !important;
-  flex-direction: column !important;
-  overflow: hidden !important;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  box-sizing: border-box;
 }
 
 .module-editor-dialog :deep(.p-dialog-content) {
@@ -712,7 +714,6 @@ async function handleSave() {
   padding-bottom: 16px !important;
 }
 
-/* ── Design tokens (kept local to this dialog for consistent typography) ── */
 .editor-grid {
   --dlg-fs-label: 0.875rem;   /* 14px - field/section labels */
   --dlg-fs-body: 0.875rem;    /* 14px - table cells, inputs */
@@ -724,7 +725,8 @@ async function handleSave() {
   gap: 0;
   flex: 1 1 auto;
   min-height: 0;
-  height: clamp(520px, 69vh, 940px);
+  max-height: 100%;
+  max-width: 100%;
 }
 
 .editor-grid.is-dragging {
@@ -745,7 +747,12 @@ async function handleSave() {
 }
 
 .left-pane {
-  min-width: 340px;
+  min-width: 38%;
+  max-width: 67%;
+}
+
+.left-pane--collapsed {
+  max-width: 100%;
 }
 
 .editor-wrapper {
@@ -828,7 +835,8 @@ async function handleSave() {
 .right-pane {
   position: relative;
   flex: 1 1 auto;
-  min-width: 300px;
+  min-width: 32%;
+  max-width: 72%;
   transition: min-width 0.15s ease, flex-basis 0.15s ease;
 }
 
@@ -860,8 +868,6 @@ async function handleSave() {
 }
 
 /* ── Tabs: make the whole chain fill available height so the scroll ── */
-/* region reaches the bottom of the panel instead of leaving blank   */
-/* space underneath it on taller screens.                            */
 .right-pane-tabs {
   flex: 1;
   min-height: 0;
