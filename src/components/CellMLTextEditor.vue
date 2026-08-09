@@ -90,7 +90,7 @@ let resizeRaf = null
 const cursorLine = ref(1)
 const latexPreview = ref('')
 
-const MIN_FIT_SCALE = 0.55
+const MIN_FIT_SCALE = 0.50
 const MIN_FONT_SIZE = 10
 const MAX_FONT_SIZE = 20
 const FONT_SIZE_STORAGE_KEY = 'cellml-editor-font-size'
@@ -380,6 +380,7 @@ onUnmounted(() => {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   background-color: var(--p-content-background);
   color: var(--p-text-color);
+  outline:none;
   border: 1px solid var(--p-content-border-color);
 }
 
