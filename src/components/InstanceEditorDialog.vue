@@ -5,6 +5,7 @@
     :header="dialogTitle"
     :dismissableMask="!loading"
     :style="{ width: '95vw', maxWidth: '1680px', height: '90vh', maxHeight: '960px' }"
+    :breakpoints="{ '1200px': '95vw', '576px': '100vw' }"
     class="module-editor-dialog"
     @update:visible="onDialogVisibleChange"
   >
@@ -13,7 +14,13 @@
       <span>Loading instance data...</span>
     </div>
 
-    <div v-else class="editor-grid" ref="editorGridRef" :class="{ 'is-dragging': dragging }">
+    <div
+      v-else
+      class="editor-grid"
+      ref="editorGridRef"
+      :class="{ 'is-dragging': dragging, 'is-suppressed': isScreenTooSmall }"
+      :inert="isScreenTooSmall"
+    >
       <!-- LEFT COLUMN: CellML Text Editor -->
       <div class="pane left-pane" :style="leftPaneStyle" :class="{ 'left-pane--collapsed': rightCollapsed }">
         <div class="editor-wrapper">
@@ -150,7 +157,7 @@
                   >
                     <Column selectionMode="multiple" headerStyle="width: 2.2rem" />
                     <Column field="name" bodyClass="small-text-col" header="Name" sortable style="min-width: 120px" />
-                    <Column field="value" header="Value" sortable style="min-width: 120px">
+                    <Column field="value" header="Value" sortable style="width: 120px">
                       <template #body="slotProps">
                         <InputText
                           v-if="isEditableVariableType(slotProps.data.type)"
@@ -163,7 +170,7 @@
                       </template>
                     </Column>
                     <Column field="units" bodyClass="small-text-col" header="Units" sortable style="min-width: 110px" />
-                    <Column field="type" header="Type" sortable style="min-width: 120px">
+                    <Column field="type" header="Type" sortable style="width: 100px">
                       <template #body="slotProps">
                         <Select
                           v-model="slotProps.data.type"
@@ -197,7 +204,19 @@
                     scrollHeight="flex"
                     tableStyle="min-width: 580px"
                   >
-                    <Column header="Type" style="min-width: 90px">
+                    <Column header="" style="width: 25px">
+                      <template #body="slotProps">
+                        <Button
+                          icon="pi pi-trash"
+                          severity="danger"
+                          rounded
+                          text
+                          size="small"
+                          @click="deletePort(editablePorts.indexOf(slotProps.data))"
+                        />
+                      </template>
+                    </Column>
+                    <Column header="Type" style="width: 3cap">
                       <template #body="slotProps">
                         <Select
                           v-model="slotProps.data.portType"
@@ -256,19 +275,6 @@
                         </div>
                       </template>
                     </Column>
-
-                    <Column header="" style="width: 56px; min-width: 56px">
-                      <template #body="slotProps">
-                        <Button
-                          icon="pi pi-trash"
-                          severity="danger"
-                          rounded
-                          text
-                          size="small"
-                          @click="deletePort(editablePorts.indexOf(slotProps.data))"
-                        />
-                      </template>
-                    </Column>
                   </DataTable>
                 </div>
                 <div v-else class="empty-state">No ports defined for this instance.</div>
@@ -279,9 +285,43 @@
       </div>
     </div>
 
+    <!-- OVERLAY: shown when the browser window is too narrow. The editor grid above
+         stays mounted the whole time (CodeMirror + DataTables are expensive to
+         tear down and rebuild), so this is purely a CSS-driven cover, not a
+         v-if swap. -->
+    <Transition name="resize-warning">
+      <div v-if="isScreenTooSmall" class="resize-warning-overlay">
+        <div class="resize-warning-card">
+          <div class="resize-warning-icon">
+            <i class="pi pi-angle-double-left resize-warning-arrow resize-warning-arrow--left"></i>
+            <i class="pi pi-desktop resize-warning-window"></i>
+            <i class="pi pi-angle-double-right resize-warning-arrow resize-warning-arrow--right"></i>
+          </div>
+          <h3 class="resize-warning-title">More room needed</h3>
+          <p class="resize-warning-copy">
+            Widen your browser window to keep editing — the parameter and port panels
+            need a bit more horizontal space to display properly.
+          </p>
+          <div
+            class="resize-warning-meter"
+            role="img"
+            :aria-label="`Window is ${currentWidth} pixels wide, ${MIN_REQUIRED_WIDTH} needed`"
+          >
+            <div class="resize-warning-meter-track">
+              <div class="resize-warning-meter-fill" :style="{ width: widthProgressPercent + '%' }"></div>
+            </div>
+            <div class="resize-warning-meter-labels">
+              <span>{{ currentWidth }}px</span>
+              <span>{{ MIN_REQUIRED_WIDTH }}px needed</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- DIALOG FOOTER -->
     <template #footer>
-      <div class="dialog-footer">
+      <div class="dialog-footer" v-if="!loading && !isScreenTooSmall">
         <div
           v-if="siblingCount > 0"
           class="apply-all-checkbox"
@@ -304,7 +344,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onBeforeUnmount, onMounted, onUnmounted } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
@@ -386,7 +426,8 @@ const editablePorts = ref([])
 const SPLIT_STORAGE_KEY = 'instanceEditorDialog.leftPanePercent'
 const DEFAULT_LEFT_PERCENT = 48
 const MIN_LEFT_PERCENT = 32
-const MAX_LEFT_PERCENT = 72
+const MAX_LEFT_PERCENT = 60
+const MIN_REQUIRED_WIDTH = 1200;
 
 function loadStoredSplit() {
   try {
@@ -467,6 +508,57 @@ function toggleRightPanel() {
 
 onBeforeUnmount(() => {
   window.removeEventListener('pointermove', onResizeMove)
+})
+
+// ── Too-small-window overlay ────────────────────────────────────────────────
+const RESIZE_MEDIA_QUERY = `(min-width: ${MIN_REQUIRED_WIDTH}px)`
+const isScreenTooSmall = ref(false)
+const currentWidth = ref(window.innerWidth)
+
+const widthProgressPercent = computed(() =>
+  Math.min(100, Math.round((currentWidth.value / MIN_REQUIRED_WIDTH) * 100))
+)
+
+let resizeMql = null
+let widthRafId = null
+
+function updateCurrentWidth() {
+  currentWidth.value = window.innerWidth
+  widthRafId = null
+}
+
+function scheduleWidthUpdate() {
+  if (widthRafId !== null) return
+  widthRafId = requestAnimationFrame(updateCurrentWidth)
+}
+
+function handleMediaChange(event) {
+  isScreenTooSmall.value = !event.matches
+}
+
+watch(isScreenTooSmall, (tooSmall) => {
+  if (tooSmall) {
+    updateCurrentWidth()
+    window.addEventListener('resize', scheduleWidthUpdate, { passive: true })
+  } else {
+    window.removeEventListener('resize', scheduleWidthUpdate)
+    if (widthRafId !== null) {
+      cancelAnimationFrame(widthRafId)
+      widthRafId = null
+    }
+  }
+})
+
+onMounted(() => {
+  resizeMql = window.matchMedia(RESIZE_MEDIA_QUERY)
+  isScreenTooSmall.value = !resizeMql.matches
+  resizeMql.addEventListener('change', handleMediaChange)
+})
+
+onUnmounted(() => {
+  resizeMql?.removeEventListener('change', handleMediaChange)
+  window.removeEventListener('resize', scheduleWidthUpdate)
+  if (widthRafId !== null) cancelAnimationFrame(widthRafId)
 })
 
 // ── Computed ─────────────────────────────────────────────────────────────────
@@ -706,6 +798,7 @@ async function handleSave() {
 }
 
 .module-editor-dialog :deep(.p-dialog-content) {
+  position: relative !important;
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
@@ -727,11 +820,18 @@ async function handleSave() {
   min-height: 0;
   max-height: 100%;
   max-width: 100%;
+  transition: filter 0.2s ease, opacity 0.2s ease;
 }
 
 .editor-grid.is-dragging {
   cursor: col-resize;
   user-select: none;
+}
+
+.editor-grid.is-suppressed {
+  pointer-events: none;
+  opacity: 0.4;
+  filter: blur(2px) saturate(0.7);
 }
 
 .pane {
@@ -748,7 +848,7 @@ async function handleSave() {
 
 .left-pane {
   min-width: 38%;
-  max-width: 67%;
+  max-width: 55%;
 }
 
 .left-pane--collapsed {
@@ -1075,6 +1175,136 @@ async function handleSave() {
   justify-content: center;
   height: 400px;
   gap: 12px;
+}
+
+/* ── Resize warning overlay ── */
+.resize-warning-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 15, 20, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.resize-warning-card {
+  width: min(420px, 100%);
+  text-align: center;
+  padding: 32px 28px;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 12px;
+  background: var(--p-content-background);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.18);
+}
+
+.resize-warning-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.resize-warning-window {
+  font-size: 2.5rem;
+  color: var(--p-primary-color);
+}
+
+.resize-warning-arrow {
+  font-size: 1.375rem;
+  color: var(--p-primary-color);
+  opacity: 0.45;
+  animation-duration: 1.6s;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+
+.resize-warning-arrow--left {
+  animation-name: resize-warning-pulse-left;
+}
+
+.resize-warning-arrow--right {
+  animation-name: resize-warning-pulse-right;
+  animation-delay: 0.1s;
+}
+
+@keyframes resize-warning-pulse-left {
+  0%, 100% { transform: translateX(0); opacity: 0.4; }
+  50% { transform: translateX(-6px); opacity: 1; }
+}
+
+@keyframes resize-warning-pulse-right {
+  0%, 100% { transform: translateX(0); opacity: 0.4; }
+  50% { transform: translateX(6px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resize-warning-arrow {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+.resize-warning-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.resize-warning-copy {
+  color: var(--p-text-muted-color);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0 0 22px;
+}
+
+.resize-warning-meter-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--p-content-hover-background, rgba(0, 0, 0, 0.08));
+  overflow: hidden;
+}
+
+.resize-warning-meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--p-primary-color);
+  transition: width 0.15s ease-out;
+}
+
+.resize-warning-meter-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--p-text-muted-color);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Transition: overlay fades, card fades + scales in slightly */
+.resize-warning-enter-active,
+.resize-warning-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.resize-warning-enter-from,
+.resize-warning-leave-to {
+  opacity: 0;
+}
+
+.resize-warning-enter-active .resize-warning-card,
+.resize-warning-leave-active .resize-warning-card {
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.resize-warning-enter-from .resize-warning-card,
+.resize-warning-leave-to .resize-warning-card {
+  transform: scale(0.96) translateY(6px);
+  opacity: 0;
 }
 
 @media (max-width: 900px) {
