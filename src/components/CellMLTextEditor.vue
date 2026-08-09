@@ -170,12 +170,14 @@ const applyFitScale = () => {
   if (!content) return
 
   const containerWidth = container.clientWidth - 30
-  if (containerWidth <= 0) return
+  const containerHeight = container.clientHeight - 10
+  if (containerWidth <= 0 || containerHeight <=0) return
 
   const contentWidth = content.scrollWidth
+  const contentHeight = content.scrollHeight
 
-  if (contentWidth > containerWidth) {
-    const rawScale = containerWidth / contentWidth
+  if (contentHeight > containerHeight || contentWidth > containerWidth) {
+    const rawScale = Math.min(containerWidth / contentWidth, containerHeight / contentHeight)
     const scale = Math.max(rawScale * 0.95, MIN_FIT_SCALE)
     content.style.transform = `scale(${scale})`
     content.style.transformOrigin = 'center center'
