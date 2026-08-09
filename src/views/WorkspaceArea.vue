@@ -293,18 +293,6 @@
     @confirm="onInstanceEditConfirm"
   />
 
-  const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  id: { type: String, required: true },
-  initialName: { type: String, default: '' },
-  mathRef: { type: String, required: true },
-  variables: { type: Array, default: () => [] },
-  initialPorts: { type: Array, default: () => [] },
-  existingNames: { type: Array, default: () => [] },
-  defaultTab: { type: String, default: 'parameters' }, // 'parameters' or 'ports'
-})
-
-
   <PortEditorDialog
     v-model="portEditorDialogVisible"
     :id="currentEditingNode?.id"

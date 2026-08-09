@@ -681,7 +681,7 @@ async function handleSave() {
   })
 
   // Emit consolidated payload to parent workspace
-  emit('save', {
+  emit('confirm', {
     id: props.id,
     name: editableName.value,
     mathRef: newMathRef,
