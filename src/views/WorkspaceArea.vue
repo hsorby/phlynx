@@ -15,6 +15,7 @@
             icon="pi pi-folder-open"
             size="small"
             variant="text"
+            v-tooltip.bottom="{ value: 'Load workspace', showDelay: 300 }"
             @click="$refs.workspaceFileInput.click()"
           />
 
@@ -22,6 +23,7 @@
             icon="pi pi-save"
             size="small"
             variant="text"
+            v-tooltip.bottom="{ value: 'Save workspace', showDelay: 300 }"
             @click="handleSaveWorkspace"
             style="margin-left: 10px"
             :disabled="!somethingAvailable"
@@ -34,6 +36,7 @@
             size="small"
             variant="text"
             severity="warn"
+            v-tooltip.bottom="{ value: 'Clean up workspace', showDelay: 300 }"
             @click="handleAutoLayout"
             :disabled="!somethingAvailable"
           />
@@ -43,6 +46,7 @@
             size="small"
             variant="text"
             severity="danger"
+            v-tooltip.bottom="{ value: 'Clear workspace', showDelay: 300 }"
             @click="handleClearWorkspace"
             style="margin-left: 10px"
             :disabled="!somethingAvailable"
@@ -56,6 +60,7 @@
             size="small"
             variant="text"
             severity="secondary"
+            v-tooltip.bottom="{ value: 'Undo', showDelay: 300 }"
             @click="handleUndo"
             :disabled="!historyStore.canUndo"
           />
@@ -66,6 +71,7 @@
             size="small"
             variant="text"
             severity="secondary"
+            v-tooltip.bottom="{ value: 'Redo', showDelay: 300 }"
             @click="handleRedo"
             style="margin-left: 10px"
             :disabled="!historyStore.canRedo"
@@ -73,19 +79,19 @@
 
           <Divider layout="vertical" style="margin: 0 15px" />
 
-          <Button iconOnly variant="text" severity="secondary">
+          <Button iconOnly variant="text" severity="secondary" v-tooltip.bottom="{ value: 'Add left handle', showDelay: 300 }" :disabled="!somethingSelected">
             <AddHandleLeft/>
           </Button>
 
-          <Button iconOnly style="margin-left: 10px" variant="text" severity="secondary">
+          <Button iconOnly style="margin-left: 10px" variant="text" severity="secondary" v-tooltip.bottom="{ value: 'Add top handle', showDelay: 300 }" :disabled="!somethingSelected">
             <AddHandleTop/>
           </Button>
 
-          <Button iconOnly style="margin-left: 10px" variant="text" severity="secondary">
+          <Button iconOnly style="margin-left: 10px" variant="text" severity="secondary" v-tooltip.bottom="{ value: 'Add right handle', showDelay: 300 }" :disabled="!somethingSelected">
             <AddHandleRight/>
           </Button>
 
-          <Button iconOnly style="margin-left: 10px" variant="text" severity="secondary">
+          <Button iconOnly style="margin-left: 10px" variant="text" severity="secondary" v-tooltip.bottom="{ value: 'Add bottom handle', showDelay: 300 }" :disabled="!somethingSelected">
             <AddHandleBottom/>
           </Button>
 
@@ -804,6 +810,7 @@ const currentMatchIndex = ref(0)
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
+const somethingSelected = computed(() => getSelectedNodes.value.length > 0)
 
 const importOptions = computed(() => [
   {
