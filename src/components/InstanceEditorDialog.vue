@@ -703,6 +703,16 @@ async function handleCancel() {
   emit('update:modelValue', false)
 }
 
+async function handleMathOverwrite() {
+  return confirm({
+    header: 'Overwrite Math?',
+    message: 'You are about to overwrite an existing math definition. Are you sure you want to proceed?',
+    severity: 'warning',
+    acceptLabel: 'Proceed',
+    rejectLabel: 'Cancel',
+  })
+}
+
 // ── Save Processing ──────────────────────────────────────────────────────────
 async function handleSave() {
   // 1. Validate Instance Name
@@ -754,13 +764,9 @@ async function handleSave() {
     const newComponentName = componentNames[0].trim()
     newMathRef = `${componentFile.value}:${newComponentName}`
 
-    if (newMathRef !== props.mathRef && store.availableMath.has(newMathRef)) {
-      await alert({
-        header: 'Name Conflict',
-        message: 'Name clash detected. Please rename the component in the editor before saving.',
-        severity: 'error',
-      })
-      return
+    if (newMathRef === props.mathRef && store.availableMath.has(newMathRef)) {
+      const overwrite = await handleMathOverwrite()
+      if (!overwrite) return
     }
     store.addMath(newMathRef, currentModel.value)
   }
