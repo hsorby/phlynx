@@ -824,6 +824,7 @@ async function handleSave() {
   gap: 0;
   flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
   max-height: 100%;
   max-width: 100%;
   transition: filter 0.2s ease, opacity 0.2s ease;

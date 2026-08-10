@@ -1787,11 +1787,16 @@ function recomputeEdgeCouplings(nodeId) {
 }
 
 async function onInstanceEditConfirm(updatedData) {
-  const { id } = currentEditingNode.value
-  if (!id) return
+  const saveData = {
+    id: updatedData.id,
+    updateAll: updatedData.updateAll,
+    mathRef: updatedData.mathRef,
+    math: updatedData.math,
+    siblings: updatedData.siblings
+  }
 
-  updateNodeData(id, updatedData)
-  recomputeEdgeCouplings(id)
+  updateNodeData(updatedData.id, {variables: updatedData.variables, ports: updatedData.ports})
+  await handleCellMLSave(saveData)
 }
 
 async function onPortEditConfirm(updatedData) {
