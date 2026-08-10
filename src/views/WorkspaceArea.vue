@@ -79,19 +79,50 @@
 
           <Divider layout="vertical" style="margin: 0 15px" />
 
-          <Button iconOnly variant="text" severity="secondary" v-tooltip.bottom="{ value: 'Add left handle', showDelay: 300 }" :disabled="!somethingSelected">
+          <Button
+            iconOnly
+            variant="text"
+            severity="secondary"
+            v-tooltip.bottom="{ value: 'Add left handle', showDelay: 300 }"
+            :disabled="!somethingSelected"
+            @click="addHandle('left')"
+          >
             <AddHandleLeft/>
           </Button>
 
-          <Button iconOnly style="margin-left: 10px" variant="text" severity="secondary" v-tooltip.bottom="{ value: 'Add top handle', showDelay: 300 }" :disabled="!somethingSelected">
+          <Button
+            iconOnly
+            style="margin-left: 10px"
+            variant="text"
+            severity="secondary"
+            v-tooltip.bottom="{ value: 'Add top handle', showDelay: 300 }"
+            :disabled="!somethingSelected"
+            @click="addHandle('top')"
+          >
             <AddHandleTop/>
           </Button>
 
-          <Button iconOnly style="margin-left: 10px" variant="text" severity="secondary" v-tooltip.bottom="{ value: 'Add right handle', showDelay: 300 }" :disabled="!somethingSelected">
+          <Button
+            iconOnly
+            style="margin-left: 10px"
+            variant="text"
+            severity="secondary"
+            v-tooltip.bottom="{ value: 'Add right handle', showDelay: 300 }"
+            :disabled="!somethingSelected"
+            @click="addHandle('right')"
+          >
             <AddHandleRight/>
           </Button>
 
-          <Button iconOnly style="margin-left: 10px" variant="text" severity="secondary" v-tooltip.bottom="{ value: 'Add bottom handle', showDelay: 300 }" :disabled="!somethingSelected">
+          <Button
+            iconOnly
+            style="margin-left: 10px"
+            variant="text"
+            severity="secondary"
+            v-tooltip.bottom="{ value: 'Add bottom handle', showDelay: 300 }"
+            :disabled="!somethingSelected"
+            @click="addHandle('bottom')"
+          >
             <AddHandleBottom/>
           </Button>
 
@@ -428,7 +459,6 @@ import { createCellMLDataFragment } from '../services/cellml'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { migrateWorkspace } from '../services/workspaceMigrator'
 import { notify } from '../utils/notify'
-import { resolvePortCouplings } from '../utils/edges'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
@@ -455,7 +485,7 @@ import {
   DEFAULT_PROJECT_TYPE,
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
-import { getId as getNextEdgeId } from '../utils/edges'
+import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
 import { getImportConfig, parseParametersFile } from '../utils/import'
 import { detachReactivity } from '../utils/reactivity'
 import {
@@ -474,7 +504,7 @@ import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
 import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
 import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
 import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
-import { getHandleId, getHandleUidFromHandleId } from '../utils/handles'
+import { getHandleId, getHandleUidFromHandleId, findMostCentralGhostHandle } from '../utils/handles'
 
 const workspaceFileInput = ref(null)
 
@@ -1164,6 +1194,14 @@ function updateHelperLines(changes, nodes) {
     helperLineHorizontal.value = helperLines.horizontal
     helperLineVertical.value = helperLines.vertical
     alignment.value = helperLines.alignment
+  }
+}
+
+const addHandle = async (side) => {
+  for (const node of getSelectedNodes.value) {
+    const mostCentralGhost = findMostCentralGhostHandle(side, node.data.handles)
+    if (!mostCentralGhost) return
+    await activateHandle(node.id, mostCentralGhost.uid)
   }
 }
 
