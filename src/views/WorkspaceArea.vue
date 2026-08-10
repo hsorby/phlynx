@@ -342,7 +342,7 @@
     v-model="instanceEditorDialogVisible"
     :id="currentEditingNode?.id"
     :initial-name="currentEditingNode?.name"
-    :math-ref="currentEditingNode?.mathRef || ''"
+    :math-ref="currentEditingNode?.mathRef"
     :variables="currentEditingNode?.variables"
     :initial-ports="currentEditingNode?.ports"
     :existing-names="allNodeNames"

@@ -584,9 +584,9 @@ const siblings = computed(() => {
 
 const siblingCount = computed(() => siblings.value.length)
 
-const isDirty = computed(() => {
-  return !areModelsEquivalent(originalModel.value, currentModel.value)
-})
+const isDirty = computed(() =>
+  !areModelsEquivalent(originalModel.value, currentModel.value)
+)
 
 const filteredParameterRows = computed(() => {
   if (!searchQuery.value.trim()) return parameterRows.value
@@ -645,6 +645,7 @@ function handleCodeUpdate(newCode) {
 }
 
 function handleEditorReady(canonicalMath) {
+  void isDirty.value
   currentModel.value = canonicalMath
   originalModel.value = canonicalMath
 }
