@@ -12,14 +12,14 @@
             @change="handleLoadWorkspace"
           />
           <Button
-            label="Load Workspace"
+            icon="pi pi-folder-open"
             size="small"
             variant="text"
             @click="$refs.workspaceFileInput.click()"
           />
 
           <Button
-            label="Save Workspace"
+            icon="pi pi-save"
             size="small"
             variant="text"
             @click="handleSaveWorkspace"
@@ -30,7 +30,7 @@
           <Divider layout="vertical" style="margin: 0 15px" />
 
           <Button
-            label="Auto Layout"
+            icon="pi pi-sparkles"
             size="small"
             variant="text"
             severity="warn"
@@ -39,7 +39,7 @@
           />
 
           <Button
-            label="Clear"
+            icon="pi pi-eraser"
             size="small"
             variant="text"
             severity="danger"
