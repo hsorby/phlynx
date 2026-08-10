@@ -73,6 +73,24 @@
 
           <Divider layout="vertical" style="margin: 0 15px" />
 
+          <Button iconOnly variant="text" severity="secondary">
+            <AddHandleLeft/>
+          </Button>
+
+          <Button iconOnly style="margin-left: 10px" variant="text" severity="secondary">
+            <AddHandleTop/>
+          </Button>
+
+          <Button iconOnly style="margin-left: 10px" variant="text" severity="secondary">
+            <AddHandleRight/>
+          </Button>
+
+          <Button iconOnly style="margin-left: 10px" variant="text" severity="secondary">
+            <AddHandleBottom/>
+          </Button>
+
+          <Divider layout="vertical" style="margin: 0 15px" />
+
           <Button
             label="Macro Build"
             size="small"
@@ -446,6 +464,10 @@ import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
 import PortEditorDialog from '../components/PortEditorDialog.vue'
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
+import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
+import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
+import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
+import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
 import { getHandleId, getHandleUidFromHandleId } from '../utils/handles'
 
 const workspaceFileInput = ref(null)
