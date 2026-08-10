@@ -2,13 +2,24 @@
   <Dialog
     :visible="modelValue"
     modal
-    :header="dialogTitle"
     :dismissableMask="!loading"
+    :draggable="false"
     :style="{ width: '95vw', maxWidth: '1680px', height: '90vh', maxHeight: '960px' }"
-    :breakpoints="{ '1200px': '95vw', '576px': '100vw' }"
     class="module-editor-dialog"
     @update:visible="onDialogVisibleChange"
   >
+    <template #header>
+      <div class="custom-dialog-header">
+        <span class="header-prefix">Editing: </span>
+        <InputText 
+          v-model="editableName" 
+          placeholder="Enter instance name..." 
+          size="small"
+          class="header-input"
+        />
+        <span class="header-suffix">({{ componentName }} - {{ componentFile }})</span>
+      </div>
+    </template>
     <div v-if="loading" class="loading-overlay">
       <ProgressSpinner style="width: 44px; height: 44px" strokeWidth="4" />
       <span>Loading instance data...</span>
@@ -285,10 +296,7 @@
       </div>
     </div>
 
-    <!-- OVERLAY: shown when the browser window is too narrow. The editor grid above
-         stays mounted the whole time (CodeMirror + DataTables are expensive to
-         tear down and rebuild), so this is purely a CSS-driven cover, not a
-         v-if swap. -->
+    <!-- OVERLAY:  -->
     <Transition name="resize-warning">
       <div v-if="isScreenTooSmall" class="resize-warning-overlay">
         <div class="resize-warning-card">
@@ -424,10 +432,10 @@ const editablePorts = ref([])
 
 // ── Split / Collapse State ──────────────────────────────────────────────────
 const SPLIT_STORAGE_KEY = 'instanceEditorDialog.leftPanePercent'
-const DEFAULT_LEFT_PERCENT = 48
+const DEFAULT_LEFT_PERCENT = 55
 const MIN_LEFT_PERCENT = 32
 const MAX_LEFT_PERCENT = 60
-const MIN_REQUIRED_WIDTH = 1200;
+const MIN_REQUIRED_WIDTH = 1000;
 
 function loadStoredSplit() {
   try {
@@ -619,8 +627,8 @@ watch(
       try {
         if (props.mathRef) {
           const math = store.availableMath.get(props.mathRef)
-          currentModel.value = math || ''
-          originalModel.value = math || ''
+          currentModel.value = math
+          originalModel.value = math
         }
       } catch (e) {
         console.error('Failed to load CellML source', e)
@@ -796,6 +804,31 @@ async function handleSave() {
 </script>
 
 <style scoped>
+.custom-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  width: 100%;
+}
+
+.header-prefix {
+  color: var(--p-text-color);
+}
+
+.header-input {
+  width: 300px;
+  font-size: 1rem;
+  font-weight: normal;
+}
+
+.header-suffix {
+  color: var(--p-text-muted-color);
+  font-size: 0.9rem;
+  font-weight: normal;
+}
+
 .module-editor-dialog {
   display: flex;
   flex-direction: column;

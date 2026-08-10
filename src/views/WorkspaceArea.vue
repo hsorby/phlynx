@@ -1795,7 +1795,7 @@ async function onInstanceEditConfirm(updatedData) {
     siblings: updatedData.siblings
   }
 
-  updateNodeData(updatedData.id, {variables: updatedData.variables, ports: updatedData.ports})
+  updateNodeData(updatedData.id, {name: updatedData.name, variables: updatedData.variables, ports: updatedData.ports})
   await handleCellMLSave(saveData)
 }
 
