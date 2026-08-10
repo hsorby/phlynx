@@ -232,9 +232,12 @@ const updatePreview = async () => {
 }
 
 const handleKeyDown = (event) => {
-  if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
     event.preventDefault()
     handleSave()
+  }
+  if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+    event.preventDefault()
   }
 }
 
