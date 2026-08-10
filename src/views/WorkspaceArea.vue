@@ -12,16 +12,18 @@
             @change="handleLoadWorkspace"
           />
           <Button
-            label="Load Workspace"
+            icon="pi pi-folder-open"
             size="small"
             variant="text"
+            v-tooltip.bottom="{ value: 'Load workspace', showDelay: 300 }"
             @click="$refs.workspaceFileInput.click()"
           />
 
           <Button
-            label="Save Workspace"
+            icon="pi pi-save"
             size="small"
             variant="text"
+            v-tooltip.bottom="{ value: 'Save workspace', showDelay: 300 }"
             @click="handleSaveWorkspace"
             style="margin-left: 10px"
             :disabled="!somethingAvailable"
@@ -30,19 +32,21 @@
           <Divider layout="vertical" style="margin: 0 15px" />
 
           <Button
-            label="Auto Layout"
+            icon="pi pi-sparkles"
             size="small"
             variant="text"
             severity="warn"
+            v-tooltip.bottom="{ value: 'Clean up workspace', showDelay: 300 }"
             @click="handleAutoLayout"
             :disabled="!somethingAvailable"
           />
 
           <Button
-            label="Clear"
+            icon="pi pi-eraser"
             size="small"
             variant="text"
             severity="danger"
+            v-tooltip.bottom="{ value: 'Clear workspace', showDelay: 300 }"
             @click="handleClearWorkspace"
             style="margin-left: 10px"
             :disabled="!somethingAvailable"
@@ -51,23 +55,76 @@
           <Divider layout="vertical" style="margin: 0 15px" />
 
           <Button
-            label="Undo"
+            iconOnly
+            icon="pi pi-undo"
             size="small"
             variant="text"
             severity="secondary"
+            v-tooltip.bottom="{ value: 'Undo', showDelay: 300 }"
             @click="handleUndo"
             :disabled="!historyStore.canUndo"
           />
 
           <Button
-            label="Redo"
+            iconOnly
+            icon="pi pi-refresh"
             size="small"
             variant="text"
             severity="secondary"
+            v-tooltip.bottom="{ value: 'Redo', showDelay: 300 }"
             @click="handleRedo"
             style="margin-left: 10px"
             :disabled="!historyStore.canRedo"
           />
+
+          <Divider layout="vertical" style="margin: 0 15px" />
+
+          <Button
+            iconOnly
+            variant="text"
+            severity="secondary"
+            v-tooltip.bottom="{ value: 'Add left handle', showDelay: 300 }"
+            :disabled="!somethingSelected"
+            @click="addHandle('left')"
+          >
+            <AddHandleLeft/>
+          </Button>
+
+          <Button
+            iconOnly
+            style="margin-left: 10px"
+            variant="text"
+            severity="secondary"
+            v-tooltip.bottom="{ value: 'Add top handle', showDelay: 300 }"
+            :disabled="!somethingSelected"
+            @click="addHandle('top')"
+          >
+            <AddHandleTop/>
+          </Button>
+
+          <Button
+            iconOnly
+            style="margin-left: 10px"
+            variant="text"
+            severity="secondary"
+            v-tooltip.bottom="{ value: 'Add right handle', showDelay: 300 }"
+            :disabled="!somethingSelected"
+            @click="addHandle('right')"
+          >
+            <AddHandleRight/>
+          </Button>
+
+          <Button
+            iconOnly
+            style="margin-left: 10px"
+            variant="text"
+            severity="secondary"
+            v-tooltip.bottom="{ value: 'Add bottom handle', showDelay: 300 }"
+            :disabled="!somethingSelected"
+            @click="addHandle('bottom')"
+          >
+            <AddHandleBottom/>
+          </Button>
 
           <Divider layout="vertical" style="margin: 0 15px" />
 
@@ -375,7 +432,7 @@ export default {
 
 <script setup>
 import { computed, h, inject, markRaw, nextTick, onMounted, onUnmounted, ref, watch, watchPostEffect } from 'vue'
-import { useVueFlow, VueFlow } from '@vue-flow/core'
+import { connectionExists, useVueFlow, VueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
 import SplitButton from 'primevue/splitbutton'
@@ -392,6 +449,7 @@ import { MiniMap } from '@vue-flow/minimap'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import useDragAndDrop from '../composables/useDnD'
+import { useHandleManagement } from '../composables/useHandleManagement'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
 import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
@@ -414,7 +472,6 @@ import { createCellMLDataFragment } from '../services/cellml'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { migrateWorkspace } from '../services/workspaceMigrator'
 import { notify } from '../utils/notify'
-import { resolvePortCouplings } from '../utils/edges'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
@@ -441,7 +498,7 @@ import {
   DEFAULT_PROJECT_TYPE,
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
-import { getId as getNextEdgeId } from '../utils/edges'
+import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
 import { getImportConfig, parseParametersFile } from '../utils/import'
 import { detachReactivity } from '../utils/reactivity'
 import {
@@ -457,6 +514,11 @@ import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
 import PortEditorDialog from '../components/PortEditorDialog.vue'
 import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
+import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
+import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
+import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
+import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
+import { getHandleId, getHandleUidFromHandleId, findMostCentralGhostHandle } from '../utils/handles'
 
 const workspaceFileInput = ref(null)
 
@@ -477,6 +539,7 @@ const {
   getSelectedEdges,
   nodes,
   onConnect,
+  onConnectEnd,
   removeEdges,
   removeNodes,
   screenToFlowCoordinate,
@@ -498,6 +561,17 @@ const {
   isDragOver,
   createInstanceNode,
 } = useDragAndDrop(pendingHistoryNodes)
+
+const {
+  activateHandle,
+  addHandle: addHandleToNode,
+  confirmActivation,
+  revertPendingGhostIfUnused,
+  revertHandlesForEdge,
+  reactivateEdgeHandles,
+  revertHandleIfUnused,
+} =
+  useHandleManagement()
 
 const dialogVisible = computed(() => {
   return (
@@ -784,6 +858,7 @@ const currentMatchIndex = ref(0)
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
+const somethingSelected = computed(() => getSelectedNodes.value.length > 0)
 
 const importOptions = computed(() => [
   {
@@ -866,12 +941,73 @@ const currentExportMode = computed(() => {
   return found || exportOptions.value[0]
 })
 
-onConnect((connection) => {
+onConnectEnd(() => {
+  revertPendingGhostIfUnused()
+})
+
+onConnect(async (connection) => {
   const sourceNode = findNode(connection.source)
   const targetNode = findNode(connection.target)
 
   if (!sourceNode || !targetNode) return
   if (sourceNode === targetNode) return
+
+  const duplicate = edges.value.find(
+    (e) => e.source === connection.source && e.target === connection.target
+  )
+
+  const duplicateSnapshot = duplicate ? detachReactivity(duplicate) : null
+
+  const sourceHandleUid = connection.sourceHandle
+    ? getHandleUidFromHandleId(connection.sourceHandle)
+    : null
+  const targetHandleUid = connection.targetHandle
+    ? getHandleUidFromHandleId(connection.targetHandle)
+    : null
+
+  confirmActivation()
+
+  if (sourceHandleUid) {
+    activateHandle(connection.source, sourceHandleUid, { trackHistory: false })
+  }
+  if (targetHandleUid) {
+    activateHandle(connection.target, targetHandleUid, { trackHistory: false })
+  }
+
+  if (duplicate) {
+    const pendingEdge = {
+      ...connection,
+      id: `pending--${connection.source}--${connection.target}`,
+      style: { strokeDasharray: '8 8', opacity: 0.4 }, // visually mark "unconfirmed"
+    }
+
+    // Prevents addition to history store.
+    suppressedEdgeIds.add(pendingEdge.id)
+    addEdges(pendingEdge)
+
+    const shouldReplace = await confirm({
+      header: 'Connection already exists',
+      message:
+        'A connection already exists between these instances. Do you wish to replace it?\n\n' +
+        'If you select Cancel, the new connection will be discarded and the existing connection will remain.',
+      severity: 'warning',
+      acceptLabel: 'Replace',
+      rejectLabel: 'Cancel',
+    })
+
+    removeEdges(pendingEdge.id)
+    suppressedEdgeIds.delete(pendingEdge.id)
+
+    if (!shouldReplace) {
+      if (sourceHandleUid) revertHandleIfUnused(connection.source, sourceHandleUid, { trackHistory: false })
+      if (targetHandleUid) revertHandleIfUnused(connection.target, targetHandleUid, { trackHistory: false })
+      return
+    }
+
+    suppressedEdgeIds.add(duplicate.id)
+    removeEdges(duplicate.id)
+    revertHandlesForEdge(duplicateSnapshot)
+  }
 
   // Derive ordinal indices from the existing edge graph:
   //   sourceIndex = how many edges already leave from this source node
@@ -902,7 +1038,33 @@ onConnect((connection) => {
     },
   }
 
-  addEdges(newEdge)
+  if (duplicateSnapshot) {
+    suppressedEdgeIds.add(newEdge.id)
+    addEdges(newEdge)
+    suppressedEdgeIds.delete(duplicateSnapshot.id)
+    suppressedEdgeIds.delete(newEdge.id)
+
+    // A single undo step for the whole replace: undo brings the old edge
+    // (and its handle activation) back and removes the new one; redo does
+    // the reverse. No pending edge involved on either side.
+    historyStore.addCommand({
+      type: 'replace-edge',
+      undo: () => {
+        removeEdges(newEdge.id)
+        revertHandlesForEdge(newEdge, [newEdge.id], { trackHistory: false })
+        addEdges(duplicateSnapshot)
+        reactivateEdgeHandles(duplicateSnapshot, { trackHistory: false })
+      },
+      redo: () => {
+        removeEdges(duplicateSnapshot.id)
+        revertHandlesForEdge(duplicateSnapshot, [duplicateSnapshot.id], { trackHistory: false })
+        addEdges(newEdge)
+        reactivateEdgeHandles(newEdge, { trackHistory: false })
+      },
+    })
+  } else {
+    addEdges(newEdge)
+  }
 })
 
 const createSelectCommand = (changes, findFn) => {
@@ -1050,6 +1212,12 @@ function updateHelperLines(changes, nodes) {
     helperLineHorizontal.value = helperLines.horizontal
     helperLineVertical.value = helperLines.vertical
     alignment.value = helperLines.alignment
+  }
+}
+
+const addHandle = async (side) => {
+  for (const node of getSelectedNodes.value) {
+    await addHandleToNode(node.id, side)
   }
 }
 
@@ -1235,6 +1403,8 @@ const onNodeChange = (changes) => {
   applyNodeChanges(changes)
 }
 
+const suppressedEdgeIds = new Set()
+
 const onEdgeChange = (changes) => {
   if (historyStore.isUndoRedoing) {
     // If we are currently undoing/redoing, bypass history tracking
@@ -1247,10 +1417,14 @@ const onEdgeChange = (changes) => {
   changes.forEach((c) => {
     if (c.type === 'remove') {
       indexRemoveEdge(c)
-      removeChanges.push({ edge: snapshotEdge(c) })
+      if (!suppressedEdgeIds.has(c.id)) {
+        removeChanges.push({ edge: snapshotEdge(c) })
+      }
     } else if (c.type === 'add') {
       indexAddEdge(c.item)
-      addChanges.push({ edge: snapshotEdge(c) })
+      if (!suppressedEdgeIds.has(c.item.id)) {
+        addChanges.push({ edge: snapshotEdge(c) })
+      }
     } else if (c.type === 'select' && undoRedoSelection) {
       const edge = findEdge(c.id)
       selectChanges.push({ id: c.id, from: edge.selected, to: c.selected })
@@ -1261,17 +1435,39 @@ const onEdgeChange = (changes) => {
     const edgesToRestore = addChanges.map((change) => change.edge)
     const idsToRemove = addChanges.map((change) => change.edge.id)
     historyStore.addCommand({
-      undo: () => removeEdges(idsToRemove),
-      redo: () => addEdges(edgesToRestore),
+      undo: () => {
+        removeEdges(idsToRemove)
+        edgesToRestore.forEach((edge) =>
+          revertHandlesForEdge(edge, idsToRemove, { trackHistory: false })
+        )
+      },
+      redo: () => {
+        addEdges(edgesToRestore)
+        edgesToRestore.forEach((edge) => reactivateEdgeHandles(edge, { trackHistory: false }))
+      },
     })
   }
 
   if (removeChanges.length) {
     const edgesToRestore = removeChanges.map((change) => change.edge)
     const idsToRemove = removeChanges.map((change) => change.edge.id)
+
+    // Ghost out any handle that no longer has an edge attached to it. 
+    // excludeEdgeIds is passed because edges.value hasn't actually 
+    // dropped these ids yet at this point.
+    edgesToRestore.forEach((edge) => revertHandlesForEdge(edge, idsToRemove))
+
     historyStore.addCommand({
-      undo: () => addEdges(edgesToRestore),
-      redo: () => removeEdges(idsToRemove),
+      undo: () => {
+        addEdges(edgesToRestore)
+        edgesToRestore.forEach((edge) => reactivateEdgeHandles(edge, { trackHistory: false }))
+      },
+      redo: () => {
+        removeEdges(idsToRemove)
+        edgesToRestore.forEach((edge) =>
+          revertHandlesForEdge(edge, idsToRemove, { trackHistory: false })
+        )
+      },
     })
   }
 
