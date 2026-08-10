@@ -97,14 +97,18 @@
         :id="getHandleId(handle)"
         :ref="'handle_' + handle.side + '_' + handle.uid"
         :position="handlePosition(handle.side)"
-        class="handle"
+        :class="['handle',
+        `handle--${handle.variant|| 'default'}`,
+        { 'handle--inert': handle.variant === HANDLE_VARIANT.GHOST && selected && isCornerHandle(handle, data.handles)},
+        ]"
         :style="getHandleStyle(handle, data.handles)"
         v-tooltip.bottom="{ value: handle.name, showDelay: 1000 }"
         @mouseenter="onHandleEnter(handle.uid)"
         @mouseleave="onHandleLeave"
+        @pointerdown="!(selected && isCornerHandle(handle, data.handles)) && handle.variant === HANDLE_VARIANT.GHOST && beginGhostActivation(props.id, handle.uid)"
       >
         <Button
-          v-show="hoveredHandleUid === handle.uid"
+          v-show="hoveredHandleUid === handle.uid && handle.variant !== HANDLE_VARIANT.GHOST"
           :class="['delete-handle-popover-btn', 'popover-' + handle.side]"
           icon="pi pi-trash"
           severity="danger"
@@ -131,16 +135,18 @@ import Menu from 'primevue/menu'
 import CellMLIcon from './icons/CellMLIcon.vue'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
-import { getHandleId, getHandleStyle, handlePosition } from '../utils/handles'
+import { getHandleId, getHandleStyle, handlePosition, findMostCentralGhostHandle, isCornerHandle } from '../utils/handles'
 import { sanitiseName } from '../utils/nodes'
 import { notify } from '../utils/notify'
 import { isEditableVariableType, isEmpty } from '../utils/variables'
 import { detachReactivity } from '../utils/reactivity'
-import { TARGET_HANDLE_TYPE, SOURCE_HANDLE_TYPE } from '../utils/constants'
+import { TARGET_HANDLE_TYPE, SOURCE_HANDLE_TYPE, HANDLE_VARIANT } from '../utils/constants'
+import { useHandleManagement } from '../composables/useHandleManagement'
 
 import '../assets/vueflownode.css'
 
 const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } = useVueFlow()
+const { beginGhostActivation, activateHandle } = useHandleManagement()
 const historyStore = useFlowHistoryStore()
 const libraryStore = useLibraryStore()
 
@@ -225,9 +231,11 @@ function handleSetDomainType(newType) {
 }
 
 const domainMenuRef = ref(null)
+
 function toggleDomainMenu(event) {
   domainMenuRef.value?.toggle(event)
 }
+
 const domainTypeMenuItems = [
   { label: 'Membrane', command: () => handleSetDomainType('membrane') },
   { label: 'Process', command: () => handleSetDomainType('process') },
@@ -238,9 +246,11 @@ const domainTypeMenuItems = [
 ]
 
 const portMenuRef = ref(null)
+
 function togglePortMenu(event) {
   portMenuRef.value?.toggle(event)
 }
+
 const portMenuItems = [
   { label: 'Left', command: () => addHandle({ side: 'left' }) },
   { label: 'Right', command: () => addHandle({ side: 'right' }) },
@@ -283,7 +293,7 @@ function onHandleLeave() {
 async function removeHandle(handleIdToRemove) {
   const oldHandles = detachReactivity(props.data.handles)
 
-  const handle = oldHandles.find((p) => p.uid === handleIdToRemove)
+  const handle = oldHandles.find((h) => h.uid === handleIdToRemove)
   if (!handle) return
 
   const handleId = getHandleId(handle)
@@ -299,7 +309,9 @@ async function removeHandle(handleIdToRemove) {
   const edgesSnapshot = connectedEdges.map((edge) => detachReactivity(edge))
 
   // Define New Handles (for Redo)
-  const newHandles = props.data.handles.filter((h) => h.uid !== handleIdToRemove)
+  const newHandles = props.data.handles.map(
+    (h) => h.uid === handleIdToRemove ? { ...h, variant: HANDLE_VARIANT.GHOST } : h
+  )
 
   // Add Composite Command to History
   historyStore.executeAndAddCommand({
@@ -326,26 +338,13 @@ async function removeHandle(handleIdToRemove) {
 }
 
 const addHandle = async (handleToAdd) => {
-  const oldHandles = [...props.data.handles]
+  const mostCentralGhost = findMostCentralGhostHandle(handleToAdd.side, props.data.handles)
 
-  const newHandle = {
-    ...handleToAdd,
-    uid: crypto.randomUUID(),
+  if (!mostCentralGhost) {
+    return
   }
 
-  const newHandles = [...props.data.handles, newHandle]
-
-  await applyHandles(newHandles)
-
-  historyStore.addCommand({
-    type: 'add-handle',
-    undo: async () => {
-      applyHandles(oldHandles)
-    },
-    redo: async () => {
-      applyHandles(newHandles)
-    },
-  })
+  await activateHandle(props.id, mostCentralGhost.uid)
 }
 
 const isEditing = ref(false)
@@ -408,10 +407,34 @@ function openContextMenu(event) {
 <style lang="scss" scoped>
 @import '../assets/vueflowhandle.css';
 
-.handle {
-  width: 14px !important;
-  height: 14px !important;
-  border-radius: 50% !important; 
+.vue-flow__handle.handle--default {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--p-text-color);
+  opacity: 1;
+}
+
+.vue-flow__handle.handle--ghost {
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  opacity: 0;
+  pointer-events: auto;
+}
+
+.vue-flow__handle.handle--ghost:hover,
+.vue-flow__handle.handle--ghost.valid {
+  background-color: rgba(34, 197, 94, 0.15);
+  border-color: #22c55e;  
+  border-style: solid;
+  opacity: 1;
+}
+
+.vue-flow__handle.handle--ghost.handle--inert {
+  pointer-events: none;
 }
 
 .instance-name {
