@@ -362,7 +362,7 @@ export default {
 
 <script setup>
 import { computed, h, inject, markRaw, nextTick, onMounted, onUnmounted, ref, watch, watchPostEffect } from 'vue'
-import { useVueFlow, VueFlow } from '@vue-flow/core'
+import { connectionExists, useVueFlow, VueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
 import SplitButton from 'primevue/splitbutton'
@@ -379,6 +379,7 @@ import { MiniMap } from '@vue-flow/minimap'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import useDragAndDrop from '../composables/useDnD'
+import { useHandleManagement } from '../composables/useHandleManagement'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
 import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
@@ -443,6 +444,7 @@ import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
 import PortEditorDialog from '../components/PortEditorDialog.vue'
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
+import { getHandleId, getHandleUidFromHandleId } from '../utils/handles'
 
 const workspaceFileInput = ref(null)
 
@@ -463,6 +465,7 @@ const {
   getSelectedEdges,
   nodes,
   onConnect,
+  onConnectEnd,
   removeEdges,
   removeNodes,
   screenToFlowCoordinate,
@@ -484,6 +487,16 @@ const {
   isDragOver,
   createInstanceNode,
 } = useDragAndDrop(pendingHistoryNodes)
+
+const {
+  activateHandle,
+  confirmActivation,
+  revertPendingGhostIfUnused,
+  revertHandlesForEdge,
+  reactivateEdgeHandles,
+  revertHandleIfUnused,
+} =
+  useHandleManagement()
 
 const dialogVisible = computed(() => {
   return (
@@ -849,12 +862,73 @@ const currentExportMode = computed(() => {
   return found || exportOptions.value[0]
 })
 
-onConnect((connection) => {
+onConnectEnd(() => {
+  revertPendingGhostIfUnused()
+})
+
+onConnect(async (connection) => {
   const sourceNode = findNode(connection.source)
   const targetNode = findNode(connection.target)
 
   if (!sourceNode || !targetNode) return
   if (sourceNode === targetNode) return
+
+  const duplicate = edges.value.find(
+    (e) => e.source === connection.source && e.target === connection.target
+  )
+
+  const duplicateSnapshot = duplicate ? detachReactivity(duplicate) : null
+
+  const sourceHandleUid = connection.sourceHandle
+    ? getHandleUidFromHandleId(connection.sourceHandle)
+    : null
+  const targetHandleUid = connection.targetHandle
+    ? getHandleUidFromHandleId(connection.targetHandle)
+    : null
+
+  confirmActivation()
+
+  if (sourceHandleUid) {
+    activateHandle(connection.source, sourceHandleUid, { trackHistory: false })
+  }
+  if (targetHandleUid) {
+    activateHandle(connection.target, targetHandleUid, { trackHistory: false })
+  }
+
+  if (duplicate) {
+    const pendingEdge = {
+      ...connection,
+      id: `pending--${connection.source}--${connection.target}`,
+      style: { strokeDasharray: '8 8', opacity: 0.4 }, // visually mark "unconfirmed"
+    }
+
+    // Prevents addition to history store.
+    suppressedEdgeIds.add(pendingEdge.id)
+    addEdges(pendingEdge)
+
+    const shouldReplace = await confirm({
+      header: 'Connection already exists',
+      message:
+        'A connection already exists between these instances. Do you wish to replace it?\n\n' +
+        'If you select Cancel, the new connection will be discarded and the existing connection will remain.',
+      severity: 'warning',
+      acceptLabel: 'Replace',
+      rejectLabel: 'Cancel',
+    })
+
+    removeEdges(pendingEdge.id)
+    suppressedEdgeIds.delete(pendingEdge.id)
+
+    if (!shouldReplace) {
+      if (sourceHandleUid) revertHandleIfUnused(connection.source, sourceHandleUid, { trackHistory: false })
+      if (targetHandleUid) revertHandleIfUnused(connection.target, targetHandleUid, { trackHistory: false })
+      return
+    }
+
+    suppressedEdgeIds.add(duplicate.id)
+    removeEdges(duplicate.id)
+    revertHandlesForEdge(duplicateSnapshot)
+  }
 
   // Derive ordinal indices from the existing edge graph:
   //   sourceIndex = how many edges already leave from this source node
@@ -885,7 +959,33 @@ onConnect((connection) => {
     },
   }
 
-  addEdges(newEdge)
+  if (duplicateSnapshot) {
+    suppressedEdgeIds.add(newEdge.id)
+    addEdges(newEdge)
+    suppressedEdgeIds.delete(duplicateSnapshot.id)
+    suppressedEdgeIds.delete(newEdge.id)
+
+    // A single undo step for the whole replace: undo brings the old edge
+    // (and its handle activation) back and removes the new one; redo does
+    // the reverse. No pending edge involved on either side.
+    historyStore.addCommand({
+      type: 'replace-edge',
+      undo: () => {
+        removeEdges(newEdge.id)
+        revertHandlesForEdge(newEdge, [newEdge.id], { trackHistory: false })
+        addEdges(duplicateSnapshot)
+        reactivateEdgeHandles(duplicateSnapshot, { trackHistory: false })
+      },
+      redo: () => {
+        removeEdges(duplicateSnapshot.id)
+        revertHandlesForEdge(duplicateSnapshot, [duplicateSnapshot.id], { trackHistory: false })
+        addEdges(newEdge)
+        reactivateEdgeHandles(newEdge, { trackHistory: false })
+      },
+    })
+  } else {
+    addEdges(newEdge)
+  }
 })
 
 const createSelectCommand = (changes, findFn) => {
@@ -1218,6 +1318,8 @@ const onNodeChange = (changes) => {
   applyNodeChanges(changes)
 }
 
+const suppressedEdgeIds = new Set()
+
 const onEdgeChange = (changes) => {
   if (historyStore.isUndoRedoing) {
     // If we are currently undoing/redoing, bypass history tracking
@@ -1230,10 +1332,14 @@ const onEdgeChange = (changes) => {
   changes.forEach((c) => {
     if (c.type === 'remove') {
       indexRemoveEdge(c)
-      removeChanges.push({ edge: snapshotEdge(c) })
+      if (!suppressedEdgeIds.has(c.id)) {
+        removeChanges.push({ edge: snapshotEdge(c) })
+      }
     } else if (c.type === 'add') {
       indexAddEdge(c.item)
-      addChanges.push({ edge: snapshotEdge(c) })
+      if (!suppressedEdgeIds.has(c.item.id)) {
+        addChanges.push({ edge: snapshotEdge(c) })
+      }
     } else if (c.type === 'select' && undoRedoSelection) {
       const edge = findEdge(c.id)
       selectChanges.push({ id: c.id, from: edge.selected, to: c.selected })
@@ -1244,17 +1350,39 @@ const onEdgeChange = (changes) => {
     const edgesToRestore = addChanges.map((change) => change.edge)
     const idsToRemove = addChanges.map((change) => change.edge.id)
     historyStore.addCommand({
-      undo: () => removeEdges(idsToRemove),
-      redo: () => addEdges(edgesToRestore),
+      undo: () => {
+        removeEdges(idsToRemove)
+        edgesToRestore.forEach((edge) =>
+          revertHandlesForEdge(edge, idsToRemove, { trackHistory: false })
+        )
+      },
+      redo: () => {
+        addEdges(edgesToRestore)
+        edgesToRestore.forEach((edge) => reactivateEdgeHandles(edge, { trackHistory: false }))
+      },
     })
   }
 
   if (removeChanges.length) {
     const edgesToRestore = removeChanges.map((change) => change.edge)
     const idsToRemove = removeChanges.map((change) => change.edge.id)
+
+    // Ghost out any handle that no longer has an edge attached to it. 
+    // excludeEdgeIds is passed because edges.value hasn't actually 
+    // dropped these ids yet at this point.
+    edgesToRestore.forEach((edge) => revertHandlesForEdge(edge, idsToRemove))
+
     historyStore.addCommand({
-      undo: () => addEdges(edgesToRestore),
-      redo: () => removeEdges(idsToRemove),
+      undo: () => {
+        addEdges(edgesToRestore)
+        edgesToRestore.forEach((edge) => reactivateEdgeHandles(edge, { trackHistory: false }))
+      },
+      redo: () => {
+        removeEdges(idsToRemove)
+        edgesToRestore.forEach((edge) =>
+          revertHandlesForEdge(edge, idsToRemove, { trackHistory: false })
+        )
+      },
     })
   }
 
