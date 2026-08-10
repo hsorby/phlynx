@@ -51,7 +51,8 @@
           <Divider layout="vertical" style="margin: 0 15px" />
 
           <Button
-            label="Undo"
+            iconOnly
+            icon="pi pi-undo"
             size="small"
             variant="text"
             severity="secondary"
@@ -60,7 +61,8 @@
           />
 
           <Button
-            label="Redo"
+            iconOnly
+            icon="pi pi-refresh"
             size="small"
             variant="text"
             severity="secondary"
