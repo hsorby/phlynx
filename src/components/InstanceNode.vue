@@ -135,7 +135,7 @@ import Menu from 'primevue/menu'
 import CellMLIcon from './icons/CellMLIcon.vue'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
-import { getHandleId, getHandleStyle, handlePosition, findMostCentralGhostHandle, isCornerHandle } from '../utils/handles'
+import { getHandleId, getHandleStyle, handlePosition, isCornerHandle } from '../utils/handles'
 import { sanitiseName } from '../utils/nodes'
 import { notify } from '../utils/notify'
 import { isEditableVariableType, isEmpty } from '../utils/variables'
@@ -146,7 +146,7 @@ import { useHandleManagement } from '../composables/useHandleManagement'
 import '../assets/vueflownode.css'
 
 const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } = useVueFlow()
-const { beginGhostActivation, activateHandle } = useHandleManagement()
+const { beginGhostActivation, activateHandle, addHandle } = useHandleManagement()
 const historyStore = useFlowHistoryStore()
 const libraryStore = useLibraryStore()
 
@@ -252,10 +252,10 @@ function togglePortMenu(event) {
 }
 
 const portMenuItems = [
-  { label: 'Left', command: () => addHandle({ side: 'left' }) },
-  { label: 'Right', command: () => addHandle({ side: 'right' }) },
-  { label: 'Top', command: () => addHandle({ side: 'top' }) },
-  { label: 'Bottom', command: () => addHandle({ side: 'bottom' }) },
+  { label: 'Left', command: () => addHandle(props.id, 'left') },
+  { label: 'Right', command: () => addHandle(props.id, 'right') },
+  { label: 'Top', command: () => addHandle(props.id, 'top') },
+  { label: 'Bottom', command: () => addHandle(props.id, 'bottom') },
 ]
 
 const applyHandles = async (handlesToSet) => {
@@ -335,16 +335,6 @@ async function removeHandle(handleIdToRemove) {
       await applyHandles(newHandles)
     },
   })
-}
-
-const addHandle = async (handleToAdd) => {
-  const mostCentralGhost = findMostCentralGhostHandle(handleToAdd.side, props.data.handles)
-
-  if (!mostCentralGhost) {
-    return
-  }
-
-  await activateHandle(props.id, mostCentralGhost.uid)
 }
 
 const isEditing = ref(false)

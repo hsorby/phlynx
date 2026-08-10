@@ -550,6 +550,7 @@ const {
 
 const {
   activateHandle,
+  addHandle: addHandleToNode,
   confirmActivation,
   revertPendingGhostIfUnused,
   revertHandlesForEdge,
@@ -1199,9 +1200,7 @@ function updateHelperLines(changes, nodes) {
 
 const addHandle = async (side) => {
   for (const node of getSelectedNodes.value) {
-    const mostCentralGhost = findMostCentralGhostHandle(side, node.data.handles)
-    if (!mostCentralGhost) return
-    await activateHandle(node.id, mostCentralGhost.uid)
+    await addHandleToNode(node.id, side)
   }
 }
 

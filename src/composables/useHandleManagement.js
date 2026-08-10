@@ -2,7 +2,7 @@ import { nextTick, ref } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { HANDLE_VARIANT } from '../utils/constants'
-import { getHandleId, getHandleUidFromHandleId } from '../utils/handles'
+import { findMostCentralGhostHandle, getHandleId, getHandleUidFromHandleId } from '../utils/handles'
 import { detachReactivity } from '../utils/reactivity'
 
 const pendingGhostRevert = ref(null)
@@ -125,8 +125,19 @@ export function useHandleManagement() {
     }
   }
 
+  async function addHandle(nodeId, side) {
+    const node = getNodes.value.find((node) => node.id === nodeId)
+    if (!node) return
+
+    const mostCentralGhost = findMostCentralGhostHandle(side, node.data.handles)
+    if (!mostCentralGhost) return
+
+    await activateHandle(nodeId, mostCentralGhost.uid)
+  }
+
   return {
     activateHandle,
+    addHandle,
     beginGhostActivation,
     confirmActivation,
     revertPendingGhostIfUnused,
