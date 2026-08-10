@@ -352,7 +352,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onBeforeUnmount, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onBeforeUnmount, onMounted, onUnmounted, nextTick } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
@@ -633,6 +633,7 @@ watch(
       } catch (e) {
         console.error('Failed to load CellML source', e)
       } finally {
+        await nextTick()
         loading.value = false
       }
     }
