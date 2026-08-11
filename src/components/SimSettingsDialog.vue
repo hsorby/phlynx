@@ -488,7 +488,10 @@ async function initialiseDialog() {
   await nextTick()
   await new Promise((resolve) => setTimeout(resolve, 0))
 
-  if (currentCycle !== loadCycle) return
+  if (currentCycle !== loadCycle) {
+    isLoading.value = false
+    return
+  }
 
   loadingText.value = 'Scanning nodes and variables...'
   variableRows.value = buildVariableRows(props.nodes, selectedByKey)
@@ -515,7 +518,7 @@ function addGroup() {
   const name = newGroupName.value.trim()
   if (!name) return
 
-  const id = `plot-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+  const id = `plot-${crypto.randomUUID()}`
   plotGroups.value.push({ id, name })
   newGroupName.value = ''
 }
