@@ -31,7 +31,7 @@
             :aria-expanded="!isGlobalCollapsed"
           >
             <i :class="['pi', isGlobalCollapsed ? 'pi-chevron-right' : 'pi-chevron-down', 'context-section-caret']"></i>
-            <h4 class="context-section-title">Global</h4>
+            <h4 class="context-section-title">Global information</h4>
           </button>
 
           <div v-show="!isGlobalCollapsed" class="context-section-body">
@@ -54,23 +54,40 @@
                 No global constants defined yet.
               </div>
 
-              <ul v-else class="global-constant-list">
-                <li
-                  v-for="row in globalConstantRows"
-                  :key="row.name"
-                  class="global-constant-row"
+              <div v-else class="table-flex-wrapper" style="margin-top: 0.5rem;">
+                <DataTable
+                  :value="globalConstantRows"
+                  dataKey="name"
+                  scrollable
+                  scrollHeight="flex"
+                  class="p-datatable-sm parameters-table"
+                  :rowClass="(row) => newlyAddedNames.has(row.name) ? 'global-constant-row--new' : ''"
                 >
-                  <span class="gc-name" :title="row.name">{{ row.name }}</span>
-                  <InputText
-                    v-model="row.value"
-                    size="small"
-                    class="gc-value"
-                    placeholder="Value..."
-                    @change="handleGlobalConstantChange(row)"
-                  />
-                  <span class="gc-units" :title="row.units">{{ row.units || '—' }}</span>
-                </li>
-              </ul>
+                  <Column field="name" bodyClass="small-text-col" header="Name" style="min-width: 90px">
+                    <template #body="slotProps">
+                      <span :title="slotProps.data.name">{{ slotProps.data.name }}</span>
+                    </template>
+                  </Column>
+                  
+                  <Column field="value" header="Value" style="width: 110px">
+                    <template #body="slotProps">
+                      <InputText
+                        v-model="slotProps.data.value"
+                        size="small"
+                        class="w-full"
+                        placeholder="Value..."
+                        @change="handleGlobalConstantChange(slotProps.data)"
+                      />
+                    </template>
+                  </Column>
+                  
+                  <Column field="units" bodyClass="small-text-col" header="Units" style="min-width: 80px">
+                    <template #body="slotProps">
+                      <span :title="slotProps.data.units">{{ slotProps.data.units || '—' }}</span>
+                    </template>
+                  </Column>
+                </DataTable>
+              </div>
             </div>
           </div>
         </section>
@@ -81,7 +98,7 @@
         <section class="context-section context-section--params">
           <template v-if="selectedNode">
             <h4 class="context-section-title">
-              {{ `Selected Instance: ${selectedNode.data?.name}` || 'not found' }}
+              {{ `${selectedNode.data?.name}` || 'Selected Instance' }}
               <span class="context-count">({{ parameterRows.length }})</span>
             </h4>
 
@@ -131,7 +148,7 @@
 
           <div v-else class="empty-state">
             <i class="pi pi-info-circle empty-state-icon"></i>
-            <p>Select an instance on the canvas to edit its parameters here.</p>
+            <p>Select an instance to edit its parameters here.</p>
           </div>
         </section>
       </div>
@@ -140,7 +157,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
@@ -188,10 +205,16 @@ const selectedNode = computed(() => getSelectedNodes.value[0] || null)
 
 // ── Global constants (top subsection) ───────────────────────────────────────
 const globalConstantRows = ref([])
+const newlyAddedNames = ref(new Set())
+
+let hasInitialisedGlobalConstants = false
+let highlightTimeoutId = null
 
 watch(
   () => libraryStore.globalVariables,
   (map) => {
+    const previousNames = new Set(globalConstantRows.value.map((row) => row.name))
+
     globalConstantRows.value = Array.from(map.entries())
       .map(([name, data]) => ({
         name,
@@ -200,6 +223,22 @@ watch(
         data_reference: data?.data_reference,
       }))
       .sort((a, b) => a.name.localeCompare(b.name))
+
+    if (!hasInitialisedGlobalConstants) {
+      hasInitialisedGlobalConstants = true
+      return
+    }
+
+    const addedNames = Array.from(map.keys()).filter((name) => !previousNames.has(name))
+    if (addedNames.length === 0) return
+
+    isGlobalCollapsed.value = false
+    newlyAddedNames.value = new Set(addedNames)
+
+    clearTimeout(highlightTimeoutId)
+    highlightTimeoutId = setTimeout(() => {
+      newlyAddedNames.value = new Set()
+    }, 2200)
   },
   { immediate: true, deep: true }
 )
@@ -207,6 +246,10 @@ watch(
 function handleGlobalConstantChange(row) {
   libraryStore.assignGlobalConstant(row.name, row.value, row.units, row.data_reference)
 }
+
+onUnmounted(() => {
+  clearTimeout(highlightTimeoutId)
+})
 
 function handleCreateSystemModule() {
   // Placeholder only for now - system module creation isn't wired up yet.
@@ -235,8 +278,6 @@ watch(
   },
   { immediate: true }
 )
-
-watch
 
 function persistParameterRows() {
   if (!selectedNode.value) return
@@ -358,7 +399,6 @@ function handleParameterTypeChange(row) {
 
 .context-section-title {
   margin: 0 0 0.75rem;
-  padding-bottom: 10px;
   font-size: 1rem;
   display: flex;
   align-items: baseline;
@@ -366,6 +406,7 @@ function handleParameterTypeChange(row) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex-shrink: 0; 
 }
 
 .context-section-header {
@@ -373,7 +414,7 @@ function handleParameterTypeChange(row) {
   align-items: center;
   gap: 0.4rem;
   width: 100%;
-  padding: 0;
+  padding-bottom: 0.75rem; 
   border: none;
   background: none;
   cursor: pointer;
@@ -383,14 +424,13 @@ function handleParameterTypeChange(row) {
 }
 
 .context-section-header .context-section-title {
-  margin: 0 0 0.75rem;
+  margin: 0; 
 }
 
 .context-section-caret {
   font-size: 0.7rem;
   color: var(--p-text-muted-color);
   transition: color 120ms ease;
-  margin-bottom: 0.75rem;
 }
 
 .context-section-header:hover .context-section-caret {
@@ -417,7 +457,12 @@ function handleParameterTypeChange(row) {
 
 .new-system-module-btn {
   width: 100%;
+  padding: 3%;
   margin-bottom: 0.85rem;
+}
+
+.new-system-module-btn :deep(.p-button-label) {
+  transform: translateY(1px); 
 }
 
 .context-subheading {
@@ -433,43 +478,17 @@ function handleParameterTypeChange(row) {
   overflow-y: auto;
 }
 
-.global-constant-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
+:deep(.global-constant-row--new > td) {
+  animation: global-constant-row-highlight 2.2s ease;
 }
 
-.global-constant-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.gc-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 0.8rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.gc-value {
-  flex: 0 0 90px;
-  width: 90px;
-}
-
-.gc-units {
-  flex: 0 0 auto;
-  font-size: 0.75rem;
-  color: var(--p-text-muted-color);
-  white-space: nowrap;
-  max-width: 60px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+@keyframes global-constant-row-highlight {
+  0% {
+    background-color: color-mix(in srgb, var(--p-primary-color) 25%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
 }
 
 .empty-hint {
