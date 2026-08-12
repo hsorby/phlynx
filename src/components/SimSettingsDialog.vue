@@ -15,7 +15,7 @@
     <div class="dialog-content">
       <!-- Loading State -->
       <div v-if="isLoading" class="loading-state">
-        <ProgressSpinner style="width: 44px; height: 44px" strokeWidth="4" />
+        <ProgressSpinner class="custom-spinner" strokeWidth="4" />
         <div class="loading-text">
           <strong>Collecting model variables...</strong>
           <span>{{ loadingText }}</span>
@@ -38,18 +38,18 @@
                 class="group-name-input"
               />
               <Button label="Add Plot" icon="pi pi-plus" text @click="addGroup" />
-            </div>
-            <div class="group-list">
-              <div v-for="group in plotGroups" :key="group.id" class="group-chip">
-                <span>{{ group.name }}</span>
-                <Button
-                  icon="pi pi-times"
-                  rounded
-                  text
-                  severity="secondary"
-                  size="small"
-                  @click="removeGroup(group.id)"
-                />
+              <div class="group-list">
+                <div v-for="group in plotGroups" :key="group.id" class="group-chip">
+                  <span>{{ group.name }}</span>
+                  <Button
+                    icon="pi pi-times"
+                    rounded
+                    text
+                    severity="secondary"
+                    size="small"
+                    @click="removeGroup(group.id)"
+                  />
+                </div>
               </div>
             </div>
           </section>
@@ -102,6 +102,16 @@
               </div>
 
               <InputText v-model="variableSearch" placeholder="Search variable name..." class="filter-input" />
+              
+              <Button
+                v-if="visibleRows.length > 0"
+                :label="isAllVisibleSelected ? 'Deselect All Filtered' : 'Select All Filtered'"
+                :icon="isAllVisibleSelected ? 'pi pi-minus-square' : 'pi pi-check-square'"
+                text
+                severity="secondary"
+                @click="toggleSelectAllVisible"
+              />
+
               <Button
                 v-if="nodeSearch || variableSearch || selectedNode"
                 label="Reset Filters"
@@ -142,7 +152,10 @@
                   dataKey="key"
                   size="small"
                   rowHover
-                  :rowClass="(data) => ({ 'row-unplotted': !data.groupId })"
+                  :rowClass="(data) => ({
+                    'row-unplotted': !data.groupId,
+                    'row-selected': data.selected
+                  })"
                   class="vars-datatable"
                 >
                   <Column style="width: 44px">
@@ -333,6 +346,16 @@
               </div>
 
               <InputText v-model="constantSearch" placeholder="Search parameter name..." class="filter-input" />
+              
+              <Button
+                v-if="visibleConstantRows.length > 0"
+                :label="isAllConstantVisibleSelected ? 'Deselect All Filtered' : 'Select All Filtered'"
+                :icon="isAllConstantVisibleSelected ? 'pi pi-minus-square' : 'pi pi-check-square'"
+                text
+                severity="secondary"
+                @click="toggleSelectAllConstantVisible"
+              />
+
               <Button
                 v-if="constantNodeSearch || constantSearch || selectedConstantNode"
                 label="Reset Filters"
@@ -371,8 +394,11 @@
                   dataKey="key"
                   size="small"
                   rowHover
-                  :rowClass="(data) => ({ 'row-unplotted': !data.selected })"
-                  class="vars-datatable"
+                  :rowClass="(data) => ({
+                    'row-unplotted': !data.selected,
+                    'row-selected': data.selected
+                  })"
+                  class="vars-datatable scan-datatable"
                 >
                   <Column style="width: 44px">
                     <template #header>
@@ -396,19 +422,28 @@
 
                   <Column header="Min" style="width: 120px">
                     <template #body="{ data }">
-                      <InputNumber v-model="data.min" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+                      <div class="param-cell-wrapper">
+                        <InputNumber v-if="data.selected" v-model="data.min" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+                        <span v-else class="subtle-dash">-</span>
+                      </div>
                     </template>
                   </Column>
 
                   <Column header="Default" style="width: 120px">
                     <template #body="{ data }">
-                      <InputNumber v-model="data.default" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+                      <div class="param-cell-wrapper">
+                        <InputNumber v-if="data.selected" v-model="data.default" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+                        <span v-else class="subtle-dash">-</span>
+                      </div>
                     </template>
                   </Column>
 
                   <Column header="Max" style="width: 120px">
                     <template #body="{ data }">
-                      <InputNumber v-model="data.max" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+                      <div class="param-cell-wrapper">
+                        <InputNumber v-if="data.selected" v-model="data.max" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+                        <span v-else class="subtle-dash">-</span>
+                      </div>
                     </template>
                   </Column>
                 </DataTable>
@@ -519,6 +554,18 @@ const visibleRows = computed(() => {
   })
 })
 
+const isAllVisibleSelected = computed(() => {
+  if (visibleRows.value.length === 0) return false
+  return visibleRows.value.every((row) => row.selected)
+})
+
+function toggleSelectAllVisible() {
+  const nextState = !isAllVisibleSelected.value
+  visibleRows.value.forEach((row) => {
+    row.selected = nextState
+  })
+}
+
 const nodeFilterOptions = computed(() => {
   const unique = new Set(variableRows.value.map((row) => row.nodeName))
   const options = [{ label: 'All nodes', value: null }]
@@ -582,6 +629,18 @@ const visibleConstantRows = computed(() => {
   })
 })
 
+const isAllConstantVisibleSelected = computed(() => {
+  if (visibleConstantRows.value.length === 0) return false
+  return visibleConstantRows.value.every((row) => row.selected)
+})
+
+function toggleSelectAllConstantVisible() {
+  const nextState = !isAllConstantVisibleSelected.value
+  visibleConstantRows.value.forEach((row) => {
+    row.selected = nextState
+  })
+}
+
 // Group constant rows by Node
 const groupedConstantRows = computed(() => {
   const groupsMap = new Map()
@@ -598,11 +657,6 @@ const groupedConstantRows = computed(() => {
   }))
 })
 
-// Which node-accordion panels are expanded, tracked by index into the current
-// grouped list. Bound two-way (v-model:activeIndex) so user toggles actually
-// stick. We only re-expand everything when the *set of visible nodes* changes
-// (e.g. a filter was applied) — not on every row edit, which would otherwise
-// snap collapsed panels back open on every checkbox click or field edit.
 const activeVariablePanels = ref([])
 const activeConstantPanels = ref([])
 
@@ -700,7 +754,6 @@ function buildVariableRows(nodes, selectedByKey) {
       const key = `${node.id}::${variable.name}`
       const existing = selectedByKey.get(key)
 
-      // DEFAULT UNPLOTTED: plot defaults to false and groupId defaults to null
       rows.push({
         key,
         nodeId: node.id,
@@ -846,12 +899,10 @@ function clearNodeSelection() {
 
 function onNodeSearchInput() {
   nodeSearchOpen.value = true
-  // Free-text edits invalidate any previously picked exact node until a match is clicked again.
   selectedNode.value = null
 }
 
 function onNodeSearchBlur() {
-  // Delay so a mousedown on a list item can still register before we close it.
   setTimeout(() => {
     nodeSearchOpen.value = false
   }, 150)
@@ -909,6 +960,7 @@ function assignSelectedToGroup() {
     if (!row.selected) return
     row.plot = true
     row.groupId = bulkGroupId.value
+    row.selected = false // Reset selection on assign
     updatedCount += 1
   })
 
@@ -932,6 +984,7 @@ function moveSelectedToUngrouped() {
     if (!row.selected) return
     row.plot = false
     row.groupId = null
+    row.selected = false // Reset selection on remove from plot
     updatedCount += 1
   })
 
@@ -1035,27 +1088,45 @@ const closeDialog = () => {
 .sim-settings-tabs {
   width: 100%;
 }
+
+/* Loading State */
 .loading-state {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  min-height: 260px;
+  gap: 16px;
+  min-height: 320px;
+  text-align: center;
 }
+.custom-spinner {
+  width: 44px;
+  height: 44px;
+}
+:deep(.custom-spinner .p-progress-spinner-circle) {
+  stroke: var(--p-primary-color, #2563eb) !important;
+}
+
 .loading-text {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
+.loading-text strong {
+  font-size: 14px;
+  color: var(--p-text-color, #1f2937);
+}
 .loading-text span {
   font-size: 12px;
-  color: #909399;
+  color: var(--p-text-muted-color, #6b7280);
 }
+
 .block {
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--p-content-border-color, var(--p-surface-200, #ebeef5));
   border-radius: 8px;
   padding: 14px;
-  background: #fff;
+  background: var(--p-content-background, var(--p-surface-0, #ffffff));
+  color: var(--p-text-color, inherit);
 }
 .mt-3 {
   margin-top: 14px;
@@ -1070,33 +1141,40 @@ const closeDialog = () => {
   margin: 0;
   font-size: 14px;
   font-weight: 700;
+  color: var(--p-text-color, inherit);
 }
 .subtle {
   font-size: 12px;
-  color: #909399;
+  color: var(--p-text-muted-color, #909399);
 }
+
+/* Plots & Tags Toolbar Layout */
 .group-toolbar {
   display: flex;
-  gap: 8px;
   align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .group-name-input {
-  width: 260px;
+  width: 200px;
 }
 .group-list {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
   flex-wrap: wrap;
-  margin-top: 8px;
+  margin-left: 4px;
 }
 .group-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  border: 1px solid #dcdfe6;
+  border: 1px solid var(--p-content-border-color, var(--p-surface-300, #dcdfe6));
   border-radius: 16px;
-  padding: 3px 6px 3px 10px;
-  background: #f8f9fb;
+  padding: 2px 6px 2px 10px;
+  background: var(--p-surface-100, #f8f9fb);
+  color: var(--p-text-color, inherit);
+  font-size: 12px;
 }
 
 /* Toolbars */
@@ -1127,11 +1205,11 @@ const closeDialog = () => {
   position: absolute;
   right: 8px;
   font-size: 12px;
-  color: #9aa1ab;
+  color: var(--p-text-muted-color, #9aa1ab);
   cursor: pointer;
 }
 .node-search-clear:hover {
-  color: #4b5563;
+  color: var(--p-text-color, #4b5563);
 }
 .search-suffix-content {
   position: absolute;
@@ -1140,10 +1218,10 @@ const closeDialog = () => {
   width: 260px;
   max-height: 220px;
   overflow-y: auto;
-  background: #fff;
-  border: 1px solid #dcdfe6;
+  background: var(--p-overlay-select-background, var(--p-content-background, #ffffff));
+  border: 1px solid var(--p-content-border-color, var(--p-surface-300, #dcdfe6));
   border-radius: 6px;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.15);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
   z-index: 30;
 }
 .search-suffix-header {
@@ -1151,9 +1229,9 @@ const closeDialog = () => {
   align-items: center;
   justify-content: space-between;
   padding: 6px 10px;
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid var(--p-content-border-color, var(--p-surface-200, #f0f2f5));
   font-size: 11px;
-  color: #909399;
+  color: var(--p-text-muted-color, #909399);
 }
 .search-match-list {
   list-style: none;
@@ -1163,21 +1241,21 @@ const closeDialog = () => {
 .search-match-item {
   padding: 6px 10px;
   font-size: 13px;
-  color: #1f2937;
+  color: var(--p-text-color, #1f2937);
   cursor: pointer;
 }
 .search-match-item:hover {
-  background-color: #f4f6f8;
+  background-color: var(--p-content-hover-background, var(--p-surface-100, #f4f6f8));
 }
 .search-match-item.active {
-  background-color: #e6f0fa;
-  color: #1d4ed8;
+  background-color: var(--p-primary-50, rgba(37, 99, 235, 0.15));
+  color: var(--p-primary-color, #2563eb);
   font-weight: 600;
 }
 .search-no-match {
   padding: 10px;
   font-size: 12px;
-  color: #909399;
+  color: var(--p-text-muted-color, #909399);
   text-align: center;
 }
 
@@ -1187,19 +1265,20 @@ const closeDialog = () => {
   justify-content: space-between;
   padding: 8px 12px;
   margin-top: 12px;
-  background-color: #f8f9fb;
-  border: 1px solid #dcdfe6;
+  background-color: var(--p-content-background, var(--p-surface-100, #f8f9fb));
+  border: 1px solid var(--p-content-border-color, var(--p-surface-300, #dcdfe6));
   border-radius: 6px;
   position: sticky;
   bottom: 0;
   z-index: 15;
-  box-shadow: 0 -6px 14px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 -6px 14px rgba(0, 0, 0, 0.2);
 }
 .bulk-info {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 13px;
+  color: var(--p-text-color, inherit);
 }
 .bulk-actions {
   display: flex;
@@ -1210,7 +1289,7 @@ const closeDialog = () => {
   width: 180px;
 }
 
-/* Accordion Styling & Visual Dropdown Enhancements */
+/* Accordion Styling */
 .node-accordion {
   max-height: 420px;
   overflow-y: auto;
@@ -1221,34 +1300,32 @@ const closeDialog = () => {
 }
 
 :deep(.node-accordion .p-accordion-tab) {
-  border: 1px solid #dcdfe6;
+  border: 1px solid var(--p-content-border-color, var(--p-surface-300, #dcdfe6));
   border-radius: 6px;
   overflow: hidden;
   margin-bottom: 6px;
 }
 
 :deep(.node-accordion .p-accordion-header-link) {
-  background-color: #f4f6f8 !important;
+  background-color: var(--p-surface-100, #f4f6f8) !important;
+  color: var(--p-text-color, inherit) !important;
   border-bottom: 1px solid transparent;
   padding: 10px 14px;
   cursor: pointer;
   user-select: none;
-  transition: background-color 0.2s, border-color 0.2s, box-shadow 0.2s;
+  transition: background-color 0.2s, border-color 0.2s;
 }
 
 :deep(.node-accordion .p-accordion-header-link:hover) {
-  background-color: #ebf1f8 !important;
-  box-shadow: inset 0 0 0 1px #c7ddf5;
+  background-color: var(--p-surface-200, #ebf1f8) !important;
 }
 
 :deep(.node-accordion .p-accordion-tab-active .p-accordion-header-link) {
-  background-color: #e6f0fa !important;
-  border-bottom-color: #d0e3f7 !important;
+  background-color: var(--p-surface-200, #e6f0fa) !important;
+  border-bottom-color: var(--p-content-border-color, #d0e3f7) !important;
   font-weight: 600;
 }
 
-/* Delete PrimeVue's own right-side toggle icon — we render our own chevron on the
-   left inside the header content, so remove anything else the header link injects. */
 :deep(.node-accordion .p-accordion-header-link > *:not(.accordion-header-content)) {
   display: none !important;
 }
@@ -1273,7 +1350,7 @@ const closeDialog = () => {
 
 .accordion-chevron {
   font-size: 12px;
-  color: #3b82f6;
+  color: var(--p-primary-color, #3b82f6);
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -1281,7 +1358,7 @@ const closeDialog = () => {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background-color: #dbeafe;
+  background-color: var(--p-primary-50, rgba(59, 130, 246, 0.15));
   transition: transform 0.2s ease-in-out;
 }
 
@@ -1290,7 +1367,7 @@ const closeDialog = () => {
 }
 
 .node-name {
-  color: #1f2937;
+  color: var(--p-text-color, #1f2937);
   font-size: 13px;
 }
 
@@ -1303,31 +1380,82 @@ const closeDialog = () => {
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
-  background-color: #e5e7eb;
-  color: #4b5563;
+  background-color: var(--p-surface-200, #e5e7eb);
+  color: var(--p-text-muted-color, #4b5563);
   border-radius: 12px;
 }
 .count-badge.plotted {
-  background-color: #dbeafe;
-  color: #1d4ed8;
+  background-color: var(--p-primary-50, rgba(59, 130, 246, 0.15));
+  color: var(--p-primary-color, #2563eb);
 }
 
 /* DataTable Customizations */
 .vars-datatable {
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--p-content-border-color, var(--p-surface-200, #e5e7eb));
 }
-:deep(.vars-datatable .p-datatable-thead > tr > th) {
-  background-color: #f9fafb;
+:deep(.vars-datatable .p-datatable-thead > tr > th),
+:deep(.vars-datatable .p-datatable-header-cell),
+:deep(.vars-datatable .p-column-title) {
+  background-color: var(--p-datatable-header-cell-background, var(--p-surface-100, #f9fafb)) !important;
+  color: var(--p-datatable-header-cell-color, var(--p-text-color, #1f2937)) !important;
   font-weight: 700;
   font-size: 12px;
 }
+
+/* Unplotted vs Selected Row Visual States (Applies to assigned and unassigned rows) */
 :deep(.vars-datatable tr.row-unplotted) {
-  opacity: 0.55;
+  opacity: 0.65;
+}
+
+:deep(.vars-datatable tr.row-selected) {
+  opacity: 1 !important;
+  background-color: var(--p-primary-50, rgba(37, 99, 235, 0.18)) !important;
+  border-left: 3px solid var(--p-primary-color, #2563eb) !important;
+}
+
+/* Checkbox Icon / Tick Mark Rendering Fix */
+:deep(.p-checkbox-box) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+:deep(.p-checkbox .p-checkbox-box .p-checkbox-icon),
+:deep(.p-checkbox-icon),
+:deep(.p-checkbox .p-icon) {
+  display: block !important;
+  visibility: visible !important;
+  width: 12px !important;
+  height: 12px !important;
+  color: var(--p-primary-contrast-color, #ffffff) !important;
+  fill: currentColor !important;
+  stroke: currentColor !important;
+}
+
+/* Fixed Row Height in Parameter Scan Table */
+:deep(.scan-datatable .p-datatable-tbody > tr) {
+  height: 46px !important;
+}
+:deep(.scan-datatable .p-datatable-tbody > tr > td) {
+  padding: 4px 8px !important;
+  height: 46px !important;
+  vertical-align: middle !important;
+}
+.param-cell-wrapper {
+  height: 34px;
+  display: flex;
+  align-items: center;
+}
+
+.subtle-dash {
+  color: var(--p-text-muted-color, #9ca3af);
+  font-size: 12px;
+  padding-left: 8px;
 }
 
 .empty-state {
   font-size: 13px;
-  color: #909399;
+  color: var(--p-text-muted-color, #909399);
   padding: 16px;
   text-align: center;
 }
@@ -1346,7 +1474,7 @@ const closeDialog = () => {
 .field label {
   font-size: 12px;
   font-weight: 600;
-  color: #606266;
+  color: var(--p-text-muted-color, #606266);
 }
 .dialog-footer {
   display: flex;
