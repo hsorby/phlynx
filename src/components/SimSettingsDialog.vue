@@ -4,6 +4,7 @@
     header="Simulation Settings"
     modal
     :draggable="false"
+    :dismissableMask="true"
     :style="{ width: '780px', maxHeight: '90vh' }"
     :appendTo="'body'"
     @update:visible="
@@ -345,7 +346,7 @@
                 </div>
               </div>
 
-              <InputText v-model="constantSearch" placeholder="Search parameter name..." class="filter-input" />
+              <InputText v-model="constantSearch" placeholder="Search parameters..." class="filter-input" />
               
               <Button
                 v-if="visibleConstantRows.length > 0"
