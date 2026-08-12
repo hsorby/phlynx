@@ -150,6 +150,17 @@
             @click="onOpenSimSettingsDialog"
           />
 
+          <Button
+            iconOnly
+            style="margin-left: 10px"
+            icon="pi pi-cog"
+            size="small"
+            variant="text"
+            severity="info"
+            v-tooltip.bottom="{ value: 'Adjust settings', showDelay: 300 }"
+            @click="onOpenSettingsDialog"
+          />
+
           <Divider layout="vertical" style="margin: 0 15px" />
 
           <!-- Import Dropdown / SplitButton -->
@@ -158,7 +169,7 @@
             size="small"
             icon="pi pi-file-import"
             :model="importMenuItems"
-            severity="secondary"
+            severity="primary"
             @click="triggerCurrentImport"
             :disabled="currentImportMode.disabled"
             v-tooltip.bottom="{ value:
@@ -185,7 +196,7 @@
             size="small"
             icon="pi pi-file-export"
             :model="exportMenuItems"
-            severity="secondary"
+            severity="primary"
             style="margin-left: 10px"
             @click="triggerCurrentExport"
             :disabled="!somethingAvailable || currentExportMode.disabled"
@@ -409,6 +420,11 @@
     @confirm="onSimSettingsConfirm"
   />
 
+  <SettingsDialog
+    v-model="settingsDialogVisible"
+    @confirm="onSettingsConfirm"
+  />
+
   <ImportDialog
     ref="importDialogRef"
     v-model="importDialogVisible"
@@ -469,6 +485,7 @@ import SaveDialog from '../components/SaveDialog.vue'
 import MacroBuilderDialog from '../components/MacroBuilderDialog.vue'
 import SimSettingsDialog from '../components/SimSettingsDialog.vue'
 import EdgeConnectionDialog from '../components/EdgeConnectionDialog.vue'
+import SettingsDialog from '../components/SettingsDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
 import PaneContextMenu from '../components/PaneContextMenu.vue'
 import { useScreenshot } from '../services/useScreenshot'
@@ -589,6 +606,7 @@ const dialogVisible = computed(() => {
     replacementDialogVisible.value ||
     macroBuilderDialogVisible.value ||
     simSettingsDialogVisible.value ||
+    settingsDialogVisible.value ||
     edgeConnectionDialogVisible.value ||
     instanceEditorDialogVisible.value
   )
@@ -828,6 +846,7 @@ const exportDialogVisible = ref(false)
 const replacementDialogVisible = ref(false)
 const macroBuilderDialogVisible = ref(false)
 const simSettingsDialogVisible = ref(false)
+const settingsDialogVisible = ref(false)
 const edgeConnectionDialogVisible = ref(false)
 const edgeDialogSourceNode = ref({})
 const edgeDialogTargetNode = ref({})
@@ -1955,6 +1974,10 @@ function onOpenSimSettingsDialog() {
   simSettingsDialogVisible.value = true
 }
 
+function onOpenSettingsDialog() {
+  settingsDialogVisible.value = true
+}
+
 /**
  * Recomputes couplings on every edge touching a given node, using the node's
  * current ports. Call this after any operation that changes ports on
@@ -2037,6 +2060,11 @@ async function onSimSettingsConfirm(data) {
   simSettings.value = data.simulationSettings
   plotConfig.value = data.plotConfig
   simSettingsDialogVisible.value = false
+}
+
+async function onSettingsConfirm(data) {
+  console.log('settings updated')
+  settingsDialogVisible.value = false
 }
 
 function handleMacroGeneration(macroPayload) {
