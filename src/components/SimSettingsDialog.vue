@@ -1292,12 +1292,9 @@ const closeDialog = () => {
 
 /* Accordion Styling */
 .node-accordion {
-  max-height: 420px;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-right: 4px;
 }
 
 :deep(.node-accordion .p-accordion-tab) {
