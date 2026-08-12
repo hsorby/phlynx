@@ -11,12 +11,19 @@
             style="display: none"
             @change="handleLoadWorkspace"
           />
-          <Button label="Load Workspace" size="small" variant="text" @click="$refs.workspaceFileInput.click()" />
-
           <Button
-            label="Save Workspace"
+            icon="pi pi-folder-open"
             size="small"
             variant="text"
+            v-tooltip.bottom="{ value: 'Load workspace', showDelay: 300 }"
+            @click="$refs.workspaceFileInput.click()"
+          />
+
+          <Button
+            icon="pi pi-save"
+            size="small"
+            variant="text"
+            v-tooltip.bottom="{ value: 'Save workspace', showDelay: 300 }"
             @click="handleSaveWorkspace"
             style="margin-left: 10px"
             :disabled="!somethingAvailable"
@@ -25,19 +32,21 @@
           <Divider layout="vertical" style="margin: 0 15px" />
 
           <Button
-            label="Auto Layout"
+            icon="pi pi-sparkles"
             size="small"
             variant="text"
             severity="warn"
+            v-tooltip.bottom="{ value: 'Clean up workspace', showDelay: 300 }"
             @click="handleAutoLayout"
             :disabled="!somethingAvailable"
           />
 
           <Button
-            label="Clear"
+            icon="pi pi-eraser"
             size="small"
             variant="text"
             severity="danger"
+            v-tooltip.bottom="{ value: 'Clear workspace', showDelay: 300 }"
             @click="handleClearWorkspace"
             style="margin-left: 10px"
             :disabled="!somethingAvailable"
@@ -46,19 +55,23 @@
           <Divider layout="vertical" style="margin: 0 15px" />
 
           <Button
-            label="Undo"
+            iconOnly
+            icon="pi pi-undo"
             size="small"
             variant="text"
             severity="secondary"
+            v-tooltip.bottom="{ value: 'Undo', showDelay: 300 }"
             @click="handleUndo"
             :disabled="!historyStore.canUndo"
           />
 
           <Button
-            label="Redo"
+            iconOnly
+            icon="pi pi-refresh"
             size="small"
             variant="text"
             severity="secondary"
+            v-tooltip.bottom="{ value: 'Redo', showDelay: 300 }"
             @click="handleRedo"
             style="margin-left: 10px"
             :disabled="!historyStore.canRedo"
@@ -66,14 +79,70 @@
 
           <Divider layout="vertical" style="margin: 0 15px" />
 
-          <Button label="Macro Build" size="small" variant="text" severity="info" @click="onOpenMacroBuilderDialog" />
+          <Button
+            iconOnly
+            style="margin-left: 10px"
+            variant="text"
+            severity="secondary"
+            v-tooltip.bottom="{ value: 'Add top handle', showDelay: 300 }"
+            :disabled="!somethingSelected"
+            @click="addHandle('left')"
+          >
+            <AddHandleLeft/>
+          </Button>
 
           <Button
-            label="Sim. Settings"
-            :disabled="!somethingAvailable"
+            iconOnly
+            style="margin-left: 10px"
+            variant="text"
+            severity="secondary"
+            v-tooltip.bottom="{ value: 'Add top handle', showDelay: 300 }"
+            :disabled="!somethingSelected"
+            @click="addHandle('top')"
+          >
+            <AddHandleTop/>
+          </Button>
+
+          <Button
+            iconOnly
+            style="margin-left: 10px"
+            variant="text"
+            severity="secondary"
+            v-tooltip.bottom="{ value: 'Add right handle', showDelay: 300 }"
+            :disabled="!somethingSelected"
+            @click="addHandle('right')"
+          >
+            <AddHandleRight/>
+          </Button>
+
+          <Button
+            iconOnly
+            style="margin-left: 10px"
+            variant="text"
+            severity="secondary"
+            v-tooltip.bottom="{ value: 'Add bottom handle', showDelay: 300 }"
+            :disabled="!somethingSelected"
+            @click="addHandle('bottom')"
+          >
+            <AddHandleBottom/>
+          </Button>
+
+          <Divider layout="vertical" style="margin: 0 15px" />
+
+          <Button
+            label="Macro Build"
             size="small"
             variant="text"
             severity="info"
+            @click="onOpenMacroBuilderDialog"
+          />
+
+          <Button
+            label="Sim. Settings"
+            size="small"
+            variant="text"
+            severity="info"
+            :disabled="!somethingAvailable"
             @click="onOpenSimSettingsDialog"
           />
 
@@ -176,17 +245,18 @@
       <main class="workbench-main">
         <div class="workspace-search-container" :class="{ 'search-inactive': !searchBarFocused && !searchQuery }">
           <div class="workspace-search-input-wrapper">
-            <IconField iconPosition="left" class="workspace-search-input">
+            <IconField>
               <InputIcon class="pi pi-search" />
               <InputText
                 v-model="searchQuery"
-                placeholder="Search modules..."
+                class="w-62"
+                placeholder="Search Workspace..."
                 @input="handleSearchInput"
                 @focus="searchBarFocused = true"
                 @blur="searchBarFocused = false"
               />
+              <InputIcon v-if="searchQuery" class="search-clear-input pi pi-times-circle" @click="clearSearch"/>
             </IconField>
-            <i v-if="searchQuery" class="pi pi-times cursor-pointer search-clear-icon" @click="clearSearch" />
           </div>
           <div v-if="searchQuery" class="search-suffix-content">
             <div class="search-suffix-header">
@@ -259,6 +329,7 @@
                 @open-port-editor-dialog="onOpenPortEditorDialog"
                 @open-cellml-editor-dialog="onOpenCellMLEditorDialog"
                 @open-parameter-editor-dialog="onOpenParameterEditorDialog"
+                @open-instance-editor="onOpenInstanceEditorDialog"
                 @open-context-menu="onNodeContextMenu"
                 :ref="(el) => (nodeRefs[props.id] = el)"
               />
@@ -274,6 +345,18 @@
 
   <!-- PrimeVue Confirmation Dialog Service component -->
   <ConfirmDialog />
+
+  <InstanceEditorDialog
+    v-model="instanceEditorDialogVisible"
+    :id="currentEditingNode?.id"
+    :initial-name="currentEditingNode?.name"
+    :math-ref="currentEditingNode?.mathRef"
+    :variables="currentEditingNode?.variables"
+    :initial-ports="currentEditingNode?.ports"
+    :existing-names="allNodeNames"
+    :default-tab="instanceEditorDefaultTab"
+    @confirm="onInstanceEditConfirm"
+  />
 
   <PortEditorDialog
     v-model="portEditorDialogVisible"
@@ -358,7 +441,7 @@ export default {
 
 <script setup>
 import { computed, h, inject, markRaw, nextTick, onMounted, onUnmounted, ref, watch, watchPostEffect } from 'vue'
-import { useVueFlow, VueFlow } from '@vue-flow/core'
+import { connectionExists, useVueFlow, VueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
 import SplitButton from 'primevue/splitbutton'
@@ -375,6 +458,7 @@ import { MiniMap } from '@vue-flow/minimap'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import useDragAndDrop from '../composables/useDnD'
+import { useHandleManagement } from '../composables/useHandleManagement'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
 import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
@@ -398,7 +482,6 @@ import { createCellMLDataFragment } from '../services/cellml'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { migrateWorkspace } from '../services/workspaceMigrator'
 import { notify } from '../utils/notify'
-import { resolvePortCouplings } from '../utils/edges'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
@@ -425,7 +508,8 @@ import {
   DEFAULT_PROJECT_TYPE,
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
-import { getId as getNextEdgeId } from '../utils/edges'
+import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
+import { getHandleId, getHandleUidFromHandleId, findMostCentralGhostHandle } from '../utils/handles'
 import { getImportConfig, parseParametersFile } from '../utils/import'
 import { detachReactivity } from '../utils/reactivity'
 import {
@@ -439,7 +523,12 @@ import {
 import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
 import PortEditorDialog from '../components/PortEditorDialog.vue'
+import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
+import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
+import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
+import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
+import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
 
 const workspaceFileInput = ref(null)
 
@@ -460,6 +549,7 @@ const {
   getSelectedEdges,
   nodes,
   onConnect,
+  onConnectEnd,
   removeEdges,
   removeNodes,
   screenToFlowCoordinate,
@@ -482,6 +572,17 @@ const {
   createInstanceNode,
 } = useDragAndDrop(pendingHistoryNodes)
 
+const {
+  activateHandle,
+  addHandle: addHandleToNode,
+  confirmActivation,
+  revertPendingGhostIfUnused,
+  revertHandlesForEdge,
+  reactivateEdgeHandles,
+  revertHandleIfUnused,
+} =
+  useHandleManagement()
+
 const dialogVisible = computed(() => {
   return (
     portEditorDialogVisible.value ||
@@ -493,7 +594,8 @@ const dialogVisible = computed(() => {
     replacementDialogVisible.value ||
     macroBuilderDialogVisible.value ||
     simSettingsDialogVisible.value ||
-    edgeConnectionDialogVisible.value
+    edgeConnectionDialogVisible.value ||
+    instanceEditorDialogVisible.value
   )
 })
 
@@ -720,6 +822,8 @@ const libraryStore = useLibraryStore()
 
 const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
+const instanceEditorDefaultTab = ref('parameters')
+const instanceEditorDialogVisible = ref(false)
 const parameterEditorDialogVisible = ref(false)
 const portEditorDialogVisible = ref(false)
 const cellMLEditorDialogVisible = ref(false)
@@ -777,6 +881,7 @@ const plotConfig = ref({})
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
+const somethingSelected = computed(() => getSelectedNodes.value.length > 0)
 
 const importOptions = computed(() => [
   {
@@ -859,12 +964,73 @@ const currentExportMode = computed(() => {
   return found || exportOptions.value[0]
 })
 
-onConnect((connection) => {
+onConnectEnd(() => {
+  revertPendingGhostIfUnused()
+})
+
+onConnect(async (connection) => {
   const sourceNode = findNode(connection.source)
   const targetNode = findNode(connection.target)
 
   if (!sourceNode || !targetNode) return
   if (sourceNode === targetNode) return
+
+  const duplicate = edges.value.find(
+    (e) => e.source === connection.source && e.target === connection.target
+  )
+
+  const duplicateSnapshot = duplicate ? detachReactivity(duplicate) : null
+
+  const sourceHandleUid = connection.sourceHandle
+    ? getHandleUidFromHandleId(connection.sourceHandle)
+    : null
+  const targetHandleUid = connection.targetHandle
+    ? getHandleUidFromHandleId(connection.targetHandle)
+    : null
+
+  confirmActivation()
+
+  if (sourceHandleUid) {
+    activateHandle(connection.source, sourceHandleUid, { trackHistory: false })
+  }
+  if (targetHandleUid) {
+    activateHandle(connection.target, targetHandleUid, { trackHistory: false })
+  }
+
+  if (duplicate) {
+    const pendingEdge = {
+      ...connection,
+      id: `pending--${connection.source}--${connection.target}`,
+      style: { strokeDasharray: '8 8', opacity: 0.4 }, // visually mark "unconfirmed"
+    }
+
+    // Prevents addition to history store.
+    suppressedEdgeIds.add(pendingEdge.id)
+    addEdges(pendingEdge)
+
+    const shouldReplace = await confirm({
+      header: 'Connection already exists',
+      message:
+        'A connection already exists between these instances. Do you wish to replace it?\n\n' +
+        'If you select Cancel, the new connection will be discarded and the existing connection will remain.',
+      severity: 'warning',
+      acceptLabel: 'Replace',
+      rejectLabel: 'Cancel',
+    })
+
+    removeEdges(pendingEdge.id)
+    suppressedEdgeIds.delete(pendingEdge.id)
+
+    if (!shouldReplace) {
+      if (sourceHandleUid) revertHandleIfUnused(connection.source, sourceHandleUid, { trackHistory: false })
+      if (targetHandleUid) revertHandleIfUnused(connection.target, targetHandleUid, { trackHistory: false })
+      return
+    }
+
+    suppressedEdgeIds.add(duplicate.id)
+    removeEdges(duplicate.id)
+    revertHandlesForEdge(duplicateSnapshot)
+  }
 
   // Derive ordinal indices from the existing edge graph:
   //   sourceIndex = how many edges already leave from this source node
@@ -895,7 +1061,33 @@ onConnect((connection) => {
     },
   }
 
-  addEdges(newEdge)
+  if (duplicateSnapshot) {
+    suppressedEdgeIds.add(newEdge.id)
+    addEdges(newEdge)
+    suppressedEdgeIds.delete(duplicateSnapshot.id)
+    suppressedEdgeIds.delete(newEdge.id)
+
+    // A single undo step for the whole replace: undo brings the old edge
+    // (and its handle activation) back and removes the new one; redo does
+    // the reverse. No pending edge involved on either side.
+    historyStore.addCommand({
+      type: 'replace-edge',
+      undo: () => {
+        removeEdges(newEdge.id)
+        revertHandlesForEdge(newEdge, [newEdge.id], { trackHistory: false })
+        addEdges(duplicateSnapshot)
+        reactivateEdgeHandles(duplicateSnapshot, { trackHistory: false })
+      },
+      redo: () => {
+        removeEdges(duplicateSnapshot.id)
+        revertHandlesForEdge(duplicateSnapshot, [duplicateSnapshot.id], { trackHistory: false })
+        addEdges(newEdge)
+        reactivateEdgeHandles(newEdge, { trackHistory: false })
+      },
+    })
+  } else {
+    addEdges(newEdge)
+  }
 })
 
 const createSelectCommand = (changes, findFn) => {
@@ -1043,6 +1235,12 @@ function updateHelperLines(changes, nodes) {
     helperLineHorizontal.value = helperLines.horizontal
     helperLineVertical.value = helperLines.vertical
     alignment.value = helperLines.alignment
+  }
+}
+
+const addHandle = async (side) => {
+  for (const node of getSelectedNodes.value) {
+    await addHandleToNode(node.id, side)
   }
 }
 
@@ -1228,6 +1426,8 @@ const onNodeChange = (changes) => {
   applyNodeChanges(changes)
 }
 
+const suppressedEdgeIds = new Set()
+
 const onEdgeChange = (changes) => {
   if (historyStore.isUndoRedoing) {
     // If we are currently undoing/redoing, bypass history tracking
@@ -1240,10 +1440,14 @@ const onEdgeChange = (changes) => {
   changes.forEach((c) => {
     if (c.type === 'remove') {
       indexRemoveEdge(c)
-      removeChanges.push({ edge: snapshotEdge(c) })
+      if (!suppressedEdgeIds.has(c.id)) {
+        removeChanges.push({ edge: snapshotEdge(c) })
+      }
     } else if (c.type === 'add') {
       indexAddEdge(c.item)
-      addChanges.push({ edge: snapshotEdge(c) })
+      if (!suppressedEdgeIds.has(c.item.id)) {
+        addChanges.push({ edge: snapshotEdge(c) })
+      }
     } else if (c.type === 'select' && undoRedoSelection) {
       const edge = findEdge(c.id)
       selectChanges.push({ id: c.id, from: edge.selected, to: c.selected })
@@ -1254,17 +1458,39 @@ const onEdgeChange = (changes) => {
     const edgesToRestore = addChanges.map((change) => change.edge)
     const idsToRemove = addChanges.map((change) => change.edge.id)
     historyStore.addCommand({
-      undo: () => removeEdges(idsToRemove),
-      redo: () => addEdges(edgesToRestore),
+      undo: () => {
+        removeEdges(idsToRemove)
+        edgesToRestore.forEach((edge) =>
+          revertHandlesForEdge(edge, idsToRemove, { trackHistory: false })
+        )
+      },
+      redo: () => {
+        addEdges(edgesToRestore)
+        edgesToRestore.forEach((edge) => reactivateEdgeHandles(edge, { trackHistory: false }))
+      },
     })
   }
 
   if (removeChanges.length) {
     const edgesToRestore = removeChanges.map((change) => change.edge)
     const idsToRemove = removeChanges.map((change) => change.edge.id)
+
+    // Ghost out any handle that no longer has an edge attached to it. 
+    // excludeEdgeIds is passed because edges.value hasn't actually 
+    // dropped these ids yet at this point.
+    edgesToRestore.forEach((edge) => revertHandlesForEdge(edge, idsToRemove))
+
     historyStore.addCommand({
-      undo: () => addEdges(edgesToRestore),
-      redo: () => removeEdges(idsToRemove),
+      undo: () => {
+        addEdges(edgesToRestore)
+        edgesToRestore.forEach((edge) => reactivateEdgeHandles(edge, { trackHistory: false }))
+      },
+      redo: () => {
+        removeEdges(idsToRemove)
+        edgesToRestore.forEach((edge) =>
+          revertHandlesForEdge(edge, idsToRemove, { trackHistory: false })
+        )
+      },
     })
   }
 
@@ -1614,6 +1840,14 @@ function onOpenParameterEditorDialog(eventPayload) {
   parameterEditorDialogVisible.value = true
 }
 
+function onOpenInstanceEditorDialog(eventPayload, tab = 'parameters') {
+  currentEditingNode.value = {
+    ...eventPayload,
+  }
+  instanceEditorDefaultTab.value = tab
+  instanceEditorDialogVisible.value = true
+}
+
 function filterConfig(config, validPortNames, validVariableNames, updatedModule) {
   const portFields = ['entrance_ports', 'exit_ports', 'general_ports']
   portFields.forEach((field) => {
@@ -1773,6 +2007,19 @@ function recomputeEdgeCouplings(nodeId) {
       ),
     }
   })
+}
+
+async function onInstanceEditConfirm(updatedData) {
+  const saveData = {
+    id: updatedData.id,
+    updateAll: updatedData.updateAll,
+    mathRef: updatedData.mathRef,
+    math: updatedData.math,
+    siblings: updatedData.siblings
+  }
+
+  updateNodeData(updatedData.id, {name: updatedData.name, variables: updatedData.variables, ports: updatedData.ports})
+  await handleCellMLSave(saveData)
 }
 
 async function onPortEditConfirm(updatedData) {
@@ -2777,7 +3024,6 @@ watch(
   top: 16px;
   right: 16px;
   z-index: 10;
-  width: 300px;
   transition: opacity 0.3s ease;
   display: flex;
   flex-direction: column;
@@ -2794,28 +3040,9 @@ watch(
 
 .workspace-search-input-wrapper {
   position: relative;
-  width: 100%;
 }
 
-.workspace-search-input {
-  width: 100%;
-}
-
-.workspace-search-input :deep(.p-inputtext) {
-  padding-right: 28px;
-}
-
-.search-clear-icon {
-  position: absolute;
-  top: 50%;
-  right: 0.75rem;
-  transform: translateY(-50%);
-  color: var(--p-text-muted-color);
-  font-size: 0.875rem;
-  z-index: 1;
-}
-
-.search-clear-icon:hover {
+.search-clear-input:hover {
   color: var(--p-text-color);
 }
 

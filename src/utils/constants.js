@@ -2,6 +2,14 @@ import { MarkerType } from '@vue-flow/core'
 
 export const SOURCE_HANDLE_TYPE = 'source'
 export const TARGET_HANDLE_TYPE = 'target'
+export const HANDLE_VARIANT = {
+  DEFAULT: 'default', 
+  GHOST: 'ghost',      
+}
+export const NUM_GHOST_HANDLES_SIDES = 5
+export const NUM_GHOST_HANDLES_TOP_BOT = 7
+export const HANDLE_SPACING = 25
+
 export const USER_MODULES_FILE = 'User_Modules.cellml'
 export const NEW_INSTANCE_MODULE_REF = 'new_module:phlynx'
 
@@ -15,7 +23,6 @@ export const edgeLineOptions = {
   markerEnd: markerEnd,
   style: {
     strokeWidth: 5,
-    // stroke: '#b1b1b7', // Can customize color if desired.
   },
 }
 export const FLOW_IDS = {
@@ -26,9 +33,9 @@ export const FLOW_IDS = {
 
 export const PARAMETER_TYPE_OPTIONS = [
   { value: 'constant', label: 'constant' },
-  { value: 'global_constant', label: 'global_constant' },
+  { value: 'global_constant', label: 'global' },
   { value: 'variable', label: 'variable' },
-  { value: 'boundary_condition', label: 'boundary_condition' },
+  { value: 'boundary_condition', label: 'boundary' },
 ]
 
 export const AFFINE_UNIT_CONVERSIONS = {
