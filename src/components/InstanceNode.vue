@@ -10,50 +10,14 @@
     <NodeResizer min-width="200" min-height="120" :is-visible="selected" />
 
     <div :class="[domainTypeClass, 'instance-card']">
-      <div v-if="isMissingParameters" class="status-indicator">
-        <i
-          class="pi pi-exclamation-triangle warning-icon"
-          v-tooltip.top="'At least one parameter has not been assigned a value'"
-        ></i>
-      </div>
-
-      <div class="instance-name" @dblclick="startEditing">
-        <span v-if="!isEditing">
-          {{ data.name }}
-        </span>
-        <InputText v-else ref="inputRef" v-model="editingName" size="small" @blur="saveEdit" @keyup.enter="saveEdit" />
-      </div>
-
-      <div class="instance-label">{{ instanceLabel }}</div>
-      <div class="button-group">
-        <Button
-          rounded
-          iconOnly
-          size="small"
-          severity="secondary"
-          class="instance-button"
-          icon="pi pi-key"
-          @click="toggleDomainMenu"
-          v-tooltip.bottom="{ value: 'Set key (colour)', showDelay: 300 }"
-          aria-haspopup="true"
-          :aria-controls="domainMenuId"
-        />
-        <Menu :id="domainMenuId" ref="domainMenuRef" :model="domainTypeMenuItems" popup class="content-fit-menu" />
-
-        <Button
-          rounded
-          iconOnly
-          size="small"
-          severity="secondary"
-          class="instance-button"
-          icon="pi pi-map-marker"
-          @click="togglePortMenu"
-          v-tooltip.bottom="{ value: 'Add handle', showDelay: 300 }"
-          aria-haspopup="true"
-          :aria-controls="portMenuId"
-        />
-        <Menu :id="portMenuId" ref="portMenuRef" :model="portMenuItems" popup class="content-fit-menu" />
-
+      <!-- Top Actions Row -->
+      <div class="card-header-actions">
+        <div v-if="isMissingParameters" class="status-indicator">
+          <i
+            class="pi pi-exclamation-triangle warning-icon"
+            v-tooltip.top="'At least one parameter has not been assigned a value'"
+          ></i>
+        </div>
         <Button
           rounded
           iconOnly
@@ -61,34 +25,29 @@
           severity="secondary"
           class="instance-button"
           icon="pi pi-pencil"
-          @click="openPortEditDialog"
-          v-tooltip.bottom="{ value: 'Edit ports', showDelay: 300 }"
+          @click="openInstanceEditor('parameters')"
+          v-tooltip.bottom="{ value: 'Edit instance', showDelay: 300 }"
         />
+      </div>
 
-        <Button
-          rounded
-          iconOnly
-          size="small"
-          severity="secondary"
-          class="instance-button"
-          icon="pi pi-sliders-h"
-          @click="openParameterEditDialog"
-          v-tooltip.bottom="{ value: 'Edit parameters', showDelay: 300 }"
-        />
+      <!-- Node Title Block -->
+      <div class="instance-name" @dblclick="startEditing">
+        <span v-if="!isEditing" class="name-text">
+          {{ data.name }}
+        </span>
+        <InputText v-else ref="inputRef" v-model="editingName" size="small" @blur="saveEdit" @keyup.enter="saveEdit" />
+      </div>
 
-        <Button
-          rounded
-          iconOnly
-          size="small"
-          severity="secondary"
-          class="instance-button"
-          @click="openCellmlEditDialog"
-          v-tooltip.bottom="{ value: 'Edit CellML Text', showDelay: 300 }"
-        >
-          <template #icon>
-            <CellMLIcon class="p-button-icon" />
-          </template>
-        </Button>
+      <!-- Metadata Footer Block -->
+      <div class="instance-details">
+        <div class="detail-item">
+          <i class="pi pi-box detail-icon"></i>
+          <span class="detail-value">{{ componentName }}</span>
+        </div>
+        <div class="detail-item">
+          <i class="pi pi-file detail-icon"></i>
+          <span class="detail-value">{{ mathFile }}</span>
+        </div>
       </div>
     </div>
 
@@ -121,7 +80,7 @@
           @click.stop="removeHandle(handle.uid)"
         />
       </Handle>
-  </template>
+    </template>
   </div>
 </template>
 
@@ -166,45 +125,28 @@ const props = defineProps({
 })
 
 const emit = defineEmits([
-  'open-cellml-editor-dialog',
-  'open-port-editor-dialog',
-  'open-parameter-editor-dialog',
+  'open-instance-editor',
   'open-context-menu',
 ])
 
 const domainMenuId = `domain-type-menu-${props.id}`
 const portMenuId = `port-menu-${props.id}`
 
-async function openPortEditDialog() {
-  emit('open-port-editor-dialog', {
-    id: props.id,
-    handles: props.data.handles,
-    initialName: props.data.name,
-    initialPorts: props.data.ports,
-    variables: props.data.variables,
-  })
-}
-
-function openCellmlEditDialog() {
-  emit('open-cellml-editor-dialog', {
+function openInstanceEditor(defaultTab = 'parameters') {
+  emit('open-instance-editor', {
     id: props.id,
     name: props.data.name,
     mathRef: props.data.mathRef,
     variables: props.data.variables,
+    ports: props.data.ports,
+    handles: props.data.handles,
+    defaultTab,
   })
 }
 
-function openParameterEditDialog() {
-  emit('open-parameter-editor-dialog', {
-    id: props.id,
-    variables: props.data.variables,
-    mathRef: props.data.mathRef,
-  })
-}
+const componentName = props.data.mathRef.split(':')[1]
 
-const instanceLabel = computed(() => {
-  return `${props.data.mathRef.split(':')[1]} — ${props.data.mathRef.split(':')[0]}`
-})
+const mathFile = props.data.mathRef.split(':')[0]
 
 const domainTypeClass = computed(() => {
   return props.data.domainType ? `domain-type-${props.data.domainType}` : 'domain-type-default'
@@ -250,13 +192,6 @@ const portMenuRef = ref(null)
 function togglePortMenu(event) {
   portMenuRef.value?.toggle(event)
 }
-
-const portMenuItems = [
-  { label: 'Left', command: () => addHandle(props.id, 'left') },
-  { label: 'Right', command: () => addHandle(props.id, 'right') },
-  { label: 'Top', command: () => addHandle(props.id, 'top') },
-  { label: 'Bottom', command: () => addHandle(props.id, 'bottom') },
-]
 
 const applyHandles = async (handlesToSet) => {
   updateNodeData(props.id, { handles: handlesToSet })
@@ -428,17 +363,28 @@ function openContextMenu(event) {
 }
 
 .instance-name {
-  min-height: 2.5rem; 
+  margin-top: auto; 
+  min-height: 2rem; 
+  margin-left: 1%;
   display: flex;
   align-items: center;
   width: 100%; 
-  margin-bottom: -4px;
+  font-weight: 600;
+  font-size: 1.2rem;
+  padding-bottom: 0.25rem;
+  margin-bottom: 0.35rem;
 }
 
 .instance-name :deep(.p-inputtext) {
   width: 100%;
-  padding-top: 0.25rem;
-  padding-bottom: 0.25rem;
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
+}
+
+.name-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .instance-node {
@@ -460,31 +406,19 @@ function openContextMenu(event) {
   border: 3px solid color-mix(in srgb, var(--p-text-color) 4%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--p-text-color) 6%, transparent);
   transition: box-shadow 120ms ease;
-  padding: 0.75rem;
+  padding: 0.5rem 0.75rem 0.65rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .instance-card:hover {
   box-shadow: 0 4px 10px color-mix(in srgb, var(--p-text-color) 12%, transparent);
 }
 
-.status-indicator {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  z-index: 10;
-  background-color: color-mix(in srgb, var(--p-orange-500) 20%, var(--p-content-background));
-  border-radius: 50%;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 4px color-mix(in srgb, var(--p-text-color) 10%, transparent);
-}
-
 .warning-icon {
   color: var(--p-orange-500);
-  font-size: 18px;
+  font-size: 0.85rem;
   cursor: help;
 }
 
@@ -492,13 +426,62 @@ function openContextMenu(event) {
   color: var(--p-orange-600);
 }
 
+.card-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  width: 100%;
+  min-height: 1.6rem;
+  z-index: 10;
+}
+
+.instance-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.detail-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--p-text-color) 70%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detail-icon {
+  font-size: 0.7rem;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.detail-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .instance-button {
   margin: 0;
   flex-shrink: 0; 
-
-  width: 1.75rem !important;
-  height: 1.75rem !important;
+  width: 1.6rem !important;
+  height: 1.6rem !important;
   padding: 0 !important;
+}
+
+.status-indicator {
+  background-color: color-mix(in srgb, var(--p-orange-500) 20%, var(--p-content-background));
+  border-radius: 50%;
+  width: 1.6rem;
+  height: 1.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px color-mix(in srgb, var(--p-text-color) 10%, transparent);
 }
 
 .instance-button :deep(.p-button-icon),
@@ -506,12 +489,6 @@ function openContextMenu(event) {
   font-size: 0.75rem !important;
   width: 0.75rem;
   height: 0.75rem;
-}
-
-.button-group {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
 }
 
 /* Base appearance for the popover */

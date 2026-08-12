@@ -5,8 +5,18 @@
 
 // Import the helper function (adjust path as needed)
 import { extractComponentsFromCellmlString } from "../utils/cellml"
-import { MAIN_NODE_TYPE, PORT_TYPE_OPTIONS, FORMAT_VERSION, DEFAULT_PROJECT_TYPE } from "../utils/constants"
+import {
+  MAIN_NODE_TYPE,
+  HANDLE_VARIANT,
+  NUM_GHOST_HANDLES_SIDES,
+  NUM_GHOST_HANDLES_TOP_BOT,
+  PORT_TYPE_OPTIONS,
+  FORMAT_VERSION,
+  DEFAULT_PROJECT_TYPE,
+  HANDLE_SIDES,
+} from "../utils/constants"
 import { normalisePorts, normaliseVariables } from "../utils/config"
+import { buildGhostHandles, findMostCentralGhostHandle } from "../utils/handles";
 
 function mergeVariables(oldData, nodeName, globalConstantNames, paramLookup) {
   const typeLookup = {};
@@ -60,17 +70,19 @@ function convertPorts(oldData) {
 }
 
 function convertHandles(oldData, uidMap) {
-  return (oldData.ports || []).map((port) => {
+  const migratedHandles = buildGhostHandles()
+  for (const port of oldData.ports) {
     const oldUid = port.uid
-    const newUid = crypto.randomUUID()
-    uidMap[oldUid] = newUid
-    return {
-      uid: newUid,
-      type: port.type,
-      side: port.side,
-      name: port.name,
+    const centralGhost = findMostCentralGhostHandle(port.side, migratedHandles)
+    if (!centralGhost) return
+    uidMap[oldUid] = centralGhost.uid
+    const handle = migratedHandles.find((h) => h.uid === centralGhost.uid)
+    if (handle) {
+      handle.variant = HANDLE_VARIANT.DEFAULT
+      handle.type = port.type 
     }
-  })
+  }
+  return migratedHandles
 }
 
 function convertNode(node, newId, globalConstantNames, paramLookup, uidMap) {

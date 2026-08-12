@@ -318,6 +318,7 @@
                 @open-port-editor-dialog="onOpenPortEditorDialog"
                 @open-cellml-editor-dialog="onOpenCellMLEditorDialog"
                 @open-parameter-editor-dialog="onOpenParameterEditorDialog"
+                @open-instance-editor="onOpenInstanceEditorDialog"
                 @open-context-menu="onNodeContextMenu"
                 :ref="(el) => (nodeRefs[props.id] = el)"
               />
@@ -333,6 +334,18 @@
 
   <!-- PrimeVue Confirmation Dialog Service component -->
   <ConfirmDialog />
+
+  <InstanceEditorDialog
+    v-model="instanceEditorDialogVisible"
+    :id="currentEditingNode?.id"
+    :initial-name="currentEditingNode?.name"
+    :math-ref="currentEditingNode?.mathRef"
+    :variables="currentEditingNode?.variables"
+    :initial-ports="currentEditingNode?.ports"
+    :existing-names="allNodeNames"
+    :default-tab="instanceEditorDefaultTab"
+    @confirm="onInstanceEditConfirm"
+  />
 
   <PortEditorDialog
     v-model="portEditorDialogVisible"
@@ -497,6 +510,7 @@ import {
 import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
 import PortEditorDialog from '../components/PortEditorDialog.vue'
+import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
 import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
 import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
@@ -566,7 +580,8 @@ const dialogVisible = computed(() => {
     exportDialogVisible.value ||
     replacementDialogVisible.value ||
     macroBuilderDialogVisible.value ||
-    edgeConnectionDialogVisible.value
+    edgeConnectionDialogVisible.value ||
+    instanceEditorDialogVisible.value
   )
 })
 
@@ -793,6 +808,8 @@ const libraryStore = useLibraryStore()
 
 const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
+const instanceEditorDefaultTab = ref('parameters')
+const instanceEditorDialogVisible = ref(false)
 const parameterEditorDialogVisible = ref(false)
 const portEditorDialogVisible = ref(false)
 const cellMLEditorDialogVisible = ref(false)
@@ -1797,6 +1814,14 @@ function onOpenParameterEditorDialog(eventPayload) {
   parameterEditorDialogVisible.value = true
 }
 
+function onOpenInstanceEditorDialog(eventPayload, tab = 'parameters') {
+  currentEditingNode.value = {
+    ...eventPayload,
+  }
+  instanceEditorDefaultTab.value = tab
+  instanceEditorDialogVisible.value = true
+}
+
 function filterConfig(config, validPortNames, validVariableNames, updatedModule) {
   const portFields = ['entrance_ports', 'exit_ports', 'general_ports']
   portFields.forEach((field) => {
@@ -1952,6 +1977,19 @@ function recomputeEdgeCouplings(nodeId) {
       ),
     }
   })
+}
+
+async function onInstanceEditConfirm(updatedData) {
+  const saveData = {
+    id: updatedData.id,
+    updateAll: updatedData.updateAll,
+    mathRef: updatedData.mathRef,
+    math: updatedData.math,
+    siblings: updatedData.siblings
+  }
+
+  updateNodeData(updatedData.id, {name: updatedData.name, variables: updatedData.variables, ports: updatedData.ports})
+  await handleCellMLSave(saveData)
 }
 
 async function onPortEditConfirm(updatedData) {
