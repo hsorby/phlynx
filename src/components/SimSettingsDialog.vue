@@ -195,7 +195,7 @@
               </AccordionTab>
             </Accordion>
 
-            <!-- Contextual Bulk Toolbar: hovers at the bottom of the dialog while items are selected -->
+            <!-- Contextual Bulk Toolbar -->
             <div class="bulk-toolbar">
               <div class="bulk-info">
                 <span><strong>{{ selectedVisibleCount }}</strong> items selected</span>
@@ -933,12 +933,20 @@ function onConstantNodeSearchBlur() {
 }
 
 function addGroup() {
-  const name = newGroupName.value.trim()
-  if (!name) return
+  const name = newGroupName.value.trim() || nextDefaultGroupName()
 
   const id = `plot-${crypto.randomUUID()}`
   plotGroups.value.push({ id, name })
   newGroupName.value = ''
+}
+
+function nextDefaultGroupName() {
+  const existingNames = new Set(plotGroups.value.map((group) => group.name))
+  let n = plotGroups.value.length + 1
+  while (existingNames.has(`Plot ${n}`)) {
+    n += 1
+  }
+  return `Plot ${n}`
 }
 
 function removeGroup(groupId) {
@@ -1173,7 +1181,7 @@ const closeDialog = () => {
   border: 1px solid var(--p-content-border-color, var(--p-surface-300, #dcdfe6));
   border-radius: 16px;
   padding: 2px 6px 2px 10px;
-  background: var(--p-surface-100, #f8f9fb);
+  background: color-mix(in srgb, var(--p-text-color, #1f2937) 12%, var(--p-content-background, #ffffff));
   color: var(--p-text-color, inherit);
   font-size: 12px;
 }
@@ -1305,7 +1313,7 @@ const closeDialog = () => {
 }
 
 :deep(.node-accordion .p-accordion-header-link) {
-  background-color: var(--p-surface-100, #f4f6f8) !important;
+  background-color: color-mix(in srgb, var(--p-text-color, #1f2937) 6%, var(--p-content-background, #ffffff)) !important;
   color: var(--p-text-color, inherit) !important;
   border-bottom: 1px solid transparent;
   padding: 10px 14px;
@@ -1315,12 +1323,13 @@ const closeDialog = () => {
 }
 
 :deep(.node-accordion .p-accordion-header-link:hover) {
-  background-color: var(--p-surface-200, #ebf1f8) !important;
+  background-color: color-mix(in srgb, var(--p-text-color, #1f2937) 12%, var(--p-content-background, #ffffff)) !important;
 }
 
 :deep(.node-accordion .p-accordion-tab-active .p-accordion-header-link) {
-  background-color: var(--p-surface-200, #e6f0fa) !important;
-  border-bottom-color: var(--p-content-border-color, #d0e3f7) !important;
+  background-color: var(--p-highlight-background, var(--p-primary-50, #e6f0fa)) !important;
+  color: var(--p-highlight-color, var(--p-primary-color, inherit)) !important;
+  border-bottom-color: var(--p-primary-color, #d0e3f7) !important;
   font-weight: 600;
 }
 
@@ -1356,8 +1365,8 @@ const closeDialog = () => {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background-color: var(--p-primary-50, rgba(59, 130, 246, 0.15));
-  transition: transform 0.2s ease-in-out;
+  background-color: color-mix(in srgb, var(--p-primary-color, #3b82f6) 18%, var(--p-content-background, #ffffff));
+  transition: transform 0.2s ease-in-out, background-color 0.2s;
 }
 
 .accordion-chevron.accordion-chevron-open {
@@ -1378,12 +1387,12 @@ const closeDialog = () => {
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
-  background-color: var(--p-surface-200, #e5e7eb);
+  background-color: color-mix(in srgb, var(--p-text-color, #1f2937) 12%, var(--p-content-background, #ffffff));
   color: var(--p-text-muted-color, #4b5563);
   border-radius: 12px;
 }
 .count-badge.plotted {
-  background-color: var(--p-primary-50, rgba(59, 130, 246, 0.15));
+  background-color: color-mix(in srgb, var(--p-primary-color, #2563eb) 18%, var(--p-content-background, #ffffff));
   color: var(--p-primary-color, #2563eb);
 }
 
@@ -1407,7 +1416,8 @@ const closeDialog = () => {
 
 :deep(.vars-datatable tr.row-selected) {
   opacity: 1 !important;
-  background-color: var(--p-primary-50, rgba(37, 99, 235, 0.18)) !important;
+  background-color: color-mix(in srgb, var(--p-primary-color, #2563eb) 18%, var(--p-content-background, #ffffff)) !important;
+  color: var(--p-text-color, inherit) !important;
   border-left: 3px solid var(--p-primary-color, #2563eb) !important;
 }
 
