@@ -332,6 +332,8 @@
           </VueFlow>
         </div>
       </main>
+      
+      <ContextSidebar :initial-width="480" :min-width="260" :max-width="480" />
     </div>
   </div>
 
@@ -422,6 +424,7 @@
     :subgraph="edgeDialogSubgraph"
     @confirm="onEdgeConnectionConfirm"
   />
+
 </template>
 
 <script>
@@ -499,6 +502,7 @@ import {
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
+import { getHandleId, getHandleUidFromHandleId, findMostCentralGhostHandle } from '../utils/handles'
 import { getImportConfig, parseParametersFile } from '../utils/import'
 import { detachReactivity } from '../utils/reactivity'
 import {
@@ -513,12 +517,12 @@ import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
 import PortEditorDialog from '../components/PortEditorDialog.vue'
 import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
+import ContextSidebar from '../components/ContextSidebar.vue'
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
 import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
 import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
 import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
 import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
-import { getHandleId, getHandleUidFromHandleId, findMostCentralGhostHandle } from '../utils/handles'
 
 const workspaceFileInput = ref(null)
 
