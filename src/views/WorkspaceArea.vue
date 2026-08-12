@@ -81,7 +81,6 @@
 
           <Button
             iconOnly
-            style="margin-left: 10px"
             variant="text"
             severity="secondary"
             v-tooltip.bottom="{ value: 'Add top handle', showDelay: 300 }"
@@ -93,7 +92,7 @@
 
           <Button
             iconOnly
-            style="margin-left: 10px"
+            style="margin-left: 5px"
             variant="text"
             severity="secondary"
             v-tooltip.bottom="{ value: 'Add top handle', showDelay: 300 }"
@@ -105,7 +104,7 @@
 
           <Button
             iconOnly
-            style="margin-left: 10px"
+            style="margin-left: 5px"
             variant="text"
             severity="secondary"
             v-tooltip.bottom="{ value: 'Add right handle', showDelay: 300 }"
@@ -117,7 +116,7 @@
 
           <Button
             iconOnly
-            style="margin-left: 10px"
+            style="margin-left: 5px"
             variant="text"
             severity="secondary"
             v-tooltip.bottom="{ value: 'Add bottom handle', showDelay: 300 }"
@@ -140,11 +139,14 @@
           />
 
           <Button
-            label="Sim. Settings"
+            iconOnly
+            style="margin-left: 10px"
+            icon="pi pi-chart-line"
             size="small"
             variant="text"
             severity="info"
             :disabled="!somethingAvailable"
+            v-tooltip.bottom="{ value: 'Configure sim. settings', showDelay: 300 }"
             @click="onOpenSimSettingsDialog"
           />
 
@@ -152,23 +154,18 @@
 
           <!-- Import Dropdown / SplitButton -->
           <SplitButton
-            :label="`Import ${currentImportMode.label}`"
             text
             size="small"
-            :icon="typeof currentImportMode.icon === 'string' ? currentImportMode.icon : undefined"
+            icon="pi pi-file-import"
             :model="importMenuItems"
             severity="secondary"
             @click="triggerCurrentImport"
             :disabled="currentImportMode.disabled"
-            v-tooltip.bottom="
-              currentImportMode.disabled ? 'The Import option is disabled because CellML library is not ready yet.' : ''
-            "
+            v-tooltip.bottom="{ value:
+              currentImportMode.disabled ? 'The Import option is disabled because CellML library is not ready yet.' 
+              : `Import ${currentImportMode.label}`, showDelay: 300
+            }"
           >
-            <!-- Main Button Icon (for custom Vue component icons) -->
-            <template #icon v-if="typeof currentImportMode.icon !== 'string'">
-              <component :is="currentImportMode.icon" class="p-button-icon p-button-icon-left" />
-            </template>
-
             <!-- Dropdown Menu Item Icons -->
             <template #item="{ item, props }">
               <a class="p-menuitem-link" v-ripple v-bind="props.action">
@@ -184,21 +181,17 @@
 
           <!-- Export Dropdown / SplitButton -->
           <SplitButton
-            :label="`Export ${currentExportMode.label}`"
             text
             size="small"
-            :icon="typeof currentExportMode.icon === 'string' ? currentExportMode.icon : undefined"
+            icon="pi pi-file-export"
             :model="exportMenuItems"
             severity="secondary"
             style="margin-left: 10px"
             @click="triggerCurrentExport"
             :disabled="!somethingAvailable || currentExportMode.disabled"
-            v-tooltip.bottom="!somethingAvailable || currentExportMode.disabled ? cellMlExportTooltip : ''"
+            v-tooltip.bottom="{value: !somethingAvailable || currentExportMode.disabled ? cellMlExportTooltip : `Export ${currentExportMode.label}`,
+              showDelay: 300 }"
           >
-            <!-- Main Button Icon (for custom Vue component icons) -->
-            <template #icon v-if="typeof currentExportMode.icon !== 'string'">
-              <component :is="currentExportMode.icon" class="p-button-icon p-button-icon-left" />
-            </template>
 
             <!-- Dropdown Menu Item Icons -->
             <template #item="{ item, props }">
@@ -901,7 +894,7 @@ const importOptions = computed(() => [
   {
     key: IMPORT_KEYS.MODULE_CONFIG,
     label: 'Module Config',
-    icon: 'pi pi-sliders-v',
+    icon: 'pi pi-wrench',
     disabled: libcellml.status !== 'ready',
   },
   {

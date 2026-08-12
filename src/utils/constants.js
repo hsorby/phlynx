@@ -170,6 +170,7 @@ export const IMPORT_LABELS = {
   PARAMETER: 'Parameters (.csv)',
   TURTLE: 'Annotations (.ttl)',
 }
+
 export const EXPORT_KEYS = {
   CA: 'circulatoryAutogen',
   CELLML: 'cellml',
