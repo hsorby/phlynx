@@ -129,10 +129,12 @@
           <Divider layout="vertical" style="margin: 0 15px" />
 
           <Button
-            label="Macro Build"
+            iconOnly
+            icon="pi pi-hammer"
             size="small"
             variant="text"
             severity="info"
+            v-tooltip.bottom="{ value: 'Open macrobuilder', showDelay: 300 }"
             @click="onOpenMacroBuilderDialog"
           />
 
