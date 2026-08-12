@@ -12,16 +12,18 @@
             @change="handleLoadWorkspace"
           />
           <Button
-            label="Load Workspace"
+            icon="pi pi-folder-open"
             size="small"
             variant="text"
+            v-tooltip.bottom="{ value: 'Load workspace', showDelay: 300 }"
             @click="$refs.workspaceFileInput.click()"
           />
 
           <Button
-            label="Save Workspace"
+            icon="pi pi-save"
             size="small"
             variant="text"
+            v-tooltip.bottom="{ value: 'Save workspace', showDelay: 300 }"
             @click="handleSaveWorkspace"
             style="margin-left: 10px"
             :disabled="!somethingAvailable"
@@ -30,19 +32,21 @@
           <Divider layout="vertical" style="margin: 0 15px" />
 
           <Button
-            label="Auto Layout"
+            icon="pi pi-sparkles"
             size="small"
             variant="text"
             severity="warn"
+            v-tooltip.bottom="{ value: 'Clean up workspace', showDelay: 300 }"
             @click="handleAutoLayout"
             :disabled="!somethingAvailable"
           />
 
           <Button
-            label="Clear"
+            icon="pi pi-eraser"
             size="small"
             variant="text"
             severity="danger"
+            v-tooltip.bottom="{ value: 'Clear workspace', showDelay: 300 }"
             @click="handleClearWorkspace"
             style="margin-left: 10px"
             :disabled="!somethingAvailable"
@@ -51,23 +55,76 @@
           <Divider layout="vertical" style="margin: 0 15px" />
 
           <Button
-            label="Undo"
+            iconOnly
+            icon="pi pi-undo"
             size="small"
             variant="text"
             severity="secondary"
+            v-tooltip.bottom="{ value: 'Undo', showDelay: 300 }"
             @click="handleUndo"
             :disabled="!historyStore.canUndo"
           />
 
           <Button
-            label="Redo"
+            iconOnly
+            icon="pi pi-refresh"
             size="small"
             variant="text"
             severity="secondary"
+            v-tooltip.bottom="{ value: 'Redo', showDelay: 300 }"
             @click="handleRedo"
             style="margin-left: 10px"
             :disabled="!historyStore.canRedo"
           />
+
+          <Divider layout="vertical" style="margin: 0 15px" />
+
+          <Button
+            iconOnly
+            variant="text"
+            severity="secondary"
+            v-tooltip.bottom="{ value: 'Add left handle', showDelay: 300 }"
+            :disabled="!somethingSelected"
+            @click="addHandle('left')"
+          >
+            <AddHandleLeft/>
+          </Button>
+
+          <Button
+            iconOnly
+            style="margin-left: 10px"
+            variant="text"
+            severity="secondary"
+            v-tooltip.bottom="{ value: 'Add top handle', showDelay: 300 }"
+            :disabled="!somethingSelected"
+            @click="addHandle('top')"
+          >
+            <AddHandleTop/>
+          </Button>
+
+          <Button
+            iconOnly
+            style="margin-left: 10px"
+            variant="text"
+            severity="secondary"
+            v-tooltip.bottom="{ value: 'Add right handle', showDelay: 300 }"
+            :disabled="!somethingSelected"
+            @click="addHandle('right')"
+          >
+            <AddHandleRight/>
+          </Button>
+
+          <Button
+            iconOnly
+            style="margin-left: 10px"
+            variant="text"
+            severity="secondary"
+            v-tooltip.bottom="{ value: 'Add bottom handle', showDelay: 300 }"
+            :disabled="!somethingSelected"
+            @click="addHandle('bottom')"
+          >
+            <AddHandleBottom/>
+          </Button>
 
           <Divider layout="vertical" style="margin: 0 15px" />
 
@@ -261,6 +318,7 @@
                 @open-port-editor-dialog="onOpenPortEditorDialog"
                 @open-cellml-editor-dialog="onOpenCellMLEditorDialog"
                 @open-parameter-editor-dialog="onOpenParameterEditorDialog"
+                @open-instance-editor="onOpenInstanceEditorDialog"
                 @open-context-menu="onNodeContextMenu"
                 :ref="(el) => (nodeRefs[props.id] = el)"
               />
@@ -276,6 +334,18 @@
 
   <!-- PrimeVue Confirmation Dialog Service component -->
   <ConfirmDialog />
+
+  <InstanceEditorDialog
+    v-model="instanceEditorDialogVisible"
+    :id="currentEditingNode?.id"
+    :initial-name="currentEditingNode?.name"
+    :math-ref="currentEditingNode?.mathRef"
+    :variables="currentEditingNode?.variables"
+    :initial-ports="currentEditingNode?.ports"
+    :existing-names="allNodeNames"
+    :default-tab="instanceEditorDefaultTab"
+    @confirm="onInstanceEditConfirm"
+  />
 
   <PortEditorDialog
     v-model="portEditorDialogVisible"
@@ -399,7 +469,6 @@ import { createCellMLDataFragment } from '../services/cellml'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { migrateWorkspace } from '../services/workspaceMigrator'
 import { notify } from '../utils/notify'
-import { resolvePortCouplings } from '../utils/edges'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
@@ -426,7 +495,7 @@ import {
   DEFAULT_PROJECT_TYPE,
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
-import { getId as getNextEdgeId } from '../utils/edges'
+import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
 import { getHandleId, getHandleUidFromHandleId, findMostCentralGhostHandle } from '../utils/handles'
 import { getImportConfig, parseParametersFile } from '../utils/import'
 import { detachReactivity } from '../utils/reactivity'
@@ -441,8 +510,13 @@ import {
 import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
 import PortEditorDialog from '../components/PortEditorDialog.vue'
+import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
-
+import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
+import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
+import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
+import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
+  
 const workspaceFileInput = ref(null)
 
 const { isDarkMode, toggleDarkMode } = useColorScheme()
@@ -487,6 +561,7 @@ const {
 
 const {
   activateHandle,
+  addHandle: addHandleToNode,
   confirmActivation,
   revertPendingGhostIfUnused,
   revertHandlesForEdge,
@@ -505,7 +580,8 @@ const dialogVisible = computed(() => {
     exportDialogVisible.value ||
     replacementDialogVisible.value ||
     macroBuilderDialogVisible.value ||
-    edgeConnectionDialogVisible.value
+    edgeConnectionDialogVisible.value ||
+    instanceEditorDialogVisible.value
   )
 })
 
@@ -732,6 +808,8 @@ const libraryStore = useLibraryStore()
 
 const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
+const instanceEditorDefaultTab = ref('parameters')
+const instanceEditorDialogVisible = ref(false)
 const parameterEditorDialogVisible = ref(false)
 const portEditorDialogVisible = ref(false)
 const cellMLEditorDialogVisible = ref(false)
@@ -777,6 +855,7 @@ const currentMatchIndex = ref(0)
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
+const somethingSelected = computed(() => getSelectedNodes.value.length > 0)
 
 const importOptions = computed(() => [
   {
@@ -1130,6 +1209,12 @@ function updateHelperLines(changes, nodes) {
     helperLineHorizontal.value = helperLines.horizontal
     helperLineVertical.value = helperLines.vertical
     alignment.value = helperLines.alignment
+  }
+}
+
+const addHandle = async (side) => {
+  for (const node of getSelectedNodes.value) {
+    await addHandleToNode(node.id, side)
   }
 }
 
@@ -1729,6 +1814,14 @@ function onOpenParameterEditorDialog(eventPayload) {
   parameterEditorDialogVisible.value = true
 }
 
+function onOpenInstanceEditorDialog(eventPayload, tab = 'parameters') {
+  currentEditingNode.value = {
+    ...eventPayload,
+  }
+  instanceEditorDefaultTab.value = tab
+  instanceEditorDialogVisible.value = true
+}
+
 function filterConfig(config, validPortNames, validVariableNames, updatedModule) {
   const portFields = ['entrance_ports', 'exit_ports', 'general_ports']
   portFields.forEach((field) => {
@@ -1884,6 +1977,19 @@ function recomputeEdgeCouplings(nodeId) {
       ),
     }
   })
+}
+
+async function onInstanceEditConfirm(updatedData) {
+  const saveData = {
+    id: updatedData.id,
+    updateAll: updatedData.updateAll,
+    mathRef: updatedData.mathRef,
+    math: updatedData.math,
+    siblings: updatedData.siblings
+  }
+
+  updateNodeData(updatedData.id, {name: updatedData.name, variables: updatedData.variables, ports: updatedData.ports})
+  await handleCellMLSave(saveData)
 }
 
 async function onPortEditConfirm(updatedData) {
