@@ -1336,9 +1336,9 @@ const closeDialog = () => {
 :deep(.node-accordion .p-accordion-header-link > *:not(.accordion-header-content)) {
   display: none !important;
 }
-:deep(.node-accordion .p-accordion-toggle-icon),
-:deep(.node-accordion .p-accordion-header-icon),
-:deep(.node-accordion .p-icon) {
+:deep(.node-accordion .p-accordion-header-link .p-accordion-toggle-icon),
+:deep(.node-accordion .p-accordion-header-link .p-accordion-header-icon),
+:deep(.node-accordion .p-accordion-header-link > .p-icon) {
   display: none !important;
 }
 
