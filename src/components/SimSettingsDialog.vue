@@ -5,7 +5,7 @@
     modal
     :draggable="false"
     :dismissableMask="true"
-    :style="{ width: '780px', maxHeight: '90vh' }"
+    :style="{ width: '840px', height: '90vh' }"
     :appendTo="'body'"
     @update:visible="
       (visible) => {
@@ -30,7 +30,7 @@
           <section class="block">
             <div class="block-header">
               <h4>Plots</h4>
-              <span class="subtle">Variables assigned to the same subplot are plotted together.</span>
+              <span class="subtle">Variables assigned to the same plot are plotted together.</span>
             </div>
             <div class="group-toolbar">
               <InputText
@@ -214,7 +214,7 @@
                   :options="assignGroupOptions"
                   optionLabel="label"
                   optionValue="value"
-                  placeholder="Assign to subplot..."
+                  placeholder="Assign to plot..."
                   class="bulk-group-select"
                 />
                 <Button
@@ -1088,7 +1088,8 @@ const closeDialog = () => {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  min-height: 300px;
+  /* height: 100%; */
+  /* overflow: hidden; */
 }
 :deep(.sim-settings-tabs .p-tabview-panels) {
   padding: 12px 0 0;
