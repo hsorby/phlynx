@@ -4,7 +4,7 @@
     header="Simulation Settings"
     modal
     :draggable="false"
-    :style="{ width: '1040px', maxHeight: '90vh' }"
+    :style="{ width: '780px', maxHeight: '90vh' }"
     :appendTo="'body'"
     @update:visible="
       (visible) => {
@@ -13,6 +13,7 @@
     "
   >
     <div class="dialog-content">
+      <!-- Loading State -->
       <div v-if="isLoading" class="loading-state">
         <ProgressSpinner style="width: 44px; height: 44px" strokeWidth="4" />
         <div class="loading-text">
@@ -21,29 +22,22 @@
         </div>
       </div>
 
+      <!-- Main Tab View -->
       <TabView v-else v-model:activeIndex="activeTabIndex" class="sim-settings-tabs">
+        <!-- TAB 1: PLOT SETUP -->
         <TabPanel header="Plot Setup">
           <section class="block">
             <div class="block-header">
-              <h4>Variable Visibility</h4>
-              <span class="subtle">Choose which variable types are shown in the table.</span>
-            </div>
-            <div class="type-filters">
-              <label v-for="type in variableTypeOptions" :key="type.value" class="type-filter-item">
-                <Checkbox v-model="typeFilters[type.value]" binary />
-                <span>{{ type.label }}</span>
-              </label>
-            </div>
-          </section>
-
-          <section class="block">
-            <div class="block-header">
-              <h4>Plot Groups</h4>
-              <span class="subtle">Variables in the same group are plotted together.</span>
+              <h4>Plots</h4>
+              <span class="subtle">Variables assigned to the same subplot are plotted together.</span>
             </div>
             <div class="group-toolbar">
-              <InputText v-model="newGroupName" placeholder="New group name (e.g. Pressure)" class="group-name-input" />
-              <Button label="Add Group" icon="pi pi-plus" text @click="addGroup" />
+              <InputText
+                v-model="newGroupName"
+                placeholder="New plot name"
+                class="group-name-input"
+              />
+              <Button label="Add Plot" icon="pi pi-plus" text @click="addGroup" />
             </div>
             <div class="group-list">
               <div v-for="group in plotGroups" :key="group.id" class="group-chip">
@@ -60,32 +54,56 @@
             </div>
           </section>
 
-          <section class="block">
+          <section class="block mt-3">
             <div class="block-header">
               <h4>Variables To Plot</h4>
               <span class="subtle">{{ visibleRows.length }} shown of {{ variableRows.length }} total</span>
             </div>
 
+            <!-- Filter Bar -->
             <div class="filter-toolbar" v-if="variableRows.length > 0">
-              <Select
-                v-model="selectedNode"
-                :options="nodeFilterOptions"
-                optionLabel="label"
-                optionValue="value"
-                placeholder="Filter by node"
-                class="filter-select"
-              />
-              <!-- <Select
-                v-model="selectedVariable"
-                :options="variableFilterOptions"
-                optionLabel="label"
-                optionValue="value"
-                placeholder="Filter by variable"
-                class="filter-select"
-              /> -->
-              <InputText v-model="nodeSearch" placeholder="Search node name..." class="filter-input" />
+              <div class="node-search-combo">
+                <span class="node-search-input-wrap">
+                  <InputText
+                    v-model="nodeSearch"
+                    placeholder="Search / filter by node..."
+                    class="filter-input node-search-input"
+                    @focus="nodeSearchOpen = true"
+                    @input="onNodeSearchInput"
+                    @blur="onNodeSearchBlur"
+                  />
+                  <i
+                    v-if="selectedNode"
+                    class="pi pi-times node-search-clear"
+                    title="Clear node filter"
+                    @mousedown.prevent="clearNodeSelection"
+                  ></i>
+                </span>
+
+                <div v-if="nodeSearchOpen && nodeSearch" class="search-suffix-content">
+                  <div class="search-suffix-header">
+                    <span class="search-match-count">
+                      {{ matchingNodeOptions.length }} match{{ matchingNodeOptions.length !== 1 ? 'es' : '' }}
+                    </span>
+                  </div>
+                  <ul v-if="matchingNodeOptions.length > 0" class="search-match-list">
+                    <li
+                      v-for="option in matchingNodeOptions"
+                      :key="option.value"
+                      class="search-match-item"
+                      :class="{ active: option.value === selectedNode }"
+                      @mousedown.prevent="selectNodeMatch(option)"
+                    >
+                      {{ option.label }}
+                    </li>
+                  </ul>
+                  <div v-else class="search-no-match">No matching nodes</div>
+                </div>
+              </div>
+
               <InputText v-model="variableSearch" placeholder="Search variable name..." class="filter-input" />
               <Button
+                v-if="nodeSearch || variableSearch || selectedNode"
                 label="Reset Filters"
                 icon="pi pi-filter-slash"
                 text
@@ -94,141 +112,152 @@
               />
             </div>
 
-            <div class="bulk-toolbar" v-if="visibleRows.length > 0">
-              <label class="bulk-select-all">
-                <Checkbox :modelValue="allVisibleSelected" binary @update:modelValue="toggleSelectAllVisible" />
-                <span>Select all shown</span>
-              </label>
-              <span class="bulk-count">{{ selectedVisibleCount }} selected</span>
-              <Button
-                label="Clear Selection"
-                icon="pi pi-eraser"
-                text
-                severity="secondary"
-                :disabled="selectedVisibleCount === 0"
-                @click="clearSelection"
-              />
-              <Select
-                v-model="bulkGroupId"
-                :options="assignGroupOptions"
-                optionLabel="label"
-                optionValue="value"
-                placeholder="Assign selected to group"
-                class="bulk-group-select"
-              />
-              <Button
-                label="Assign Selected"
-                icon="pi pi-check"
-                text
-                :disabled="selectedVisibleCount === 0 || !bulkGroupId"
-                @click="assignSelectedToGroup"
-              />
-              <Button
-                label="Move To Ungrouped"
-                icon="pi pi-minus-circle"
-                text
-                severity="contrast"
-                :disabled="selectedVisibleCount === 0"
-                @click="moveSelectedToUngrouped"
-              />
+            <!-- Accordion Grouped Variables -->
+            <div v-if="groupedVisibleRows.length === 0" class="empty-state">
+              No variables match the current filters.
             </div>
 
-            <div v-if="visibleRows.length === 0" class="empty-state">
-              No variables match the current type visibility filters.
-            </div>
+            <Accordion v-else :multiple="true" v-model:activeIndex="activeVariablePanels" class="node-accordion">
+              <AccordionTab v-for="(group, index) in groupedVisibleRows" :key="group.nodeName">
+                <template #header>
+                  <div class="accordion-header-content">
+                    <div class="node-title-group">
+                      <i
+                        class="pi pi-chevron-right accordion-chevron"
+                        :class="{ 'accordion-chevron-open': activeVariablePanels.includes(index) }"
+                      ></i>
+                      <span class="font-bold node-name">{{ group.nodeName }}</span>
+                    </div>
+                    <div class="badge-group">
+                      <span class="count-badge">{{ group.rows.length }} vars</span>
+                      <span v-if="group.plottedCount > 0" class="count-badge plotted">
+                        {{ group.plottedCount }} plotted
+                      </span>
+                    </div>
+                  </div>
+                </template>
 
-            <div v-else class="vars-table-wrap">
-              <table class="vars-table">
-                <thead>
-                  <tr>
-                    <th style="width: 56px">Sel</th>
-                    <th style="width: 70px">Plot</th>
-                    <th>Node</th>
-                    <th>Variable</th>
-                    <th style="width: 170px">Type</th>
-                    <th style="width: 120px">Units</th>
-                    <th style="width: 250px">Group</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in visibleRows" :key="row.key">
-                    <td>
-                      <Checkbox v-model="row.selected" binary />
-                    </td>
-                    <td>
-                      <Checkbox v-model="row.plot" binary @change="onPlotToggle(row)" />
-                    </td>
-                    <td>{{ row.nodeName }}</td>
-                    <td>{{ row.variableName }}</td>
-                    <td>
-                      <Tag :value="row.type" severity="secondary" />
-                    </td>
-                    <td>{{ row.units || '-' }}</td>
-                    <td>
+                <DataTable
+                  :value="group.rows"
+                  dataKey="key"
+                  size="small"
+                  rowHover
+                  :rowClass="(data) => ({ 'row-unplotted': !data.groupId })"
+                  class="vars-datatable"
+                >
+                  <Column style="width: 44px">
+                    <template #header>
+                      <Checkbox
+                        :modelValue="isGroupAllSelected(group.rows)"
+                        binary
+                        @update:modelValue="(val) => toggleGroupSelection(group.rows, val)"
+                      />
+                    </template>
+                    <template #body="{ data }">
+                      <Checkbox v-model="data.selected" binary />
+                    </template>
+                  </Column>
+
+                  <Column field="variableName" header="Variable" sortable></Column>
+                  <Column field="units" header="Units" style="width: 100px">
+                    <template #body="{ data }">
+                      {{ data.units || '-' }}
+                    </template>
+                  </Column>
+                  <Column header="Subplot" style="width: 220px">
+                    <template #body="{ data }">
                       <Select
-                        v-model="row.groupId"
+                        v-model="data.groupId"
                         :options="groupOptions"
                         optionLabel="label"
                         optionValue="value"
-                        placeholder="Select group"
-                        :disabled="!row.plot"
+                        placeholder="Not plotted"
                         class="w-full"
+                        @change="onSubplotChange(data)"
                       />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                    </template>
+                  </Column>
+                </DataTable>
+              </AccordionTab>
+            </Accordion>
+
+            <!-- Contextual Bulk Toolbar: hovers at the bottom of the dialog while items are selected -->
+            <div class="bulk-toolbar">
+              <div class="bulk-info">
+                <span><strong>{{ selectedVisibleCount }}</strong> items selected</span>
+                <Button
+                  label="Clear Selection"
+                  icon="pi pi-eraser"
+                  text
+                  size="small"
+                  severity="secondary"
+                  @click="clearSelection"
+                />
+              </div>
+              <div class="bulk-actions">
+                <Select
+                  v-model="bulkGroupId"
+                  :options="assignGroupOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  placeholder="Assign to subplot..."
+                  class="bulk-group-select"
+                />
+                <Button
+                  label="Assign"
+                  icon="pi pi-check"
+                  size="small"
+                  :disabled="!bulkGroupId"
+                  @click="assignSelectedToGroup"
+                />
+                <Button
+                  label="Remove From Plot"
+                  icon="pi pi-minus-circle"
+                  severity="secondary"
+                  text
+                  size="small"
+                  @click="moveSelectedToUngrouped"
+                />
+              </div>
             </div>
           </section>
         </TabPanel>
 
+        <!-- TAB 2: SIMULATION PARAMETERS -->
         <TabPanel header="Simulation Parameters">
           <section class="block">
             <div class="block-header">
-              <h4>Simulation Parameters</h4>
-              <span class="subtle">Secondary settings passed through to OpenCOR config export.</span>
+              <h4>Time Configuration</h4>
+              <span class="subtle">Define simulation bounds and time intervals.</span>
             </div>
             <div class="settings-grid">
               <div class="field">
-                <label>Time Step</label>
-                <InputNumber
-                  v-model="settingsPayload.timeStep"
-                  :min="0"
-                  :minFractionDigits="0"
-                  :maxFractionDigits="8"
-                  fluid
-                />
-              </div>
-              <div class="field">
-                <label>Point Interval</label>
-                <InputNumber
-                  v-model="settingsPayload.pointInterval"
-                  :min="0"
-                  :minFractionDigits="0"
-                  :maxFractionDigits="8"
-                  fluid
-                />
-              </div>
-              <div class="field">
                 <label>Starting Point</label>
-                <InputNumber
-                  v-model="settingsPayload.startingPoint"
-                  :minFractionDigits="0"
-                  :maxFractionDigits="8"
-                  fluid
-                />
+                <InputNumber v-model="settingsPayload.startingPoint" :minFractionDigits="0" :maxFractionDigits="8" fluid />
               </div>
               <div class="field">
                 <label>Ending Point</label>
-                <InputNumber
-                  v-model="settingsPayload.endingPoint"
-                  :minFractionDigits="0"
-                  :maxFractionDigits="8"
-                  fluid
-                />
+                <InputNumber v-model="settingsPayload.endingPoint" :minFractionDigits="0" :maxFractionDigits="8" fluid />
               </div>
               <div class="field">
-                <label>Solver</label>
+                <label>Time Step</label>
+                <InputNumber v-model="settingsPayload.timeStep" :min="0" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+              </div>
+              <div class="field">
+                <label>Point Interval</label>
+                <InputNumber v-model="settingsPayload.pointInterval" :min="0" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+              </div>
+            </div>
+          </section>
+
+          <section class="block mt-3">
+            <div class="block-header">
+              <h4>Solver Configuration</h4>
+              <span class="subtle">Select numerical solver and step limits.</span>
+            </div>
+            <div class="settings-grid">
+              <div class="field">
+                <label>Solver Algorithm</label>
                 <Select
                   v-model="settingsPayload.solver"
                   :options="solverOptions"
@@ -254,6 +283,139 @@
             </div>
           </section>
         </TabPanel>
+
+        <!-- TAB 3: PARAMETER SCAN -->
+        <TabPanel header="Parameter Scan">
+          <section class="block">
+            <div class="block-header">
+              <h4>Parameter Scan</h4>
+              <span class="subtle">{{ selectedConstantCount }} of {{ constantRows.length }} constants included</span>
+            </div>
+
+            <div class="filter-toolbar" v-if="constantRows.length > 0">
+              <div class="node-search-combo">
+                <span class="node-search-input-wrap">
+                  <InputText
+                    v-model="constantNodeSearch"
+                    placeholder="Search / filter by node..."
+                    class="filter-input node-search-input"
+                    @focus="constantNodeSearchOpen = true"
+                    @input="onConstantNodeSearchInput"
+                    @blur="onConstantNodeSearchBlur"
+                  />
+                  <i
+                    v-if="selectedConstantNode"
+                    class="pi pi-times node-search-clear"
+                    title="Clear node filter"
+                    @mousedown.prevent="clearConstantNodeSelection"
+                  ></i>
+                </span>
+
+                <div v-if="constantNodeSearchOpen && constantNodeSearch" class="search-suffix-content">
+                  <div class="search-suffix-header">
+                    <span class="search-match-count">
+                      {{ matchingConstantNodeOptions.length }} match{{ matchingConstantNodeOptions.length !== 1 ? 'es' : '' }}
+                    </span>
+                  </div>
+                  <ul v-if="matchingConstantNodeOptions.length > 0" class="search-match-list">
+                    <li
+                      v-for="option in matchingConstantNodeOptions"
+                      :key="option.value"
+                      class="search-match-item"
+                      :class="{ active: option.value === selectedConstantNode }"
+                      @mousedown.prevent="selectConstantNodeMatch(option)"
+                    >
+                      {{ option.label }}
+                    </li>
+                  </ul>
+                  <div v-else class="search-no-match">No matching nodes</div>
+                </div>
+              </div>
+
+              <InputText v-model="constantSearch" placeholder="Search parameter name..." class="filter-input" />
+              <Button
+                v-if="constantNodeSearch || constantSearch || selectedConstantNode"
+                label="Reset Filters"
+                icon="pi pi-filter-slash"
+                text
+                severity="secondary"
+                @click="resetConstantFilters"
+              />
+            </div>
+
+            <!-- Accordion Grouped Constants -->
+            <div v-if="constantRows.length === 0" class="empty-state">
+              No constants were found on the current nodes.
+            </div>
+            <div v-else-if="groupedConstantRows.length === 0" class="empty-state">
+              No constants match the current filters.
+            </div>
+
+            <Accordion v-else :multiple="true" v-model:activeIndex="activeConstantPanels" class="node-accordion">
+              <AccordionTab v-for="(group, index) in groupedConstantRows" :key="group.nodeName">
+                <template #header>
+                  <div class="accordion-header-content">
+                    <div class="node-title-group">
+                      <i
+                        class="pi pi-chevron-right accordion-chevron"
+                        :class="{ 'accordion-chevron-open': activeConstantPanels.includes(index) }"
+                      ></i>
+                      <span class="font-bold node-name">{{ group.nodeName }}</span>
+                    </div>
+                    <span class="count-badge">{{ group.rows.length }} params</span>
+                  </div>
+                </template>
+
+                <DataTable
+                  :value="group.rows"
+                  dataKey="key"
+                  size="small"
+                  rowHover
+                  :rowClass="(data) => ({ 'row-unplotted': !data.selected })"
+                  class="vars-datatable"
+                >
+                  <Column style="width: 44px">
+                    <template #header>
+                      <Checkbox
+                        :modelValue="isGroupAllSelected(group.rows)"
+                        binary
+                        @update:modelValue="(val) => toggleGroupSelection(group.rows, val)"
+                      />
+                    </template>
+                    <template #body="{ data }">
+                      <Checkbox v-model="data.selected" binary />
+                    </template>
+                  </Column>
+
+                  <Column field="parameterName" header="Parameter" sortable></Column>
+                  <Column field="units" header="Unit" style="width: 90px">
+                    <template #body="{ data }">
+                      {{ data.units || '-' }}
+                    </template>
+                  </Column>
+
+                  <Column header="Min" style="width: 120px">
+                    <template #body="{ data }">
+                      <InputNumber v-model="data.min" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+                    </template>
+                  </Column>
+
+                  <Column header="Default" style="width: 120px">
+                    <template #body="{ data }">
+                      <InputNumber v-model="data.default" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+                    </template>
+                  </Column>
+
+                  <Column header="Max" style="width: 120px">
+                    <template #body="{ data }">
+                      <InputNumber v-model="data.max" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+                    </template>
+                  </Column>
+                </DataTable>
+              </AccordionTab>
+            </Accordion>
+          </section>
+        </TabPanel>
       </TabView>
     </div>
 
@@ -269,14 +431,17 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 
+import Accordion from 'primevue/accordion'
+import AccordionTab from 'primevue/accordiontab'
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
+import Column from 'primevue/column'
+import DataTable from 'primevue/datatable'
 import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import ProgressSpinner from 'primevue/progressspinner'
 import Select from 'primevue/select'
-import Tag from 'primevue/tag'
 import TabPanel from 'primevue/tabpanel'
 import TabView from 'primevue/tabview'
 
@@ -297,16 +462,13 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  parameterScanConfig: {
+    type: Object,
+    default: () => ({}),
+  },
 })
 
 const emit = defineEmits(['update:modelValue', 'confirm'])
-
-const variableTypeOptions = [
-  { label: 'Variables', value: 'variable' },
-  { label: 'Boundary Conditions', value: 'boundary_condition' },
-  { label: 'Constants', value: 'constant' },
-  { label: 'Global Constants', value: 'global_constant' },
-]
 
 const solverOptions = [
   { label: 'CVODE', value: 'CVODE' },
@@ -316,6 +478,7 @@ const solverOptions = [
 
 const settingsPayload = ref({ ...BASELINE_SIMULATION_SETTINGS })
 const variableRows = ref([])
+const constantRows = ref([])
 const isLoading = ref(false)
 const loadingText = ref('Preparing variable list...')
 const newGroupName = ref('')
@@ -325,18 +488,18 @@ const selectedNode = ref(null)
 const selectedVariable = ref(null)
 const nodeSearch = ref('')
 const variableSearch = ref('')
+const nodeSearchOpen = ref(false)
+const constantNodeSearch = ref('')
+const constantSearch = ref('')
+const selectedConstantNode = ref(null)
+const constantNodeSearchOpen = ref(false)
 const activeTabIndex = ref(0)
 let loadCycle = 0
 
-const typeFilters = ref({
-  variable: true,
-  boundary_condition: true,
-  constant: false,
-  global_constant: false,
-})
+// --- Computed Properties ---
 
 const groupOptions = computed(() => {
-  const options = [{ label: 'Ungrouped', value: null }]
+  const options = [{ label: 'Not plotted', value: null }]
   for (const group of plotGroups.value) {
     options.push({ label: group.name, value: group.id })
   }
@@ -348,7 +511,6 @@ const visibleRows = computed(() => {
   const variableTerm = variableSearch.value.trim().toLowerCase()
 
   return variableRows.value.filter((row) => {
-    if (!typeFilters.value[row.type]) return false
     if (selectedNode.value && row.nodeName !== selectedNode.value) return false
     if (selectedVariable.value && row.variableName !== selectedVariable.value) return false
     if (nodeTerm && !row.nodeName.toLowerCase().includes(nodeTerm)) return false
@@ -366,34 +528,122 @@ const nodeFilterOptions = computed(() => {
   return options
 })
 
-const variableFilterOptions = computed(() => {
-  let pool = variableRows.value
-  if (selectedNode.value) {
-    pool = pool.filter((row) => row.nodeName === selectedNode.value)
-  }
-
-  const unique = new Set(pool.map((row) => row.variableName))
-  const options = [{ label: 'All variables', value: null }]
+const constantNodeFilterOptions = computed(() => {
+  const unique = new Set(constantRows.value.map((row) => row.nodeName))
+  const options = [{ label: 'All nodes', value: null }]
   Array.from(unique)
     .sort((a, b) => a.localeCompare(b))
     .forEach((name) => options.push({ label: name, value: name }))
   return options
 })
 
-const selectedVisibleCount = computed(() => {
-  return visibleRows.value.filter((row) => row.selected).length
+// Matches shown in the node search comboboxes (real nodes only, no 'All nodes' entry)
+const matchingNodeOptions = computed(() => {
+  const term = nodeSearch.value.trim().toLowerCase()
+  const options = nodeFilterOptions.value.filter((opt) => opt.value !== null)
+  if (!term) return options
+  return options.filter((opt) => opt.label.toLowerCase().includes(term))
 })
 
-const allVisibleSelected = computed(() => {
-  if (visibleRows.value.length === 0) return false
-  return visibleRows.value.every((row) => row.selected)
+const matchingConstantNodeOptions = computed(() => {
+  const term = constantNodeSearch.value.trim().toLowerCase()
+  const options = constantNodeFilterOptions.value.filter((opt) => opt.value !== null)
+  if (!term) return options
+  return options.filter((opt) => opt.label.toLowerCase().includes(term))
+})
+
+// Group visible variables by Node
+const groupedVisibleRows = computed(() => {
+  const groupsMap = new Map()
+  for (const row of visibleRows.value) {
+    if (!groupsMap.has(row.nodeName)) {
+      groupsMap.set(row.nodeName, [])
+    }
+    groupsMap.get(row.nodeName).push(row)
+  }
+
+  return Array.from(groupsMap.entries()).map(([nodeName, rows]) => ({
+    nodeName,
+    rows,
+    plottedCount: rows.filter((r) => r.plot).length,
+  }))
+})
+
+// Constant rows filtered by the Parameter Scan tab's own search/node controls
+const visibleConstantRows = computed(() => {
+  const nodeTerm = constantNodeSearch.value.trim().toLowerCase()
+  const paramTerm = constantSearch.value.trim().toLowerCase()
+
+  return constantRows.value.filter((row) => {
+    if (selectedConstantNode.value && row.nodeName !== selectedConstantNode.value) return false
+    if (nodeTerm && !row.nodeName.toLowerCase().includes(nodeTerm)) return false
+    if (paramTerm && !row.parameterName.toLowerCase().includes(paramTerm)) return false
+    return true
+  })
+})
+
+// Group constant rows by Node
+const groupedConstantRows = computed(() => {
+  const groupsMap = new Map()
+  for (const row of visibleConstantRows.value) {
+    if (!groupsMap.has(row.nodeName)) {
+      groupsMap.set(row.nodeName, [])
+    }
+    groupsMap.get(row.nodeName).push(row)
+  }
+
+  return Array.from(groupsMap.entries()).map(([nodeName, rows]) => ({
+    nodeName,
+    rows,
+  }))
+})
+
+// Which node-accordion panels are expanded, tracked by index into the current
+// grouped list. Bound two-way (v-model:activeIndex) so user toggles actually
+// stick. We only re-expand everything when the *set of visible nodes* changes
+// (e.g. a filter was applied) — not on every row edit, which would otherwise
+// snap collapsed panels back open on every checkbox click or field edit.
+const activeVariablePanels = ref([])
+const activeConstantPanels = ref([])
+
+watch(
+  () => groupedVisibleRows.value.map((g) => g.nodeName).join('|'),
+  () => {
+    activeVariablePanels.value = groupedVisibleRows.value.map((_, index) => index)
+  }
+)
+
+watch(
+  () => groupedConstantRows.value.map((g) => g.nodeName).join('|'),
+  () => {
+    activeConstantPanels.value = groupedConstantRows.value.map((_, index) => index)
+  }
+)
+
+const selectedVisibleCount = computed(() => {
+  return visibleRows.value.filter((row) => row.selected).length
 })
 
 const assignGroupOptions = computed(() => {
   return plotGroups.value.map((group) => ({ label: group.name, value: group.id }))
 })
 
-// --- State Management ---
+const selectedConstantCount = computed(() => constantRows.value.filter((row) => row.selected).length)
+
+// --- Helper Selection Functions ---
+
+function isGroupAllSelected(rows) {
+  if (!rows || rows.length === 0) return false
+  return rows.every((row) => row.selected)
+}
+
+function toggleGroupSelection(rows, value) {
+  rows.forEach((row) => {
+    row.selected = Boolean(value)
+  })
+}
+
+// --- Watchers & Initialization ---
 
 watch(
   () => props.modelValue,
@@ -438,18 +688,19 @@ function normaliseGroups(existingGroups) {
 
 function buildVariableRows(nodes, selectedByKey) {
   const rows = []
-  const defaultGroupId = plotGroups.value[0]?.id || null
 
   for (const node of nodes || []) {
     if (!node?.data?.name) continue
     for (const variable of node.data.variables || []) {
       if (!variable?.name) continue
 
+      const type = variable.type || 'variable'
+      if (type !== 'variable') continue
+
       const key = `${node.id}::${variable.name}`
       const existing = selectedByKey.get(key)
-      const type = variable.type || 'variable'
-      const defaultPlotted = type === 'variable' || type === 'boundary_condition'
 
+      // DEFAULT UNPLOTTED: plot defaults to false and groupId defaults to null
       rows.push({
         key,
         nodeId: node.id,
@@ -457,8 +708,8 @@ function buildVariableRows(nodes, selectedByKey) {
         variableName: variable.name,
         units: variable.units || '',
         type,
-        plot: existing?.plot ?? defaultPlotted,
-        groupId: existing?.groupId ?? (defaultPlotted ? defaultGroupId : null),
+        plot: existing?.plot ?? false,
+        groupId: existing?.groupId ?? null,
         selected: false,
       })
     }
@@ -468,6 +719,58 @@ function buildVariableRows(nodes, selectedByKey) {
     const nodeDiff = a.nodeName.localeCompare(b.nodeName)
     if (nodeDiff !== 0) return nodeDiff
     return a.variableName.localeCompare(b.variableName)
+  })
+}
+
+function pickDefaultValue(variable) {
+  const candidate = variable.defaultValue ?? variable.initialValue ?? variable.value
+  const numeric = Number(candidate)
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+function computeScanBounds(defaultValue) {
+  if (defaultValue === null || defaultValue === undefined || Number.isNaN(defaultValue)) {
+    return { min: null, max: null }
+  }
+  const spread = Math.abs(defaultValue) * 0.1
+  return { min: defaultValue - spread, max: defaultValue + spread }
+}
+
+function buildConstantRows(nodes, selectedByKey) {
+  const rows = []
+
+  for (const node of nodes || []) {
+    if (!node?.data?.name) continue
+    for (const variable of node.data.variables || []) {
+      if (!variable?.name) continue
+
+      const type = variable.type || 'variable'
+      if (type !== 'constant' && type !== 'global_constant') continue
+
+      const key = `${node.id}::${variable.name}`
+      const existing = selectedByKey.get(key)
+      const defaultValue = pickDefaultValue(variable)
+      const bounds = computeScanBounds(defaultValue)
+
+      rows.push({
+        key,
+        nodeId: node.id,
+        nodeName: node.data.name,
+        parameterName: variable.name,
+        units: variable.units || '',
+        type,
+        selected: existing?.selected ?? false,
+        default: existing?.default ?? defaultValue,
+        min: existing?.min ?? bounds.min,
+        max: existing?.max ?? bounds.max,
+      })
+    }
+  }
+
+  return rows.sort((a, b) => {
+    const nodeDiff = a.nodeName.localeCompare(b.nodeName)
+    if (nodeDiff !== 0) return nodeDiff
+    return a.parameterName.localeCompare(b.parameterName)
   })
 }
 
@@ -484,6 +787,9 @@ async function initialiseDialog() {
   plotGroups.value = normaliseGroups(existingPlotConfig.groups)
 
   const selectedByKey = new Map((existingPlotConfig.selections || []).map((selection) => [selection.key, selection]))
+  const scanSelectedByKey = new Map(
+    (props.parameterScanConfig?.selections || []).map((selection) => [selection.key, selection])
+  )
 
   await nextTick()
   await new Promise((resolve) => setTimeout(resolve, 0))
@@ -495,7 +801,9 @@ async function initialiseDialog() {
 
   loadingText.value = 'Scanning nodes and variables...'
   variableRows.value = buildVariableRows(props.nodes, selectedByKey)
+  constantRows.value = buildConstantRows(props.nodes, scanSelectedByKey)
   resetVariableFilters()
+  resetConstantFilters()
 
   if (variableRows.value.length === 0) {
     notify.info({
@@ -507,11 +815,69 @@ async function initialiseDialog() {
   isLoading.value = false
 }
 
+// --- Action Methods ---
+
 function resetVariableFilters() {
   selectedNode.value = null
   selectedVariable.value = null
   nodeSearch.value = ''
   variableSearch.value = ''
+  nodeSearchOpen.value = false
+}
+
+function resetConstantFilters() {
+  selectedConstantNode.value = null
+  constantNodeSearch.value = ''
+  constantSearch.value = ''
+  constantNodeSearchOpen.value = false
+}
+
+function selectNodeMatch(option) {
+  selectedNode.value = option.value
+  nodeSearch.value = option.label
+  nodeSearchOpen.value = false
+}
+
+function clearNodeSelection() {
+  selectedNode.value = null
+  nodeSearch.value = ''
+  nodeSearchOpen.value = false
+}
+
+function onNodeSearchInput() {
+  nodeSearchOpen.value = true
+  // Free-text edits invalidate any previously picked exact node until a match is clicked again.
+  selectedNode.value = null
+}
+
+function onNodeSearchBlur() {
+  // Delay so a mousedown on a list item can still register before we close it.
+  setTimeout(() => {
+    nodeSearchOpen.value = false
+  }, 150)
+}
+
+function selectConstantNodeMatch(option) {
+  selectedConstantNode.value = option.value
+  constantNodeSearch.value = option.label
+  constantNodeSearchOpen.value = false
+}
+
+function clearConstantNodeSelection() {
+  selectedConstantNode.value = null
+  constantNodeSearch.value = ''
+  constantNodeSearchOpen.value = false
+}
+
+function onConstantNodeSearchInput() {
+  constantNodeSearchOpen.value = true
+  selectedConstantNode.value = null
+}
+
+function onConstantNodeSearchBlur() {
+  setTimeout(() => {
+    constantNodeSearchOpen.value = false
+  }, 150)
 }
 
 function addGroup() {
@@ -531,21 +897,8 @@ function removeGroup(groupId) {
   })
 }
 
-function onPlotToggle(row) {
-  if (!row.plot) {
-    row.groupId = null
-    return
-  }
-
-  if (!row.groupId) {
-    row.groupId = plotGroups.value[0]?.id || null
-  }
-}
-
-function toggleSelectAllVisible(nextValue) {
-  visibleRows.value.forEach((row) => {
-    row.selected = Boolean(nextValue)
-  })
+function onSubplotChange(row) {
+  row.plot = Boolean(row.groupId)
 }
 
 function assignSelectedToGroup() {
@@ -562,7 +915,7 @@ function assignSelectedToGroup() {
   if (updatedCount > 0) {
     notify.success({
       title: 'Bulk Assign Applied',
-      message: `Assigned ${updatedCount} variable${updatedCount === 1 ? '' : 's'} to selected group.`,
+      message: `Assigned ${updatedCount} variable${updatedCount === 1 ? '' : 's'} to selected subplot.`,
     })
   }
 }
@@ -577,20 +930,19 @@ function moveSelectedToUngrouped() {
   let updatedCount = 0
   visibleRows.value.forEach((row) => {
     if (!row.selected) return
-    row.plot = true
+    row.plot = false
     row.groupId = null
     updatedCount += 1
   })
 
   if (updatedCount > 0) {
     notify.success({
-      title: 'Bulk Ungroup Applied',
-      message: `Moved ${updatedCount} variable${updatedCount === 1 ? '' : 's'} to ungrouped.`,
+      title: 'Bulk Update Applied',
+      message: `Removed ${updatedCount} variable${updatedCount === 1 ? '' : 's'} from the plot.`,
     })
   }
 }
 
-// --- Handlers ---
 const handleConfirm = () => {
   const selected = variableRows.value.filter((row) => row.plot)
 
@@ -635,13 +987,29 @@ const handleConfirm = () => {
       groupId: null,
     }))
 
+  const scanSelections = constantRows.value
+    .filter((row) => row.selected)
+    .map((row) => ({
+      key: row.key,
+      nodeId: row.nodeId,
+      nodeName: row.nodeName,
+      parameterName: row.parameterName,
+      units: row.units,
+      type: row.type,
+      min: row.min,
+      default: row.default,
+      max: row.max,
+    }))
+
   emit('confirm', {
     simulationSettings: settingsPayload.value,
-    // ...settingsPayload.value,
     plotConfig: {
       groups: plotGroups.value,
       groupedSelections: groupsWithVariables,
       selections: [...groupsWithVariables.flatMap((group) => group.selections), ...ungroupedSelections],
+    },
+    parameterScan: {
+      selections: scanSelections,
     },
   })
 
@@ -662,6 +1030,7 @@ const closeDialog = () => {
 }
 :deep(.sim-settings-tabs .p-tabview-panels) {
   padding: 12px 0 0;
+  min-height: 560px;
 }
 .sim-settings-tabs {
   width: 100%;
@@ -685,14 +1054,17 @@ const closeDialog = () => {
 .block {
   border: 1px solid #ebeef5;
   border-radius: 8px;
-  padding: 12px;
+  padding: 14px;
   background: #fff;
+}
+.mt-3 {
+  margin-top: 14px;
 }
 .block-header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 .block-header h4 {
   margin: 0;
@@ -703,24 +1075,13 @@ const closeDialog = () => {
   font-size: 12px;
   color: #909399;
 }
-.type-filters {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-.type-filter-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-}
 .group-toolbar {
   display: flex;
   gap: 8px;
   align-items: center;
 }
 .group-name-input {
-  width: 300px;
+  width: 260px;
 }
 .group-list {
   display: flex;
@@ -737,73 +1098,245 @@ const closeDialog = () => {
   padding: 3px 6px 3px 10px;
   background: #f8f9fb;
 }
-.bulk-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
-}
+
+/* Toolbars */
 .filter-toolbar {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   flex-wrap: wrap;
 }
-.filter-select {
-  width: 220px;
-}
 .filter-input {
-  width: 220px;
+  width: 180px;
 }
-.bulk-select-all {
+
+.node-search-combo {
+  position: relative;
+}
+.node-search-input-wrap {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+}
+.node-search-input {
+  width: 220px;
+  padding-right: 26px;
+}
+.node-search-clear {
+  position: absolute;
+  right: 8px;
+  font-size: 12px;
+  color: #9aa1ab;
+  cursor: pointer;
+}
+.node-search-clear:hover {
+  color: #4b5563;
+}
+.search-suffix-content {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 260px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.15);
+  z-index: 30;
+}
+.search-suffix-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid #f0f2f5;
+  font-size: 11px;
+  color: #909399;
+}
+.search-match-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+.search-match-item {
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #1f2937;
+  cursor: pointer;
+}
+.search-match-item:hover {
+  background-color: #f4f6f8;
+}
+.search-match-item.active {
+  background-color: #e6f0fa;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+.search-no-match {
+  padding: 10px;
+  font-size: 12px;
+  color: #909399;
+  text-align: center;
+}
+
+.bulk-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  margin-top: 12px;
+  background-color: #f8f9fb;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  position: sticky;
+  bottom: 0;
+  z-index: 15;
+  box-shadow: 0 -6px 14px rgba(15, 23, 42, 0.12);
+}
+.bulk-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
 }
-.bulk-count {
-  font-size: 12px;
-  color: #606266;
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .bulk-group-select {
-  width: 260px;
+  width: 180px;
 }
-.vars-table-wrap {
-  max-height: 320px;
-  overflow: auto;
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
+
+/* Accordion Styling & Visual Dropdown Enhancements */
+.node-accordion {
+  max-height: 420px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 4px;
 }
-.vars-table {
+
+:deep(.node-accordion .p-accordion-tab) {
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+:deep(.node-accordion .p-accordion-header-link) {
+  background-color: #f4f6f8 !important;
+  border-bottom: 1px solid transparent;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+:deep(.node-accordion .p-accordion-header-link:hover) {
+  background-color: #ebf1f8 !important;
+  box-shadow: inset 0 0 0 1px #c7ddf5;
+}
+
+:deep(.node-accordion .p-accordion-tab-active .p-accordion-header-link) {
+  background-color: #e6f0fa !important;
+  border-bottom-color: #d0e3f7 !important;
+  font-weight: 600;
+}
+
+/* Delete PrimeVue's own right-side toggle icon — we render our own chevron on the
+   left inside the header content, so remove anything else the header link injects. */
+:deep(.node-accordion .p-accordion-header-link > *:not(.accordion-header-content)) {
+  display: none !important;
+}
+:deep(.node-accordion .p-accordion-toggle-icon),
+:deep(.node-accordion .p-accordion-header-icon),
+:deep(.node-accordion .p-icon) {
+  display: none !important;
+}
+
+.accordion-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   width: 100%;
-  border-collapse: collapse;
+}
+
+.node-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.accordion-chevron {
+  font-size: 12px;
+  color: #3b82f6;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: #dbeafe;
+  transition: transform 0.2s ease-in-out;
+}
+
+.accordion-chevron.accordion-chevron-open {
+  transform: rotate(90deg);
+}
+
+.node-name {
+  color: #1f2937;
   font-size: 13px;
 }
-.vars-table th,
-.vars-table td {
-  text-align: left;
-  padding: 8px;
-  border-bottom: 1px solid #f2f4f7;
-  vertical-align: middle;
+
+.badge-group {
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }
-.vars-table thead th {
-  position: sticky;
-  top: 0;
-  background: #f8f9fb;
-  z-index: 1;
+.count-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  background-color: #e5e7eb;
+  color: #4b5563;
+  border-radius: 12px;
+}
+.count-badge.plotted {
+  background-color: #dbeafe;
+  color: #1d4ed8;
+}
+
+/* DataTable Customizations */
+.vars-datatable {
+  border-top: 1px solid #e5e7eb;
+}
+:deep(.vars-datatable .p-datatable-thead > tr > th) {
+  background-color: #f9fafb;
   font-weight: 700;
+  font-size: 12px;
 }
+:deep(.vars-datatable tr.row-unplotted) {
+  opacity: 0.55;
+}
+
 .empty-state {
   font-size: 13px;
   color: #909399;
-  padding: 10px 0;
+  padding: 16px;
+  text-align: center;
 }
+
+/* Grid Layouts */
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 .field {
   display: flex;
@@ -812,17 +1345,12 @@ const closeDialog = () => {
 }
 .field label {
   font-size: 12px;
+  font-weight: 600;
   color: #606266;
 }
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-}
-
-@media (max-width: 1000px) {
-  .settings-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 </style>
