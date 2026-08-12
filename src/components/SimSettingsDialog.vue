@@ -101,7 +101,7 @@
                 </div>
               </div>
 
-              <InputText v-model="variableSearch" placeholder="Search variable name..." class="filter-input" />
+              <InputText v-model="variableSearch" placeholder="Search variable..." class="filter-input" />
               
               <Button
                 v-if="visibleRows.length > 0"
@@ -310,7 +310,7 @@
                 <span class="node-search-input-wrap">
                   <InputText
                     v-model="constantNodeSearch"
-                    placeholder="Search / filter by node..."
+                    placeholder="Search / filter by instance..."
                     class="filter-input node-search-input"
                     @focus="constantNodeSearchOpen = true"
                     @input="onConstantNodeSearchInput"
@@ -341,7 +341,7 @@
                       {{ option.label }}
                     </li>
                   </ul>
-                  <div v-else class="search-no-match">No matching nodes</div>
+                  <div v-else class="search-no-match">No matching instances</div>
                 </div>
               </div>
 
@@ -368,7 +368,7 @@
 
             <!-- Accordion Grouped Constants -->
             <div v-if="constantRows.length === 0" class="empty-state">
-              No constants were found on the current nodes.
+              No constants were found in the current instances.
             </div>
             <div v-else-if="groupedConstantRows.length === 0" class="empty-state">
               No constants match the current filters.
@@ -568,7 +568,7 @@ function toggleSelectAllVisible() {
 
 const nodeFilterOptions = computed(() => {
   const unique = new Set(variableRows.value.map((row) => row.nodeName))
-  const options = [{ label: 'All nodes', value: null }]
+  const options = [{ label: 'All instances', value: null }]
   Array.from(unique)
     .sort((a, b) => a.localeCompare(b))
     .forEach((name) => options.push({ label: name, value: name }))
@@ -577,7 +577,7 @@ const nodeFilterOptions = computed(() => {
 
 const constantNodeFilterOptions = computed(() => {
   const unique = new Set(constantRows.value.map((row) => row.nodeName))
-  const options = [{ label: 'All nodes', value: null }]
+  const options = [{ label: 'All instances', value: null }]
   Array.from(unique)
     .sort((a, b) => a.localeCompare(b))
     .forEach((name) => options.push({ label: name, value: name }))
