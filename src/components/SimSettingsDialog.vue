@@ -221,7 +221,7 @@
                   label="Assign"
                   icon="pi pi-check"
                   size="small"
-                  :disabled="!bulkGroupId"
+                  :disabled="selectedUnassignedCount === 0 || !bulkGroupId"
                   @click="assignSelectedToGroup"
                 />
                 <Button
@@ -230,6 +230,7 @@
                   severity="secondary"
                   text
                   size="small"
+                  :disabled="selectedAssignedCount === 0"
                   @click="moveSelectedToUngrouped"
                 />
               </div>
@@ -677,6 +678,14 @@ watch(
 
 const selectedVisibleCount = computed(() => {
   return visibleRows.value.filter((row) => row.selected).length
+})
+
+const selectedAssignedCount = computed(() => {
+  return visibleRows.value.filter((row) => row.selected && row.groupId).length
+})
+
+const selectedUnassignedCount = computed(() => {
+  return visibleRows.value.filter((row) => row.selected && row.groupId !== bulkGroupId.value).length
 })
 
 const assignGroupOptions = computed(() => {
