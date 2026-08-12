@@ -234,21 +234,18 @@
       <main class="workbench-main">
         <div class="workspace-search-container" :class="{ 'search-inactive': !searchBarFocused && !searchQuery }">
           <div class="workspace-search-input-wrapper">
-            <IconField iconPosition="left" class="workspace-search-input">
+            <IconField>
               <InputIcon class="pi pi-search" />
               <InputText
                 v-model="searchQuery"
-                placeholder="Search modules..."
+                class="w-62"
+                placeholder="Search Workspace..."
                 @input="handleSearchInput"
                 @focus="searchBarFocused = true"
                 @blur="searchBarFocused = false"
               />
+              <InputIcon v-if="searchQuery" class="search-clear-input pi pi-times-circle" @click="clearSearch"/>
             </IconField>
-            <i
-              v-if="searchQuery"
-              class="pi pi-times cursor-pointer search-clear-icon"
-              @click="clearSearch"
-            />
           </div>
           <div v-if="searchQuery" class="search-suffix-content">
             <div class="search-suffix-header">
@@ -499,6 +496,7 @@ import {
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
+import { getHandleId, getHandleUidFromHandleId, findMostCentralGhostHandle } from '../utils/handles'
 import { getImportConfig, parseParametersFile } from '../utils/import'
 import { detachReactivity } from '../utils/reactivity'
 import {
@@ -518,8 +516,7 @@ import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
 import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
 import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
 import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
-import { getHandleId, getHandleUidFromHandleId, findMostCentralGhostHandle } from '../utils/handles'
-
+  
 const workspaceFileInput = ref(null)
 
 const { isDarkMode, toggleDarkMode } = useColorScheme()
@@ -2990,7 +2987,6 @@ watch(
   top: 16px;
   right: 16px;
   z-index: 10;
-  width: 300px;
   transition: opacity 0.3s ease;
   display: flex;
   flex-direction: column;
@@ -3007,28 +3003,9 @@ watch(
 
 .workspace-search-input-wrapper {
   position: relative;
-  width: 100%;
 }
 
-.workspace-search-input {
-  width: 100%;
-}
-
-.workspace-search-input :deep(.p-inputtext) {
-  padding-right: 28px;
-}
-
-.search-clear-icon {
-  position: absolute;
-  top: 50%;
-  right: 0.75rem;
-  transform: translateY(-50%);
-  color: var(--p-text-muted-color);
-  font-size: 0.875rem;
-  z-index: 1;
-}
-
-.search-clear-icon:hover {
+.search-clear-input:hover {
   color: var(--p-text-color);
 }
 
