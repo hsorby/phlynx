@@ -32,14 +32,16 @@
           <Divider layout="vertical" style="margin: 0 15px" />
 
           <Button
-            icon="pi pi-sparkles"
+            iconOnly
             size="small"
             variant="text"
             severity="warn"
             v-tooltip.bottom="{ value: 'Clean up workspace', showDelay: 300 }"
             @click="handleAutoLayout"
             :disabled="!somethingAvailable"
-          />
+          >
+          <DustpanBrush/>
+          </Button> 
 
           <Button
             icon="pi pi-eraser"
@@ -541,6 +543,7 @@ import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
 import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
 import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
 import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
+import DustpanBrush from '../components/icons/DustpanBrush.vue'
 
 const workspaceFileInput = ref(null)
 
