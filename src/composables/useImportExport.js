@@ -16,7 +16,7 @@ import { useLibraryStore } from '../stores/libraryStore'
 import { generateFlattenedModel } from '../utils/cellml'
 import { createCellMLDataFragment } from '../services/cellml'
 import { generateOmexArchive } from '../services/export/omexExport'
-import { generateExportZip } from '../services/caExport'
+import { generateExportZip } from '../services/export/ca'
 
 export function useImportExport({
   libcellml,

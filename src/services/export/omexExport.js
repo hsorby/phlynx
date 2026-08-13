@@ -2,12 +2,6 @@ import JSZip from 'jszip'
 
 import { generateSedmlData } from './sedmlExport'
 
-// NOTE: assumes JSZip is already a project dependency — it's the same library
-// implied by the existing `.zip` export (generateExportZip in caExport.js).
-// If this project uses a different zip library there, swap the import below
-// to match and the rest of this file should work unchanged (only `new
-// JSZip()` / `.file()` / `.generateAsync()` are JSZip-specific).
-
 /**
  * Builds the COMBINE archive manifest.xml listing every file included in the
  * archive, plus the mandatory self-referencing "." entry for the archive
