@@ -33,13 +33,26 @@
           <TabPanel value="global">
             <section class="context-section context-section--global">
               <h4 class="context-section-title">Global Constants <span class="context-count">({{ globalConstantRows.length }})</span></h4>
+
+                <InputText
+                  v-if="globalConstantRows.length > 0"
+                  v-model="globalConstantSearch"
+                  placeholder="Search constants..."
+                  size="small"
+                  class="w-full table-search-input"
+                />
+
                 <div v-if="globalConstantRows.length === 0" class="empty-hint">
                   No global constants defined yet.
                 </div>
 
+                <div v-else-if="filteredGlobalConstantRows.length === 0" class="empty-hint">
+                  No constants match your search.
+                </div>
+
                 <div v-else class="table-flex-wrapper" style="margin-top: 0.5rem;">
                   <DataTable
-                    :value="globalConstantRows"
+                    :value="filteredGlobalConstantRows"
                     dataKey="name"
                     scrollable
                     scrollHeight="flex"
@@ -84,13 +97,25 @@
                   <span class="context-count">({{ parameterRows.length }})</span>
                 </h4>
 
+                <InputText
+                  v-if="parameterRows.length > 0"
+                  v-model="parameterSearch"
+                  placeholder="Search parameters..."
+                  size="small"
+                  class="w-full table-search-input"
+                />
+
                 <div v-if="parameterRows.length === 0" class="empty-hint">
                   This instance has no parameters.
                 </div>
 
+                <div v-else-if="filteredParameterRows.length === 0" class="empty-hint">
+                  No parameters match your search.
+                </div>
+
                 <div v-else class="table-flex-wrapper">
                   <DataTable
-                    :value="parameterRows"
+                    :value="filteredParameterRows"
                     dataKey="name"
                     scrollable
                     scrollHeight="flex"
@@ -146,21 +171,65 @@
           </TabPanel>
 
           <TabPanel value="sysmod">
-            <section class="context-section context-section--global">
-              <h4 class="context-section-title">Inspection Modules</h4>
-              <Button
-                label="New Inspection Module"
-                icon="pi pi-plus"
-                size="small"
-                outlined
-                class="new-system-module-btn"
-                @click="handleCreateInspectionModule"
-              />
+            <section class="context-section context-section--modules">
+              <div class="modules-header">
+                <h4 class="context-section-title">
+                  Inspection Modules
+                  <span class="context-count">({{ inspectionModuleStore.modules.length }})</span>
+                </h4>
+                <Button
+                  label="New"
+                  icon="pi pi-plus"
+                  size="small"
+                  outlined
+                  @click="isInspectionDialogOpen = true"
+                />
+              </div>
+
+              <div v-if="inspectionModuleStore.modules.length === 0" class="empty-hint">
+                No inspection modules yet. Create one to sum variables that share the same units.
+              </div>
+
+              <div v-else class="module-card-list">
+                <div v-for="module in inspectionModuleStore.modules" :key="module.id" class="module-card">
+                  <div class="module-card-header">
+                    <div class="module-card-title-group">
+                      <i class="pi pi-calculator module-card-icon"></i>
+                      <span class="module-card-name" :title="module.name">{{ module.name }}</span>
+                    </div>
+                    <div class="module-card-actions">
+                      <span class="module-card-units-badge">{{ module.units || '—' }}</span>
+                      <Button
+                        icon="pi pi-trash"
+                        text
+                        rounded
+                        size="small"
+                        severity="danger"
+                        v-tooltip.top="'Delete module'"
+                        @click="inspectionModuleStore.removeModule(module.id)"
+                      />
+                    </div>
+                  </div>
+                  <ul class="module-card-variable-list">
+                    <li v-for="variable in module.variables" :key="variable.key" class="module-card-variable-item">
+                      <span class="module-card-variable-node">{{ variable.nodeName }}</span>
+                      <span class="module-card-variable-sep">·</span>
+                      <span class="module-card-variable-name">{{ variable.variableName }}</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
             </section>
           </TabPanel>
         </TabPanels>
       </Tabs>
     </aside>
+
+    <CreateInspectionModuleDialog
+      v-model="isInspectionDialogOpen"
+      :nodes="allNodes"
+      @confirm="handleCreateInspectionModule"
+    />
   </div>
 </template>
 
@@ -179,8 +248,11 @@ import Tab from 'primevue/tab'
 import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
 
+import CreateInspectionModuleDialog from './dialogs/CreateInspectorModule.vue'
+
 import { useResizableAside } from '../composables/useResizableAside'
 import { useLibraryStore } from '../stores/libraryStore'
+import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
 import { detachReactivity } from '../utils/reactivity'
 import { isEditableVariableType } from '../utils/variables'
 import { PARAMETER_TYPE_OPTIONS, FLOW_IDS } from '../utils/constants'
@@ -218,12 +290,16 @@ const tabs = [
 const activeTabId = ref('global')
 
 const libraryStore = useLibraryStore()
+const inspectionModuleStore = useInspectionModuleStore()
 
-const { getSelectedNodes, updateNodeData } = useVueFlow(FLOW_IDS.MAIN)
+const { getSelectedNodes, getNodes, updateNodeData } = useVueFlow(FLOW_IDS.MAIN)
 
 const selectedNode = computed(() => getSelectedNodes.value[0] || null)
+const allNodes = computed(() => getNodes.value)
 
 const isMultipleSelected = computed(() => getSelectedNodes.value.length > 1)
+
+const isInspectionDialogOpen = ref(false)
 
 watch(selectedNode, (node) => {
   if (node) {
@@ -234,7 +310,16 @@ watch(selectedNode, (node) => {
 
 // ── Global constants (top subsection) ───────────────────────────────────────
 const globalConstantRows = ref([])
+const globalConstantSearch = ref('')
 const newlyAddedNames = ref(new Set())
+
+const filteredGlobalConstantRows = computed(() => {
+  const term = globalConstantSearch.value.trim().toLowerCase()
+  if (!term) return globalConstantRows.value
+  return globalConstantRows.value.filter(
+    (row) => row.name.toLowerCase().includes(term) || (row.units || '').toLowerCase().includes(term)
+  )
+})
 
 let hasInitialisedGlobalConstants = false
 let highlightTimeoutId = null
@@ -281,12 +366,29 @@ onUnmounted(() => {
   clearTimeout(highlightTimeoutId)
 })
 
-function handleCreateInspectionModule() {
-  notify.success({ message: 'Inspection module creation is coming soon.' })
+function handleCreateInspectionModule(payload) {
+  inspectionModuleStore.addModule(payload)
+  notify.success({
+    title: 'Inspection Module Created',
+    message: `"${payload.name}" now sums ${payload.variables.length} variables.`,
+  })
 }
 
 // ── Selected node parameters (lower subsection) ─────────────────────────────
 const parameterRows = ref([])
+const parameterSearch = ref('')
+
+const filteredParameterRows = computed(() => {
+  const term = parameterSearch.value.trim().toLowerCase()
+  if (!term) return parameterRows.value
+  return parameterRows.value.filter(
+    (row) => row.name.toLowerCase().includes(term) || (row.units || '').toLowerCase().includes(term)
+  )
+})
+
+watch(selectedNode, () => {
+  parameterSearch.value = ''
+})
 
 watch(
   selectedNode,
@@ -590,7 +692,112 @@ function handleParameterTypeChange(row) {
   width: 100%;
 }
 
+.table-search-input {
+  margin-bottom: 0.5rem;
+}
+
 .text-muted {
   color: var(--p-text-muted-color);
 }
+
+/* ── Inspection modules tab ─────────────────────────────────────────────── */
+.context-section--modules {
+  overflow-y: auto;
+}
+
+.modules-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.modules-header .context-section-title {
+  margin: 0;
+}
+
+.module-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.module-card {
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+  background: color-mix(in srgb, var(--p-text-color) 4%, var(--p-content-background));
+}
+
+.module-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.module-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.module-card-icon {
+  color: var(--p-primary-color);
+  flex-shrink: 0;
+  font-size: 0.85rem;
+}
+
+.module-card-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.module-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.module-card-units-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--p-primary-color) 18%, var(--p-content-background));
+  color: var(--p-primary-color);
+}
+
+.module-card-variable-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.module-card-variable-item {
+  font-size: 0.75rem;
+  color: var(--p-text-muted-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.module-card-variable-node {
+  color: var(--p-text-color);
+  font-weight: 500;
+}
+
+.module-card-variable-sep {
+  margin: 0 0.25rem;
+}
+
 </style>
