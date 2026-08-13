@@ -418,6 +418,7 @@
     v-model="simSettingsDialogVisible"
     :simulationSettings="simSettings"
     :plotConfig="plotConfig"
+    :parameterScanConfig="parameterScanConfig"
     :nodes="nodes"
     @confirm="onSimSettingsConfirm"
   />
@@ -897,6 +898,7 @@ const simSettings = ref({
   maxSteps: 10000,
 })
 const plotConfig = ref({})
+const parameterScanConfig = ref({})
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
@@ -2117,6 +2119,7 @@ async function onSimSettingsConfirm(data) {
   console.log('Sim settings updated:', data)
   simSettings.value = data.simulationSettings
   plotConfig.value = data.plotConfig
+  parameterScanConfig.value = data.parameterScanConfig
   simSettingsDialogVisible.value = false
 }
 

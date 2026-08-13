@@ -497,13 +497,13 @@ const props = defineProps({
     type: Object,
     default: () => ({}),
   },
-  nodes: {
-    type: Array,
-    default: () => [],
-  },
   parameterScanConfig: {
     type: Object,
     default: () => ({}),
+  },
+  nodes: {
+    type: Array,
+    default: () => [],
   },
 })
 
@@ -1081,7 +1081,7 @@ const handleConfirm = () => {
       groupedSelections: groupsWithVariables,
       selections: [...groupsWithVariables.flatMap((group) => group.selections), ...ungroupedSelections],
     },
-    parameterScan: {
+    parameterScanConfig: {
       selections: scanSelections,
     },
   })
