@@ -9,7 +9,7 @@
     :appendTo="'body'"
     @update:visible="
       (visible) => {
-        if (!visible) closeDialog()
+        if (!visible) requestClose()
       }
     "
   >
@@ -502,7 +502,7 @@
 
     <template #footer>
       <div class="dialog-footer">
-        <Button label="Cancel" severity="secondary" text @click="closeDialog" />
+        <Button label="Cancel" severity="secondary" text @click="requestClose" />
         <Button label="Save" severity="primary" @click="handleConfirm" />
       </div>
     </template>
@@ -526,6 +526,7 @@ import Select from 'primevue/select'
 import TabPanel from 'primevue/tabpanel'
 import TabView from 'primevue/tabview'
 
+import { useConfirmDialog } from '../composables/useConfirmDialog'
 import { notify } from '../utils/notify'
 import { BASELINE_SIMULATION_SETTINGS } from '../utils/constants'
 
@@ -550,6 +551,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue', 'confirm'])
+const { confirm } = useConfirmDialog()
 
 const solverOptions = [
   { label: 'CVODE', value: 'CVODE' },
@@ -575,6 +577,8 @@ const constantSearch = ref('')
 const selectedConstantNode = ref(null)
 const constantNodeSearchOpen = ref(false)
 const activeTabIndex = ref(0)
+const initialDraftSignature = ref('')
+const bypassCloseGuard = ref(false)
 let loadCycle = 0
 
 // --- Computed Properties ---
@@ -738,6 +742,11 @@ const assignGroupOptions = computed(() => {
 
 const selectedConstantCount = computed(() => constantRows.value.filter((row) => row.selected).length)
 
+const hasUnsavedChanges = computed(() => {
+  if (!props.modelValue || isLoading.value) return false
+  return createDraftSignature() !== initialDraftSignature.value
+})
+
 // --- Helper Selection Functions ---
 
 function isGroupAllSelected(rows) {
@@ -881,6 +890,75 @@ function buildConstantRows(nodes, selectedByKey) {
   })
 }
 
+function createDraftPayload() {
+  const selectedPlotRows = variableRows.value.filter((row) => row.plot)
+  const groupsById = new Map(plotGroups.value.map((group) => [group.id, group]))
+
+  const groupedSelections = plotGroups.value
+    .map((group) => {
+      const selections = selectedPlotRows.filter((row) => row.groupId === group.id)
+      return {
+        id: group.id,
+        name: group.name,
+        selections: selections.map((row) => ({
+          key: row.key,
+          nodeId: row.nodeId,
+          nodeName: row.nodeName,
+          variableName: row.variableName,
+          units: row.units,
+          type: row.type,
+          plot: true,
+          groupId: row.groupId,
+        })),
+      }
+    })
+    .filter((group) => group.selections.length > 0)
+
+  const ungroupedSelections = selectedPlotRows
+    .filter((row) => !groupsById.has(row.groupId))
+    .map((row) => ({
+      key: row.key,
+      nodeId: row.nodeId,
+      nodeName: row.nodeName,
+      variableName: row.variableName,
+      units: row.units,
+      type: row.type,
+      plot: true,
+      groupId: null,
+    }))
+
+  const scanSelections = constantRows.value
+    .filter((row) => row.selected)
+    .map((row) => ({
+      key: row.key,
+      nodeId: row.nodeId,
+      nodeName: row.nodeName,
+      parameterName: row.parameterName,
+      selected: row.selected,
+      units: row.units,
+      type: row.type,
+      min: row.min,
+      default: row.default,
+      max: row.max,
+    }))
+
+  return {
+    simulationSettings: { ...localSimulationSettings.value },
+    plotConfig: {
+      groups: plotGroups.value.map((group) => ({ ...group })),
+      groupedSelections,
+      selections: [...groupedSelections.flatMap((group) => group.selections), ...ungroupedSelections],
+    },
+    parameterScanConfig: {
+      selections: scanSelections,
+    },
+  }
+}
+
+function createDraftSignature() {
+  return JSON.stringify(createDraftPayload())
+}
+
 async function initialiseDialog() {
   loadCycle += 1
   const currentCycle = loadCycle
@@ -919,6 +997,9 @@ async function initialiseDialog() {
       message: 'No variables were found on the current nodes.',
     })
   }
+
+  initialDraftSignature.value = createDraftSignature()
+  bypassCloseGuard.value = false
 
   isLoading.value = false
 }
@@ -1069,71 +1150,34 @@ const handleConfirm = () => {
     })
   }
 
-  const groupsById = new Map(plotGroups.value.map((group) => [group.id, group]))
-  const groupsWithVariables = plotGroups.value
-    .map((group) => {
-      const selections = selected.filter((row) => row.groupId === group.id)
-      return {
-        id: group.id,
-        name: group.name,
-        selections: selections.map((row) => ({
-          key: row.key,
-          nodeId: row.nodeId,
-          nodeName: row.nodeName,
-          variableName: row.variableName,
-          units: row.units,
-          type: row.type,
-          plot: true,
-          groupId: row.groupId,
-        })),
-      }
-    })
-    .filter((group) => group.selections.length > 0)
+  const payload = createDraftPayload()
+  emit('confirm', payload)
 
-  const ungroupedSelections = selected
-    .filter((row) => !groupsById.has(row.groupId))
-    .map((row) => ({
-      key: row.key,
-      nodeId: row.nodeId,
-      nodeName: row.nodeName,
-      variableName: row.variableName,
-      units: row.units,
-      type: row.type,
-      plot: true,
-      groupId: null,
-    }))
-
-  const scanSelections = constantRows.value
-    .filter((row) => row.selected)
-    .map((row) => ({
-      key: row.key,
-      nodeId: row.nodeId,
-      nodeName: row.nodeName,
-      parameterName: row.parameterName,
-      selected: row.selected,
-      units: row.units,
-      type: row.type,
-      min: row.min,
-      default: row.default,
-      max: row.max,
-    }))
-
-  emit('confirm', {
-    simulationSettings: localSimulationSettings.value,
-    plotConfig: {
-      groups: plotGroups.value,
-      groupedSelections: groupsWithVariables,
-      selections: [...groupsWithVariables.flatMap((group) => group.selections), ...ungroupedSelections],
-    },
-    parameterScanConfig: {
-      selections: scanSelections,
-    },
-  })
-
-  closeDialog()
+  bypassCloseGuard.value = true
+  emit('update:modelValue', false)
 }
 
-const closeDialog = () => {
+const requestClose = async () => {
+  if (bypassCloseGuard.value) {
+    emit('update:modelValue', false)
+    return
+  }
+
+  if (!hasUnsavedChanges.value) {
+    emit('update:modelValue', false)
+    return
+  }
+
+  const shouldDiscard = await confirm({
+    header: 'Discard unsaved changes?',
+    message: 'You have unsaved simulation settings changes. Close without saving?',
+    severity: 'warning',
+    acceptLabel: 'Discard',
+    rejectLabel: 'Keep Editing',
+  })
+
+  if (!shouldDiscard) return
+
   emit('update:modelValue', false)
 }
 </script>
@@ -1143,8 +1187,6 @@ const closeDialog = () => {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  /* height: 100%; */
-  /* overflow: hidden; */
 }
 :deep(.sim-settings-tabs .p-tabview-panels) {
   padding: 12px 0 0;
