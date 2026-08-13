@@ -236,7 +236,11 @@
       >
         <LibraryArea />
       </ResizableLibraryPanel>
-      <main class="workbench-main" :style="{ '--library-panel-width': libraryPanelWidth + 'px' }">
+      <main class="workbench-main" :style="{
+        '--library-panel-width': libraryPanelWidth + 'px',
+        '--context-sidebar-width': contextSidebarWidth + 'px',
+        }">
+        
         <div class="workspace-search-container" :class="{ 'search-inactive': !searchBarFocused && !searchQuery }">
           <div class="workspace-search-input-wrapper">
             <IconField>
@@ -290,6 +294,37 @@
         </div>
 
         <div class="dnd-flow" @drop="onDrop">
+          <Toast position="top-right" :style="{ top: '166px', right: `${contextSidebarWidth + 25}px` }">
+          <template #message="slotProps">
+            <div class="p-toast-message-text" style="flex: 1">
+              
+              <!-- Summary / Title -->
+              <div 
+                v-if="slotProps.message.summary" 
+                class="p-toast-summary font-bold" 
+                style="line-height: 1.2; margin-bottom: 4px;"
+              >
+                {{ slotProps.message.summary }}
+              </div>
+
+              <!-- Detail / Message Content -->
+              <div 
+                class="p-toast-detail" 
+                style="line-height: 1.5;"
+              >
+                <component 
+                  v-if="typeof slotProps.message.detail === 'object'" 
+                  :is="slotProps.message.detail" 
+                />
+                <div 
+                  v-else 
+                  v-html="slotProps.message.detail" 
+                />
+              </div>
+
+            </div>
+          </template>
+        </Toast>
           <VueFlow
             :id="FLOW_IDS.MAIN"
             @dragover="onDragOver"
@@ -334,7 +369,7 @@
           </VueFlow>
         </div>
       </main>
-      <ContextSidebar :initial-width="480" :min-width="260" :max-width="480" />
+      <ContextSidebar :initial-width="480" :min-width="260" :max-width="480" @resize="onContextSidebarResize"/>
     </div>
   </div>
 
@@ -446,12 +481,15 @@ import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import ConfirmDialog from 'primevue/confirmdialog'
 import ToggleSwitch from 'primevue/toggleswitch'
+import { Toast } from 'primevue'
 
 import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
+import { useToast } from 'primevue/usetoast'
+import { useRoute } from 'vue-router'
 import useDragAndDrop from '../composables/useDnD'
 import { useHandleManagement } from '../composables/useHandleManagement'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
@@ -532,6 +570,10 @@ const libraryPanelWidth = ref(0)
 function onLibraryPanelResize(width) {
   libraryPanelWidth.value = width
 }
+const contextSidebarWidth = ref(0)
+function onContextSidebarResize(width) {
+  contextSidebarWidth.value = width
+}
 
 const { isDarkMode, toggleDarkMode } = useColorScheme()
 
@@ -562,6 +604,8 @@ const {
 } = useVueFlow(FLOW_IDS.MAIN)
 const { processMacroGeneration } = useMacroGenerator()
 const { confirm } = useConfirmDialog()
+const toast = useToast()
+const route = useRoute()
 
 const pendingHistoryNodes = new Set()
 
@@ -2865,6 +2909,24 @@ onUnmounted(() => {
 })
 
 watch(
+  () => route.path,
+  (path) => {
+    if (path !== '/') {
+      toast.removeAllGroups()
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  contextSidebarWidth,
+  (newWidth) => {
+    document.documentElement.style.setProperty('--context-sidebar-width', `${newWidth}px`)
+  },
+  { immediate: true }
+)
+
+watch(
   nodes,
   () => {
     if (searchQuery.value.trim()) {
@@ -2932,8 +2994,16 @@ watch(
 .workbench-main {
   position: relative;
   overflow: hidden;
+  min-width: 0;
+  min-height: 0;
   padding: 0;
   flex-grow: 1;
+}
+
+.dnd-flow {
+  position: relative;
+  width: 100%;
+  height: 100%;
 }
 
 /* Tutorial Slate Background for Dark Mode */
