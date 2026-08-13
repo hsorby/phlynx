@@ -490,9 +490,6 @@ import SettingsDialog from '../components/SettingsDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
 import PaneContextMenu from '../components/PaneContextMenu.vue'
 import { useScreenshot } from '../services/useScreenshot'
-import { generateExportZip } from '../services/caExport'
-import { generateOmexArchive } from '../services/export/omexExport'
-import { createCellMLDataFragment } from '../services/cellml'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { migrateWorkspace } from '../services/workspaceMigrator'
 import { notify } from '../utils/notify'
@@ -503,21 +500,16 @@ import { useConfirmDialog } from '../composables/useConfirmDialog'
 import { useImportExport } from '../composables/useImportExport'
 import { relayoutNodes } from '../services/layouts/physics'
 import {
-  generateFlattenedModel,
   initLibCellML,
   processCellMLData,
   extractVariablesFromMath,
-  extractComponentsFromCellmlString,
 } from '../utils/cellml'
 import {
   edgeLineOptions,
   CELLML_FILE_TYPES,
   FLOW_IDS,
   IMPORT_KEYS,
-  EXPORT_KEYS,
   JSON_FILE_TYPES,
-  ZIP_FILE_TYPES,
-  OMEX_FILE_TYPES,
   DEFAULT_FILE_NAME,
   NEW_INSTANCE_MODULE_REF,
   FORMAT_VERSION,
