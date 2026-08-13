@@ -77,7 +77,7 @@
           <!-- ── Parameters of the selected node ─────────────────────────────── -->
           <TabPanel value="params">
             <section class="context-section context-section--params">
-              <template v-if="selectedNode">
+              <template v-if="selectedNode && !isMultipleSelected">
                 <h4 class="context-section-title">
                   {{ `${selectedNode.data?.name}` || 'Selected Instance' }}
                   <span class="context-count">({{ parameterRows.length }})</span>
@@ -126,6 +126,11 @@
                   </DataTable>
                 </div>
               </template>
+              <div v-else-if="isMultipleSelected" class="empty-state">
+                <i class="pi pi-info-circle empty-state-icon"></i>
+                <p>Parameter inspector is restricted to a single instance</p>
+              </div>
+
               <div v-else class="empty-state">
                 <i class="pi pi-info-circle empty-state-icon"></i>
                 <p>Select an instance to edit its parameters here.</p>
@@ -216,6 +221,8 @@ const libraryStore = useLibraryStore()
 const { getSelectedNodes, updateNodeData } = useVueFlow(FLOW_IDS.MAIN)
 
 const selectedNode = computed(() => getSelectedNodes.value[0] || null)
+
+const isMultipleSelected = computed(() => getSelectedNodes.value.length > 1)
 
 watch(selectedNode, (node) => {
   if (node) {
