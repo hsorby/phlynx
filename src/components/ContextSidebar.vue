@@ -32,14 +32,7 @@
           <!-- ── Global functions & constants ──────────────────────────────── -->
           <TabPanel value="global">
             <section class="context-section context-section--global">
-              <h4 class="context-section-title">Global Constants</h4>
-
-              <div class="global-constants">
-                <label class="context-subheading">
-                  Global Constants
-                  <span class="context-count">({{ globalConstantRows.length }})</span>
-                </label>
-
+              <h4 class="context-section-title">Global Constants <span class="context-count">({{ globalConstantRows.length }})</span></h4>
                 <div v-if="globalConstantRows.length === 0" class="empty-hint">
                   No global constants defined yet.
                 </div>
@@ -78,7 +71,6 @@
                     </Column>
                   </DataTable>
                 </div>
-              </div>
             </section>
           </TabPanel>
 
@@ -134,11 +126,30 @@
                   </DataTable>
                 </div>
               </template>
-
               <div v-else class="empty-state">
                 <i class="pi pi-info-circle empty-state-icon"></i>
                 <p>Select an instance to edit its parameters here.</p>
               </div>
+            </section>
+          </TabPanel>
+
+          <TabPanel value="props">
+            <section class="context-section context-section--global">
+              <h4 class="context-section-title">Properties</h4>
+            </section>
+          </TabPanel>
+
+          <TabPanel value="sysmod">
+            <section class="context-section context-section--global">
+              <h4 class="context-section-title">Inspection Modules</h4>
+              <Button
+                label="New Inspection Module"
+                icon="pi pi-plus"
+                size="small"
+                outlined
+                class="new-system-module-btn"
+                @click="handleCreateInspectionModule"
+              />
             </section>
           </TabPanel>
         </TabPanels>
@@ -206,10 +217,11 @@ const { getSelectedNodes, updateNodeData } = useVueFlow(FLOW_IDS.MAIN)
 
 const selectedNode = computed(() => getSelectedNodes.value[0] || null)
 
-// Jump to the Parameters tab whenever a node is selected, so the panel
-// surfaces the relevant info without requiring a manual tab click.
 watch(selectedNode, (node) => {
-  if (node) activeTabId.value = 'params'
+  if (node) {
+    activeTabId.value = 'params'
+    if (isCollapsed.value === true) toggleCollapsed()
+  }
 })
 
 // ── Global constants (top subsection) ───────────────────────────────────────
@@ -261,9 +273,8 @@ onUnmounted(() => {
   clearTimeout(highlightTimeoutId)
 })
 
-function handleCreateSystemModule() {
-  // Placeholder only for now - system module creation isn't wired up yet.
-  notify.success({ message: 'System module creation is coming soon.' })
+function handleCreateInspectionModule() {
+  notify.success({ message: 'Inspection module creation is coming soon.' })
 }
 
 // ── Selected node parameters (lower subsection) ─────────────────────────────
