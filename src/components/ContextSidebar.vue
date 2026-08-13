@@ -76,6 +76,7 @@
 
           <!-- ── Parameters of the selected node ─────────────────────────────── -->
           <TabPanel value="params">
+            <h4 class="context-section-title">Instance Parameters</h4>
             <section class="context-section context-section--params">
               <template v-if="selectedNode && !isMultipleSelected">
                 <h4 class="context-section-title">
@@ -227,7 +228,7 @@ const isMultipleSelected = computed(() => getSelectedNodes.value.length > 1)
 watch(selectedNode, (node) => {
   if (node) {
     activeTabId.value = 'params'
-    if (isCollapsed.value === true) toggleCollapsed()
+    if (isCollapsed.value) toggleCollapsed()
   }
 })
 
