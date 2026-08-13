@@ -178,7 +178,7 @@
                       {{ data.units || '-' }}
                     </template>
                   </Column>
-                  <Column header="Subplot" style="width: 220px">
+                  <Column header="Plot" style="width: 220px">
                     <template #body="{ data }">
                       <Select
                         v-model="data.groupId"
@@ -238,69 +238,8 @@
           </section>
         </TabPanel>
 
-        <!-- TAB 2: SIMULATION PARAMETERS -->
-        <TabPanel header="Simulation Parameters">
-          <section class="block">
-            <div class="block-header">
-              <h4>Time Configuration</h4>
-              <span class="subtle">Define simulation bounds and time intervals.</span>
-            </div>
-            <div class="settings-grid">
-              <div class="field">
-                <label>Starting Point</label>
-                <InputNumber v-model="settingsPayload.startingPoint" :minFractionDigits="0" :maxFractionDigits="8" fluid />
-              </div>
-              <div class="field">
-                <label>Ending Point</label>
-                <InputNumber v-model="settingsPayload.endingPoint" :minFractionDigits="0" :maxFractionDigits="8" fluid />
-              </div>
-              <div class="field">
-                <label>Time Step</label>
-                <InputNumber v-model="settingsPayload.timeStep" :min="0" :minFractionDigits="0" :maxFractionDigits="8" fluid />
-              </div>
-              <div class="field">
-                <label>Point Interval</label>
-                <InputNumber v-model="settingsPayload.pointInterval" :min="0" :minFractionDigits="0" :maxFractionDigits="8" fluid />
-              </div>
-            </div>
-          </section>
-
-          <section class="block mt-3">
-            <div class="block-header">
-              <h4>Solver Configuration</h4>
-              <span class="subtle">Select numerical solver and step limits.</span>
-            </div>
-            <div class="settings-grid">
-              <div class="field">
-                <label>Solver Algorithm</label>
-                <Select
-                  v-model="settingsPayload.solver"
-                  :options="solverOptions"
-                  optionLabel="label"
-                  optionValue="value"
-                  fluid
-                />
-              </div>
-              <div class="field">
-                <label>Tolerance</label>
-                <InputNumber
-                  v-model="settingsPayload.tolerance"
-                  :min="0"
-                  :minFractionDigits="0"
-                  :maxFractionDigits="12"
-                  fluid
-                />
-              </div>
-              <div class="field">
-                <label>Max Steps</label>
-                <InputNumber v-model="settingsPayload.maxSteps" :min="1" :useGrouping="false" fluid />
-              </div>
-            </div>
-          </section>
-        </TabPanel>
-
-        <!-- TAB 3: PARAMETER SCAN -->
-        <TabPanel header="Parameter Scan">
+         <!-- TAB 2: PARAMETER SCAN SETUP -->
+        <TabPanel header="Parameter Scan Setup">
           <section class="block">
             <div class="block-header">
               <h4>Parameter Scan</h4>
@@ -453,6 +392,69 @@
             </Accordion>
           </section>
         </TabPanel>
+
+        <!-- TAB 3: SIMULATION PARAMETERS -->
+        <TabPanel header="Simulation Parameters">
+          <section class="block">
+            <div class="block-header">
+              <h4>Time Configuration</h4>
+              <span class="subtle">Define simulation bounds and time intervals.</span>
+            </div>
+            <div class="settings-grid">
+              <div class="field">
+                <label>Starting Point</label>
+                <InputNumber v-model="settingsPayload.startingPoint" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+              </div>
+              <div class="field">
+                <label>Ending Point</label>
+                <InputNumber v-model="settingsPayload.endingPoint" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+              </div>
+              <div class="field">
+                <label>Time Step</label>
+                <InputNumber v-model="settingsPayload.timeStep" :min="0" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+              </div>
+              <div class="field">
+                <label>Point Interval</label>
+                <InputNumber v-model="settingsPayload.pointInterval" :min="0" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+              </div>
+            </div>
+          </section>
+
+          <section class="block mt-3">
+            <div class="block-header">
+              <h4>Solver Configuration</h4>
+              <span class="subtle">Select numerical solver and step limits.</span>
+            </div>
+            <div class="settings-grid">
+              <div class="field">
+                <label>Solver Algorithm</label>
+                <Select
+                  v-model="settingsPayload.solver"
+                  :options="solverOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  fluid
+                />
+              </div>
+              <div class="field">
+                <label>Tolerance</label>
+                <InputNumber
+                  v-model="settingsPayload.tolerance"
+                  :min="0"
+                  :minFractionDigits="0"
+                  :maxFractionDigits="12"
+                  fluid
+                />
+              </div>
+              <div class="field">
+                <label>Max Steps</label>
+                <InputNumber v-model="settingsPayload.maxSteps" :min="1" :useGrouping="false" fluid />
+              </div>
+            </div>
+          </section>
+        </TabPanel>
+
+       
       </TabView>
     </div>
 
