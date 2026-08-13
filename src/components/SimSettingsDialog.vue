@@ -426,7 +426,7 @@
               <div class="field">
                 <label>Starting Point</label>
                 <InputNumber
-                  v-model="settingsPayload.startingPoint"
+                  v-model="localSimulationSettings.startingPoint"
                   :minFractionDigits="0"
                   :maxFractionDigits="8"
                   fluid
@@ -435,7 +435,7 @@
               <div class="field">
                 <label>Ending Point</label>
                 <InputNumber
-                  v-model="settingsPayload.endingPoint"
+                  v-model="localSimulationSettings.endingPoint"
                   :minFractionDigits="0"
                   :maxFractionDigits="8"
                   fluid
@@ -444,7 +444,7 @@
               <div class="field">
                 <label>Time Step</label>
                 <InputNumber
-                  v-model="settingsPayload.timeStep"
+                  v-model="localSimulationSettings.timeStep"
                   :min="0"
                   :minFractionDigits="0"
                   :maxFractionDigits="8"
@@ -454,7 +454,7 @@
               <div class="field">
                 <label>Point Interval</label>
                 <InputNumber
-                  v-model="settingsPayload.pointInterval"
+                  v-model="localSimulationSettings.pointInterval"
                   :min="0"
                   :minFractionDigits="0"
                   :maxFractionDigits="8"
@@ -473,7 +473,7 @@
               <div class="field">
                 <label>Solver Algorithm</label>
                 <Select
-                  v-model="settingsPayload.solver"
+                  v-model="localSimulationSettings.solver"
                   :options="solverOptions"
                   optionLabel="label"
                   optionValue="value"
@@ -483,7 +483,7 @@
               <div class="field">
                 <label>Tolerance</label>
                 <InputNumber
-                  v-model="settingsPayload.tolerance"
+                  v-model="localSimulationSettings.tolerance"
                   :min="0"
                   :minFractionDigits="0"
                   :maxFractionDigits="12"
@@ -492,7 +492,7 @@
               </div>
               <div class="field">
                 <label>Max Steps</label>
-                <InputNumber v-model="settingsPayload.maxSteps" :min="1" :useGrouping="false" fluid />
+                <InputNumber v-model="localSimulationSettings.maxSteps" :min="1" :useGrouping="false" fluid />
               </div>
             </div>
           </section>
@@ -557,7 +557,7 @@ const solverOptions = [
   { label: 'Runge Kutta 4', value: 'RungeKutta4' },
 ]
 
-const settingsPayload = ref({ ...BASELINE_SIMULATION_SETTINGS })
+const localSimulationSettings = ref({ ...BASELINE_SIMULATION_SETTINGS })
 const variableRows = ref([])
 const constantRows = ref([])
 const isLoading = ref(false)
@@ -888,7 +888,7 @@ async function initialiseDialog() {
   isLoading.value = true
   loadingText.value = 'Preparing simulation settings...'
 
-  settingsPayload.value = cloneSettings(props.simulationSettings)
+  localSimulationSettings.value = cloneSettings(props.simulationSettings)
 
   const existingPlotConfig = props.plotConfig || {}
   plotGroups.value = normaliseGroups(existingPlotConfig.groups)
@@ -909,6 +909,7 @@ async function initialiseDialog() {
   loadingText.value = 'Scanning nodes and variables...'
   variableRows.value = buildVariableRows(props.nodes, selectedByKey)
   constantRows.value = buildConstantRows(props.nodes, scanSelectedByKey)
+
   resetVariableFilters()
   resetConstantFilters()
 
@@ -1109,6 +1110,7 @@ const handleConfirm = () => {
       nodeId: row.nodeId,
       nodeName: row.nodeName,
       parameterName: row.parameterName,
+      selected: row.selected,
       units: row.units,
       type: row.type,
       min: row.min,
@@ -1117,7 +1119,7 @@ const handleConfirm = () => {
     }))
 
   emit('confirm', {
-    simulationSettings: settingsPayload.value,
+    simulationSettings: localSimulationSettings.value,
     plotConfig: {
       groups: plotGroups.value,
       groupedSelections: groupsWithVariables,
