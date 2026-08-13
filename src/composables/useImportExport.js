@@ -14,7 +14,7 @@ import CellMLIcon from '../components/icons/CellMLIcon.vue'
 import { useSimSettingsStore } from '../stores/simSettingsStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import { generateFlattenedModel } from '../utils/cellml'
-import { createCellMLDataFragment } from '../services/cellml'
+import { createCellMLDataFragment } from '../services/compress'
 import { generateOmexArchive } from '../services/export/omexExport'
 import { generateExportZip } from '../services/export/ca'
 
