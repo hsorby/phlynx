@@ -201,8 +201,8 @@
             severity="primary"
             style="margin-left: 10px"
             @click="triggerCurrentExport"
-            :disabled="!somethingAvailable || currentExportMode.disabled"
-            v-tooltip.bottom="{value: !somethingAvailable || currentExportMode.disabled ? cellMlExportTooltip : `Export ${currentExportMode.label}`,
+            :disabled="!somethingAvailable || currentExportDisabled"
+            v-tooltip.bottom="{value: !somethingAvailable || currentExportDisabled ? cellMlExportTooltip : `Export ${currentExportMode.label}`,
               showDelay: 300 }"
           >
 
@@ -492,6 +492,7 @@ import HelperLines from '../components/HelperLines.vue'
 import PaneContextMenu from '../components/PaneContextMenu.vue'
 import { useScreenshot } from '../services/useScreenshot'
 import { generateExportZip } from '../services/caExport'
+import { generateOmexArchive } from '../services/export/omexExport'
 import { createCellMLDataFragment } from '../services/cellml'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { migrateWorkspace } from '../services/workspaceMigrator'
@@ -516,6 +517,7 @@ import {
   EXPORT_KEYS,
   JSON_FILE_TYPES,
   ZIP_FILE_TYPES,
+  OMEX_FILE_TYPES,
   DEFAULT_FILE_NAME,
   NEW_INSTANCE_MODULE_REF,
   FORMAT_VERSION,
@@ -933,8 +935,27 @@ const exportOptions = computed(() => [
     key: EXPORT_KEYS.CELLML,
     label: 'CellML',
     icon: markRaw(CellMLIcon),
-    suffix: '.cellml',
     disabled: libcellml.status !== 'ready' || !somethingAvailable.value,
+    suffix: '.cellml',
+    fileTypes: CELLML_FILE_TYPES,
+    message: 'Generating flattened CellML model.',
+    action: () => generateFlattenedModel(nodes.value, edges.value, libraryStore),
+    successMessage: async (blob, finalName) => {
+      const dataUri = await createCellMLDataFragment(blob, finalName)
+      return h('div', null, [
+        'Model exported to CellML. Open this model directly in ',
+        h(
+          'a',
+          {
+            href: `https://opencor.ws/app/?opencor://openFile/#${dataUri}`,
+            rel: 'noopener noreferrer',
+            style: { color: 'var(--p-primary-color)', fontWeight: 'bold' },
+            target: '_blank',
+          },
+          'OpenCOR'
+        ),
+      ])
+    },
   },
   {
     key: EXPORT_KEYS.CA,
@@ -942,6 +963,37 @@ const exportOptions = computed(() => [
     icon: 'pi pi-box',
     disabled: !somethingAvailable.value,
     suffix: '.zip',
+    fileTypes: ZIP_FILE_TYPES,
+    message: 'Generating and zipping CA files.',
+    action: (finalName) => generateExportZip(finalName, nodes.value, edges.value, libraryStore),
+    successMessage: () => 'Circulatory Autogen export zip generated.',
+  },
+  {
+    key: EXPORT_KEYS.OMEX,
+    label: 'Web OpenCOR',
+    icon: 'pi pi-box',
+    disabled: libcellml.status !== 'ready' || !somethingAvailable.value,
+    suffix: '.omex',
+    fileTypes: OMEX_FILE_TYPES,
+    message: 'Generating flattened CellML model.',
+    action: async () => {
+      const cellmlText = await generateFlattenedModel(nodes.value, edges.value, libraryStore)
+      return generateOmexArchive(cellmlText, {
+        simulationSettings: simSettings.value,
+        plotConfig: plotConfig.value,
+      })
+    },
+    successMessage: () => 'OMEX archive generated for Web OpenCOR.',
+  },
+  {
+    key: EXPORT_KEYS.CUFLYNX,
+    label: 'CUFLynx',
+    icon: 'pi pi-box',
+    disabled: true, // no action wired up yet — see the `!opt.action` guard in exportMenuItems below
+    suffix: '.omex',
+    fileTypes: OMEX_FILE_TYPES,
+    message: 'Generating flattened CellML model.',
+    // action: intentionally omitted until this export target is implemented.
   },
 ])
 
@@ -958,7 +1010,7 @@ const exportMenuItems = computed(() =>
   exportOptions.value.map((opt) => ({
     label: opt.label,
     icon: opt.icon,
-    disabled: opt.disabled,
+    disabled: opt.disabled || !opt.action,
     command: () => handleExportCommand(opt),
   }))
 )
@@ -980,6 +1032,8 @@ const currentExportMode = computed(() => {
   // Fallback to the first option if nothing is found
   return found || exportOptions.value[0]
 })
+
+const currentExportDisabled = computed(() => currentExportMode.value.disabled || !currentExportMode.value.action)
 
 onConnectEnd(() => {
   revertPendingGhostIfUnused()
@@ -1815,7 +1869,7 @@ const performExport = async () => {
   currentExportKey.value = currentExportMode.value.key
 
   const baseName = libraryStore.lastExportName || DEFAULT_FILE_NAME
-  const fileTypes = currentExportKey.value === EXPORT_KEYS.CELLML ? CELLML_FILE_TYPES : ZIP_FILE_TYPES
+  const fileTypes = currentExportMode.value.fileTypes || ZIP_FILE_TYPES
 
   // Get handle first
   const result = await getFileHandle(baseName, fileTypes, currentExportMode.value.suffix)
@@ -1864,6 +1918,19 @@ function onOpenInstanceEditorDialog(eventPayload, tab = 'parameters') {
   instanceEditorDefaultTab.value = tab
   instanceEditorDialogVisible.value = true
 }
+
+function onOpenMacroBuilderDialog() {
+  macroBuilderDialogVisible.value = true
+}
+
+function onOpenSimSettingsDialog() {
+  simSettingsDialogVisible.value = true
+}
+
+function onOpenSettingsDialog() {
+  settingsDialogVisible.value = true
+}
+
 
 function filterConfig(config, validPortNames, validVariableNames, updatedModule) {
   const portFields = ['entrance_ports', 'exit_ports', 'general_ports']
@@ -1967,18 +2034,6 @@ async function handleCellMLSave(saveData) {
 async function handleParameterSave(saveData) {
   const { id, variables } = saveData
   updateNodeData(id, { variables })
-}
-
-function onOpenMacroBuilderDialog() {
-  macroBuilderDialogVisible.value = true
-}
-
-function onOpenSimSettingsDialog() {
-  simSettingsDialogVisible.value = true
-}
-
-function onOpenSettingsDialog() {
-  settingsDialogVisible.value = true
 }
 
 /**
@@ -2291,51 +2346,37 @@ async function onExportConfirm(fileName, handle) {
     activeExportNotification.value = null
   }
 
-  const caExport = currentExportMode.value.key === EXPORT_KEYS.CA
-  const message = caExport ? 'Generating and zipping CA files.' : 'Generating flattened CellML model.'
+  const exportMode = currentExportMode.value
+
   const notification = notify.info({
     title: 'Exporting...',
-    message: message,
+    message: exportMode.message,
     duration: 0,
   })
 
   try {
     const finalName = fileName || libraryStore.lastExportName || DEFAULT_FILE_NAME
 
-    const blob = caExport
-      ? await generateExportZip(finalName, nodes.value, edges.value, libraryStore)
-      : generateFlattenedModel(nodes.value, edges.value, libraryStore)
+    if (!exportMode.action) {
+      throw new Error(`The ${exportMode.label} export isn't implemented yet.`)
+    }
 
-    const result = await saveWithDialog(blob, handle, finalName, currentExportMode.value.suffix)
+    const blob = await exportMode.action(finalName)
+
+    const result = await saveWithDialog(blob, handle, finalName, exportMode.suffix)
 
     libraryStore.setLastExportName(result.savedName)
     notification.close()
 
-    let exportMessage = ''
-    if (caExport) {
-      exportMessage = 'Circulatory Autogen export zip generated.'
-    } else {
-      const dataUri = await createCellMLDataFragment(blob, finalName)
-      exportMessage = h('div', null, [
-        'Model exported to CellML. Open this model directly in ',
-        h(
-          'a',
-          {
-            href: `https://opencor.ws/app/?opencor://openFile/#${dataUri}`,
-            rel: 'noopener noreferrer',
-            style: { color: 'var(--p-primary-color)', fontWeight: 'bold' },
-            target: '_blank',
-          },
-          'OpenCOR'
-        ),
-      ])
-    }
+    const exportMessage = exportMode.successMessage
+      ? await exportMode.successMessage(blob, finalName)
+      : `${exportMode.label} export generated.`
 
     trackEvent('export_action', {
       category: 'Export',
       action: 'export_model',
       label: `File: ${finalName}`,
-      file_type: currentExportMode.value.key,
+      file_type: exportMode.key,
     })
 
     activeExportNotification.value = notify.success({
@@ -2349,7 +2390,7 @@ async function onExportConfirm(fileName, handle) {
       category: 'Export',
       action: 'export_model',
       label: `Error: ${error.message}`,
-      file_type: currentExportMode.value.key,
+      file_type: exportMode.key,
     })
 
     notify.error({ title: 'Export failed', message: `${error.message}` })
@@ -2745,7 +2786,7 @@ const handleKeyDown = (event) => {
     handleRedo()
   }
 
-  if (isCtrl && event.key.toLowerCase() === 'e' && !currentExportMode.disabled) {
+  if (isCtrl && event.key.toLowerCase() === 'e' && !currentExportDisabled.value) {
     event.preventDefault()
     triggerCurrentExport()
   }

@@ -174,6 +174,8 @@ export const IMPORT_LABELS = {
 export const EXPORT_KEYS = {
   CA: 'circulatoryAutogen',
   CELLML: 'cellml',
+  OMEX: 'omex',
+  CUFLYNX: 'cufLynx',
 }
 
 export const TTL_FILE_TYPES = [
@@ -201,6 +203,13 @@ export const ZIP_FILE_TYPES = [
   {
     description: 'ZIP File',
     accept: { 'application/zip': ['.zip'] },
+  },
+]
+
+export const OMEX_FILE_TYPES = [
+  {
+    description: 'COMBINE Archive (OMEX)',
+    accept: { 'application/zip': ['.omex'] },
   },
 ]
 
