@@ -524,6 +524,7 @@ import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
 import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
 import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
 import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
+import { useInspectionModuleStore } from '../stores/inspectionModuleStore.js'
 
 const workspaceFileInput = ref(null)
 
@@ -818,6 +819,7 @@ const helperLineVertical = ref(null)
 const alignment = ref('edge')
 
 const libraryStore = useLibraryStore()
+const inspectionModuleStore = useInspectionModuleStore()
 
 const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
@@ -2254,7 +2256,7 @@ async function onExportConfirm(fileName, handle) {
 
     const blob = caExport
       ? await generateExportZip(finalName, nodes.value, edges.value, libraryStore)
-      : generateFlattenedModel(nodes.value, edges.value, libraryStore)
+      : generateFlattenedModel(nodes.value, edges.value, libraryStore, inspectionModuleStore.modules)
 
     const result = await saveWithDialog(blob, handle, finalName, currentExportMode.value.suffix)
 

@@ -555,16 +555,17 @@ function createSummationComponent(model, sourceComp, sourceVarName, targetCompon
  * @param {Map<string, libcellml.Component>} nodeComponentMap - NodeID -> component, built while processing nodes.
  */
 function createInspectionModuleComponent(model, module, nodeComponentMap) {
-  const componentName = nextAvailableComponentName(model, sanitiseCellMLIdentifier(module.name))
-
-  const inspectionComp = new _libcellml.Component()
-  inspectionComp.setName(componentName)
-  model.addComponent(inspectionComp)
+  let inspectionComp = model.componentByName('inspection_modules', true)
+  if (inspectionComp === null) {
+    inspectionComp = new _libcellml.Component()
+    inspectionComp.setName('inspection_modules')
+    model.addComponent(inspectionComp)
+  }
 
   const unitsName = module.units || 'dimensionless'
 
   // Output variable: the summed value itself.
-  const sumVarName = nextAvailableVarName(inspectionComp, 'sum')
+  const sumVarName = nextAvailableVarName(inspectionComp, sanitiseCellMLIdentifier(module.name))
   const sumVar = new _libcellml.Variable()
   sumVar.setName(sumVarName)
   sumVar.setUnitsByName(unitsName)
