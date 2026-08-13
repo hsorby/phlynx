@@ -500,6 +500,7 @@ import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
+import { useImportExport } from '../composables/useImportExport'
 import { relayoutNodes } from '../services/layouts/physics'
 import {
   generateFlattenedModel,
@@ -867,10 +868,8 @@ const currentEditingNode = ref({
   id: '',
   ports: [],
 })
-const currentImportMode = ref(null)
 const currentImportConfig = ref({})
 
-const currentExportKey = ref(EXPORT_KEYS.CELLML)
 const activeExportNotification = ref(null)
 
 const activeInteractionBuffer = new Map()
@@ -891,139 +890,30 @@ const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
 const somethingSelected = computed(() => getSelectedNodes.value.length > 0)
 
-const importOptions = computed(() => [
-  {
-    key: IMPORT_KEYS.INSTANCE_ARRAY,
-    label: 'Instance Array',
-    icon: 'pi pi-th-large',
-    disabled: false,
-  },
-  {
-    key: IMPORT_KEYS.CELLML_FILE,
-    label: 'CellML File',
-    icon: markRaw(CellMLIcon),
-    disabled: libcellml.status !== 'ready',
-  },
-  {
-    key: IMPORT_KEYS.MODULE_CONFIG,
-    label: 'Module Config',
-    icon: 'pi pi-wrench',
-    disabled: libcellml.status !== 'ready',
-  },
-  {
-    key: IMPORT_KEYS.PARAMETER,
-    label: 'Parameters',
-    icon: 'pi pi-sliders-h',
-    disabled: false,
-  },
-])
-currentImportMode.value = importOptions.value[0]
-
-const exportOptions = computed(() => [
-  {
-    key: EXPORT_KEYS.CELLML,
-    label: 'CellML',
-    icon: markRaw(CellMLIcon),
-    disabled: libcellml.status !== 'ready' || !somethingAvailable.value,
-    suffix: '.cellml',
-    fileTypes: CELLML_FILE_TYPES,
-    message: 'Generating flattened CellML model.',
-    action: () => generateFlattenedModel(nodes.value, edges.value, libraryStore),
-    successMessage: async (blob, finalName) => {
-      const dataUri = await createCellMLDataFragment(blob, finalName)
-      return h('div', null, [
-        'Model exported to CellML. Open this model directly in ',
-        h(
-          'a',
-          {
-            href: `https://opencor.ws/app/?opencor://openFile/#${dataUri}`,
-            rel: 'noopener noreferrer',
-            style: { color: 'var(--p-primary-color)', fontWeight: 'bold' },
-            target: '_blank',
-          },
-          'OpenCOR'
-        ),
-      ])
-    },
-  },
-  {
-    key: EXPORT_KEYS.CA,
-    label: 'Circulatory Autogen',
-    icon: 'pi pi-box',
-    disabled: !somethingAvailable.value,
-    suffix: '.zip',
-    fileTypes: ZIP_FILE_TYPES,
-    message: 'Generating and zipping CA files.',
-    action: (finalName) => generateExportZip(finalName, nodes.value, edges.value, libraryStore),
-    successMessage: () => 'Circulatory Autogen export zip generated.',
-  },
-  {
-    key: EXPORT_KEYS.OMEX,
-    label: 'Web OpenCOR',
-    icon: 'pi pi-box',
-    disabled: libcellml.status !== 'ready' || !somethingAvailable.value,
-    suffix: '.omex',
-    fileTypes: OMEX_FILE_TYPES,
-    message: 'Generating flattened CellML model.',
-    action: async () => {
-      const cellmlText = await generateFlattenedModel(nodes.value, edges.value, libraryStore)
-      return generateOmexArchive(cellmlText, {
-        simulationSettings: simSettings.value,
-        plotConfig: plotConfig.value,
-        parameterScanConfig: parameterScanConfig.value,
-      })
-    },
-    successMessage: () => 'OMEX archive generated for Web OpenCOR.',
-  },
-  {
-    key: EXPORT_KEYS.CUFLYNX,
-    label: 'CUFLynx',
-    icon: 'pi pi-box',
-    disabled: true, // no action wired up yet — see the `!opt.action` guard in exportMenuItems below
-    suffix: '.omex',
-    fileTypes: OMEX_FILE_TYPES,
-    message: 'Generating flattened CellML model.',
-    // action: intentionally omitted until this export target is implemented.
-  },
-])
-
-const importMenuItems = computed(() =>
-  importOptions.value.map((opt) => ({
-    label: opt.label,
-    icon: opt.icon,
-    disabled: opt.disabled,
-    command: () => handleImportCommand(opt),
-  }))
-)
-
-const exportMenuItems = computed(() =>
-  exportOptions.value.map((opt) => ({
-    label: opt.label,
-    icon: opt.icon,
-    disabled: opt.disabled || !opt.action,
-    command: () => handleExportCommand(opt),
-  }))
-)
-
-const cellMlExportTooltip = computed(() => {
-  const prefix = 'The CellML export option is disabled because '
-  if (libcellml.status !== 'ready') {
-    return prefix + 'the CellML library is not ready yet. Please wait a moment and try again.'
-  }
-  if (!somethingAvailable.value) {
-    return prefix + 'there is nothing to export. Please add some modules to the workspace first.'
-  }
-  return 'This should not be shown when CellML export is enabled.'
+const {
+  currentImportMode,
+  currentExportKey,
+  importMenuItems,
+  exportMenuItems,
+  cellMlExportTooltip,
+  currentExportMode,
+  currentExportDisabled,
+  triggerCurrentImport,
+  triggerCurrentExport,
+  handleImportCommand,
+  handleExportCommand,
+} = useImportExport({
+  libcellml,
+  somethingAvailable,
+  nodes,
+  edges,
+  importDialogVisible,
+  exportDialogVisible,
+  currentImportConfig,
+  getImportConfig,
+  getFileHandle,
+  onExportConfirm,
 })
-
-const currentExportMode = computed(() => {
-  // Find the selected option in the current list
-  const found = exportOptions.value.find((opt) => opt.key === currentExportKey.value)
-  // Fallback to the first option if nothing is found
-  return found || exportOptions.value[0]
-})
-
-const currentExportDisabled = computed(() => currentExportMode.value.disabled || !currentExportMode.value.action)
 
 onConnectEnd(() => {
   revertPendingGhostIfUnused()
@@ -1756,23 +1646,6 @@ const loadConfigData = async (content, filename, { notify: shouldNotify = true }
   }
 }
 
-const performImport = (mode) => {
-  currentImportConfig.value = getImportConfig(mode.key)
-
-  if (currentImportConfig.value) {
-    importDialogVisible.value = true
-  }
-}
-
-const triggerCurrentImport = () => {
-  performImport(currentImportMode.value)
-}
-
-const handleImportCommand = (option) => {
-  currentImportMode.value = option
-  performImport(option)
-}
-
 async function onImportConfirm(importPayload, updateProgress) {
   if (currentImportMode.value.key === IMPORT_KEYS.INSTANCE_ARRAY) {
     const instanceArrayFiles = importPayload.get(IMPORT_KEYS.INSTANCE_ARRAY)
@@ -1843,31 +1716,6 @@ async function onImportConfirm(importPayload, updateProgress) {
   if (importDialogRef.value) {
     importDialogRef.value.finishLoading()
   }
-}
-
-const performExport = async () => {
-  currentExportKey.value = currentExportMode.value.key
-
-  const baseName = libraryStore.lastExportName || DEFAULT_FILE_NAME
-  const fileTypes = currentExportMode.value.fileTypes || ZIP_FILE_TYPES
-
-  // Get handle first
-  const result = await getFileHandle(baseName, fileTypes, currentExportMode.value.suffix)
-  if (result.success && result.handle) {
-    onExportConfirm(result.cleanName, result.handle)
-  } else if (result.needsLegacyDialog) {
-    // Show custom dialog for legacy browsers
-    exportDialogVisible.value = true
-  }
-}
-
-const triggerCurrentExport = () => {
-  performExport()
-}
-
-const handleExportCommand = (option) => {
-  currentExportKey.value = option.key
-  performExport(option)
 }
 
 function onOpenPortEditorDialog(eventPayload) {
@@ -2765,7 +2613,7 @@ const handleKeyDown = (event) => {
     triggerCurrentExport()
   }
 
-  if (isCtrl && event.key.toLowerCase() === 'i' && !currentImportMode.disabled) {
+  if (isCtrl && event.key.toLowerCase() === 'i' && !currentImportMode.value.disabled) {
     event.preventDefault()
     triggerCurrentImport()
   }
