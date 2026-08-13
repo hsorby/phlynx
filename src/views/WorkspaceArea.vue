@@ -40,8 +40,8 @@
             @click="handleAutoLayout"
             :disabled="!somethingAvailable"
           >
-          <DustpanBrush/>
-          </Button> 
+            <DustpanBrush />
+          </Button>
 
           <Button
             icon="pi pi-eraser"
@@ -89,7 +89,7 @@
             :disabled="!somethingSelected"
             @click="addHandle('left')"
           >
-            <AddHandleLeft/>
+            <AddHandleLeft />
           </Button>
 
           <Button
@@ -101,7 +101,7 @@
             :disabled="!somethingSelected"
             @click="addHandle('top')"
           >
-            <AddHandleTop/>
+            <AddHandleTop />
           </Button>
 
           <Button
@@ -113,7 +113,7 @@
             :disabled="!somethingSelected"
             @click="addHandle('right')"
           >
-            <AddHandleRight/>
+            <AddHandleRight />
           </Button>
 
           <Button
@@ -125,7 +125,7 @@
             :disabled="!somethingSelected"
             @click="addHandle('bottom')"
           >
-            <AddHandleBottom/>
+            <AddHandleBottom />
           </Button>
 
           <Divider layout="vertical" style="margin: 0 15px" />
@@ -174,9 +174,11 @@
             severity="primary"
             @click="triggerCurrentImport"
             :disabled="currentImportMode.disabled"
-            v-tooltip.bottom="{ value:
-              currentImportMode.disabled ? 'The Import option is disabled because CellML library is not ready yet.' 
-              : `Import ${currentImportMode.label}`, showDelay: 300
+            v-tooltip.bottom="{
+              value: currentImportMode.disabled
+                ? 'The Import option is disabled because CellML library is not ready yet.'
+                : `Import ${currentImportMode.label}`,
+              showDelay: 300,
             }"
           >
             <!-- Dropdown Menu Item Icons -->
@@ -202,10 +204,14 @@
             style="margin-left: 10px"
             @click="triggerCurrentExport"
             :disabled="!somethingAvailable || currentExportDisabled"
-            v-tooltip.bottom="{value: !somethingAvailable || currentExportDisabled ? cellMlExportTooltip : `Export ${currentExportMode.label}`,
-              showDelay: 300 }"
+            v-tooltip.bottom="{
+              value:
+                !somethingAvailable || currentExportDisabled
+                  ? cellMlExportTooltip
+                  : `Export ${currentExportMode.label}`,
+              showDelay: 300,
+            }"
           >
-
             <!-- Dropdown Menu Item Icons -->
             <template #item="{ item, props }">
               <a class="p-menuitem-link" v-ripple v-bind="props.action">
@@ -263,7 +269,7 @@
                 @focus="searchBarFocused = true"
                 @blur="searchBarFocused = false"
               />
-              <InputIcon v-if="searchQuery" class="search-clear-input pi pi-times-circle" @click="clearSearch"/>
+              <InputIcon v-if="searchQuery" class="search-clear-input pi pi-times-circle" @click="clearSearch" />
             </IconField>
           </div>
           <div v-if="searchQuery" class="search-suffix-content">
@@ -423,10 +429,7 @@
     @confirm="onSimSettingsConfirm"
   />
 
-  <SettingsDialog
-    v-model="settingsDialogVisible"
-    @confirm="onSettingsConfirm"
-  />
+  <SettingsDialog v-model="settingsDialogVisible" @confirm="onSettingsConfirm" />
 
   <ImportDialog
     ref="importDialogRef"
@@ -455,6 +458,7 @@ export default {
 
 <script setup>
 import { computed, h, inject, markRaw, nextTick, onMounted, onUnmounted, ref, watch, watchPostEffect } from 'vue'
+import { storeToRefs } from 'pinia'
 import { connectionExists, useVueFlow, VueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
@@ -471,6 +475,7 @@ import { MiniMap } from '@vue-flow/minimap'
 
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
+import { useSimSettingsStore } from '../stores/simSettingsStore'
 import useDragAndDrop from '../composables/useDnD'
 import { useHandleManagement } from '../composables/useHandleManagement'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
@@ -598,8 +603,7 @@ const {
   revertHandlesForEdge,
   reactivateEdgeHandles,
   revertHandleIfUnused,
-} =
-  useHandleManagement()
+} = useHandleManagement()
 
 const dialogVisible = computed(() => {
   return (
@@ -829,6 +833,8 @@ const onDrop = async (event) => {
 }
 
 const historyStore = useFlowHistoryStore()
+const simSettingsStore = useSimSettingsStore()
+const { simulationSettings: simSettings, plotConfig, parameterScanConfig } = storeToRefs(simSettingsStore)
 const { loadFromInstanceArray } = useLoadFromInstanceArray()
 const { loadFromCellML } = useLoadFromCellML()
 const { capture } = useScreenshot()
@@ -887,18 +893,6 @@ const matchingNodeIds = ref(new Set())
 const searchBarFocused = ref(false)
 
 const currentMatchIndex = ref(0)
-
-const simSettings = ref({
-  timeStep: 0.0,
-  pointInterval: 0.01,
-  startingPoint: 0.0,
-  endingPoint: 10.0,
-  solver: 'CVODE',
-  tolerance: 1e-6,
-  maxSteps: 10000,
-})
-const plotConfig = ref({})
-const parameterScanConfig = ref({})
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
@@ -1048,18 +1042,12 @@ onConnect(async (connection) => {
   if (!sourceNode || !targetNode) return
   if (sourceNode === targetNode) return
 
-  const duplicate = edges.value.find(
-    (e) => e.source === connection.source && e.target === connection.target
-  )
+  const duplicate = edges.value.find((e) => e.source === connection.source && e.target === connection.target)
 
   const duplicateSnapshot = duplicate ? detachReactivity(duplicate) : null
 
-  const sourceHandleUid = connection.sourceHandle
-    ? getHandleUidFromHandleId(connection.sourceHandle)
-    : null
-  const targetHandleUid = connection.targetHandle
-    ? getHandleUidFromHandleId(connection.targetHandle)
-    : null
+  const sourceHandleUid = connection.sourceHandle ? getHandleUidFromHandleId(connection.sourceHandle) : null
+  const targetHandleUid = connection.targetHandle ? getHandleUidFromHandleId(connection.targetHandle) : null
 
   confirmActivation()
 
@@ -1533,9 +1521,7 @@ const onEdgeChange = (changes) => {
     historyStore.addCommand({
       undo: () => {
         removeEdges(idsToRemove)
-        edgesToRestore.forEach((edge) =>
-          revertHandlesForEdge(edge, idsToRemove, { trackHistory: false })
-        )
+        edgesToRestore.forEach((edge) => revertHandlesForEdge(edge, idsToRemove, { trackHistory: false }))
       },
       redo: () => {
         addEdges(edgesToRestore)
@@ -1548,8 +1534,8 @@ const onEdgeChange = (changes) => {
     const edgesToRestore = removeChanges.map((change) => change.edge)
     const idsToRemove = removeChanges.map((change) => change.edge.id)
 
-    // Ghost out any handle that no longer has an edge attached to it. 
-    // excludeEdgeIds is passed because edges.value hasn't actually 
+    // Ghost out any handle that no longer has an edge attached to it.
+    // excludeEdgeIds is passed because edges.value hasn't actually
     // dropped these ids yet at this point.
     edgesToRestore.forEach((edge) => revertHandlesForEdge(edge, idsToRemove))
 
@@ -1560,9 +1546,7 @@ const onEdgeChange = (changes) => {
       },
       redo: () => {
         removeEdges(idsToRemove)
-        edgesToRestore.forEach((edge) =>
-          revertHandlesForEdge(edge, idsToRemove, { trackHistory: false })
-        )
+        edgesToRestore.forEach((edge) => revertHandlesForEdge(edge, idsToRemove, { trackHistory: false }))
       },
     })
   }
@@ -1933,7 +1917,6 @@ function onOpenSettingsDialog() {
   settingsDialogVisible.value = true
 }
 
-
 function filterConfig(config, validPortNames, validVariableNames, updatedModule) {
   const portFields = ['entrance_ports', 'exit_ports', 'general_ports']
   portFields.forEach((field) => {
@@ -2093,10 +2076,10 @@ async function onInstanceEditConfirm(updatedData) {
     updateAll: updatedData.updateAll,
     mathRef: updatedData.mathRef,
     math: updatedData.math,
-    siblings: updatedData.siblings
+    siblings: updatedData.siblings,
   }
 
-  updateNodeData(updatedData.id, {name: updatedData.name, variables: updatedData.variables, ports: updatedData.ports})
+  updateNodeData(updatedData.id, { name: updatedData.name, variables: updatedData.variables, ports: updatedData.ports })
   await handleCellMLSave(saveData)
 }
 
@@ -2117,9 +2100,7 @@ async function onMacroBuilderGenerate(data) {
 
 async function onSimSettingsConfirm(data) {
   console.log('Sim settings updated:', data)
-  simSettings.value = data.simulationSettings
-  plotConfig.value = data.plotConfig
-  parameterScanConfig.value = data.parameterScanConfig
+  simSettingsStore.loadState(data)
   simSettingsDialogVisible.value = false
 }
 
@@ -2459,6 +2440,7 @@ function createSaveBlob() {
     },
     flow: toObject(),
     store: libraryStore.getState(),
+    simulation: simSettingsStore.getState(),
   }
 
   const jsonString = JSON.stringify(saveState, null, 2)
@@ -2513,6 +2495,7 @@ function handleLoadWorkspace(event) {
 
       // Restore Pinia store state.
       libraryStore.loadState(migratedState.store)
+      simSettingsStore.loadState(migratedState.simulation)
 
       trackEvent('workflow_load_action', {
         category: 'Workflow',

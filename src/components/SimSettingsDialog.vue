@@ -33,11 +33,7 @@
               <span class="subtle">Variables assigned to the same plot are plotted together.</span>
             </div>
             <div class="group-toolbar">
-              <InputText
-                v-model="newGroupName"
-                placeholder="New plot name"
-                class="group-name-input"
-              />
+              <InputText v-model="newGroupName" placeholder="New plot name" class="group-name-input" />
               <Button label="Add Plot" icon="pi pi-plus" text @click="addGroup" />
               <div class="group-list">
                 <div v-for="group in plotGroups" :key="group.id" class="group-chip">
@@ -103,7 +99,7 @@
               </div>
 
               <InputText v-model="variableSearch" placeholder="Search variable..." class="filter-input" />
-              
+
               <Button
                 v-if="visibleRows.length > 0"
                 :label="isAllVisibleSelected ? 'Deselect All Filtered' : 'Select All Filtered'"
@@ -153,10 +149,12 @@
                   dataKey="key"
                   size="small"
                   rowHover
-                  :rowClass="(data) => ({
-                    'row-unplotted': !data.groupId,
-                    'row-selected': data.selected
-                  })"
+                  :rowClass="
+                    (data) => ({
+                      'row-unplotted': !data.groupId,
+                      'row-selected': data.selected,
+                    })
+                  "
                   class="vars-datatable"
                 >
                   <Column style="width: 44px">
@@ -198,7 +196,9 @@
             <!-- Contextual Bulk Toolbar -->
             <div class="bulk-toolbar">
               <div class="bulk-info">
-                <span><strong>{{ selectedVisibleCount }}</strong> items selected</span>
+                <span
+                  ><strong>{{ selectedVisibleCount }}</strong> items selected</span
+                >
                 <Button
                   label="Clear Selection"
                   icon="pi pi-eraser"
@@ -238,7 +238,7 @@
           </section>
         </TabPanel>
 
-         <!-- TAB 2: PARAMETER SCAN SETUP -->
+        <!-- TAB 2: PARAMETER SCAN SETUP -->
         <TabPanel header="Parameter Scan Setup">
           <section class="block">
             <div class="block-header">
@@ -268,7 +268,9 @@
                 <div v-if="constantNodeSearchOpen && constantNodeSearch" class="search-suffix-content">
                   <div class="search-suffix-header">
                     <span class="search-match-count">
-                      {{ matchingConstantNodeOptions.length }} match{{ matchingConstantNodeOptions.length !== 1 ? 'es' : '' }}
+                      {{ matchingConstantNodeOptions.length }} match{{
+                        matchingConstantNodeOptions.length !== 1 ? 'es' : ''
+                      }}
                     </span>
                   </div>
                   <ul v-if="matchingConstantNodeOptions.length > 0" class="search-match-list">
@@ -287,7 +289,7 @@
               </div>
 
               <InputText v-model="constantSearch" placeholder="Search parameters..." class="filter-input" />
-              
+
               <Button
                 v-if="visibleConstantRows.length > 0"
                 :label="isAllConstantVisibleSelected ? 'Deselect All Filtered' : 'Select All Filtered'"
@@ -335,10 +337,12 @@
                   dataKey="key"
                   size="small"
                   rowHover
-                  :rowClass="(data) => ({
-                    'row-unplotted': !data.selected,
-                    'row-selected': data.selected
-                  })"
+                  :rowClass="
+                    (data) => ({
+                      'row-unplotted': !data.selected,
+                      'row-selected': data.selected,
+                    })
+                  "
                   class="vars-datatable scan-datatable"
                 >
                   <Column style="width: 44px">
@@ -364,7 +368,13 @@
                   <Column header="Min" style="width: 120px">
                     <template #body="{ data }">
                       <div class="param-cell-wrapper">
-                        <InputNumber v-if="data.selected" v-model="data.min" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+                        <InputNumber
+                          v-if="data.selected"
+                          v-model="data.min"
+                          :minFractionDigits="0"
+                          :maxFractionDigits="8"
+                          fluid
+                        />
                         <span v-else class="subtle-dash">-</span>
                       </div>
                     </template>
@@ -373,7 +383,13 @@
                   <Column header="Default" style="width: 120px">
                     <template #body="{ data }">
                       <div class="param-cell-wrapper">
-                        <InputNumber v-if="data.selected" v-model="data.default" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+                        <InputNumber
+                          v-if="data.selected"
+                          v-model="data.default"
+                          :minFractionDigits="0"
+                          :maxFractionDigits="8"
+                          fluid
+                        />
                         <span v-else class="subtle-dash">-</span>
                       </div>
                     </template>
@@ -382,7 +398,13 @@
                   <Column header="Max" style="width: 120px">
                     <template #body="{ data }">
                       <div class="param-cell-wrapper">
-                        <InputNumber v-if="data.selected" v-model="data.max" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+                        <InputNumber
+                          v-if="data.selected"
+                          v-model="data.max"
+                          :minFractionDigits="0"
+                          :maxFractionDigits="8"
+                          fluid
+                        />
                         <span v-else class="subtle-dash">-</span>
                       </div>
                     </template>
@@ -403,19 +425,41 @@
             <div class="settings-grid">
               <div class="field">
                 <label>Starting Point</label>
-                <InputNumber v-model="settingsPayload.startingPoint" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+                <InputNumber
+                  v-model="settingsPayload.startingPoint"
+                  :minFractionDigits="0"
+                  :maxFractionDigits="8"
+                  fluid
+                />
               </div>
               <div class="field">
                 <label>Ending Point</label>
-                <InputNumber v-model="settingsPayload.endingPoint" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+                <InputNumber
+                  v-model="settingsPayload.endingPoint"
+                  :minFractionDigits="0"
+                  :maxFractionDigits="8"
+                  fluid
+                />
               </div>
               <div class="field">
                 <label>Time Step</label>
-                <InputNumber v-model="settingsPayload.timeStep" :min="0" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+                <InputNumber
+                  v-model="settingsPayload.timeStep"
+                  :min="0"
+                  :minFractionDigits="0"
+                  :maxFractionDigits="8"
+                  fluid
+                />
               </div>
               <div class="field">
                 <label>Point Interval</label>
-                <InputNumber v-model="settingsPayload.pointInterval" :min="0" :minFractionDigits="0" :maxFractionDigits="8" fluid />
+                <InputNumber
+                  v-model="settingsPayload.pointInterval"
+                  :min="0"
+                  :minFractionDigits="0"
+                  :maxFractionDigits="8"
+                  fluid
+                />
               </div>
             </div>
           </section>
@@ -453,8 +497,6 @@
             </div>
           </section>
         </TabPanel>
-
-       
       </TabView>
     </div>
 
@@ -848,7 +890,7 @@ async function initialiseDialog() {
 
   settingsPayload.value = cloneSettings(props.simulationSettings)
 
-  const existingPlotConfig = props.simulationSettings?.plotConfig || {}
+  const existingPlotConfig = props.plotConfig || {}
   plotGroups.value = normaliseGroups(existingPlotConfig.groups)
 
   const selectedByKey = new Map((existingPlotConfig.selections || []).map((selection) => [selection.key, selection]))
@@ -1325,7 +1367,11 @@ const closeDialog = () => {
 }
 
 :deep(.node-accordion .p-accordion-header-link) {
-  background-color: color-mix(in srgb, var(--p-text-color, #1f2937) 6%, var(--p-content-background, #ffffff)) !important;
+  background-color: color-mix(
+    in srgb,
+    var(--p-text-color, #1f2937) 6%,
+    var(--p-content-background, #ffffff)
+  ) !important;
   color: var(--p-text-color, inherit) !important;
   border-bottom: 1px solid transparent;
   padding: 10px 14px;
@@ -1335,7 +1381,11 @@ const closeDialog = () => {
 }
 
 :deep(.node-accordion .p-accordion-header-link:hover) {
-  background-color: color-mix(in srgb, var(--p-text-color, #1f2937) 12%, var(--p-content-background, #ffffff)) !important;
+  background-color: color-mix(
+    in srgb,
+    var(--p-text-color, #1f2937) 12%,
+    var(--p-content-background, #ffffff)
+  ) !important;
 }
 
 :deep(.node-accordion .p-accordion-tab-active .p-accordion-header-link) {
@@ -1428,7 +1478,11 @@ const closeDialog = () => {
 
 :deep(.vars-datatable tr.row-selected) {
   opacity: 1 !important;
-  background-color: color-mix(in srgb, var(--p-primary-color, #2563eb) 18%, var(--p-content-background, #ffffff)) !important;
+  background-color: color-mix(
+    in srgb,
+    var(--p-primary-color, #2563eb) 18%,
+    var(--p-content-background, #ffffff)
+  ) !important;
   color: var(--p-text-color, inherit) !important;
   border-left: 3px solid var(--p-primary-color, #2563eb) !important;
 }
