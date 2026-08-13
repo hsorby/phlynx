@@ -420,14 +420,7 @@
     @edit-node="onOpenPortEditorDialog"
   />
 
-  <SimSettingsDialog
-    v-model="simSettingsDialogVisible"
-    :simulationSettings="simSettings"
-    :plotConfig="plotConfig"
-    :parameterScanConfig="parameterScanConfig"
-    :nodes="nodes"
-    @confirm="onSimSettingsConfirm"
-  />
+  <SimSettingsDialog v-model="simSettingsDialogVisible" :nodes="nodes" />
 
   <SettingsDialog v-model="settingsDialogVisible" @confirm="onSettingsConfirm" />
 
@@ -977,6 +970,7 @@ const exportOptions = computed(() => [
       return generateOmexArchive(cellmlText, {
         simulationSettings: simSettings.value,
         plotConfig: plotConfig.value,
+        parameterScanConfig: parameterScanConfig.value,
       })
     },
     successMessage: () => 'OMEX archive generated for Web OpenCOR.',
@@ -2096,12 +2090,6 @@ const nodeRefs = ref({})
 async function onMacroBuilderGenerate(data) {
   handleMacroGeneration(data)
   macroBuilderDialogVisible.value = false
-}
-
-async function onSimSettingsConfirm(data) {
-  console.log('Sim settings updated:', data)
-  simSettingsStore.loadState(data)
-  simSettingsDialogVisible.value = false
 }
 
 async function onSettingsConfirm(data) {

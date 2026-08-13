@@ -511,6 +511,7 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 
 import Accordion from 'primevue/accordion'
 import AccordionTab from 'primevue/accordiontab'
@@ -527,31 +528,22 @@ import TabPanel from 'primevue/tabpanel'
 import TabView from 'primevue/tabview'
 
 import { useConfirmDialog } from '../composables/useConfirmDialog'
+import { useSimSettingsStore } from '../stores/simSettingsStore'
 import { notify } from '../utils/notify'
 import { BASELINE_SIMULATION_SETTINGS } from '../utils/constants'
 
 const props = defineProps({
   modelValue: Boolean,
-  simulationSettings: {
-    type: Object,
-    required: true,
-  },
-  plotConfig: {
-    type: Object,
-    default: () => ({}),
-  },
-  parameterScanConfig: {
-    type: Object,
-    default: () => ({}),
-  },
   nodes: {
     type: Array,
     default: () => [],
   },
 })
 
-const emit = defineEmits(['update:modelValue', 'confirm'])
+const emit = defineEmits(['update:modelValue'])
 const { confirm } = useConfirmDialog()
+const simSettingsStore = useSimSettingsStore()
+const { simulationSettings: simSettings, plotConfig, parameterScanConfig } = storeToRefs(simSettingsStore)
 
 const solverOptions = [
   { label: 'CVODE', value: 'CVODE' },
@@ -966,14 +958,14 @@ async function initialiseDialog() {
   isLoading.value = true
   loadingText.value = 'Preparing simulation settings...'
 
-  localSimulationSettings.value = cloneSettings(props.simulationSettings)
+  localSimulationSettings.value = cloneSettings(simSettings.value)
 
-  const existingPlotConfig = props.plotConfig || {}
+  const existingPlotConfig = plotConfig.value || {}
   plotGroups.value = normaliseGroups(existingPlotConfig.groups)
 
   const selectedByKey = new Map((existingPlotConfig.selections || []).map((selection) => [selection.key, selection]))
   const scanSelectedByKey = new Map(
-    (props.parameterScanConfig?.selections || []).map((selection) => [selection.key, selection])
+    (parameterScanConfig.value?.selections || []).map((selection) => [selection.key, selection])
   )
 
   await nextTick()
@@ -1151,7 +1143,7 @@ const handleConfirm = () => {
   }
 
   const payload = createDraftPayload()
-  emit('confirm', payload)
+  simSettingsStore.loadState(payload)
 
   bypassCloseGuard.value = true
   emit('update:modelValue', false)
