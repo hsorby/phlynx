@@ -2672,10 +2672,7 @@ const moduleConfigs = import.meta.glob('../assets/module_configs/*.json', {
   eager: true,
 })
 
-onMounted(async () => {
-  document.addEventListener('keydown', handleKeyDown)
-  document.addEventListener('mousemove', onMouseMove)
-
+const hydrateCellmlLibrariesInBackground = async () => {
   // Load the manifest and the libCellML WebAssembly module.
   const [manifest, instance] = await Promise.all([loadManifest(), libcellmlReadyPromise])
   initLibCellML(instance)
@@ -2752,6 +2749,17 @@ onMounted(async () => {
   for (const [path, content] of Object.entries(moduleConfigs)) {
     libraryStore.addConfigFile(path.split('/').pop(), content.default)
   }
+
+  return manifest
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeyDown)
+  document.addEventListener('mousemove', onMouseMove)
+
+  void hydrateCellmlLibrariesInBackground().catch((error) => {
+    console.error('Failed to initialize libCellML resources in background:', error)
+  })
 })
 
 const onMouseMove = (event) => {
