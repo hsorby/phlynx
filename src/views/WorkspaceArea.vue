@@ -227,11 +227,16 @@
     </header>
 
     <div class="app-body-container">
-      <ResizableLibraryPanel title="Available Modules" :initial-width="300" :min-width="150" :max-width="400">
+      <ResizableLibraryPanel
+        title="Available Modules"
+        :initial-width="300"
+        :min-width="150"
+        :max-width="400"
+        @resize="onLibraryPanelResize"
+      >
         <LibraryArea />
       </ResizableLibraryPanel>
-
-      <main class="workbench-main">
+      <main class="workbench-main" :style="{ '--library-panel-width': libraryPanelWidth + 'px' }">
         <div class="workspace-search-container" :class="{ 'search-inactive': !searchBarFocused && !searchQuery }">
           <div class="workspace-search-input-wrapper">
             <IconField>
@@ -329,7 +334,6 @@
           </VueFlow>
         </div>
       </main>
-      
       <ContextSidebar :initial-width="480" :min-width="260" :max-width="480" />
     </div>
   </div>
@@ -522,6 +526,11 @@ import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
 import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
 
 const workspaceFileInput = ref(null)
+
+const libraryPanelWidth = ref(0)
+function onLibraryPanelResize(width) {
+  libraryPanelWidth.value = width
+}
 
 const { isDarkMode, toggleDarkMode } = useColorScheme()
 
@@ -2897,6 +2906,7 @@ watch(
 }
 
 .app-body-container {
+  position: relative;
   display: flex;
   flex-grow: 1;
   min-height: 0;
@@ -2916,6 +2926,12 @@ watch(
 .p-dark .workbench-main {
   background-color: #2d3748;
   color: #fffffb;
+}
+
+/* Control box library aside adjustment */
+.vue-flow__controls {
+  transform: translateX(var(--library-panel-width, 0px));
+  transition: transform 160ms ease;
 }
 
 /* Vue Flow Edges */

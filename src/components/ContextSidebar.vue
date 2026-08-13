@@ -364,6 +364,7 @@ function handleParameterTypeChange(row) {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--p-text-color) 15%, transparent);
   transition: width 160ms ease, padding 160ms ease;
 }
 
