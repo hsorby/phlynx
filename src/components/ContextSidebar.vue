@@ -34,13 +34,16 @@
             <section class="context-section context-section--global">
               <h4 class="context-section-title">Global Constants <span class="context-count">({{ globalConstantRows.length }})</span></h4>
 
+              <IconField class="table-search-input" v-if="globalConstantRows.length > 0">
+                <InputIcon class="pi pi-search" />
                 <InputText
-                  v-if="globalConstantRows.length > 0"
                   v-model="globalConstantSearch"
                   placeholder="Search constants..."
                   size="small"
-                  class="w-full table-search-input"
+                  class="w-full"
                 />
+                <InputIcon v-if="globalConstantSearch" class="search-clear-input pi pi-times-circle" @click="clearSearch"/>
+              </IconField>
 
                 <div v-if="globalConstantRows.length === 0" class="empty-hint">
                   No global constants defined yet.
@@ -97,13 +100,16 @@
                   <span class="context-count">({{ parameterRows.length }})</span>
                 </h4>
 
-                <InputText
-                  v-if="parameterRows.length > 0"
-                  v-model="parameterSearch"
-                  placeholder="Search parameters..."
-                  size="small"
-                  class="w-full table-search-input"
-                />
+                <IconField class="table-search-input" v-if="parameterRows.length > 0">
+                  <InputIcon class="pi pi-search" />
+                  <InputText
+                    v-model="parameterSearch"
+                    placeholder="Search parameters..."
+                    size="small"
+                    class="w-full"
+                  />
+                  <InputIcon v-if="parameterSearch" class="search-clear-input pi pi-times-circle" @click="clearSearch"/>
+                </IconField>
 
                 <div v-if="parameterRows.length === 0" class="empty-hint">
                   This instance has no parameters.
@@ -247,6 +253,8 @@ import TabList from 'primevue/tablist'
 import Tab from 'primevue/tab'
 import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
+import InputIcon from 'primevue/inputicon'
+import IconField from 'primevue/iconfield'
 
 import CreateInspectionModuleDialog from './dialogs/CreateInspectorModule.vue'
 
@@ -278,6 +286,11 @@ const isCollapsed = ref(true)
 
 function toggleCollapsed() {
   isCollapsed.value = !isCollapsed.value
+}
+
+function clearSearch() {
+  globalConstantSearch.value = ''
+  parameterSearch.value = ''
 }
 
 // ── Vertical tab navigation ──────────────────────────────────────────────
