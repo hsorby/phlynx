@@ -1398,11 +1398,23 @@ const onNodeChange = (changes) => {
   }
   if (removeChanges.length) {
     const nodesToRestore = removeChanges.map((change) => change.node)
-    const idsToRemove = removeChanges.map((change) => change.node.id)
+    const idsToRemove = new Set(removeChanges.map((change) => change.node.id))
+    const remainingNodes = nodes.value.filter((n) => !idsToRemove.has(n.id))
+    const removedConstants = libraryStore.cleanupUnusedGlobalConstants(remainingNodes)
     historyStore.addCommand({
       type: 'remove',
-      undo: () => addNodes(nodesToRestore),
-      redo: () => removeNodes(idsToRemove),
+      undo: () => {
+        addNodes(nodesToRestore)
+        removedConstants.forEach((c) => {
+          libraryStore.assignGlobalConstant(c.name, c.value, c.units, c.data_reference)
+        })
+      },
+      redo: () => {
+        removeNodes(Array.from(idsToRemove))
+        removedConstants.forEach((c) => {
+          libraryStore.removeGlobalConstant(c.name)
+        })
+      }
     })
   }
   if (selectChanges.length) {
