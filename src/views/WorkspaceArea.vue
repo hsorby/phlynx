@@ -2672,7 +2672,7 @@ const moduleConfigs = import.meta.glob('../assets/module_configs/*.json', {
   eager: true,
 })
 
-const hydrateCellmlLibrariesInBackground = async () => {
+const hydrateCellmlAndDependents = async () => {
   // Load the manifest and the libCellML WebAssembly module.
   const [manifest, instance] = await Promise.all([loadManifest(), libcellmlReadyPromise])
   initLibCellML(instance)
@@ -2757,7 +2757,7 @@ onMounted(() => {
   document.addEventListener('keydown', handleKeyDown)
   document.addEventListener('mousemove', onMouseMove)
 
-  void hydrateCellmlLibrariesInBackground().catch((error) => {
+  void hydrateCellmlAndDependents().catch((error) => {
     console.error('Failed to initialize libCellML resources in background:', error)
   })
 })
