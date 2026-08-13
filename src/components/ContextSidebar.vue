@@ -21,137 +21,128 @@
       class="context-aside"
       :class="{ 'context-aside--collapsed': isCollapsed }"
     >
-      <div class="context-aside-content">
-        <!-- ── Top subsection: global functions & constants ──────────────── -->
-        <section class="context-section context-section--global">
-          <button
-            type="button"
-            class="context-section-header"
-            @click="isGlobalCollapsed = !isGlobalCollapsed"
-            :aria-expanded="!isGlobalCollapsed"
-          >
-            <i :class="['pi', isGlobalCollapsed ? 'pi-chevron-right' : 'pi-chevron-down', 'context-section-caret']"></i>
-            <h4 class="context-section-title">Global information</h4>
-          </button>
+      <Tabs v-model:value="activeTabId" class="context-tabs">
+        <TabList>
+          <Tab v-for="tab in tabs" :key="tab.id" :value="tab.id" v-tooltip.right="tab.label">
+            <i :class="['pi', tab.icon]"></i>
+          </Tab>
+        </TabList>
 
-          <div v-show="!isGlobalCollapsed" class="context-section-body">
-            <Button
-              label="New System Module"
-              icon="pi pi-plus"
-              size="small"
-              outlined
-              class="new-system-module-btn"
-              @click="handleCreateSystemModule"
-            />
+        <TabPanels>
+          <!-- ── Global functions & constants ──────────────────────────────── -->
+          <TabPanel value="global">
+            <section class="context-section context-section--global">
+              <h4 class="context-section-title">Global Constants</h4>
 
-            <div class="global-constants">
-              <label class="context-subheading">
-                Global Constants
-                <span class="context-count">({{ globalConstantRows.length }})</span>
-              </label>
+              <div class="global-constants">
+                <label class="context-subheading">
+                  Global Constants
+                  <span class="context-count">({{ globalConstantRows.length }})</span>
+                </label>
 
-              <div v-if="globalConstantRows.length === 0" class="empty-hint">
-                No global constants defined yet.
+                <div v-if="globalConstantRows.length === 0" class="empty-hint">
+                  No global constants defined yet.
+                </div>
+
+                <div v-else class="table-flex-wrapper" style="margin-top: 0.5rem;">
+                  <DataTable
+                    :value="globalConstantRows"
+                    dataKey="name"
+                    scrollable
+                    scrollHeight="flex"
+                    class="p-datatable-sm parameters-table"
+                    :rowClass="(row) => newlyAddedNames.has(row.name) ? 'global-constant-row--new' : ''"
+                  >
+                    <Column field="name" bodyClass="small-text-col" header="Name" style="min-width: 90px">
+                      <template #body="slotProps">
+                        <span :title="slotProps.data.name">{{ slotProps.data.name }}</span>
+                      </template>
+                    </Column>
+                    
+                    <Column field="value" header="Value" style="width: 110px">
+                      <template #body="slotProps">
+                        <InputText
+                          v-model="slotProps.data.value"
+                          size="small"
+                          class="w-full"
+                          placeholder="Value..."
+                          @change="handleGlobalConstantChange(slotProps.data)"
+                        />
+                      </template>
+                    </Column>
+                    
+                    <Column field="units" bodyClass="small-text-col" header="Units" style="min-width: 80px">
+                      <template #body="slotProps">
+                        <span :title="slotProps.data.units">{{ slotProps.data.units || '—' }}</span>
+                      </template>
+                    </Column>
+                  </DataTable>
+                </div>
               </div>
+            </section>
+          </TabPanel>
 
-              <div v-else class="table-flex-wrapper" style="margin-top: 0.5rem;">
-                <DataTable
-                  :value="globalConstantRows"
-                  dataKey="name"
-                  scrollable
-                  scrollHeight="flex"
-                  class="p-datatable-sm parameters-table"
-                  :rowClass="(row) => newlyAddedNames.has(row.name) ? 'global-constant-row--new' : ''"
-                >
-                  <Column field="name" bodyClass="small-text-col" header="Name" style="min-width: 90px">
-                    <template #body="slotProps">
-                      <span :title="slotProps.data.name">{{ slotProps.data.name }}</span>
-                    </template>
-                  </Column>
-                  
-                  <Column field="value" header="Value" style="width: 110px">
-                    <template #body="slotProps">
-                      <InputText
-                        v-model="slotProps.data.value"
-                        size="small"
-                        class="w-full"
-                        placeholder="Value..."
-                        @change="handleGlobalConstantChange(slotProps.data)"
-                      />
-                    </template>
-                  </Column>
-                  
-                  <Column field="units" bodyClass="small-text-col" header="Units" style="min-width: 80px">
-                    <template #body="slotProps">
-                      <span :title="slotProps.data.units">{{ slotProps.data.units || '—' }}</span>
-                    </template>
-                  </Column>
-                </DataTable>
+          <!-- ── Parameters of the selected node ─────────────────────────────── -->
+          <TabPanel value="params">
+            <section class="context-section context-section--params">
+              <template v-if="selectedNode">
+                <h4 class="context-section-title">
+                  {{ `${selectedNode.data?.name}` || 'Selected Instance' }}
+                  <span class="context-count">({{ parameterRows.length }})</span>
+                </h4>
+
+                <div v-if="parameterRows.length === 0" class="empty-hint">
+                  This instance has no parameters.
+                </div>
+
+                <div v-else class="table-flex-wrapper">
+                  <DataTable
+                    :value="parameterRows"
+                    dataKey="name"
+                    scrollable
+                    scrollHeight="flex"
+                    class="p-datatable-sm parameters-table"
+                  >
+                    <Column field="name" bodyClass="small-text-col" header="Name" style="min-width: 90px" />
+                    <Column field="value" header="Value" style="width: 110px">
+                      <template #body="slotProps">
+                        <InputText
+                          v-if="isEditableVariableType(slotProps.data.type)"
+                          v-model="slotProps.data.value"
+                          size="small"
+                          placeholder="Enter value..."
+                          class="w-full"
+                          @change="handleParameterValueChange"
+                        />
+                        <span v-else class="text-muted">-</span>
+                      </template>
+                    </Column>
+                    <Column field="units" bodyClass="small-text-col" header="Units" style="min-width: 80px" />
+                    <Column field="type" header="Type" style="width: 100px">
+                      <template #body="slotProps">
+                        <Select
+                          v-model="slotProps.data.type"
+                          :options="PARAMETER_TYPE_OPTIONS"
+                          optionLabel="label"
+                          optionValue="value"
+                          size="small"
+                          class="w-full"
+                          @change="handleParameterTypeChange(slotProps.data)"
+                        />
+                      </template>
+                    </Column>
+                  </DataTable>
+                </div>
+              </template>
+
+              <div v-else class="empty-state">
+                <i class="pi pi-info-circle empty-state-icon"></i>
+                <p>Select an instance to edit its parameters here.</p>
               </div>
-            </div>
-          </div>
-        </section>
-
-        <Divider class="context-divider" />
-
-        <!-- ── Lower subsection: parameters of the selected node ──────────── -->
-        <section class="context-section context-section--params">
-          <template v-if="selectedNode">
-            <h4 class="context-section-title">
-              {{ `${selectedNode.data?.name}` || 'Selected Instance' }}
-              <span class="context-count">({{ parameterRows.length }})</span>
-            </h4>
-
-            <div v-if="parameterRows.length === 0" class="empty-hint">
-              This instance has no parameters.
-            </div>
-
-            <div v-else class="table-flex-wrapper">
-              <DataTable
-                :value="parameterRows"
-                dataKey="name"
-                scrollable
-                scrollHeight="flex"
-                class="p-datatable-sm parameters-table"
-              >
-                <Column field="name" bodyClass="small-text-col" header="Name" style="min-width: 90px" />
-                <Column field="value" header="Value" style="width: 110px">
-                  <template #body="slotProps">
-                    <InputText
-                      v-if="isEditableVariableType(slotProps.data.type)"
-                      v-model="slotProps.data.value"
-                      size="small"
-                      placeholder="Enter value..."
-                      class="w-full"
-                      @change="handleParameterValueChange"
-                    />
-                    <span v-else class="text-muted">-</span>
-                  </template>
-                </Column>
-                <Column field="units" bodyClass="small-text-col" header="Units" style="min-width: 80px" />
-                <Column field="type" header="Type" style="width: 100px">
-                  <template #body="slotProps">
-                    <Select
-                      v-model="slotProps.data.type"
-                      :options="PARAMETER_TYPE_OPTIONS"
-                      optionLabel="label"
-                      optionValue="value"
-                      size="small"
-                      class="w-full"
-                      @change="handleParameterTypeChange(slotProps.data)"
-                    />
-                  </template>
-                </Column>
-              </DataTable>
-            </div>
-          </template>
-
-          <div v-else class="empty-state">
-            <i class="pi pi-info-circle empty-state-icon"></i>
-            <p>Select an instance to edit its parameters here.</p>
-          </div>
-        </section>
-      </div>
+            </section>
+          </TabPanel>
+        </TabPanels>
+      </Tabs>
     </aside>
   </div>
 </template>
@@ -165,7 +156,11 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
-import Divider from 'primevue/divider'
+import Tabs from 'primevue/tabs'
+import TabList from 'primevue/tablist'
+import Tab from 'primevue/tab'
+import TabPanels from 'primevue/tabpanels'
+import TabPanel from 'primevue/tabpanel'
 
 import { useResizableAside } from '../composables/useResizableAside'
 import { useLibraryStore } from '../stores/libraryStore'
@@ -190,18 +185,32 @@ const props = defineProps({
 })
 
 const { width, startResize } = useResizableAside(props.initialWidth, props.minWidth, props.maxWidth, 'right')
-const isCollapsed = ref(false)
+const isCollapsed = ref(true)
 
 function toggleCollapsed() {
   isCollapsed.value = !isCollapsed.value
 }
 
+// ── Vertical tab navigation ──────────────────────────────────────────────
+const tabs = [
+  { id: 'global', label: 'Global parameters', icon: 'pi-globe' },
+  { id: 'params', label: 'Instance parameters', icon: 'pi-sliders-h' },
+  { id: 'sysmod', label: 'Inspection modules', icon: 'pi-question-circle' },
+  { id: 'props', label: 'Properties', icon: 'pi-wrench' },
+]
+const activeTabId = ref('global')
+
 const libraryStore = useLibraryStore()
-const isGlobalCollapsed = ref(false)
 
 const { getSelectedNodes, updateNodeData } = useVueFlow(FLOW_IDS.MAIN)
 
 const selectedNode = computed(() => getSelectedNodes.value[0] || null)
+
+// Jump to the Parameters tab whenever a node is selected, so the panel
+// surfaces the relevant info without requiring a manual tab click.
+watch(selectedNode, (node) => {
+  if (node) activeTabId.value = 'params'
+})
 
 // ── Global constants (top subsection) ───────────────────────────────────────
 const globalConstantRows = ref([])
@@ -232,7 +241,8 @@ watch(
     const addedNames = Array.from(map.keys()).filter((name) => !previousNames.has(name))
     if (addedNames.length === 0) return
 
-    isGlobalCollapsed.value = false
+    // Surface newly-added constants even if the user is currently on the Parameters tab.
+    activeTabId.value = 'global'
     newlyAddedNames.value = new Set(addedNames)
 
     clearTimeout(highlightTimeoutId)
@@ -364,7 +374,7 @@ function handleParameterTypeChange(row) {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--p-text-color) 15%, transparent);
+  box-shadow: 0 4px color-mix(in srgb, var(--p-text-color) 15%, transparent);
   transition: width 160ms ease, padding 160ms ease;
 }
 
@@ -373,10 +383,68 @@ function handleParameterTypeChange(row) {
   border-left: none;
 }
 
-.context-aside-content {
+/* PrimeVue's Tabs ships horizontal-only (tablist above panels, tabs laid out
+   left-to-right). There's no built-in vertical orientation, so we keep the
+   real Tabs/TabList/Tab/TabPanels/TabPanel components — for their ARIA roles
+   and keyboard support — and reflow them into a rail + panel layout ourselves. */
+:deep(.context-tabs.p-tabs) {
+  flex: 1 1 auto;
+  flex-direction: row;
+  min-width: v-bind('props.minWidth + "px"');
+  min-height: 0;
+  gap: 0.75rem;
+}
+
+:deep(.context-tabs .p-tablist) {
+  flex-shrink: 0;
+}
+
+:deep(.context-tabs .p-tablist-tab-list) {
+  flex-direction: column;
+  gap: 0.35rem;
+  border-right: 1px solid var(--p-content-border-color);
+  border-width: 0 1px 0 0;
+  padding-right: 0.75rem;
+  background: transparent;
+}
+
+/* The built-in active-bar slides along the x-axis for horizontal tabs; it
+   doesn't translate to a vertical rail, so we hide it and rely on the
+   selected tab's own background/color instead. */
+:deep(.context-tabs .p-tablist-active-bar) {
+  display: none;
+}
+
+:deep(.context-tabs .p-tab) {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+:deep(.context-tabs .p-tab[aria-selected='true']) {
+  background: color-mix(in srgb, var(--p-primary-color) 15%, transparent);
+  color: var(--p-primary-color);
+}
+
+:deep(.context-tabs .p-tabpanels) {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+:deep(.context-tabs .p-tabpanel) {
   height: 100%;
   min-height: 0;
-  min-width: v-bind('props.minWidth + "px"');
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -386,16 +454,7 @@ function handleParameterTypeChange(row) {
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-.context-section--global {
-  flex-shrink: 0;
-  max-height: 45%;
-}
-
-.context-section--params {
   flex: 1 1 auto;
-  min-height: 0;
 }
 
 .context-section-title {
@@ -410,50 +469,10 @@ function handleParameterTypeChange(row) {
   flex-shrink: 0; 
 }
 
-.context-section-header {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  width: 100%;
-  padding-bottom: 0.75rem; 
-  border: none;
-  background: none;
-  cursor: pointer;
-  text-align: left;
-  color: inherit;
-  font: inherit;
-}
-
-.context-section-header .context-section-title {
-  margin: 0; 
-}
-
-.context-section-caret {
-  font-size: 0.7rem;
-  color: var(--p-text-muted-color);
-  transition: color 120ms ease;
-}
-
-.context-section-header:hover .context-section-caret {
-  color: var(--p-primary-color);
-}
-
-.context-section-body {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-}
-
 .context-count {
   font-size: 0.8rem;
   font-weight: 400;
   color: var(--p-text-muted-color);
-}
-
-.context-divider {
-  margin: 1rem 0;
-  flex-shrink: 0;
 }
 
 .new-system-module-btn {

@@ -82,7 +82,7 @@ function toggleCollapsed() {
   padding: 1rem;
   box-sizing: border-box;
   overflow: hidden;
-  box-shadow: 4px 0 16px color-mix(in srgb, var(--p-text-color) 15%, transparent);
+  box-shadow: 4px 0px color-mix(in srgb, var(--p-text-color) 15%, transparent);
   transition: width 160ms ease, padding 160ms ease;
 }
 
