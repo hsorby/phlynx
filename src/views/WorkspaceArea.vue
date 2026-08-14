@@ -369,7 +369,13 @@
           </VueFlow>
         </div>
       </main>
-      <ContextSidebar :initial-width="480" :min-width="260" :max-width="480" @resize="onContextSidebarResize"/>
+      <ContextSidebar
+        :initial-width="480"
+        :min-width="260"
+        :max-width="480"
+        @resize="onContextSidebarResize"
+        @open-inspection-module-dialog="onOpenInspectionModuleDialog"
+      />
     </div>
   </div>
 
@@ -432,6 +438,12 @@
     v-model="replacementDialogVisible"
     :current-instance="currentEditingNode"
     @confirm="onReplaceConfirm"
+  />
+
+  <CreateInspectionModuleDialog
+    v-model="inspectionModuleDialogVisible"
+    :nodes="nodes"
+    @confirm="handleCreateInspectionModule"
   />
 
   <MacroBuilderDialog
@@ -556,6 +568,7 @@ import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
 import PortEditorDialog from '../components/PortEditorDialog.vue'
 import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
+import CreateInspectionModuleDialog from '../components/dialogs/CreateInspectorModule.vue'
 import ContextSidebar from '../components/ContextSidebar.vue'
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
 import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
@@ -643,7 +656,8 @@ const dialogVisible = computed(() => {
     replacementDialogVisible.value ||
     macroBuilderDialogVisible.value ||
     edgeConnectionDialogVisible.value ||
-    instanceEditorDialogVisible.value
+    instanceEditorDialogVisible.value ||
+    inspectionModuleDialogVisible.value
   )
 })
 
@@ -882,6 +896,7 @@ const exportDialogVisible = ref(false)
 const replacementDialogVisible = ref(false)
 const macroBuilderDialogVisible = ref(false)
 const edgeConnectionDialogVisible = ref(false)
+const inspectionModuleDialogVisible = ref(false)
 const edgeDialogSourceNode = ref({})
 const edgeDialogTargetNode = ref({})
 const edgeDialogActiveEdge = ref({})
@@ -2204,6 +2219,18 @@ async function onReplaceConfirm(updatedData) {
   if (!id) return
   updateNodeData(id, updatedData)
   replacementDialogVisible.value = false
+}
+
+function onOpenInspectionModuleDialog() {
+  inspectionModuleDialogVisible.value = true
+}
+
+function handleCreateInspectionModule(payload) {
+  inspectionModuleStore.addModule(payload)
+  notify.success({
+    title: 'Inspection Module Created',
+    message: `"${payload.name}" now sums ${payload.variables.length} variables.`,
+  })
 }
 
 const contextMenuRef = ref(null)

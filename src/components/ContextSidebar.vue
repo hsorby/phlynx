@@ -188,7 +188,7 @@
                   icon="pi pi-plus"
                   size="small"
                   outlined
-                  @click="isInspectionDialogOpen = true"
+                  @click="emit('open-inspection-module-dialog')"
                 />
               </div>
 
@@ -230,12 +230,6 @@
         </TabPanels>
       </Tabs>
     </aside>
-
-    <CreateInspectionModuleDialog
-      v-model="isInspectionDialogOpen"
-      :nodes="allNodes"
-      @confirm="handleCreateInspectionModule"
-    />
   </div>
 </template>
 
@@ -256,15 +250,13 @@ import TabPanel from 'primevue/tabpanel'
 import InputIcon from 'primevue/inputicon'
 import IconField from 'primevue/iconfield'
 
-import CreateInspectionModuleDialog from './dialogs/CreateInspectorModule.vue'
-
-import { useResizableAside } from '../composables/useResizableAside'
-import { useLibraryStore } from '../stores/libraryStore'
+import { PARAMETER_TYPE_OPTIONS, FLOW_IDS } from '../utils/constants'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
 import { detachReactivity } from '../utils/reactivity'
 import { isEditableVariableType } from '../utils/variables'
-import { PARAMETER_TYPE_OPTIONS, FLOW_IDS } from '../utils/constants'
-import { notify } from '../utils/notify'
+
+import { useResizableAside } from '../composables/useResizableAside'
+import { useLibraryStore } from '../stores/libraryStore'
 
 const props = defineProps({
   initialWidth: {
@@ -281,7 +273,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['resize'])
+const emit = defineEmits(['resize', 'open-inspection-module-dialog'])
 
 const { width, startResize } = useResizableAside(props.initialWidth, props.minWidth, props.maxWidth, 'right')
 const isCollapsed = ref(true)
@@ -310,14 +302,11 @@ const activeTabId = ref('global')
 const libraryStore = useLibraryStore()
 const inspectionModuleStore = useInspectionModuleStore()
 
-const { getSelectedNodes, getNodes, updateNodeData } = useVueFlow(FLOW_IDS.MAIN)
+const { getSelectedNodes, updateNodeData } = useVueFlow(FLOW_IDS.MAIN)
 
 const selectedNode = computed(() => getSelectedNodes.value[0] || null)
-const allNodes = computed(() => getNodes.value)
 
 const isMultipleSelected = computed(() => getSelectedNodes.value.length > 1)
-
-const isInspectionDialogOpen = ref(false)
 
 watch(selectedNode, (node) => {
   if (node) {
@@ -383,14 +372,6 @@ function handleGlobalConstantChange(row) {
 onUnmounted(() => {
   clearTimeout(highlightTimeoutId)
 })
-
-function handleCreateInspectionModule(payload) {
-  inspectionModuleStore.addModule(payload)
-  notify.success({
-    title: 'Inspection Module Created',
-    message: `"${payload.name}" now sums ${payload.variables.length} variables.`,
-  })
-}
 
 // ── Selected node parameters (lower subsection) ─────────────────────────────
 const parameterRows = ref([])
@@ -522,10 +503,6 @@ function handleParameterTypeChange(row) {
   border-left: none;
 }
 
-/* PrimeVue's Tabs ships horizontal-only (tablist above panels, tabs laid out
-   left-to-right). There's no built-in vertical orientation, so we keep the
-   real Tabs/TabList/Tab/TabPanels/TabPanel components — for their ARIA roles
-   and keyboard support — and reflow them into a rail + panel layout ourselves. */
 :deep(.context-tabs.p-tabs) {
   flex: 1 1 auto;
   flex-direction: row;
