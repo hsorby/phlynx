@@ -15,7 +15,7 @@ function clonePlainObject(value) {
   return JSON.parse(JSON.stringify(value))
 }
 
-export const useSimSettingsStore = defineStore('simSettings', () => {
+export const useSimulationSettingsStore = defineStore('simulationSettings', () => {
   const simulationSettings = ref(cloneSimulationSettings())
   const plotConfig = ref({})
   const parameterScanConfig = ref({})

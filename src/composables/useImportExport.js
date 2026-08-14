@@ -11,11 +11,10 @@ import {
 } from '../utils/constants'
 
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
-import { useSimSettingsStore } from '../stores/simSettingsStore'
+import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import { generateFlattenedModel } from '../utils/cellml'
-import { createCellMLDataFragment } from '../services/compress'
-import { generateOmexArchive } from '../services/export/omexExport'
+import { createCellMLDataFragment, generateOmexArchive } from '../services/compress'
 import { generateExportZip } from '../services/export/ca'
 
 export function useImportExport({
@@ -30,14 +29,13 @@ export function useImportExport({
   getFileHandle,
   onExportConfirm,
 }) {
-
-  const simSettingsStore = useSimSettingsStore()
+  const simulationSettingsStore = useSimulationSettingsStore()
   const libraryStore = useLibraryStore()
 
   const currentImportMode = ref(null)
   const currentExportKey = ref(EXPORT_KEYS.CELLML)
 
-  const { simSettings, plotConfig, parameterScanConfig } = storeToRefs(simSettingsStore);
+  const { simulationSettings, plotConfig, parameterScanConfig } = storeToRefs(simulationSettingsStore)
 
   const importOptions = computed(() => [
     {
@@ -113,16 +111,32 @@ export function useImportExport({
       disabled: libcellml.status !== 'ready' || !somethingAvailable.value,
       suffix: '.omex',
       fileTypes: OMEX_FILE_TYPES,
-      message: 'Generating flattened CellML model.',
-      action: async () => {
-        const cellmlText = await generateFlattenedModel(nodes.value, edges.value, libraryStore)
-        return generateOmexArchive(cellmlText, {
-          simulationSettings: simSettings.value,
-          plotConfig: plotConfig.value,
-          parameterScanConfig: parameterScanConfig.value,
-        })
+      message: 'Generating OMEX archive for Web OpenCOR.',
+      action: () => generateFlattenedModel(nodes.value, edges.value, libraryStore),
+      successMessage: async (blob, finalName) => {
+        console.log(simulationSettings.value, plotConfig.value, parameterScanConfig.value)
+        const dataUri = await generateOmexArchive(
+          { blob, finalName },
+          {
+            simulationSettings: simulationSettings.value,
+            plotConfig: plotConfig.value,
+            parameterScanConfig: parameterScanConfig.value,
+          }
+        )
+        return h('div', null, [
+          'OMEX archive generated for Web OpenCOR. Open this model directly in ',
+          h(
+            'a',
+            {
+              href: `https://opencor.ws/app/?opencor://openFile/#${dataUri}`,
+              rel: 'noopener noreferrer',
+              style: { color: 'var(--p-primary-color)', fontWeight: 'bold' },
+              target: '_blank',
+            },
+            'OpenCOR'
+          ),
+        ])
       },
-      successMessage: () => 'OMEX archive generated for Web OpenCOR.',
     },
     {
       key: EXPORT_KEYS.CUFLYNX,
@@ -131,7 +145,7 @@ export function useImportExport({
       disabled: true,
       suffix: '.omex',
       fileTypes: OMEX_FILE_TYPES,
-      message: 'Generating flattened CellML model.',
+      message: 'Generating OMEX archive for CUFLynx.',
     },
   ])
 

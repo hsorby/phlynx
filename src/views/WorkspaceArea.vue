@@ -468,7 +468,7 @@ import { MiniMap } from '@vue-flow/minimap'
 
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
-import { useSimSettingsStore } from '../stores/simSettingsStore'
+import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import useDragAndDrop from '../composables/useDnD'
 import { useHandleManagement } from '../composables/useHandleManagement'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
@@ -499,11 +499,7 @@ import { useClearWorkspace } from '../utils/workspace'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
 import { useImportExport } from '../composables/useImportExport'
 import { relayoutNodes } from '../services/layouts/physics'
-import {
-  initLibCellML,
-  processCellMLData,
-  extractVariablesFromMath,
-} from '../utils/cellml'
+import { initLibCellML, processCellMLData, extractVariablesFromMath } from '../utils/cellml'
 import {
   edgeLineOptions,
   CELLML_FILE_TYPES,
@@ -819,8 +815,7 @@ const onDrop = async (event) => {
 }
 
 const historyStore = useFlowHistoryStore()
-const simSettingsStore = useSimSettingsStore()
-const { simulationSettings: simSettings, plotConfig, parameterScanConfig } = storeToRefs(simSettingsStore)
+const simulationSettingsStore = useSimulationSettingsStore()
 const { loadFromInstanceArray } = useLoadFromInstanceArray()
 const { loadFromCellML } = useLoadFromCellML()
 const { capture } = useScreenshot()
@@ -2268,7 +2263,7 @@ function createSaveBlob() {
     },
     flow: toObject(),
     store: libraryStore.getState(),
-    simulation: simSettingsStore.getState(),
+    simulation: simulationSettingsStore.getState(),
   }
 
   const jsonString = JSON.stringify(saveState, null, 2)
@@ -2323,7 +2318,7 @@ function handleLoadWorkspace(event) {
 
       // Restore Pinia store state.
       libraryStore.loadState(migratedState.store)
-      simSettingsStore.loadState(migratedState.simulation)
+      simulationSettingsStore.loadState(migratedState.simulation)
 
       trackEvent('workflow_load_action', {
         category: 'Workflow',

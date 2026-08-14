@@ -528,7 +528,7 @@ import TabPanel from 'primevue/tabpanel'
 import TabView from 'primevue/tabview'
 
 import { useConfirmDialog } from '../composables/useConfirmDialog'
-import { useSimSettingsStore } from '../stores/simSettingsStore'
+import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { notify } from '../utils/notify'
 import { BASELINE_SIMULATION_SETTINGS } from '../utils/constants'
 
@@ -542,8 +542,8 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 const { confirm } = useConfirmDialog()
-const simSettingsStore = useSimSettingsStore()
-const { simulationSettings: simSettings, plotConfig, parameterScanConfig } = storeToRefs(simSettingsStore)
+const simulationSettingsStore = useSimulationSettingsStore()
+const { simulationSettings, plotConfig, parameterScanConfig } = storeToRefs(simulationSettingsStore)
 
 const solverOptions = [
   { label: 'CVODE', value: 'CVODE' },
@@ -958,7 +958,7 @@ async function initialiseDialog() {
   isLoading.value = true
   loadingText.value = 'Preparing simulation settings...'
 
-  localSimulationSettings.value = cloneSettings(simSettings.value)
+  localSimulationSettings.value = cloneSettings(simulationSettings.value)
 
   const existingPlotConfig = plotConfig.value || {}
   plotGroups.value = normaliseGroups(existingPlotConfig.groups)
@@ -1143,7 +1143,7 @@ const handleConfirm = () => {
   }
 
   const payload = createDraftPayload()
-  simSettingsStore.loadState(payload)
+  simulationSettingsStore.loadState(payload)
 
   bypassCloseGuard.value = true
   emit('update:modelValue', false)
