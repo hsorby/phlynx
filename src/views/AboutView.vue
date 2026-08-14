@@ -40,8 +40,7 @@
 
                   <h3>The Workflow</h3>
                   <p>
-                    This application serves as the visual frontend for the
-                    <strong>Circulatory Autogen</strong> project. It allows users to:
+                    <strong>PhLynx</strong> allows users to:
                   </p>
                   <ul>
                     <li>Visually connect independent CellML modules.</li>
@@ -53,8 +52,8 @@
 
                   <p>
                     For more information on the science and methodology behind the broader project, please visit the
-                    <a href="https://physiomelinks.github.io/circulatory_autogen/" target="_blank" class="prime-link">
-                      Circulatory Autogen website</a
+                    <a href="https://www.cellml.org/" target="_blank" class="prime-link">
+                      CellML website</a
                     >.
                   </p>
 
