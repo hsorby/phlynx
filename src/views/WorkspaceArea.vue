@@ -2454,6 +2454,7 @@ function createSaveBlob() {
     },
     flow: toObject(),
     store: libraryStore.getState(),
+    inspectionModules: inspectionModuleStore.getState(),
   }
 
   const jsonString = JSON.stringify(saveState, null, 2)
@@ -2508,6 +2509,7 @@ function handleLoadWorkspace(event) {
 
       // Restore Pinia store state.
       libraryStore.loadState(migratedState.store)
+      inspectionModuleStore.loadState(migratedState.inspectionModules)
 
       trackEvent('workflow_load_action', {
         category: 'Workflow',
