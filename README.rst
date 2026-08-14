@@ -11,12 +11,7 @@ Common use cases include generating coupled biophysical cell models and patient-
 
 Getting Started
 ---------------
-PhLynx is a web application - no installation required. Simply access it through your web browser, and start building models immediately. The latest state of the application can be accessed online at: https://latest-phlynx.netlify.app/
-
-.. note::
-
-   The latest version is not guaranteed to be stable or working at any given time.
-
+PhLynx is a web application - no installation required. Simply access it through your web browser, and start building models immediately. The latest state of the application can be accessed online at: https://phlynx.com/
 
 Browser Requirements:
 ~~~~~~~~~~~~~~~~~~~~~
