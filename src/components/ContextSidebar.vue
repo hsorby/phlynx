@@ -281,8 +281,13 @@ const props = defineProps({
   },
 })
 
+const emit = defineEmits(['resize'])
+
 const { width, startResize } = useResizableAside(props.initialWidth, props.minWidth, props.maxWidth, 'right')
 const isCollapsed = ref(true)
+
+const effectiveWidth = computed(() => (isCollapsed.value ? 0 : width.value))
+watch(effectiveWidth, (newWidth) => emit('resize', newWidth), { immediate: true })
 
 function toggleCollapsed() {
   isCollapsed.value = !isCollapsed.value

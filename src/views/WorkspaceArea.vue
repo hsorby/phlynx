@@ -241,7 +241,7 @@
         '--context-sidebar-width': contextSidebarWidth + 'px',
         }">
         
-        <div class="workspace-search-container" :class="{ 'search-inactive': !searchBarFocused && !searchQuery }">
+        <div ref="searchBarEl" class="workspace-search-container" :class="{ 'search-inactive': !searchBarFocused && !searchQuery }">
           <div class="workspace-search-input-wrapper">
             <IconField>
               <InputIcon class="pi pi-search" />
@@ -294,7 +294,7 @@
         </div>
 
         <div class="dnd-flow" @drop="onDrop">
-          <Toast position="top-right" :style="{ top: '166px', right: `${contextSidebarWidth + 25}px` }">
+          <Toast position="top-right" :style="{ top: `${toastTop}px`, right: `${contextSidebarWidth + 25}px` }">
           <template #message="slotProps">
             <div class="p-toast-message-text" style="flex: 1">
               
@@ -574,6 +574,10 @@ const contextSidebarWidth = ref(0)
 function onContextSidebarResize(width) {
   contextSidebarWidth.value = width
 }
+
+const SEARCH_BAR_TOP = 150
+const TOAST_GAP_BELOW_SEARCH_BAR = 16
+const toastTop = computed(() => SEARCH_BAR_TOP + TOAST_GAP_BELOW_SEARCH_BAR)
 
 const { isDarkMode, toggleDarkMode } = useColorScheme()
 
