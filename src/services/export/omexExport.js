@@ -8,7 +8,7 @@ import { generateSedmlData } from './sedmlExport'
  * format itself. See the example archive (enterocyte.omex) for the shape
  * this mirrors.
  */
-function buildManifestXml(entries) {
+export function buildManifestXml(entries) {
   const contentLines = entries
     .map(
       (entry) =>
