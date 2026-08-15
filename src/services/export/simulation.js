@@ -31,18 +31,18 @@ export function buildSimulationJson(plotConfig, parameterScan, options = {}) {
   const plots = buildOutputPlots(plotConfig, selections, timeVariable)
   const parameters = buildParameters(scanSelections)
 
-  return {
+  return JSON.stringify({
     input,
     output: { data, plots },
     parameters,
-  }
+  })
 }
 
 // input: one entry per parameter-scan selection. id/name are both just the
 // constant's own name (per spec: "id and name can just be the variable name").
 function buildInput(scanSelections) {
   return scanSelections.map((sel) => ({
-    id: sel.parameterName,
+    id: `id__${sel.nodeName}__${sel.parameterName}`,
     name: sel.parameterName,
     defaultValue: sel.default,
     minimumValue: sel.min,
@@ -76,6 +76,7 @@ function buildOutputData(selections, timeVariable) {
 // "ungrouped" plot instead of silently being dropped.
 function buildOutputPlots(plotConfig, selections, timeVariable) {
   const groupOrder = (plotConfig?.groups || []).map((group) => group.id)
+  const groupNameMap = new Map((plotConfig?.groups || []).map((group) => [group.id, group.name]))
   const UNGROUPED = '__ungrouped__'
 
   const byGroup = new Map()
@@ -94,6 +95,7 @@ function buildOutputPlots(plotConfig, selections, timeVariable) {
     .map((groupKey) => byGroup.get(groupKey))
     .filter((groupSelections) => groupSelections.length > 0)
     .map(([first, ...rest]) => ({
+      name: groupNameMap.get(first.groupId) || 'Ungrouped',
       xValue: timeVariable.id,
       yValue: first.variableName,
       additionalTraces: rest.map((sel) => ({
@@ -111,6 +113,6 @@ function buildOutputPlots(plotConfig, selections, timeVariable) {
 function buildParameters(scanSelections) {
   return scanSelections.map((sel) => ({
     name: `${sel.nodeName}/${sel.parameterName}`,
-    value: sel.parameterName,
+    value: `id__${sel.nodeName}__${sel.parameterName}`,
   }))
 }

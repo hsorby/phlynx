@@ -62,7 +62,7 @@ describe('generateOmexArchive', () => {
     const archive = await readArchive(archiveBlob)
     const entryNames = Object.keys(archive.files).sort()
 
-    expect(entryNames).toEqual(['document.sedml', 'manifest.xml', 'model.cellml'])
+    expect(entryNames).toEqual(['document.sedml', 'manifest.xml', 'model.cellml', 'simulation.json'])
 
     const manifestXml = await archive.file('manifest.xml').async('string')
     expect(manifestXml).toContain('<omexManifest')
@@ -81,5 +81,50 @@ describe('generateOmexArchive', () => {
     expect(sedmlDocument).toContain('<sedML xmlns="http://sed-ml.org/sed-ml/level1/version4" level="1" version="4">')
     expect(sedmlDocument).toContain('<model id="model1" language="urn:sedml:language:cellml" source="model.cellml">')
     expect(sedmlDocument).toContain('<task id="task1" modelReference="model1" simulationReference="simulation1"/>')
+
+    const simulationJson = await archive.file('simulation.json').async('string')
+    const simulationData = JSON.parse(simulationJson)
+    expect(simulationData).toHaveProperty('input')
+    expect(simulationData).toHaveProperty('output')
+    expect(simulationData).toHaveProperty('parameters')
+
+    expect(simulationData.input).toEqual([
+      {
+        id: 'id__membrane__gNa',
+        name: 'gNa',
+        defaultValue: 1,
+        minimumValue: 0.1,
+        maximumValue: 10,
+      },
+    ])
+
+    expect(simulationData.output.data).toEqual([
+      {
+        id: 'Vm',
+        name: 'membrane/Vm',
+      },
+      {
+        id: 'time',
+        name: 'time',
+      },
+    ])
+
+    expect(simulationData.output.plots).toEqual([
+      {
+        additionalTraces: [],
+        name: 'Plot 1',
+        xAxisTitle: '',
+        xValue: 'time',
+        yAxisTitle: '',
+        yValue: 'Vm',
+      },
+    ])
+
+    expect(simulationData.parameters).toEqual([
+      {
+        value: 'id__membrane__gNa',
+        name: 'membrane/gNa',
+      },
+    ])
   })
 })

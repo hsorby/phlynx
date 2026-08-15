@@ -1,7 +1,5 @@
 import JSZip from 'jszip'
 
-import { generateSedmlData } from './sedmlExport'
-
 /**
  * Builds the COMBINE archive manifest.xml listing every file included in the
  * archive, plus the mandatory self-referencing "." entry for the archive
