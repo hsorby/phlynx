@@ -32,6 +32,7 @@
     "update:docs:changelog": "node scripts/build-changelog.js",
     "test": "vitest",
     "test:ui": "vitest --ui",
+    "test:unit": "vitest run --dir tests/vitest/",
     "test:coverage": "vitest --coverage"
   },
   "build": {
