@@ -4,13 +4,6 @@ export function generateSedmlData(simData) {
 <sedML xmlns="http://sed-ml.org/sed-ml/level1/version4" level="1" version="4">
   <listOfModels>
     <model id="model1" language="urn:sedml:language:cellml" source="model.cellml">
-      <listOfChanges>
-        <changeAttribute target="/cellml:model/cellml:component[@name='parameters']/cellml:variable[@name='Scale_GLUT2apex']" newValue="10"/>
-        <changeAttribute target="/cellml:model/cellml:component[@name='parameters']/cellml:variable[@name='Scale_GLUT2base']" newValue="100"/>
-        <changeAttribute target="/cellml:model/cellml:component[@name='parameters']/cellml:variable[@name='Scale_Kir']" newValue="3.35"/>
-        <changeAttribute target="/cellml:model/cellml:component[@name='parameters']/cellml:variable[@name='Scale_NKA']" newValue="1"/>
-        <changeAttribute target="/cellml:model/cellml:component[@name='parameters']/cellml:variable[@name='Scale_SGLT1']" newValue="1.86"/>
-      </listOfChanges>
     </model>
   </listOfModels>
   <listOfSimulations>

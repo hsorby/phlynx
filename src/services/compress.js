@@ -1,7 +1,8 @@
 import JSZip from 'jszip'
 
-import { generateSedmlData } from './export/sedmlExport'
-import { buildManifestXml } from './export/omexExport'
+import { generateSedmlData } from './export/sedml'
+import { buildManifestXml } from './export/omex'
+import { buildSimulationJson } from './export/simulation'
 
 // Helper: Converts a Blob to a pure Base64 string (strips the "data:..." prefix)
 const blobToBase64 = (blob) => {
@@ -57,6 +58,8 @@ export async function generateOmexArchive(cellmlData, simData = {}) {
     { location: 'model.cellml', format: 'http://identifiers.org/combine.specifications/cellml' },
   ])
 
+  const simulationJson = buildSimulationJson(simData.plotConfig, simData.parameterScanConfig)
+
   console.log('OMEX archive manifest.xml:\n', manifestXml)
   console.log('OMEX archive model.cellml:\n', cellmlData.finalName)
 
@@ -64,6 +67,7 @@ export async function generateOmexArchive(cellmlData, simData = {}) {
   zip.file('manifest.xml', manifestXml)
   zip.file('model.cellml', cellmlData.blob)
   zip.file('document.sedml', sedmlText)
+  zip.file('simulation.json', simulationJson)
 
   return zip.generateAsync({ type: 'blob' })
 }
