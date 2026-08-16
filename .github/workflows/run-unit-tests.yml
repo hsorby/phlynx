@@ -15,4 +15,6 @@ jobs:
         with:
           node-version: 24
 
+      - run: corepack enable && yarn install --frozen-lockfile
+
       - run: yarn test
