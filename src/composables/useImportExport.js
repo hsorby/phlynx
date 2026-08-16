@@ -13,8 +13,8 @@ import {
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useLibraryStore } from '../stores/libraryStore'
-import { generateFlattenedModel } from '../utils/cellml'
-import { createCellMLDataFragment, generateOmexArchive } from '../services/compress'
+import { generateFlattenedModel, extractVoiFromBlob } from '../utils/cellml'
+import { createCellMLDataFragment, generateOmexArchive, createOmexDataFragment } from '../services/compress'
 import { generateExportZip } from '../services/export/ca'
 
 export function useImportExport({
@@ -112,17 +112,21 @@ export function useImportExport({
       suffix: '.omex',
       fileTypes: OMEX_FILE_TYPES,
       message: 'Generating OMEX archive for Web OpenCOR.',
-      action: () => generateFlattenedModel(nodes.value, edges.value, libraryStore),
-      successMessage: async (blob, finalName) => {
-        console.log(simulationSettings.value, plotConfig.value, parameterScanConfig.value)
-        const dataUri = await generateOmexArchive(
+      action: async (finalName) => {
+        const blob = await generateFlattenedModel(nodes.value, edges.value, libraryStore)
+        const voiInformation = await extractVoiFromBlob(blob)
+        console.log(voiInformation)
+        return generateOmexArchive(
           { blob, finalName },
           {
             simulationSettings: simulationSettings.value,
             plotConfig: plotConfig.value,
             parameterScanConfig: parameterScanConfig.value,
-          }
-        )
+          },
+          { voiInformation }
+        )},
+      successMessage: async (blob, finalName) => {
+        const dataUri = await createOmexDataFragment(blob)
         return h('div', null, [
           'OMEX archive generated for Web OpenCOR. Open this model directly in ',
           h(

@@ -48,20 +48,19 @@ export async function createCellMLDataFragment(cellmlBlob, fileName) {
  *
  * @param {object} cellmlData - The flattened CellML model data.
  * @param {object} [simData] - Simulation/plot/parameter-scan config for the SED-ML doc. Currently unused by generateSedmlData.
+ * @param {object} [addInfo] - Additional information not carried by the other parameters.
  * @returns {Promise<Blob>} The .omex archive as a zip Blob.
  */
-export async function generateOmexArchive(cellmlData, simData = {}) {
+export async function generateOmexArchive(cellmlData, simData = {}, addInfo = {}) {
   const sedmlText = generateSedmlData(simData)
 
   const manifestXml = buildManifestXml([
     { location: 'document.sedml', format: 'http://identifiers.org/combine.specifications/sed-ml', master: true },
     { location: 'model.cellml', format: 'http://identifiers.org/combine.specifications/cellml' },
+    { location: 'simulation.json', format: 'http://purl.org/NET/mediatypes/application/json' },
   ])
 
-  const simulationJson = buildSimulationJson(simData.plotConfig, simData.parameterScanConfig)
-
-  console.log('OMEX archive manifest.xml:\n', manifestXml)
-  console.log('OMEX archive model.cellml:\n', cellmlData.finalName)
+  const simulationJson = buildSimulationJson(simData.plotConfig, simData.parameterScanConfig, addInfo.voiInformation)
 
   const zip = new JSZip()
   zip.file('manifest.xml', manifestXml)
@@ -70,6 +69,10 @@ export async function generateOmexArchive(cellmlData, simData = {}) {
   zip.file('simulation.json', simulationJson)
 
   return zip.generateAsync({ type: 'blob' })
+}
+
+export async function createOmexDataFragment(omexBlob) {
+  return createDataFragment(omexBlob, 'omex')
 }
 
 export async function createDataFragment(zipBlob, subMimeType) {

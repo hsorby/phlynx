@@ -1,5 +1,6 @@
 export function generateSedmlData(simData) {
 
+  console.log('generateSedmlData simData:', simData)
   return `<?xml version="1.0" encoding="UTF-8"?>
 <sedML xmlns="http://sed-ml.org/sed-ml/level1/version4" level="1" version="4">
   <listOfModels>
@@ -7,7 +8,7 @@ export function generateSedmlData(simData) {
     </model>
   </listOfModels>
   <listOfSimulations>
-    <uniformTimeCourse id="simulation1" initialTime="0" outputStartTime="0" outputEndTime="10000" numberOfSteps="10000">
+    <uniformTimeCourse id="simulation1" initialTime="${simData.initialTime}" outputStartTime="${simData.outputStartTime}" outputEndTime="${simData.outputEndTime}" numberOfSteps="${simData.numberOfSteps}">
       <algorithm kisaoID="KISAO:0000019">
         <listOfAlgorithmParameters>
           <algorithmParameter kisaoID="KISAO:0000209" value="1e-07"/>

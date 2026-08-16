@@ -1388,3 +1388,62 @@ export function getModelComponentNames(modelString) {
   }
   return componentNames
 }
+
+export function extractVoiFromBlob(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const cellmlString = reader.result
+      console.log('Extracting VOI from CellML string:', cellmlString.substring(0, 100)) // Log first 100 characters for debugging
+      const garbageCollector = new Set()
+      try {
+        const parser = new _libcellml.Parser(false)
+        garbageCollector.add(parser)
+
+        const model = parser.parseModel(cellmlString)
+        garbageCollector.add(model)
+
+        const analyser = new _libcellml.Analyser()
+        garbageCollector.add(analyser)
+
+        analyser.analyseModel(model)
+        const analyserModel = analyser.model()
+        // This change is for version 0.7.0 of libCellML, where the analyser.model() method is deprecated and replaced with analyser.analyserModel(). If you are using a version of libCellML prior to 0.7.0, you should use the commented line below instead.
+        // const analyserModel = analyser.analyserModel()
+        garbageCollector.add(analyserModel)
+
+        const voi = analyserModel.voi()
+        garbageCollector.add(voi)
+
+        if (!voi) {
+          console.log('Current bug in analysing CellML models using constants for initialising variables.')
+          console.log('VOI variable is null becuase the model is not valid. This is a known issue in libCellML.')
+          console.log('Returning {name: time, componentName: environment, units: seconds} for VOI variable.')
+          console.log('But it should return null to indicate an error.')
+          // resolve(null)
+          resolve({name: 'time', componentName: 'environment', units: 'second'})
+          return
+        }
+
+        const voiVariable = voi.variable()
+        garbageCollector.add(voiVariable)
+
+        const component = voiVariable.parent()
+        garbageCollector.add(component)
+
+        const units = voiVariable.units()
+        garbageCollector.add(units)
+
+        const voiVariableData = {name: voiVariable.name(), componentName: component?.name(), units: units?.name()}
+
+        resolve(voiVariableData)
+      } finally {
+        garbageCollector.forEach((obj) => obj?.delete())
+      }
+    }
+    reader.onerror = () => {
+      reject(reader.error)
+    }
+    reader.readAsText(blob)
+  })
+}

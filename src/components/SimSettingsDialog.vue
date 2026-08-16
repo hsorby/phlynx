@@ -442,10 +442,9 @@
                 />
               </div>
               <div class="field">
-                <label>Time Step</label>
+                <label>Initial Point</label>
                 <InputNumber
-                  v-model="localSimulationSettings.timeStep"
-                  :min="0"
+                  v-model="localSimulationSettings.initialPoint"
                   :minFractionDigits="0"
                   :maxFractionDigits="8"
                   fluid
@@ -477,6 +476,16 @@
                   :options="solverOptions"
                   optionLabel="label"
                   optionValue="value"
+                  fluid
+                />
+              </div>
+              <div class="field">
+                <label>Time Step</label>
+                <InputNumber
+                  v-model="localSimulationSettings.timeStep"
+                  :min="0"
+                  :minFractionDigits="0"
+                  :maxFractionDigits="12"
                   fluid
                 />
               </div>
@@ -530,7 +539,6 @@ import TabView from 'primevue/tabview'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { notify } from '../utils/notify'
-import { BASELINE_SIMULATION_SETTINGS } from '../utils/constants'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -551,7 +559,7 @@ const solverOptions = [
   { label: 'Runge Kutta 4', value: 'RungeKutta4' },
 ]
 
-const localSimulationSettings = ref({ ...BASELINE_SIMULATION_SETTINGS })
+const localSimulationSettings = ref({})
 const variableRows = ref([])
 const constantRows = ref([])
 const isLoading = ref(false)
@@ -774,10 +782,7 @@ watch(selectedNode, () => {
 })
 
 function cloneSettings(input) {
-  return {
-    ...BASELINE_SIMULATION_SETTINGS,
-    ...(input || {}),
-  }
+  return {...input}
 }
 
 function makeGroupId(index) {

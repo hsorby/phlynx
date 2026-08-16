@@ -12,19 +12,13 @@
  *
  * @param {object} plotConfig - The `plotConfig` field of SimSettingsDialog's confirm payload.
  * @param {object} parameterScan - The `parameterScan` field of SimSettingsDialog's confirm payload.
- * @param {object} [options]
- * @param {{id: string, name: string}} [options.timeVariable] - Id/name for the
- *   plots' shared x-axis. SimSettingsDialog's payload doesn't know which
- *   node/variable represents simulation time, so this defaults to a plain
- *   { id: 'time', name: 'time' } placeholder — pass the model's actual
- *   node-qualified time variable (e.g. { id: 'time', name: 'environment/time' })
- *   if the caller has access to the node list and can resolve it.
+ * @param {object} voiInformation - Information for the VOI (typically the time axis variable).
  * @returns {object} The simulation.json object — JSON.stringify() before writing to the archive.
  */
-export function buildSimulationJson(plotConfig, parameterScan, options = {}) {
+export function buildSimulationJson(plotConfig, parameterScan, voiInformation) {
   const selections = plotConfig?.selections || []
   const scanSelections = parameterScan?.selections || []
-  const timeVariable = options.timeVariable || { id: 'time', name: 'time' }
+  const timeVariable = { id: formVoiVariableId(voiInformation), name: formVoiVariableName(voiInformation) }
 
   const input = buildInput(scanSelections)
   const data = buildOutputData(selections, timeVariable)
@@ -50,21 +44,28 @@ function buildInput(scanSelections) {
   }))
 }
 
+function formVoiVariableId(variableInfo) {
+  return `voi__${variableInfo.componentName.toLowerCase()}__${variableInfo.name.toLowerCase()}`
+}
+
+function formVoiVariableName(variableInfo) {
+  return `${variableInfo.componentName}/${variableInfo.name}`
+}
+
+function formDataVariableId(nodeName, variableName) {
+  return `data__${nodeName.toLowerCase()}__${variableName.toLowerCase()}`
+}
+
 // output.data: one entry per plotted variable ("instance name/variable name"),
 // plus the shared time axis — unless a plotted variable is already literally
 // named "time", in which case that one is used instead of adding a duplicate.
 function buildOutputData(selections, timeVariable) {
   const data = selections.map((sel) => ({
-    id: sel.variableName,
+    id: formDataVariableId(sel.nodeName, sel.variableName),
     name: `${sel.nodeName}/${sel.variableName}`,
   }))
 
-  const alreadyHasTime = selections.some(
-    (sel) => sel.variableName?.toLowerCase() === timeVariable.id.toLowerCase()
-  )
-  if (!alreadyHasTime) {
-    data.push({ id: timeVariable.id, name: timeVariable.name })
-  }
+  data.push(timeVariable)
 
   return data
 }
@@ -97,10 +98,10 @@ function buildOutputPlots(plotConfig, selections, timeVariable) {
     .map(([first, ...rest]) => ({
       name: groupNameMap.get(first.groupId) || 'Ungrouped',
       xValue: timeVariable.id,
-      yValue: first.variableName,
+      yValue: formDataVariableId(first.nodeName, first.variableName),
       additionalTraces: rest.map((sel) => ({
         xValue: timeVariable.id,
-        yValue: sel.variableName,
+        yValue: formDataVariableId(sel.nodeName, sel.variableName),
       })),
       xAxisTitle: '',
       yAxisTitle: '',

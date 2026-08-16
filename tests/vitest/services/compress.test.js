@@ -54,7 +54,8 @@ describe('generateOmexArchive', () => {
             },
           ],
         },
-      }
+      },
+      {voiInformation: {name: 'time', componentName: 'environment', units: 'seconds'}}
     )
 
     expect(archiveBlob).toBeInstanceOf(Blob)
@@ -73,6 +74,7 @@ describe('generateOmexArchive', () => {
     expect(manifestXml).toContain(
       '<content location="model.cellml" format="http://identifiers.org/combine.specifications/cellml"/>'
     )
+    expect(manifestXml).toContain('<content location="simulation.json" format="http://purl.org/NET/mediatypes/application/json"/>')
 
     const modelCellml = await archive.file('model.cellml').async('string')
     expect(modelCellml).toBe(cellmlSource)
@@ -100,12 +102,12 @@ describe('generateOmexArchive', () => {
 
     expect(simulationData.output.data).toEqual([
       {
-        id: 'Vm',
+        id: 'data__membrane__vm',
         name: 'membrane/Vm',
       },
       {
-        id: 'time',
-        name: 'time',
+        id: 'voi__environment__time',
+        name: 'environment/time',
       },
     ])
 
@@ -114,9 +116,9 @@ describe('generateOmexArchive', () => {
         additionalTraces: [],
         name: 'Plot 1',
         xAxisTitle: '',
-        xValue: 'time',
+        xValue: 'voi__environment__time',
         yAxisTitle: '',
-        yValue: 'Vm',
+        yValue: 'data__membrane__vm',
       },
     ])
 
