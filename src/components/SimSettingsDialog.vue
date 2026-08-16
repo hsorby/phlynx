@@ -463,7 +463,7 @@
             </div>
           </section>
 
-          <section class="block mt-3">
+          <section class="block mt-3" style="opacity: 0">
             <div class="block-header">
               <h4>Solver Configuration</h4>
               <span class="subtle">Select numerical solver and step limits.</span>
@@ -477,6 +477,7 @@
                   optionLabel="label"
                   optionValue="value"
                   fluid
+                  disabled
                 />
               </div>
               <div class="field">
@@ -487,6 +488,7 @@
                   :minFractionDigits="0"
                   :maxFractionDigits="12"
                   fluid
+                  disabled
                 />
               </div>
               <div class="field">
@@ -497,11 +499,12 @@
                   :minFractionDigits="0"
                   :maxFractionDigits="12"
                   fluid
+                  disabled
                 />
               </div>
               <div class="field">
                 <label>Max Steps</label>
-                <InputNumber v-model="localSimulationSettings.maxSteps" :min="1" :useGrouping="false" fluid />
+                <InputNumber v-model="localSimulationSettings.maxSteps" :min="1" :useGrouping="false" fluid disabled/>
               </div>
             </div>
           </section>
