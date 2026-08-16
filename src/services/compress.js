@@ -52,7 +52,7 @@ export async function createCellMLDataFragment(cellmlBlob, fileName) {
  * @returns {Promise<Blob>} The .omex archive as a zip Blob.
  */
 export async function generateOmexArchive(cellmlData, simData = {}, addInfo = {}) {
-  const sedmlText = generateSedmlData(simData)
+  const sedmlText = generateSedmlData(simData.simulationSettings)
 
   const manifestXml = buildManifestXml([
     { location: 'document.sedml', format: 'http://identifiers.org/combine.specifications/sed-ml', master: true },

@@ -1,6 +1,5 @@
 export function generateSedmlData(simData) {
-
-  console.log('generateSedmlData simData:', simData)
+  const numberOfSteps = Math.floor((simData.endingPoint - simData.startingPoint) / simData.pointInterval) + 1
   return `<?xml version="1.0" encoding="UTF-8"?>
 <sedML xmlns="http://sed-ml.org/sed-ml/level1/version4" level="1" version="4">
   <listOfModels>
@@ -8,7 +7,7 @@ export function generateSedmlData(simData) {
     </model>
   </listOfModels>
   <listOfSimulations>
-    <uniformTimeCourse id="simulation1" initialTime="${simData.initialTime}" outputStartTime="${simData.outputStartTime}" outputEndTime="${simData.outputEndTime}" numberOfSteps="${simData.numberOfSteps}">
+    <uniformTimeCourse id="simulation1" initialTime="${simData.initialPoint}" outputStartTime="${simData.startingPoint}" outputEndTime="${simData.endingPoint}" numberOfSteps="${numberOfSteps}">
       <algorithm kisaoID="KISAO:0000019">
         <listOfAlgorithmParameters>
           <algorithmParameter kisaoID="KISAO:0000209" value="1e-07"/>
@@ -30,7 +29,6 @@ export function generateSedmlData(simData) {
     <task id="task1" modelReference="model1" simulationReference="simulation1"/>
   </listOfTasks>
 </sedML>`
-
 }
 
 // return

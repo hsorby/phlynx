@@ -21,8 +21,9 @@ describe('generateOmexArchive', () => {
       },
       {
         simulationSettings: {
-          startingPoint: 0,
-          endingPoint: 100,
+          startingPoint: 10,
+          endingPoint: 20,
+          initialPoint: 5,
           timeStep: 1,
           pointInterval: 1,
           solver: 'CVODE',
@@ -83,6 +84,7 @@ describe('generateOmexArchive', () => {
     expect(sedmlDocument).toContain('<sedML xmlns="http://sed-ml.org/sed-ml/level1/version4" level="1" version="4">')
     expect(sedmlDocument).toContain('<model id="model1" language="urn:sedml:language:cellml" source="model.cellml">')
     expect(sedmlDocument).toContain('<task id="task1" modelReference="model1" simulationReference="simulation1"/>')
+    expect(sedmlDocument).toContain('<uniformTimeCourse id="simulation1" initialTime="5" outputStartTime="10" outputEndTime="20" numberOfSteps="11">')
 
     const simulationJson = await archive.file('simulation.json').async('string')
     const simulationData = JSON.parse(simulationJson)
