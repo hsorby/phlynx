@@ -1,5 +1,6 @@
 export function generateSedmlData(simData) {
-  const numberOfSteps = Math.floor((simData.endingPoint - simData.startingPoint) / simData.pointInterval) + 1
+  // I feel like we should be adding a 1 to the number of steps here, however Web OpenCOR is also doing this.
+  const numberOfSteps = Math.floor((simData.endingPoint - simData.startingPoint) / simData.pointInterval)
   return `<?xml version="1.0" encoding="UTF-8"?>
 <sedML xmlns="http://sed-ml.org/sed-ml/level1/version4" level="1" version="4">
   <listOfModels>
