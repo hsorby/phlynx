@@ -35,13 +35,17 @@ export function buildSimulationJson(plotConfig, parameterScan, voiInformation) {
 // input: one entry per parameter-scan selection. id/name are both just the
 // constant's own name (per spec: "id and name can just be the variable name").
 function buildInput(scanSelections) {
-  return scanSelections.map((sel) => ({
-    id: `id__${sel.nodeName}__${sel.parameterName}`,
-    name: sel.parameterName,
-    defaultValue: sel.default,
-    minimumValue: sel.min,
-    maximumValue: sel.max,
-  }))
+  return scanSelections.map((sel) => {
+    const stepValue = (sel.max - sel.min) / 100
+    return {
+      id: `id__${sel.nodeName}__${sel.parameterName}`,
+      name: sel.parameterName,
+      defaultValue: sel.default,
+      minimumValue: sel.min,
+      maximumValue: sel.max,
+      stepValue,
+    }
+  })
 }
 
 function formVoiVariableId(variableInfo) {

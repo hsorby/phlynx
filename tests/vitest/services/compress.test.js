@@ -100,6 +100,7 @@ describe('generateOmexArchive', () => {
         defaultValue: 1,
         minimumValue: 0.1,
         maximumValue: 10,
+        stepValue: 0.099,
       },
     ])
 
