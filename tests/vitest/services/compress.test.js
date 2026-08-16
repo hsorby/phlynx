@@ -49,6 +49,7 @@ describe('generateOmexArchive', () => {
               nodeId: 'node-1',
               nodeName: 'membrane',
               parameterName: 'gNa',
+              type: 'constant',
               min: 0.1,
               default: 1,
               max: 10,
@@ -84,7 +85,7 @@ describe('generateOmexArchive', () => {
     expect(sedmlDocument).toContain('<sedML xmlns="http://sed-ml.org/sed-ml/level1/version4" level="1" version="4">')
     expect(sedmlDocument).toContain('<model id="model1" language="urn:sedml:language:cellml" source="model.cellml">')
     expect(sedmlDocument).toContain('<task id="task1" modelReference="model1" simulationReference="simulation1"/>')
-    expect(sedmlDocument).toContain('<uniformTimeCourse id="simulation1" initialTime="5" outputStartTime="10" outputEndTime="20" numberOfSteps="11">')
+    expect(sedmlDocument).toContain('<uniformTimeCourse id="simulation1" initialTime="5" outputStartTime="10" outputEndTime="20" numberOfSteps="10">')
 
     const simulationJson = await archive.file('simulation.json').async('string')
     const simulationData = JSON.parse(simulationJson)
@@ -127,7 +128,7 @@ describe('generateOmexArchive', () => {
     expect(simulationData.parameters).toEqual([
       {
         value: 'id__membrane__gNa',
-        name: 'membrane/gNa',
+        name: 'parameters/gNa',
       },
     ])
   })

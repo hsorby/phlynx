@@ -115,7 +115,6 @@ export function useImportExport({
       action: async (finalName) => {
         const blob = await generateFlattenedModel(nodes.value, edges.value, libraryStore)
         const voiInformation = await extractVoiFromBlob(blob)
-        console.log(voiInformation)
         return generateOmexArchive(
           { blob, finalName },
           {

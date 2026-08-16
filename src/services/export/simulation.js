@@ -112,8 +112,11 @@ function buildOutputPlots(plotConfig, selections, timeVariable) {
 // above. Per spec this is simplified to just reuse the constant's own name
 // (rather than inventing a separate short alias, as the example archive does).
 function buildParameters(scanSelections) {
-  return scanSelections.map((sel) => ({
-    name: `${sel.nodeName}/${sel.parameterName}`,
-    value: `id__${sel.nodeName}__${sel.parameterName}`,
-  }))
+  return scanSelections.map((sel) => {
+    const namePrefix = sel.type === 'constant' ? 'parameters' : 'parameters_global'
+    return {
+      name: `${namePrefix}/${sel.parameterName}`,
+      value: `id__${sel.nodeName}__${sel.parameterName}`,
+    }
+  })
 }
