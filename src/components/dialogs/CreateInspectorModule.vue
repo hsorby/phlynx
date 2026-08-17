@@ -1,11 +1,11 @@
 <template>
   <Dialog
     :visible="modelValue"
-    header="New Inspection Module"
+    :header="editingModule ? 'Edit Inspection Module' : 'New Inspection Module'"
     modal
     :draggable="false"
     :dismissableMask="true"
-    :style="{ width: '720px', height: '80vh' }"
+    :style="{ width: '760px', height: '85vh' }"
     :appendTo="'body'"
     @update:visible="
       (visible) => {
@@ -20,7 +20,7 @@
           <InputText
             id="inspection-module-name"
             v-model="moduleName"
-            placeholder="e.g. Total Heat Loss"
+            placeholder="e.g., total_volume"
             class="w-full"
             autofocus
           />
@@ -33,6 +33,21 @@
           <span class="subtle">{{ selectedRows.length }} selected of {{ variableRows.length }} total</span>
         </div>
 
+        <!-- Validation / status -->
+        <div class="validation-status">
+          <Message v-if="selectedRows.length === 0" severity="secondary" :closable="false">
+            Select two or more variables with matching units to sum. 
+          </Message>
+          <Message v-else-if="selectedRows.length === 1" severity="warn" :closable="false">
+            Select at least one more variable — a module needs two or more variables to sum.
+          </Message>
+          <Message v-else-if="hasUnitMismatch" severity="error" :closable="false">
+            Selected variables have mismatched units ({{ distinctUnits.join(', ') }}). 
+          </Message>
+          <Message v-else severity="success" :closable="false">
+            {{ selectedRows.length }} variables selected — units: {{ distinctUnits[0] || '—' }}
+          </Message>
+        </div>
         <!-- Filter Bar -->
         <div class="filter-toolbar" v-if="variableRows.length > 0">
           <div class="node-search-combo">
@@ -145,36 +160,39 @@
               </Column>
 
               <Column field="variableName" header="Variable" sortable></Column>
-              <Column field="units" header="Units" style="width: 100px">
+              <Column field="units" header="Units" style="width: 90px">
                 <template #body="{ data }">
                   {{ data.units || '-' }}
+                </template>
+              </Column>
+              <Column header="Sign" style="width: 64px">
+                <template #body="{ data }">
+                  <Button
+                    :icon="data.sign === -1 ? 'pi pi-minus' : 'pi pi-plus'"
+                    text
+                    rounded
+                    size="small"
+                    :severity="data.sign === -1 ? 'danger' : 'success'"
+                    v-tooltip.top="data.sign === -1 ? 'Subtracted from total' : 'Added to total'"
+                    @click="toggleSign(data)"
+                  />
                 </template>
               </Column>
             </DataTable>
           </AccordionTab>
         </Accordion>
       </section>
-
-      <!-- Validation / status -->
-      <Message v-if="selectedRows.length === 0" severity="secondary" :closable="false">
-        Select two or more variables with matching units to sum.
-      </Message>
-      <Message v-else-if="selectedRows.length === 1" severity="warn" :closable="false">
-        Select at least one more variable — a module needs two or more variables to sum.
-      </Message>
-      <Message v-else-if="hasUnitMismatch" severity="error" :closable="false">
-        Selected variables have mismatched units ({{ distinctUnits.join(', ') }}). All selected variables must share
-        the same units.
-      </Message>
-      <Message v-else severity="success" :closable="false">
-        {{ selectedRows.length }} variables selected — units: {{ distinctUnits[0] || '—' }}
-      </Message>
     </div>
 
     <template #footer>
       <div class="dialog-footer">
         <Button label="Cancel" severity="secondary" text @click="closeDialog" />
-        <Button label="Create Module" severity="primary" :disabled="!canConfirm" @click="handleConfirm" />
+        <Button
+          :label="editingModule ? 'Save Changes' : 'Create Module'"
+          severity="primary"
+          :disabled="!canConfirm"
+          @click="handleConfirm"
+        />
       </div>
     </template>
   </Dialog>
@@ -199,6 +217,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  editingModule: {
+    type: Object,
+    default: null,
+  },
 })
 
 const emit = defineEmits(['update:modelValue', 'confirm'])
@@ -218,7 +240,14 @@ watch(
   }
 )
 
-function buildVariableRows(nodes) {
+function buildVariableRows(nodes, editingModule) {
+  const existingByKey = new Map()
+  if (editingModule) {
+    for (const variable of editingModule.variables || []) {
+      existingByKey.set(variable.key, variable)
+    }
+  }
+
   const rows = []
 
   for (const node of nodes || []) {
@@ -227,13 +256,18 @@ function buildVariableRows(nodes) {
       if (!variable?.name) continue
       if ((variable.type || 'variable') !== 'variable') continue
 
+      const key = `${node.id}::${variable.name}`
+      const existing = existingByKey.get(key)
+      if (existing) existingByKey.delete(key)
+
       rows.push({
-        key: `${node.id}::${variable.name}`,
+        key,
         nodeId: node.id,
         nodeName: node.data.name,
         variableName: variable.name,
         units: variable.units || '',
-        selected: false,
+        selected: Boolean(existing),
+        sign: existing?.sign === -1 ? -1 : 1,
       })
     }
   }
@@ -246,12 +280,16 @@ function buildVariableRows(nodes) {
 }
 
 function initialiseDialog() {
-  moduleName.value = ''
-  variableRows.value = buildVariableRows(props.nodes)
+  const editing = props.editingModule
+  moduleName.value = editing ? editing.name : ''
+  variableRows.value = buildVariableRows(props.nodes, editing)
   resetFilters()
 }
 
-// ── Filtering ──────────────────────────────────────────────────────────────
+function toggleSign(row) {
+  row.sign = row.sign === -1 ? 1 : -1
+}
+
 const visibleRows = computed(() => {
   const nodeTerm = nodeSearch.value.trim().toLowerCase()
   const variableTerm = variableSearch.value.trim().toLowerCase()
@@ -362,23 +400,28 @@ const distinctUnits = computed(() => {
 const hasUnitMismatch = computed(() => distinctUnits.value.length > 1)
 const isNameValid = computed(() => moduleName.value.trim().length > 0)
 
-const canConfirm = computed(
-  () => isNameValid.value && selectedRows.value.length >= 2 && !hasUnitMismatch.value
-)
+const canConfirm = computed(() => {
+  if (!isNameValid.value) return false
+  return selectedRows.value.length >= 2 && !hasUnitMismatch.value
+})
 
 // ── Actions ──────────────────────────────────────────────────────────────
 function handleConfirm() {
   if (!canConfirm.value) return
 
+  const inferredUnits = distinctUnits.value[0] || 'dimensionless'
+
   emit('confirm', {
+    id: props.editingModule?.id,
     name: moduleName.value.trim(),
-    units: distinctUnits.value[0] || '',
+    units: inferredUnits,
     variables: selectedRows.value.map((row) => ({
       key: row.key,
       nodeId: row.nodeId,
       nodeName: row.nodeName,
       variableName: row.variableName,
       units: row.units,
+      sign: row.sign,
     })),
   })
 
@@ -420,9 +463,9 @@ const closeDialog = () => {
 }
 
 .field label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--p-text-muted-color, #606266);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--p-text-color, inherit);
 }
 
 .block-header {
@@ -449,13 +492,17 @@ const closeDialog = () => {
   display: flex;
   align-items: center;
   gap: 10px;
+  margin-top: 12px;
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
 .filter-input {
   width: 180px;
 }
-
+.validation-status {
+  display: inline-block;
+  height: 30px;
+}
 .node-search-combo {
   position: relative;
 }

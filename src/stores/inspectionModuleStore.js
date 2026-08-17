@@ -4,17 +4,45 @@ import { ref } from 'vue'
 export const useInspectionModuleStore = defineStore('inspectionModules', () => {
   const modules = ref([])
 
+  function normaliseVariables(variables) {
+    return (variables || []).map((v) => ({ ...v, sign: v.sign === -1 ? -1 : 1 }))
+  }
+
   /**
-   * @param {{ id?: string, name: string, units: string, variables: Array<{ key: string, nodeId: string, nodeName: string, variableName: string, units: string }> }} payload
+   * @param {{
+   *   id?: string,
+   *   name: string,
+   *   units: string,
+   *   variables: Array<{ key: string, nodeId: string, nodeName: string, variableName: string, units: string, sign?: 1 | -1 }>,
+   *   advanced?: boolean,
+   *   formula?: string | null,
+   * }} payload
    */
-  function addModule({ id, name, units, variables }) {
+  function addModule({ id, name, units, variables, advanced = false, formula = null }) {
     const module = {
       id: id || `inspection-${crypto.randomUUID()}`,
       name,
       units: units || '',
-      variables,
+      variables: normaliseVariables(variables),
+      advanced: Boolean(advanced),
+      formula: advanced ? formula || '' : null,
     }
     modules.value.push(module)
+    return module
+  }
+
+  /**
+   * Same payload shape as addModule, applied in place to an existing module.
+   */
+  function updateModule(id, { name, units, variables, advanced = false, formula = null }) {
+    const module = modules.value.find((module) => module.id === id)
+    if (!module) return null
+
+    module.name = name
+    module.units = units || ''
+    module.variables = normaliseVariables(variables)
+    module.advanced = Boolean(advanced)
+    module.formula = advanced ? formula || '' : null
     return module
   }
 
@@ -42,5 +70,14 @@ export const useInspectionModuleStore = defineStore('inspectionModules', () => {
     }
   }
 
-  return { modules, addModule, removeModule, renameModule, clearModules, getState, loadState }
+  return {
+    modules,
+    addModule,
+    updateModule,
+    removeModule,
+    renameModule,
+    clearModules,
+    getState,
+    loadState,
+  }
 })

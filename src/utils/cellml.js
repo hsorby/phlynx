@@ -7,6 +7,7 @@ import {
   GLOBAL_PARAMETERS,
   MODEL_PARAMETERS,
 } from './constants.js'
+import { CellMLTextParser } from 'cellml-text-editor'
 
 let _libcellml = null
 
@@ -547,12 +548,11 @@ function createSummationComponent(model, sourceComp, sourceVarName, targetCompon
 
 /**
  * Creates a dedicated component — named after the user-provided inspection
- * module name — that sums a set of variables hand-picked from across the
- * model, purely for inspection/output purposes.
+ * module name — that sums or subtracts selected variables.
  *
  * @param {libcellml.Model} model
- * @param {{ name: string, units: string, variables: Array<{ nodeId: string, variableName: string }> }} module
- * @param {Map<string, libcellml.Component>} nodeComponentMap - NodeID -> component, built while processing nodes.
+ * @param {{ name: string, units: string, variables: Array<{ nodeId: string, variableName: string, sign?: number, units?: string }> }} module
+ * @param {Map<string, libcellml.Component>} nodeComponentMap - NodeID -> component
  */
 function createInspectionModuleComponent(model, module, nodeComponentMap) {
   let inspectionComp = model.componentByName('inspection_modules', true)
@@ -563,9 +563,8 @@ function createInspectionModuleComponent(model, module, nodeComponentMap) {
   }
 
   const unitsName = module.units || 'dimensionless'
-
-  // Output variable: the summed value itself.
   const sumVarName = nextAvailableVarName(inspectionComp, sanitiseCellMLIdentifier(module.name))
+
   const sumVar = new _libcellml.Variable()
   sumVar.setName(sumVarName)
   sumVar.setUnitsByName(unitsName)
@@ -573,30 +572,21 @@ function createInspectionModuleComponent(model, module, nodeComponentMap) {
   inspectionComp.addVariable(sumVar)
   sumVar.delete()
 
-  // One local operand variable per selected variable, equivalenced back to
-  // its source variable on the originating node's component.
-  const operandNames = []
+  const addVarNames = []
+  const subVarNames = []
+
   for (const entry of module.variables ?? []) {
     const sourceComp = nodeComponentMap.get(entry.nodeId)
-    if (!sourceComp) {
-      console.warn(
-        `Inspection module '${module.name}': node '${entry.nodeId}' not found in model, skipping '${entry.variableName}'.`
-      )
-      continue
-    }
+    if (!sourceComp) continue
 
     const sourceVar = sourceComp.variableByName(entry.variableName)
-    if (!sourceVar) {
-      console.warn(
-        `Inspection module '${module.name}': variable '${entry.variableName}' not found on '${sourceComp.name()}', skipping.`
-      )
-      continue
-    }
+    if (!sourceVar) continue
 
     const localVarName = nextAvailableVarName(inspectionComp, `op_${entry.variableName}`)
     const opVar = new _libcellml.Variable()
     opVar.setName(localVarName)
-    opVar.setUnitsByName(unitsName)
+    const varUnits = entry.units || unitsName
+    opVar.setUnitsByName(model.hasUnitsByName(varUnits) || isStandardUnit(varUnits) ? varUnits : unitsName)
     opVar.setInterfaceTypeByString('public')
     inspectionComp.addVariable(opVar)
 
@@ -605,23 +595,37 @@ function createInspectionModuleComponent(model, module, nodeComponentMap) {
     opVar.delete()
     sourceVar.delete()
 
-    operandNames.push(localVarName)
-  }
-
-  if (operandNames.length === 0) {
-    console.warn(`Inspection module '${module.name}' has no resolvable variables — its sum will be a constant 0.`)
+    if (entry.sign === -1) {
+      subVarNames.push(localVarName)
+    } else {
+      addVarNames.push(localVarName)
+    }
   }
 
   let rhsMathML
-  if (operandNames.length === 0) {
+  if (addVarNames.length === 0 && subVarNames.length === 0) {
     rhsMathML = `<cn cellml:units="${unitsName}">0</cn>`
-  } else if (operandNames.length === 1) {
-    rhsMathML = `<ci>${operandNames[0]}</ci>`
+  } else if (subVarNames.length === 0) {
+    rhsMathML =
+      addVarNames.length === 1
+        ? `<ci>${addVarNames[0]}</ci>`
+        : `<apply><plus/>${addVarNames.map((n) => `<ci>${n}</ci>`).join('')}</apply>`
+  } else if (addVarNames.length === 0) {
+    const subSum =
+      subVarNames.length === 1
+        ? `<ci>${subVarNames[0]}</ci>`
+        : `<apply><plus/>${subVarNames.map((n) => `<ci>${n}</ci>`).join('')}</apply>`
+    rhsMathML = `<apply><minus/>${subSum}</apply>`
   } else {
-    rhsMathML = `<apply>
-        <plus/>
-        ${operandNames.map((name) => `<ci>${name}</ci>`).join('\n        ')}
-      </apply>`
+    const addsPart =
+      addVarNames.length === 1
+        ? `<ci>${addVarNames[0]}</ci>`
+        : `<apply><plus/>${addVarNames.map((n) => `<ci>${n}</ci>`).join('')}</apply>`
+    const subsPart =
+      subVarNames.length === 1
+        ? `<ci>${subVarNames[0]}</ci>`
+        : `<apply><plus/>${subVarNames.map((n) => `<ci>${n}</ci>`).join('')}</apply>`
+    rhsMathML = `<apply><minus/>${addsPart}${subsPart}</apply>`
   }
 
   const mathML = `<math xmlns="http://www.w3.org/1998/Math/MathML" xmlns:cellml="http://www.cellml.org/cellml/2.0#">
