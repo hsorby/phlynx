@@ -879,6 +879,7 @@ function buildConstantRows(nodes, selectedByKey) {
         default: existing?.default ?? defaultValue,
         min: existing?.min ?? bounds.min,
         max: existing?.max ?? bounds.max,
+        step: existing?.step ?? null,
       })
     }
   }
@@ -940,6 +941,7 @@ function createDraftPayload() {
       min: row.min,
       default: row.default,
       max: row.max,
+      step: row.step,
     }))
 
   return {

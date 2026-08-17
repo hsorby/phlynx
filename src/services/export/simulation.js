@@ -43,7 +43,7 @@ function buildInput(scanSelections) {
       defaultValue: sel.default,
       minimumValue: sel.min,
       maximumValue: sel.max,
-      stepValue,
+      stepValue: sel.step === null || sel.step === undefined ? stepValue : sel.step,
     }
   })
 }
