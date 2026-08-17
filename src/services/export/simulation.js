@@ -18,7 +18,7 @@
 export function buildSimulationJson(plotConfig, parameterScan, voiInformation) {
   const selections = plotConfig?.selections || []
   const scanSelections = parameterScan?.selections || []
-  const timeVariable = { id: formVoiVariableId(voiInformation), name: formVoiVariableName(voiInformation) }
+  const timeVariable = { id: formVoiVariableId(voiInformation), name: formVoiVariableName(voiInformation), units: voiInformation.units }
 
   const input = buildInput(scanSelections)
   const data = buildOutputData(selections, timeVariable)
@@ -69,7 +69,8 @@ function buildOutputData(selections, timeVariable) {
     name: `${sel.nodeName}/${sel.variableName}`,
   }))
 
-  data.push(timeVariable)
+
+  data.push({id: timeVariable.id, name: timeVariable.name})
 
   return data
 }
@@ -100,13 +101,16 @@ function buildOutputPlots(plotConfig, selections, timeVariable) {
     .map((groupKey) => byGroup.get(groupKey))
     .filter((groupSelections) => groupSelections.length > 0)
     .map(([first, ...rest]) => ({
-      name: groupNameMap.get(first.groupId) || 'Ungrouped',
       xValue: timeVariable.id,
       yValue: formDataVariableId(first.nodeName, first.variableName),
+      name: `${first.nodeName}/${first.variableName}`,
       additionalTraces: rest.map((sel) => ({
         xValue: timeVariable.id,
         yValue: formDataVariableId(sel.nodeName, sel.variableName),
+        name: `${sel.nodeName}/${sel.variableName}`,
       })),
+      // Currently this is a lie, because of the bug in libCellML we don't know the units of the time axis variable. Once that is fixed, this can be restored to the correct value.
+      // xAxisTitle: `${timeVariable.name} (${timeVariable.units})`,
       xAxisTitle: '',
       yAxisTitle: '',
     }))

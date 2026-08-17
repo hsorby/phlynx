@@ -118,7 +118,7 @@ describe('generateOmexArchive', () => {
     expect(simulationData.output.plots).toEqual([
       {
         additionalTraces: [],
-        name: 'Plot 1',
+        name: 'membrane/Vm',
         xAxisTitle: '',
         xValue: 'voi__environment__time',
         yAxisTitle: '',
