@@ -7,6 +7,7 @@ import {
   GLOBAL_PARAMETERS,
   MODEL_PARAMETERS,
 } from './constants.js'
+import { CellMLTextParser } from 'cellml-text-editor'
 
 let _libcellml = null
 
@@ -192,6 +193,27 @@ function nextAvailableVarName(component, baseName) {
     currentCandidate = component.variableByName(candidateName)
   }
   return candidateName
+}
+
+function nextAvailableComponentName(model, baseName) {
+  let candidateName = baseName
+  let index = 1
+  let currentCandidate = model.componentByName(candidateName, true)
+  while (currentCandidate !== null) {
+    candidateName = `${baseName}_${index}`
+    index++
+    currentCandidate.delete()
+    currentCandidate = model.componentByName(candidateName, true)
+  }
+  return candidateName
+}
+
+function sanitiseCellMLIdentifier(name) {
+  let sanitised = (name ?? '').trim().replace(/[^a-zA-Z0-9_]/g, '_')
+  if (!/^[a-zA-Z_]/.test(sanitised)) {
+    sanitised = `_${sanitised}`
+  }
+  return sanitised || 'inspection_module'
 }
 
 function createAffineConversionComponent(model, v1, v2, v1CompName, v2CompName) {
@@ -524,6 +546,100 @@ function createSummationComponent(model, sourceComp, sourceVarName, targetCompon
   sumComp.delete()
 }
 
+/**
+ * Creates a dedicated component — named after the user-provided inspection
+ * module name — that sums or subtracts selected variables.
+ *
+ * @param {libcellml.Model} model
+ * @param {{ name: string, units: string, variables: Array<{ nodeId: string, variableName: string, sign?: number, units?: string }> }} module
+ * @param {Map<string, libcellml.Component>} nodeComponentMap - NodeID -> component
+ */
+function createInspectionModuleComponent(model, module, nodeComponentMap) {
+  let inspectionComp = model.componentByName('inspection_modules', true)
+  if (inspectionComp === null) {
+    inspectionComp = new _libcellml.Component()
+    inspectionComp.setName('inspection_modules')
+    model.addComponent(inspectionComp)
+  }
+
+  const unitsName = module.units || 'dimensionless'
+  const sumVarName = nextAvailableVarName(inspectionComp, sanitiseCellMLIdentifier(module.name))
+
+  const sumVar = new _libcellml.Variable()
+  sumVar.setName(sumVarName)
+  sumVar.setUnitsByName(unitsName)
+  sumVar.setInterfaceTypeByString('public')
+  inspectionComp.addVariable(sumVar)
+  sumVar.delete()
+
+  const addVarNames = []
+  const subVarNames = []
+
+  for (const entry of module.variables ?? []) {
+    const sourceComp = nodeComponentMap.get(entry.nodeId)
+    if (!sourceComp) continue
+
+    const sourceVar = sourceComp.variableByName(entry.variableName)
+    if (!sourceVar) continue
+
+    const localVarName = nextAvailableVarName(inspectionComp, `op_${entry.variableName}`)
+    const opVar = new _libcellml.Variable()
+    opVar.setName(localVarName)
+    const varUnits = entry.units || unitsName
+    opVar.setUnitsByName(model.hasUnitsByName(varUnits) || isStandardUnit(varUnits) ? varUnits : unitsName)
+    opVar.setInterfaceTypeByString('public')
+    inspectionComp.addVariable(opVar)
+
+    _libcellml.Variable.addEquivalence(opVar, sourceVar)
+
+    opVar.delete()
+    sourceVar.delete()
+
+    if (entry.sign === -1) {
+      subVarNames.push(localVarName)
+    } else {
+      addVarNames.push(localVarName)
+    }
+  }
+
+  let rhsMathML
+  if (addVarNames.length === 0 && subVarNames.length === 0) {
+    rhsMathML = `<cn cellml:units="${unitsName}">0</cn>`
+  } else if (subVarNames.length === 0) {
+    rhsMathML =
+      addVarNames.length === 1
+        ? `<ci>${addVarNames[0]}</ci>`
+        : `<apply><plus/>${addVarNames.map((n) => `<ci>${n}</ci>`).join('')}</apply>`
+  } else if (addVarNames.length === 0) {
+    const subSum =
+      subVarNames.length === 1
+        ? `<ci>${subVarNames[0]}</ci>`
+        : `<apply><plus/>${subVarNames.map((n) => `<ci>${n}</ci>`).join('')}</apply>`
+    rhsMathML = `<apply><minus/>${subSum}</apply>`
+  } else {
+    const addsPart =
+      addVarNames.length === 1
+        ? `<ci>${addVarNames[0]}</ci>`
+        : `<apply><plus/>${addVarNames.map((n) => `<ci>${n}</ci>`).join('')}</apply>`
+    const subsPart =
+      subVarNames.length === 1
+        ? `<ci>${subVarNames[0]}</ci>`
+        : `<apply><plus/>${subVarNames.map((n) => `<ci>${n}</ci>`).join('')}</apply>`
+    rhsMathML = `<apply><minus/>${addsPart}${subsPart}</apply>`
+  }
+
+  const mathML = `<math xmlns="http://www.w3.org/1998/Math/MathML" xmlns:cellml="http://www.cellml.org/cellml/2.0#">
+    <apply>
+      <eq/>
+      <ci>${sumVarName}</ci>
+      ${rhsMathML}
+    </apply>
+  </math>`
+
+  inspectionComp.appendMath(mathML)
+  inspectionComp.delete()
+}
+
 function extractUnitsFromMath(multiBlockMathString) {
   const wrappedString = `<root>${multiBlockMathString}</root>`
 
@@ -753,8 +869,11 @@ function stripCelsiusToArbitraryUnit(xmlString) {
  *   couplings are the pre-resolved port-label pairings produced by resolvePortCouplings.
  * @param {object} libraryStore - Pinia library store, providing availableMath (Map<mathRef, xmlString>),
  *   availableUnits (Array<{ componentFile, model }>), and getGlobalConstant(name).
+ * @param {Array} inspectionModules - Records from useInspectionModuleStore().modules, each
+ *   { name, units, variables: [{ nodeId, variableName, ... }] }. Each becomes its own generated
+ *   component summing the selected variables — see createInspectionModuleComponent.
  */
-export function generateFlattenedModel(nodes, edges, libraryStore) {
+export function generateFlattenedModel(nodes, edges, libraryStore, inspectionModules = []) {
   const appVersion = __APP_VERSION__ || '0.0.0'
 
   // Initialize core objects
@@ -1075,6 +1194,13 @@ export function generateFlattenedModel(nodes, edges, libraryStore) {
 
     for (const comp of componentTrashCan) {
       comp && comp.delete()
+    }
+
+    // ------------------------------------------
+    // Process Inspection Modules (Create Components)
+    // ------------------------------------------
+    for (const module of inspectionModules) {
+      createInspectionModuleComponent(model, module, nodeComponentMap)
     }
 
     model.linkUnits()

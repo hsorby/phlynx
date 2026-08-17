@@ -61,6 +61,33 @@ export const useLibraryStore = defineStore('library', () => {
     return globalConstants.value.get(variableName)
   }
 
+  function removeGlobalConstant(variableName) {
+    globalConstants.value.delete(variableName)
+  }
+
+  function cleanupUnusedGlobalConstants(activeNodes) {
+    if (globalConstants.value.size === 0) return []
+
+    const activeVariableNames = new Set()
+    activeNodes.forEach((node) => {
+      node.data?.variables?.forEach((variable) => {
+        if (variable.name) {
+          activeVariableNames.add(variable.name.trim())
+        }
+      })
+    })
+
+    const removedConstants = []
+    for (const [key, value] of globalConstants.value.entries()) {
+      if (!activeVariableNames.has(key)) {
+        removedConstants.push({ name: key, ...value })
+        globalConstants.value.delete(key)
+      }
+    }
+
+    return removedConstants
+  }
+
   function resetStore() {
     clearGlobalConstants()
     availableMath.value.clear()
@@ -267,6 +294,8 @@ export const useLibraryStore = defineStore('library', () => {
     loadState,
     removeModule,
     removeCollection,
+    removeGlobalConstant,
+    cleanupUnusedGlobalConstants,
     setLastExportName,
     setLastSaveName,
 

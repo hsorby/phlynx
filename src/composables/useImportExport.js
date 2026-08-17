@@ -13,6 +13,7 @@ import {
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useLibraryStore } from '../stores/libraryStore'
+import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
 import { generateFlattenedModel, extractVoiFromBlob } from '../utils/cellml'
 import { createCellMLDataFragment, generateOmexArchive, createOmexDataFragment } from '../services/compress'
 import { generateExportZip } from '../services/export/ca'
@@ -31,6 +32,7 @@ export function useImportExport({
 }) {
   const simulationSettingsStore = useSimulationSettingsStore()
   const libraryStore = useLibraryStore()
+  const inspectionModuleStore = useInspectionModuleStore()
 
   const currentImportMode = ref(null)
   const currentExportKey = ref(EXPORT_KEYS.CELLML)
@@ -75,7 +77,7 @@ export function useImportExport({
       suffix: '.cellml',
       fileTypes: CELLML_FILE_TYPES,
       message: 'Generating flattened CellML model.',
-      action: () => generateFlattenedModel(nodes.value, edges.value, libraryStore),
+      action: () => generateFlattenedModel(nodes.value, edges.value, libraryStore, inspectionModuleStore.modules),
       successMessage: async (blob, finalName) => {
         const dataUri = await createCellMLDataFragment(blob, finalName)
         return h('div', null, [
@@ -113,7 +115,7 @@ export function useImportExport({
       fileTypes: OMEX_FILE_TYPES,
       message: 'Generating OMEX archive for Web OpenCOR.',
       action: async (finalName) => {
-        const blob = await generateFlattenedModel(nodes.value, edges.value, libraryStore)
+        const blob = await generateFlattenedModel(nodes.value, edges.value, libraryStore, inspectionModuleStore.modules)
         const voiInformation = await extractVoiFromBlob(blob)
         return generateOmexArchive(
           { blob, finalName },

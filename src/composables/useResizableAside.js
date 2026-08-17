@@ -1,13 +1,20 @@
 import { ref, onUnmounted } from 'vue'
 
-export function useResizableAside(initialWidth = 250, min = 200, max = 500) {
+/**
+ * @param {number} initialWidth
+ * @param {number} min
+ * @param {number} max
+ * @param {'left' | 'right'} anchor
+ */
+export function useResizableAside(initialWidth = 250, min = 200, max = 500, anchor = 'left') {
   const width = ref(initialWidth)
 
   const onResizing = (event) => {
     event.preventDefault()
     // Calculate new width based on mouse X position
     // Math.max/min clamps the value between your defined limits
-    width.value = Math.max(min, Math.min(event.clientX, max))
+    const rawWidth = anchor === 'right' ? window.innerWidth - event.clientX : event.clientX
+    width.value = Math.max(min, Math.min(rawWidth, max))
   }
 
   const stopResize = () => {
