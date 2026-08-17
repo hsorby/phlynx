@@ -128,7 +128,7 @@
                     class="p-datatable-sm parameters-table"
                   >
                     <Column field="name" bodyClass="small-text-col" header="Name" style="min-width: 90px" />
-                    <Column field="value" header="Value" style="width: 110px">
+                    <Column field="value" header="Value" style="min-width: 70px">
                       <template #body="slotProps">
                         <InputText
                           v-if="isEditableVariableType(slotProps.data.type)"

@@ -372,7 +372,7 @@
       <ContextSidebar
         :initial-width="480"
         :min-width="260"
-        :max-width="700"
+        :max-width="1200"
         @resize="onContextSidebarResize"
         @open-inspection-module-dialog="onOpenInspectionModuleDialog"
       />
