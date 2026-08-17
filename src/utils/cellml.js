@@ -1417,8 +1417,8 @@ export function extractVoiFromBlob(blob) {
 
         if (!voi) {
           console.log('Current bug in analysing CellML models using constants for initialising variables.')
-          console.log('VOI variable is null becuase the model is not valid. This is a known issue in libCellML.')
-          console.log('Returning {name: time, componentName: environment, units: seconds} for VOI variable.')
+          console.log('VOI variable is null because the model is not valid. This is a known issue in libCellML.')
+          console.log('Returning {name: time, componentName: environment, units: second} for VOI variable.')
           console.log('But it should return null to indicate an error.')
           // resolve(null)
           resolve({name: 'time', componentName: 'environment', units: 'second'})
