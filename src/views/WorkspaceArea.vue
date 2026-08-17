@@ -372,7 +372,7 @@
       <ContextSidebar
         :initial-width="480"
         :min-width="260"
-        :max-width="480"
+        :max-width="700"
         @resize="onContextSidebarResize"
         @open-inspection-module-dialog="onOpenInspectionModuleDialog"
       />
@@ -443,6 +443,8 @@
   <CreateInspectionModuleDialog
     v-model="inspectionModuleDialogVisible"
     :nodes="nodes"
+    :editing-module="editingInspectionModule"
+    :existing-modules="inspectionModuleStore.modules"
     @confirm="handleCreateInspectionModule"
   />
 
@@ -897,6 +899,7 @@ const replacementDialogVisible = ref(false)
 const macroBuilderDialogVisible = ref(false)
 const edgeConnectionDialogVisible = ref(false)
 const inspectionModuleDialogVisible = ref(false)
+const editingInspectionModule = ref(null)
 const edgeDialogSourceNode = ref({})
 const edgeDialogTargetNode = ref({})
 const edgeDialogActiveEdge = ref({})
@@ -2221,16 +2224,28 @@ async function onReplaceConfirm(updatedData) {
   replacementDialogVisible.value = false
 }
 
-function onOpenInspectionModuleDialog() {
+function onOpenInspectionModuleDialog(module = null) {
+  editingInspectionModule.value = module
   inspectionModuleDialogVisible.value = true
 }
 
 function handleCreateInspectionModule(payload) {
-  inspectionModuleStore.addModule(payload)
-  notify.success({
-    title: 'Inspection Module Created',
-    message: `"${payload.name}" now sums ${payload.variables.length} variables.`,
-  })
+  const variableCount = payload.variables.length
+  const variableLabel = `${variableCount} variable${variableCount === 1 ? '' : 's'}`
+
+  if (payload.id) {
+    inspectionModuleStore.updateModule(payload.id, payload)
+    notify.success({
+      title: 'Inspection Module Updated',
+      message: `"${payload.name}" now uses ${variableLabel}.`,
+    })
+  } else {
+    inspectionModuleStore.addModule(payload)
+    notify.success({
+      title: 'Inspection Module Created',
+      message: `"${payload.name}" now sums ${variableLabel}.`,
+    })
+  }
 }
 
 const contextMenuRef = ref(null)

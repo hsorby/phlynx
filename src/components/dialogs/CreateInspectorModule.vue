@@ -16,14 +16,20 @@
     <div class="dialog-content">
       <section class="block">
         <div class="field">
-          <label for="inspection-module-name">Module Name</label>
+          <label for="inspection-module-name">
+            Module Name <span class="subtle">(optional — defaults to '{{ defaultName }}')</span>
+          </label>
           <InputText
             id="inspection-module-name"
             v-model="moduleName"
             placeholder="e.g., total_volume"
+            :invalid="isNameDuplicate"
             class="w-full"
             autofocus
           />
+          <small v-if="isNameDuplicate" class="error-text">
+            A module with the name "{{ sanitiseName(moduleName) }}" already exists. Please choose a unique name.
+          </small>
         </div>
       </section>
 
@@ -35,7 +41,10 @@
 
         <!-- Validation / status -->
         <div class="validation-status">
-          <Message v-if="selectedRows.length === 0" severity="secondary" :closable="false">
+          <Message v-if="isNameDuplicate" severity="error" :closable="false">
+            Inspection module name must be unique.
+          </Message>
+          <Message v-else-if="selectedRows.length === 0" severity="secondary" :closable="false">
             Select two or more variables with matching units to sum. 
           </Message>
           <Message v-else-if="selectedRows.length === 1" severity="warn" :closable="false">
@@ -48,6 +57,7 @@
             {{ selectedRows.length }} variables selected — units: {{ distinctUnits[0] || '—' }}
           </Message>
         </div>
+
         <!-- Filter Bar -->
         <div class="filter-toolbar" v-if="variableRows.length > 0">
           <div class="node-search-combo">
@@ -201,6 +211,8 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 
+import { sanitiseName } from '../../utils/nodes'
+
 import Accordion from 'primevue/accordion'
 import AccordionTab from 'primevue/accordiontab'
 import Button from 'primevue/button'
@@ -220,6 +232,10 @@ const props = defineProps({
   editingModule: {
     type: Object,
     default: null,
+  },
+  existingModules: {
+    type: Array,
+    default: () => [],
   },
 })
 
@@ -389,6 +405,34 @@ function onNodeSearchBlur() {
   }, 150)
 }
 
+// ── Uniqueness & Default Name Logic ─────────────────────────────────────────
+const existingNames = computed(() => {
+  return (props.existingModules || [])
+    .filter((mod) => !props.editingModule || mod.id !== props.editingModule.id)
+    .map((mod) => (mod.name || '').trim().toLowerCase())
+})
+
+const defaultName = computed(() => {
+  const base = 'inspection_module'
+  const taken = new Set(existingNames.value)
+
+  if (!taken.has(base.toLowerCase())) {
+    return base
+  }
+
+  let counter = 1
+  while (taken.has(`${base}_${counter}`.toLowerCase())) {
+    counter++
+  }
+  return `${base}_${counter}`
+})
+
+const isNameDuplicate = computed(() => {
+  const input = sanitiseName(moduleName.value)
+  if (!input) return false // Empty string falls back to defaultName, which is guaranteed unique
+  return existingNames.value.includes(input)
+})
+
 // ── Selection / validation ──────────────────────────────────────────────────
 const selectedRows = computed(() => variableRows.value.filter((row) => row.selected))
 
@@ -398,10 +442,9 @@ const distinctUnits = computed(() => {
 })
 
 const hasUnitMismatch = computed(() => distinctUnits.value.length > 1)
-const isNameValid = computed(() => moduleName.value.trim().length > 0)
 
 const canConfirm = computed(() => {
-  if (!isNameValid.value) return false
+  if (isNameDuplicate.value) return false
   return selectedRows.value.length >= 2 && !hasUnitMismatch.value
 })
 
@@ -410,10 +453,11 @@ function handleConfirm() {
   if (!canConfirm.value) return
 
   const inferredUnits = distinctUnits.value[0] || 'dimensionless'
+  const finalModuleName = sanitiseName(moduleName.value) || defaultName.value
 
   emit('confirm', {
     id: props.editingModule?.id,
-    name: moduleName.value.trim(),
+    name: finalModuleName,
     units: inferredUnits,
     variables: selectedRows.value.map((row) => ({
       key: row.key,
@@ -468,6 +512,11 @@ const closeDialog = () => {
   color: var(--p-text-color, inherit);
 }
 
+.error-text {
+  color: var(--p-red-500, #f87171);
+  font-size: 12px;
+}
+
 .block-header {
   display: flex;
   align-items: baseline;
@@ -484,6 +533,7 @@ const closeDialog = () => {
 
 .subtle {
   font-size: 12px;
+  font-weight: 400;
   color: var(--p-text-muted-color, #909399);
 }
 
@@ -503,6 +553,7 @@ const closeDialog = () => {
   display: inline-block;
   height: 30px;
 }
+
 .node-search-combo {
   position: relative;
 }
@@ -573,7 +624,7 @@ const closeDialog = () => {
   text-align: center;
 }
 
-/* Accordion styling (matches SimSettingsDialog) */
+/* Accordion styling */
 .node-accordion {
   display: flex;
   flex-direction: column;
@@ -721,5 +772,6 @@ const closeDialog = () => {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  margin-top: 10px;
 }
 </style>

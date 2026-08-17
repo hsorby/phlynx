@@ -200,7 +200,11 @@
                 <div v-for="module in inspectionModuleStore.modules" :key="module.id" class="module-card">
                   <div class="module-card-header">
                     <div class="module-card-title-group">
-                      <i class="pi pi-calculator module-card-icon"></i>
+                      <i
+                        class="pi pi-calculator module-card-icon module-card-icon-button"
+                        v-tooltip.top="'Edit module'"
+                        @click="emit('open-inspection-module-dialog', module)"
+                      ></i>
                       <span class="module-card-name" :title="module.name">{{ module.name }}</span>
                     </div>
                     <div class="module-card-actions">
@@ -218,6 +222,9 @@
                   </div>
                   <ul class="module-card-variable-list">
                     <li v-for="variable in module.variables" :key="variable.key" class="module-card-variable-item">
+                      <span class="module-card-variable-sign" :class="{ negative: variable.sign === -1 }">
+                        {{ variable.sign === -1 ? '-' : '+' }}
+                      </span>
                       <span class="module-card-variable-node">{{ variable.nodeName }}</span>
                       <span class="module-card-variable-sep">·</span>
                       <span class="module-card-variable-name">{{ variable.variableName }}</span>
@@ -745,6 +752,18 @@ function handleParameterTypeChange(row) {
   font-size: 0.85rem;
 }
 
+.module-card-icon-button {
+  cursor: pointer;
+  border-radius: 50%;
+  padding: 3px;
+  margin: -3px;
+  transition: background-color 0.15s ease;
+}
+
+.module-card-icon-button:hover {
+  background-color: color-mix(in srgb, var(--p-primary-color) 18%, transparent);
+}
+
 .module-card-name {
   font-size: 0.85rem;
   font-weight: 600;
@@ -769,6 +788,16 @@ function handleParameterTypeChange(row) {
   color: var(--p-primary-color);
 }
 
+.module-card-advanced-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--p-text-color) 12%, var(--p-content-background));
+  color: var(--p-text-muted-color);
+}
+
 .module-card-variable-list {
   list-style: none;
   margin: 0.5rem 0 0;
@@ -779,11 +808,26 @@ function handleParameterTypeChange(row) {
 }
 
 .module-card-variable-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
   font-size: 0.75rem;
   color: var(--p-text-muted-color);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.module-card-variable-sign {
+  flex-shrink: 0;
+  width: 1rem;
+  text-align: center;
+  font-weight: 700;
+  color: var(--p-green-500, #22c55e);
+}
+
+.module-card-variable-sign.negative {
+  color: var(--p-red-500, #ef4444);
 }
 
 .module-card-variable-node {
