@@ -197,7 +197,6 @@
         </div>
       </form>
 
-      <!-- Move overlays after form to guarantee they paint over positioned elements like Message -->
       <Transition name="overlay-fade">
         <div v-if="isLoading" class="loading-overlay">
           <ProgressSpinner />
@@ -653,7 +652,6 @@ function sortConfigsFirst(files, getName = (f) => f.name) {
 async function ingestFileIntoField(field, rawFile, { cleanupOnFailure = false, notifyStaging = true } = {}) {
   const filename = rawFile.name
 
-  // Suppress individual popups if notifyStaging is false
   if (field.processUpload === 'cellml' && !validateCellMLFilename(rawFile, { silent: cleanupOnFailure || !notifyStaging })) {
     return { ok: false, error: null, skip: !cleanupOnFailure }
   }
@@ -871,7 +869,6 @@ async function runFormDropClassification(entries) {
     }
   }
 
-  // Notify once after staging all files in the dropped folder
   if (stagedCount > 0) {
     const status = importReadiness.value
     if (status?.resourcesAreLoaded) {
@@ -1103,6 +1100,13 @@ defineExpose({
 .dialog-content {
   position: relative;
   min-height: 220px;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.import-form {
+  position: relative;
+  z-index: 1;
 }
 
 .dialog-content.is-drag-active {
@@ -1136,12 +1140,12 @@ defineExpose({
   inset: 0;
   z-index: 30;
   display: flex;
-  border: 20px solid var(--vf-node-bg,--p-dialog-color);
+  border: 20px solid var(--vf-node-bg, --p-dialog-color);
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
-  background: var(--vf-node-bg,--p-dialog-color);
+  background: var(--vf-node-bg, --p-dialog-color);
   border-radius: 8px;
 }
 
@@ -1379,7 +1383,6 @@ defineExpose({
 }
 
 .form-header {
-  padding-right: 5px;
   margin-top: 0.25rem;
   margin-bottom: 0.75rem;
   font-size: 0.8rem;
