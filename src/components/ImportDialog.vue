@@ -21,64 +21,12 @@
       @dragleave.prevent="handleFormDragLeave"
       @drop.prevent="handleFormDrop"
     >
-      <div v-if="isLoading" class="loading-overlay">
-        <ProgressSpinner />
-        <span class="loading-text">{{ loadingText }}</span>
-      </div>
-
-      <div v-if="isDraggingOverForm" class="drop-overlay">
-        <i class="pi pi-cloud-upload drop-overlay-icon" />
-        <span>Drop a folder, multiple files, or a single file</span>
-      </div>
-
       <form class="import-form" :class="{ 'is-loading-content': isLoading }">
-        <div v-if="isInstanceArrayImport" class="folder-import-row">
-          <div class="folder-import-info">
-            <i class="pi pi-folder" />
-            <span v-if="folderStatus === 'connected'">
-              Auto-loading from <strong>{{ folderName }}</strong>
-            </span>
-            <span v-else-if="folderStatus === 'needs-permission'"> Folder access needs to be re-confirmed. </span>
-            <span v-else-if="supportsFolderAccess">
-              Connect a folder to auto-load required files, or drag & drop / select several files at once below.
-            </span>
-            <span v-else> Drag & drop a folder or several files below and we'll sort them automatically. </span>
-          </div>
-          <div class="folder-import-actions">
-            <Button
-              v-if="supportsFolderAccess && folderStatus === 'disconnected'"
-              label="Connect Folder"
-              size="small"
-              text
-              icon="pi pi-folder-open"
-              @click="handleConnectFolder"
-            />
-            <Button
-              v-if="folderStatus === 'needs-permission'"
-              label="Reconnect"
-              size="small"
-              text
-              severity="warn"
-              icon="pi pi-refresh"
-              @click="handleReconnectFolder"
-            />
-            <Button
-              v-if="folderStatus === 'connected'"
-              label="Disconnect"
-              size="small"
-              text
-              severity="secondary"
-              icon="pi pi-times"
-              @click="handleForgetFolder"
-            />
-            <ProgressSpinner v-if="isScanningFolder" style="width: 18px; height: 18px" strokeWidth="6" />
-          </div>
-        </div>
-
         <div class="form-header" v-if="requiredFieldsCount > 0">
           <span class="required-asterisk">*</span> Indicates required field
         </div>
 
+        <TransitionGroup name="field-pop" tag="div" class="fields-list">
         <div v-for="field in displayFields" :key="field.key" class="field-container">
           <div class="form-item" :class="{ 'is-info': field.limit }">
             <label class="field-label">
@@ -103,6 +51,7 @@
                     No file(s) selected
                   </span>
                   <template v-else>
+                    <TransitionGroup name="tag-pop" tag="span" class="tags-row">
                     <Tag
                       v-for="[filename, fileData] in [...formState[field.key].files].slice(
                         0,
@@ -126,6 +75,7 @@
                         />
                       </span>
                     </Tag>
+                    </TransitionGroup>
 
                     <Button
                       v-if="formState[field.key].files.size > MAX_VISIBLE_TAGS"
@@ -173,6 +123,50 @@
           </div>
         </div>
 
+        <div v-if="isInstanceArrayImport && !importReadiness" class="folder-import-row">
+          <div class="folder-import-info">
+            <i class="pi pi-folder" />
+            <span v-if="folderStatus === 'connected'">
+              Auto-loading from <strong>{{ folderName }}</strong>
+            </span>
+            <span v-else-if="folderStatus === 'needs-permission'"> Folder access needs to be re-confirmed. </span>
+            <span v-else-if="supportsFolderAccess">
+              Connect a folder to auto-load required files, or drag & drop / select several files at once below.
+            </span>
+            <span v-else> Drag & drop a folder or file(s) and we'll sort them automatically. </span>
+          </div>
+          <div class="folder-import-actions">
+            <Button
+              v-if="supportsFolderAccess && folderStatus === 'disconnected'"
+              label="Connect Folder"
+              size="small"
+              text
+              icon="pi pi-folder-open"
+              @click="handleConnectFolder"
+            />
+            <Button
+              v-if="folderStatus === 'needs-permission'"
+              label="Reconnect"
+              size="small"
+              text
+              severity="warn"
+              icon="pi pi-refresh"
+              @click="handleReconnectFolder"
+            />
+            <Button
+              v-if="folderStatus === 'connected'"
+              label="Disconnect"
+              size="small"
+              text
+              severity="secondary"
+              icon="pi pi-times"
+              @click="handleForgetFolder"
+            />
+            <ProgressSpinner v-if="isScanningFolder" style="width: 18px; height: 18px" strokeWidth="6" />
+          </div>
+        </div>
+        </TransitionGroup>
+
         <div v-if="importReadiness && formState[IMPORT_KEYS.INSTANCE_ARRAY]?.readiness" class="validation-status">
           <Message v-if="importReadiness.resourcesAreLoaded" severity="success" :closable="false">
             <div class="message-title">All Required Resources Available</div>
@@ -202,6 +196,21 @@
           </Message>
         </div>
       </form>
+
+      <!-- Move overlays after form to guarantee they paint over positioned elements like Message -->
+      <Transition name="overlay-fade">
+        <div v-if="isLoading" class="loading-overlay">
+          <ProgressSpinner />
+          <span class="loading-text">{{ loadingText }}</span>
+        </div>
+      </Transition>
+
+      <Transition name="overlay-fade">
+        <div v-if="isDraggingOverForm" class="drop-overlay">
+          <i class="pi pi-cloud-upload drop-overlay-icon" />
+          <span>Drop a folder or file(s)</span>
+        </div>
+      </Transition>
     </div>
 
     <template #footer>
@@ -275,7 +284,6 @@ const {
   scanFolder,
 } = useFolderImport()
 
-// --- Serialize batch imports ---
 let importQueue = Promise.resolve()
 function withImportLock(taskFn) {
   const run = importQueue.then(taskFn, taskFn)
@@ -284,7 +292,6 @@ function withImportLock(taskFn) {
 }
 
 const isScanningFolder = ref(false)
-
 const foldersAttemptedFilenames = ref(new Set())
 
 // --- Drag-and-drop ---
@@ -376,24 +383,19 @@ function isFieldExpanded(fieldKey) {
   return expandedFields.value.has(fieldKey)
 }
 
-// Handler for removing a file via the tag's close button
 const removeFile = (fieldKey, filename) => {
   const fieldState = formState[fieldKey]
   if (fieldState && fieldState.files.has(filename)) {
-    // Remove from local form state
     fieldState.files.delete(filename)
 
-    // Remove from staged files if applicable
     stagedFiles.value.mathFiles = stagedFiles.value.mathFiles.filter((f) => f.filename !== filename)
     stagedFiles.value.configFiles = stagedFiles.value.configFiles.filter((f) => f.filename !== filename)
 
-    // Re-evaluate overall module dependencies
     const instanceArrayPayload = getInstanceArrayPayload()
     if (instanceArrayPayload) {
       const resourcesLoadStatus = checkReadiness(instanceArrayPayload)
       updateDynamicFields(resourcesLoadStatus)
     } else if (fieldKey === IMPORT_KEYS.INSTANCE_ARRAY) {
-      // If the user deletes the instance array file, wipe completion status
       resetForm()
     }
   }
@@ -448,7 +450,6 @@ const resetForm = (keepInstanceArray = false) => {
   }
 }
 
-// Initialize formState when config changes
 watch(
   () => props.config?.fields,
   (fields) => {
@@ -470,7 +471,6 @@ watch(
   }
 )
 
-// --- Dynamic Fields Handling ---
 const displayFields = computed(() => {
   const baseFields = props.config.fields || []
   return [...baseFields, ...dynamicFields.value]
@@ -500,8 +500,8 @@ const syncDynamicFields = async (completionStatus) => {
 
 function createEmptyFieldState() {
   return {
-    files: new Map(), //  [ key: filename, object: {isValid: boolean, payload: raw file contents} ]
-    readiness: null, // Selected files contain enough information to complete the import
+    files: new Map(),
+    readiness: null,
     warnings: [],
   }
 }
@@ -525,13 +525,11 @@ const getInstanceArrayPayload = () => {
   return null
 }
 
-// Create a temporary store-like object for validation that includes staged files
 const createTemporaryStore = () => {
   const availableModules = detachReactivity(libraryStore.availableModules)
   const availableMath = detachReactivity(libraryStore.availableMath)
   const availableCollections = detachReactivity(libraryStore.availableCollections)
 
-  // Apply staged module config files
   for (const { filename, payload: configs } of stagedFiles.value.configFiles) {
     configs.forEach((config) => {
       const module = normaliseConfig(config)
@@ -548,7 +546,6 @@ const createTemporaryStore = () => {
     })
   }
 
-  // Apply staged math files
   for (const { filename, payload } of stagedFiles.value.mathFiles) {
     payload.forEach((component) => {
       const mathRef = `${filename}:${component.name}`
@@ -575,7 +572,6 @@ const checkReadiness = (instanceArrayPayload) => {
   if (!instanceArrayPayload) return null
 
   const temporaryStore = createTemporaryStore()
-
   const resourcesLoadStatus = checkResourcesAreLoaded(instanceArrayPayload, temporaryStore)
 
   importReadiness.value = resourcesLoadStatus
@@ -593,17 +589,14 @@ const isFieldReady = (fieldKey) => {
   const filesAllValid = Array.from(fieldState.files.values()).every((f) => f?.isValid)
   if (!filesAllValid) return false
 
-  // Instance array field is ready if all its files are valid
   if (fieldKey === IMPORT_KEYS.INSTANCE_ARRAY) {
     return true
   }
 
-  // Module config field is ready if all required configs have been supplied
   if (fieldKey === IMPORT_KEYS.MODULE_CONFIG) {
     return !(importReadiness.value?.missingResources?.modules.size > 0 ?? true)
   }
 
-  // Math field is ready if all required math have been supplied
   if (fieldKey === IMPORT_KEYS.CELLML_FILE) {
     return !(importReadiness.value?.missingResources?.math.size > 0 ?? true)
   }
@@ -611,11 +604,9 @@ const isFieldReady = (fieldKey) => {
   return true
 }
 
-// --- Computed Validation ---
 const isFormValid = computed(() => {
   if (!displayFields.value || displayFields.value.length === 0) return false
 
-  // Strictly check if all required fields have successfully parsed their files
   return displayFields.value.every((field) => {
     if (field.required === false) return true
 
@@ -649,8 +640,8 @@ function acceptsExtension(fieldConfig, filename) {
 
 function importPriority(filename) {
   const ext = extensionOf(filename)
-  if (ext === '.csv') return 0
-  if (ext === '.json') return 1
+  if (ext === '.json') return 0
+  if (ext === '.csv') return 1
   if (ext === '.cellml' || ext === '.xml') return 2
   return 3
 }
@@ -662,7 +653,8 @@ function sortConfigsFirst(files, getName = (f) => f.name) {
 async function ingestFileIntoField(field, rawFile, { cleanupOnFailure = false, notifyStaging = true } = {}) {
   const filename = rawFile.name
 
-  if (field.processUpload === 'cellml' && !validateCellMLFilename(rawFile, { silent: cleanupOnFailure })) {
+  // Suppress individual popups if notifyStaging is false
+  if (field.processUpload === 'cellml' && !validateCellMLFilename(rawFile, { silent: cleanupOnFailure || !notifyStaging })) {
     return { ok: false, error: null, skip: !cleanupOnFailure }
   }
 
@@ -682,7 +674,7 @@ async function ingestFileIntoField(field, rawFile, { cleanupOnFailure = false, n
   try {
     const parsed = await parseFile(field, rawFile)
 
-    state.files.get(filename).payload = parsed?.data ?? parsed // parameter files have different structure
+    state.files.get(filename).payload = parsed?.data ?? parsed
     state.readiness = parsed?.completionStatus ?? null
     state.warnings = parsed?.completionStatus?.warnings ?? []
 
@@ -711,7 +703,7 @@ async function ingestFileIntoField(field, rawFile, { cleanupOnFailure = false, n
       }
     }
 
-    if (state.warnings.length) {
+    if (state.warnings.length && notifyStaging) {
       await nextTick()
       for (const w of state.warnings) {
         notify.warning({
@@ -737,10 +729,12 @@ async function ingestFileIntoField(field, rawFile, { cleanupOnFailure = false, n
     const isUnexpectedError = error instanceof Error && error.constructor !== Error
     if (isUnexpectedError) {
       console.error(`[ImportDialog] Unexpected error while processing "${filename}" for field "${field.key}":`, error)
-      notify.error({
-        title: 'Import Error',
-        message: `Something went wrong while checking readiness after loading "${filename}": ${error.message}`,
-      })
+      if (notifyStaging) {
+        notify.error({
+          title: 'Import Error',
+          message: `Something went wrong while checking readiness after loading "${filename}": ${error.message}`,
+        })
+      }
     }
 
     return { ok: false, error }
@@ -754,7 +748,6 @@ const PROCESS_UPLOAD_BY_KEY = {
 
 function candidateKeysExcluding(excludeKey) {
   const keys = [IMPORT_KEYS.MODULE_CONFIG, IMPORT_KEYS.CELLML_FILE, IMPORT_KEYS.PARAMETER]
-  // Only worth guessing the instance array itself if it hasn't been supplied yet.
   if (!formState[IMPORT_KEYS.INSTANCE_ARRAY]?.files?.size) {
     keys.unshift(IMPORT_KEYS.INSTANCE_ARRAY)
   }
@@ -772,7 +765,7 @@ async function classifyIntoOtherFields(rawFile, excludeKey) {
         ? { ...baseCandidateConfig, processUpload: PROCESS_UPLOAD_BY_KEY[key] }
         : baseCandidateConfig
 
-    const result = await ingestFileIntoField(candidateConfig, rawFile, { cleanupOnFailure: true })
+    const result = await ingestFileIntoField(candidateConfig, rawFile, { cleanupOnFailure: true, notifyStaging: false })
     if (result.ok) {
       const alreadyVisible =
         (props.config.fields || []).some((f) => f.key === candidateConfig.key) ||
@@ -799,7 +792,7 @@ async function runProcessIncomingFiles(field, rawFiles) {
   }
 
   for (const rawFile of files) {
-    const primary = await ingestFileIntoField(field, rawFile)
+    const primary = await ingestFileIntoField(field, rawFile, { notifyStaging: true })
     if (primary.ok) continue
     if (primary.skip) continue
 
@@ -867,9 +860,31 @@ async function handleFormDrop(event) {
 async function runFormDropClassification(entries) {
   const sorted = sortConfigsFirst(entries, (e) => e.file.name)
   const unmatched = []
+  let stagedCount = 0
+
   for (const { file } of sorted) {
     const matched = await classifyIntoOtherFields(file, undefined)
-    if (!matched) unmatched.push(file.name)
+    if (matched) {
+      stagedCount++
+    } else {
+      unmatched.push(file.name)
+    }
+  }
+
+  // Notify once after staging all files in the dropped folder
+  if (stagedCount > 0) {
+    const status = importReadiness.value
+    if (status?.resourcesAreLoaded) {
+      notify.success({
+        title: 'Folder Staged Successfully',
+        message: `Processed ${stagedCount} file${stagedCount > 1 ? 's' : ''}. All required resources are ready.`,
+      })
+    } else {
+      notify.info({
+        title: 'Files Staged',
+        message: `Staged ${stagedCount} file${stagedCount > 1 ? 's' : ''}. Additional required files are still needed.`,
+      })
+    }
   }
 
   if (unmatched.length) {
@@ -1091,7 +1106,6 @@ defineExpose({
 }
 
 .dialog-content.is-drag-active {
-  outline: 2px dashed var(--p-primary-color);
   outline-offset: -4px;
   border-radius: 8px;
 }
@@ -1120,19 +1134,72 @@ defineExpose({
 .loading-overlay {
   position: absolute;
   inset: 0;
-  z-index: 10;
+  z-index: 30;
   display: flex;
+  border: 20px solid var(--vf-node-bg,--p-dialog-color);
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
-  background: var(--p-mask-background, rgba(0, 0, 0, 0.4));
-  backdrop-filter: blur(2px);
+  background: var(--vf-node-bg,--p-dialog-color);
+  border-radius: 8px;
 }
 
 .loading-text {
   color: var(--p-text-color);
   font-size: 0.95rem;
+}
+
+.overlay-fade-enter-active,
+.overlay-fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.overlay-fade-enter-from,
+.overlay-fade-leave-to {
+  opacity: 0;
+}
+
+.fields-list {
+  position: relative;
+  display: block;
+}
+
+.field-pop-enter-active,
+.field-pop-leave-active,
+.field-pop-move {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.field-pop-enter-from,
+.field-pop-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.field-pop-leave-active {
+  position: absolute;
+  width: 100%;
+}
+
+.tags-row {
+  display: contents;
+}
+
+.tag-pop-enter-active,
+.tag-pop-move {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.tag-pop-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  position: absolute;
+}
+
+.tag-pop-enter-from,
+.tag-pop-leave-to {
+  opacity: 0;
+  transform: scale(0.9);
 }
 
 .field-container {
@@ -1192,7 +1259,6 @@ defineExpose({
 
 .file-input-box.is-drag-active {
   border-color: var(--p-primary-color);
-  border-style: dashed;
   box-shadow: 0 0 0 1px var(--p-primary-color);
   background-color: color-mix(in srgb, var(--p-primary-color) 8%, transparent);
 }
@@ -1202,6 +1268,7 @@ defineExpose({
 }
 
 .file-names-area {
+  position: relative;
   flex: 1;
   display: flex;
   align-items: center;
@@ -1312,6 +1379,7 @@ defineExpose({
 }
 
 .form-header {
+  padding-right: 5px;
   margin-top: 0.25rem;
   margin-bottom: 0.75rem;
   font-size: 0.8rem;
@@ -1398,9 +1466,9 @@ defineExpose({
 }
 
 .is-loading-content {
-  opacity: 0.2;
+  opacity: 0.5;
   pointer-events: none;
-  filter: grayscale(40%);
+  filter: grayscale(25%);
   transition: opacity 0.2s ease, filter 0.2s ease;
 }
 </style>
