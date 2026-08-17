@@ -179,9 +179,8 @@
       <div class="bottom-bar">
         <div class="legend">
           <span class="legend-item"><span class="legend-dot dot-connected"></span>Connected</span>
-          <span class="legend-item"><span class="legend-dot dot-taken"></span>Taken (single)</span>
-          <span class="legend-item"><span class="legend-dot dot-taken-multi"></span>Taken (multiport)</span>
-          <span class="legend-item"><span class="legend-dot dot-free"></span>Free</span>
+          <span class="legend-item"><span class="legend-dot dot-taken"></span>Taken</span>
+          <span class="legend-item"><span class="legend-dot dot-free"></span>Available</span>
         </div>
       </div>
     </div>
@@ -332,15 +331,8 @@ function waitUntilStable(el, maxTimeout = 500) {
 async function onDialogShow() {
   isFlowReady.value = false
   initLocalState()
-  await nextTick()
-
-  // 1. Wait until the dialog entrance animation finishes completely
   await waitUntilStable(canvasEl.value, 400)
-  
-  // 2. Mount VueFlow
   isFlowReady.value = true
-
-  // 3. Force handle positions recalculation on mount
   await nextTick()
   refreshNodeInternals()
 }
@@ -932,10 +924,6 @@ watch(
 .dot-taken {
   background: var(--p-warn-color, #e6a23c);
   border: 1px dashed var(--p-warn-color, #e6a23c);
-}
-.dot-taken-multi {
-  background: var(--p-content-background, #18181b);
-  border: 1px solid var(--p-content-border-color, #52525b);
 }
 .dot-free {
   background: var(--p-text-muted-color, #71717a);
