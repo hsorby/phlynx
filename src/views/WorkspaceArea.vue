@@ -227,12 +227,21 @@
     </header>
 
     <div class="app-body-container">
-      <ResizableLibraryPanel title="Available Modules" :initial-width="300" :min-width="150" :max-width="400">
+      <ResizableLibraryPanel
+        title="Available Modules"
+        :initial-width="300"
+        :min-width="150"
+        :max-width="400"
+        @resize="onLibraryPanelResize"
+      >
         <LibraryArea />
       </ResizableLibraryPanel>
-
-      <main class="workbench-main">
-        <div class="workspace-search-container" :class="{ 'search-inactive': !searchBarFocused && !searchQuery }">
+      <main class="workbench-main" :style="{
+        '--library-panel-width': libraryPanelWidth + 'px',
+        '--context-sidebar-width': contextSidebarWidth + 'px',
+        }">
+        
+        <div ref="searchBarEl" class="workspace-search-container" :class="{ 'search-inactive': !searchBarFocused && !searchQuery }">
           <div class="workspace-search-input-wrapper">
             <IconField>
               <InputIcon class="pi pi-search" />
@@ -285,6 +294,37 @@
         </div>
 
         <div class="dnd-flow" @drop="onDrop">
+          <Toast position="top-right" :style="{ top: `${toastTop}px`, right: `${contextSidebarWidth + 25}px` }">
+          <template #message="slotProps">
+            <div class="p-toast-message-text" style="flex: 1">
+              
+              <!-- Summary / Title -->
+              <div 
+                v-if="slotProps.message.summary" 
+                class="p-toast-summary font-bold" 
+                style="line-height: 1.2; margin-bottom: 4px;"
+              >
+                {{ slotProps.message.summary }}
+              </div>
+
+              <!-- Detail / Message Content -->
+              <div 
+                class="p-toast-detail" 
+                style="line-height: 1.5;"
+              >
+                <component 
+                  v-if="typeof slotProps.message.detail === 'object'" 
+                  :is="slotProps.message.detail" 
+                />
+                <div 
+                  v-else 
+                  v-html="slotProps.message.detail" 
+                />
+              </div>
+
+            </div>
+          </template>
+        </Toast>
           <VueFlow
             :id="FLOW_IDS.MAIN"
             @dragover="onDragOver"
@@ -329,6 +369,13 @@
           </VueFlow>
         </div>
       </main>
+      <ContextSidebar
+        :initial-width="480"
+        :min-width="260"
+        :max-width="1200"
+        @resize="onContextSidebarResize"
+        @open-inspection-module-dialog="onOpenInspectionModuleDialog"
+      />
     </div>
   </div>
 
@@ -393,6 +440,14 @@
     @confirm="onReplaceConfirm"
   />
 
+  <CreateInspectionModuleDialog
+    v-model="inspectionModuleDialogVisible"
+    :nodes="nodes"
+    :editing-module="editingInspectionModule"
+    :existing-modules="inspectionModuleStore.modules"
+    @confirm="handleCreateInspectionModule"
+  />
+
   <MacroBuilderDialog
     v-model="macroBuilderDialogVisible"
     @generate="onMacroBuilderGenerate"
@@ -419,6 +474,7 @@
     :subgraph="edgeDialogSubgraph"
     @confirm="onEdgeConnectionConfirm"
   />
+
 </template>
 
 <script>
@@ -439,12 +495,15 @@ import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import ConfirmDialog from 'primevue/confirmdialog'
 import ToggleSwitch from 'primevue/toggleswitch'
+import { Toast } from 'primevue'
 
 import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
+import { useToast } from 'primevue/usetoast'
+import { useRoute } from 'vue-router'
 import useDragAndDrop from '../composables/useDnD'
 import { useHandleManagement } from '../composables/useHandleManagement'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
@@ -511,13 +570,29 @@ import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
 import PortEditorDialog from '../components/PortEditorDialog.vue'
 import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
+import CreateInspectionModuleDialog from '../components/dialogs/CreateInspectorModule.vue'
+import ContextSidebar from '../components/ContextSidebar.vue'
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
 import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
 import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
 import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
 import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
+import { useInspectionModuleStore } from '../stores/inspectionModuleStore.js'
 
 const workspaceFileInput = ref(null)
+
+const libraryPanelWidth = ref(0)
+function onLibraryPanelResize(width) {
+  libraryPanelWidth.value = width
+}
+const contextSidebarWidth = ref(0)
+function onContextSidebarResize(width) {
+  contextSidebarWidth.value = width
+}
+
+const SEARCH_BAR_TOP = 150
+const TOAST_GAP_BELOW_SEARCH_BAR = 16
+const toastTop = computed(() => SEARCH_BAR_TOP + TOAST_GAP_BELOW_SEARCH_BAR)
 
 const { isDarkMode, toggleDarkMode } = useColorScheme()
 
@@ -548,6 +623,8 @@ const {
 } = useVueFlow(FLOW_IDS.MAIN)
 const { processMacroGeneration } = useMacroGenerator()
 const { confirm } = useConfirmDialog()
+const toast = useToast()
+const route = useRoute()
 
 const pendingHistoryNodes = new Set()
 
@@ -581,7 +658,8 @@ const dialogVisible = computed(() => {
     replacementDialogVisible.value ||
     macroBuilderDialogVisible.value ||
     edgeConnectionDialogVisible.value ||
-    instanceEditorDialogVisible.value
+    instanceEditorDialogVisible.value ||
+    inspectionModuleDialogVisible.value
   )
 })
 
@@ -805,6 +883,7 @@ const helperLineVertical = ref(null)
 const alignment = ref('edge')
 
 const libraryStore = useLibraryStore()
+const inspectionModuleStore = useInspectionModuleStore()
 
 const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
@@ -819,6 +898,8 @@ const exportDialogVisible = ref(false)
 const replacementDialogVisible = ref(false)
 const macroBuilderDialogVisible = ref(false)
 const edgeConnectionDialogVisible = ref(false)
+const inspectionModuleDialogVisible = ref(false)
+const editingInspectionModule = ref(null)
 const edgeDialogSourceNode = ref({})
 const edgeDialogTargetNode = ref({})
 const edgeDialogActiveEdge = ref({})
@@ -1383,11 +1464,23 @@ const onNodeChange = (changes) => {
   }
   if (removeChanges.length) {
     const nodesToRestore = removeChanges.map((change) => change.node)
-    const idsToRemove = removeChanges.map((change) => change.node.id)
+    const idsToRemove = new Set(removeChanges.map((change) => change.node.id))
+    const remainingNodes = nodes.value.filter((n) => !idsToRemove.has(n.id))
+    const removedConstants = libraryStore.cleanupUnusedGlobalConstants(remainingNodes)
     historyStore.addCommand({
       type: 'remove',
-      undo: () => addNodes(nodesToRestore),
-      redo: () => removeNodes(idsToRemove),
+      undo: () => {
+        addNodes(nodesToRestore)
+        removedConstants.forEach((c) => {
+          libraryStore.assignGlobalConstant(c.name, c.value, c.units, c.data_reference)
+        })
+      },
+      redo: () => {
+        removeNodes(Array.from(idsToRemove))
+        removedConstants.forEach((c) => {
+          libraryStore.removeGlobalConstant(c.name)
+        })
+      }
     })
   }
   if (selectChanges.length) {
@@ -2131,6 +2224,30 @@ async function onReplaceConfirm(updatedData) {
   replacementDialogVisible.value = false
 }
 
+function onOpenInspectionModuleDialog(module = null) {
+  editingInspectionModule.value = module
+  inspectionModuleDialogVisible.value = true
+}
+
+function handleCreateInspectionModule(payload) {
+  const variableCount = payload.variables.length
+  const variableLabel = `${variableCount} variable${variableCount === 1 ? '' : 's'}`
+
+  if (payload.id) {
+    inspectionModuleStore.updateModule(payload.id, payload)
+    notify.success({
+      title: 'Inspection Module Updated',
+      message: `"${payload.name}" now uses ${variableLabel}.`,
+    })
+  } else {
+    inspectionModuleStore.addModule(payload)
+    notify.success({
+      title: 'Inspection Module Created',
+      message: `"${payload.name}" now sums ${variableLabel}.`,
+    })
+  }
+}
+
 const contextMenuRef = ref(null)
 
 const paneContextMenuItems = [
@@ -2241,7 +2358,7 @@ async function onExportConfirm(fileName, handle) {
 
     const blob = caExport
       ? await generateExportZip(finalName, nodes.value, edges.value, libraryStore)
-      : generateFlattenedModel(nodes.value, edges.value, libraryStore)
+      : generateFlattenedModel(nodes.value, edges.value, libraryStore, inspectionModuleStore.modules)
 
     const result = await saveWithDialog(blob, handle, finalName, currentExportMode.value.suffix)
 
@@ -2352,6 +2469,7 @@ function createSaveBlob() {
     },
     flow: toObject(),
     store: libraryStore.getState(),
+    inspectionModules: inspectionModuleStore.getState(),
   }
 
   const jsonString = JSON.stringify(saveState, null, 2)
@@ -2406,6 +2524,7 @@ function handleLoadWorkspace(event) {
 
       // Restore Pinia store state.
       libraryStore.loadState(migratedState.store)
+      inspectionModuleStore.loadState(migratedState.inspectionModules)
 
       trackEvent('workflow_load_action', {
         category: 'Workflow',
@@ -2838,6 +2957,24 @@ onUnmounted(() => {
 })
 
 watch(
+  () => route.path,
+  (path) => {
+    if (path !== '/') {
+      toast.removeAllGroups()
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  contextSidebarWidth,
+  (newWidth) => {
+    document.documentElement.style.setProperty('--context-sidebar-width', `${newWidth}px`)
+  },
+  { immediate: true }
+)
+
+watch(
   nodes,
   () => {
     if (searchQuery.value.trim()) {
@@ -2893,6 +3030,7 @@ watch(
 }
 
 .app-body-container {
+  position: relative;
   display: flex;
   flex-grow: 1;
   min-height: 0;
@@ -2904,14 +3042,28 @@ watch(
 .workbench-main {
   position: relative;
   overflow: hidden;
+  min-width: 0;
+  min-height: 0;
   padding: 0;
   flex-grow: 1;
+}
+
+.dnd-flow {
+  position: relative;
+  width: 100%;
+  height: 100%;
 }
 
 /* Tutorial Slate Background for Dark Mode */
 .p-dark .workbench-main {
   background-color: #2d3748;
   color: #fffffb;
+}
+
+/* Control box library aside adjustment */
+.vue-flow__controls {
+  transform: translateX(var(--library-panel-width, 0px));
+  transition: transform 160ms ease;
 }
 
 /* Vue Flow Edges */

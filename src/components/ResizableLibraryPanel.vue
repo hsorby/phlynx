@@ -30,7 +30,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useResizableAside } from '../composables/useResizableAside'
 
 const props = defineProps({
@@ -52,8 +52,14 @@ const props = defineProps({
   },
 })
 
+const emit = defineEmits(['resize'])
+
 const { width, startResize } = useResizableAside(props.initialWidth, props.minWidth, props.maxWidth)
 const isCollapsed = ref(false)
+
+const effectiveWidth = computed(() => (isCollapsed.value ? 0 : width.value))
+
+watch(effectiveWidth, (val) => emit('resize', val), { immediate: true })
 
 function toggleCollapsed() {
   isCollapsed.value = !isCollapsed.value
@@ -62,9 +68,11 @@ function toggleCollapsed() {
 
 <style scoped>
 .resizable-library-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 20;
   display: flex;
-  flex-shrink: 0;
-  min-height: 0;
   height: 100%;
 }
 
@@ -74,6 +82,7 @@ function toggleCollapsed() {
   padding: 1rem;
   box-sizing: border-box;
   overflow: hidden;
+  box-shadow: 4px 0px color-mix(in srgb, var(--p-text-color) 15%, transparent);
   transition: width 160ms ease, padding 160ms ease;
 }
 
