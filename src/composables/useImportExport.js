@@ -11,6 +11,7 @@ import {
 } from '../utils/constants'
 
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
+import OpenCORIcon from '../components/icons/OpenCORIcon.vue'
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
@@ -108,8 +109,8 @@ export function useImportExport({
     },
     {
       key: EXPORT_KEYS.OMEX,
-      label: 'Web OpenCOR',
-      icon: 'pi pi-box',
+      label: 'OpenCOR',
+      icon: markRaw(OpenCORIcon),
       disabled: libcellml.status !== 'ready' || !somethingAvailable.value,
       suffix: '.omex',
       fileTypes: OMEX_FILE_TYPES,
