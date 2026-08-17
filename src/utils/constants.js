@@ -162,9 +162,12 @@ export const IMPORT_LABELS = {
   PARAMETER: 'Parameters (.csv)',
   TURTLE: 'Annotations (.ttl)',
 }
+
 export const EXPORT_KEYS = {
   CA: 'circulatoryAutogen',
   CELLML: 'cellml',
+  OMEX: 'omex',
+  CUFLYNX: 'cufLynx',
 }
 
 export const TTL_FILE_TYPES = [
@@ -195,6 +198,13 @@ export const ZIP_FILE_TYPES = [
   },
 ]
 
+export const OMEX_FILE_TYPES = [
+  {
+    description: 'COMBINE Archive (OMEX)',
+    accept: { 'application/zip': ['.omex'] },
+  },
+]
+
 export const RELEVANT_EXTENSIONS = new Set(['.csv', '.json', '.omex', '.cellml'])
 export const DB_NAME = 'phlynx-import'
 export const STORE_NAME = 'handles'
@@ -204,3 +214,14 @@ export const HANDLE_KEY = 'importFolderHandle'
 export const HANDLE_SIDES = ["left", "right", "top", "bottom"]
 export const SOURCE_HANDLE_PRIORITY = ["right", "bottom", "top", "left"]
 export const TARGET_HANDLE_PRIORITY = ["left", "top", "bottom", "right"]
+
+export const BASELINE_SIMULATION_SETTINGS = {
+  pointInterval: 0.01,
+  startingPoint: 0.0,
+  endingPoint: 10.0,
+  initialPoint: 0.0,
+  solver: 'CVODE',
+  timeStep: 0.0,
+  tolerance: 1e-6,
+  maxSteps: 10000,
+}

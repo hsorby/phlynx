@@ -4,7 +4,7 @@
  */
 
 // Import the helper function (adjust path as needed)
-import { extractComponentsFromCellmlString } from "../utils/cellml"
+import { extractComponentsFromCellmlString } from '../utils/cellml'
 import {
   MAIN_NODE_TYPE,
   HANDLE_VARIANT,
@@ -14,13 +14,14 @@ import {
   FORMAT_VERSION,
   DEFAULT_PROJECT_TYPE,
   HANDLE_SIDES,
-} from "../utils/constants"
-import { normalisePorts, normaliseVariables } from "../utils/config"
-import { buildGhostHandles, findMostCentralGhostHandle } from "../utils/handles";
+  BASELINE_SIMULATION_SETTINGS,
+} from '../utils/constants'
+import { normalisePorts, normaliseVariables } from '../utils/config'
+import { buildGhostHandles, findMostCentralGhostHandle } from '../utils/handles'
 
 function mergeVariables(oldData, nodeName, globalConstantNames, paramLookup) {
-  const typeLookup = {};
-  (oldData.variables || []).forEach((v) => {
+  const typeLookup = {}
+  ;(oldData.variables || []).forEach((v) => {
     typeLookup[v.name] = v
   })
 
@@ -79,7 +80,7 @@ function convertHandles(oldData, uidMap) {
     const handle = migratedHandles.find((h) => h.uid === centralGhost.uid)
     if (handle) {
       handle.variant = HANDLE_VARIANT.DEFAULT
-      handle.type = port.type 
+      handle.type = port.type
     }
   }
   return migratedHandles
@@ -87,7 +88,7 @@ function convertHandles(oldData, uidMap) {
 
 function convertNode(node, newId, globalConstantNames, paramLookup, uidMap) {
   const oldData = node.data || {}
-  const nodeName = oldData.name 
+  const nodeName = oldData.name
 
   const sourceFile = oldData.sourceFile || ''
   const componentName = oldData.componentName || ''
@@ -106,7 +107,7 @@ function convertNode(node, newId, globalConstantNames, paramLookup, uidMap) {
   const newNode = {
     id: newId,
     type: MAIN_NODE_TYPE,
-    position: node.position, 
+    position: node.position,
     data: newData,
   }
 
@@ -131,7 +132,9 @@ function convertEdge(edge, idMap, uidMap) {
   let newTarget = idMap[oldTarget]
 
   if (!newSource || !newTarget) {
-    console.warn(`Edge '${edge.id}': source/target (${oldSource}/${oldTarget}) not found in node id map; edge may be broken.`)
+    console.warn(
+      `Edge '${edge.id}': source/target (${oldSource}/${oldTarget}) not found in node id map; edge may be broken.`
+    )
     newSource = newSource || oldSource
     newTarget = newTarget || oldTarget
   }
@@ -144,10 +147,12 @@ function convertEdge(edge, idMap, uidMap) {
     } else {
       oldUid = h.slice(5)
     }
-    
+
     let newUid = uidMap[oldUid]
     if (!newUid) {
-      console.warn(`Edge '${edge.id}': ${label} uid '${oldUid}' not found among converted node handles; keeping original uid.`)
+      console.warn(
+        `Edge '${edge.id}': ${label} uid '${oldUid}' not found among converted node handles; keeping original uid.`
+      )
       newUid = oldUid
     }
     return `handle_${newUid}`
@@ -225,13 +230,13 @@ function extractComponentsToMathRefs(availableModules) {
 
   for (const collection of availableModules) {
     if (!collection.model) continue
-    
+
     const result = extractComponentsFromCellmlString(collection.model)
-    
+
     if (result.errors && result.errors.length > 0) {
       console.warn(`Errors extracting components from ${collection.filename}:`, result.errors)
     }
-    
+
     if (result.xml && Array.isArray(result.xml)) {
       for (const component of result.xml) {
         const mathRefKey = `${collection.filename}:${component.name}`
@@ -239,7 +244,7 @@ function extractComponentsToMathRefs(availableModules) {
       }
     }
   }
-  
+
   return newAvailableMath
 }
 
@@ -248,7 +253,7 @@ function extractModulesToModuleRefs(availableModules) {
   if (!availableModules) return newAvailableModules
 
   for (const collection of availableModules) {
-    const modulesList = collection.modules 
+    const modulesList = collection.modules
     for (const modules of modulesList) {
       if (!modules.configs) continue
       modules.configs.forEach((config) => {
@@ -256,7 +261,7 @@ function extractModulesToModuleRefs(availableModules) {
         const moduleSubtype = config.BC_type
         const componentFile = config.module_file
         const componentName = config.module_type
-        
+
         const moduleRef = `${moduleType}:${moduleSubtype}`
         const mathRef = `${componentFile}:${componentName}`
 
@@ -268,14 +273,14 @@ function extractModulesToModuleRefs(availableModules) {
         }
       })
     }
-  } 
-  return newAvailableModules  
+  }
+  return newAvailableModules
 }
 
 function convertStore(oldStore, globalConstantNames) {
   const availableParameters = oldStore.availableParameters || []
-  
-  const newUnits = (oldStore.availableUnits).map((u) => ({
+
+  const newUnits = oldStore.availableUnits.map((u) => ({
     componentFile: u.filename,
     model: u.model,
   }))
@@ -292,9 +297,10 @@ function convertStore(oldStore, globalConstantNames) {
   })
 
   return {
-    availableCollections: Object.entries(newAvailableCollections).map(
-      ([mathRef, moduleRefsSet]) => [mathRef, Array.from(moduleRefsSet)]
-    ),
+    availableCollections: Object.entries(newAvailableCollections).map(([mathRef, moduleRefsSet]) => [
+      mathRef,
+      Array.from(moduleRefsSet),
+    ]),
     availableModules: Object.entries(newAvailableModules),
     availableMath: Object.entries(newAvailableMath),
     availableUnits: newUnits,
@@ -305,16 +311,17 @@ function convertStore(oldStore, globalConstantNames) {
 }
 
 export function migrateWorkspace(doc, projectName = DEFAULT_PROJECT_TYPE) {
-  // New versions (i.e., containing info field) don't need migrating
+  // New versions (i.e., containing info field) don't need migrating, but may
+  // predate the Inspection Modules feature and therefore lack that key.
   if (doc && doc.info) {
-    return doc
+    return { ...doc, inspectionModules: doc.inspectionModules || [] }
   }
 
-  const oldFlow = doc.flow 
-  const oldStore = doc.store 
+  const oldFlow = doc.flow
+  const oldStore = doc.store
   const oldNodes = oldFlow.nodes
   const oldEdges = oldFlow.edges
-  
+
   // Sequential id map
   const idMap = {}
   oldNodes.forEach((n, i) => {
@@ -323,15 +330,13 @@ export function migrateWorkspace(doc, projectName = DEFAULT_PROJECT_TYPE) {
 
   const globalConstantNames = collectGlobalConstantNames(oldNodes)
   const paramLookup = buildParamLookup(oldStore.availableParameters || [])
-  
+
   const uidMap = {}
-  
-  const newNodes = oldNodes.map((n) =>
-    convertNode(n, idMap[n.id], globalConstantNames, paramLookup, uidMap)
-  )
+
+  const newNodes = oldNodes.map((n) => convertNode(n, idMap[n.id], globalConstantNames, paramLookup, uidMap))
 
   const newEdges = oldEdges.map((e) => convertEdge(e, idMap, uidMap))
-  
+
   const newFlow = {
     nodes: newNodes,
     edges: newEdges,
@@ -347,5 +352,11 @@ export function migrateWorkspace(doc, projectName = DEFAULT_PROJECT_TYPE) {
     },
     flow: newFlow,
     store: convertStore(oldStore, globalConstantNames),
+    simulation: {
+      simulationSettings: { ...BASELINE_SIMULATION_SETTINGS },
+      plotConfig: {},
+      parameterScanConfig: {},
+    },
+    inspectionModules: [],
   }
 }

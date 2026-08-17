@@ -122,8 +122,8 @@ const rowClass = computed(() => {
 
 const handleClass = computed(() => {
   if (props.isConnected) return 'handle--connected'
-  if (props.isTakenElsewhere) {
-    return props.port.multiportType && props.port.multiportType !== 'None' ? 'handle--taken-multi' : 'handle--taken'
+  if (props.isTakenElsewhere && props.port?.multiportType === 'None') {
+    return 'handle--taken'
   }
   return 'handle--free'
 })
@@ -256,10 +256,6 @@ const handleClass = computed(() => {
 }
 .handle--taken {
   background: var(--p-warn-color, #e6a23c);
-}
-.handle--taken-multi {
-  background: var(--p-content-background, #18181b);
-  border: 2px solid var(--p-text-muted-color, #71717a);
 }
 .handle--free {
   background: var(--p-text-muted-color, #71717a);

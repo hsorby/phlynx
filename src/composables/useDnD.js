@@ -11,6 +11,8 @@ import { getId as getNextNodeId } from '../utils/nodes'
 import { generateUniqueInstanceName, findAnyNode } from '../utils/nodes'
 import { buildInstance } from '../services/import/buildWorkflow'
 import { buildGhostHandles } from '../utils/handles'
+import { useLibraryStore } from '../stores/libraryStore'
+import { extractGlobalConstants } from '../utils/variables'
 
 /**
  * In a real world scenario you'd want to avoid creating refs in a global scope like this as they might not be cleaned up properly.
@@ -29,6 +31,7 @@ export default function useDragAndDrop(pendingHistoryNodes) {
   const { draggedType, isDragOver, isDragging } = state
 
   const { addNodes, getNodes, onNodesInitialized, screenToFlowCoordinate, updateNode } = useVueFlow()
+  const store = useLibraryStore()
 
   const isGhostSetupOpen = ref(false)
   const pendingGhostNodeId = ref(null)
@@ -100,6 +103,12 @@ export default function useDragAndDrop(pendingHistoryNodes) {
     const nodeType = componentFile === GHOST_MODULE_FILENAME ? GHOST_NODE_TYPE : MAIN_NODE_TYPE
     
     const newNode = buildInstance(nodeId, finalName, nodeType, moduleData, allHandles, position)
+
+    const globalConstants = extractGlobalConstants(moduleData.variables)
+    
+    for (const g of globalConstants) {
+      store.assignGlobalConstant(g.name, g.value, g.units, g.data_reference)
+    }
 
     /**
      * Align node position after drop, so it's centered to the mouse.

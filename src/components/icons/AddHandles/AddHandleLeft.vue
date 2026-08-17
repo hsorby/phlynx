@@ -1,17 +1,17 @@
 <template>
   <svg
     xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 1683.5 1683.78"
+    viewBox="-1 0 12 12"
     width="1em"
     height="1em"
   >
     <path
       fill="none"
       stroke="currentColor"
-      stroke-width="150"
+      stroke-width="1.1"
       stroke-miterlimit="10"
-      d="M1421.51,1249.7H261.99c-61.49,0-111.34-49.85-111.34-111.34V545.42c0-61.49,49.85-111.34,111.34-111.34h1159.52c61.49,0,111.34,49.85,111.34,111.34v592.94C1532.85,1199.85,1483,1249.7,1421.51,1249.7z"
+      d="M9.7,8.9H1.4c-.4,0-.8-.4-.8-.8V3.9c0-.4.4-.8.8-.8h8.3c.4,0,.8.4.8.8v4.2c0,.4-.4.8-.8.8Z"
     />
-    <circle fill="currentColor" cx="150.65" cy="841.89" r="200" />
+    <circle fill="currentColor" cx="0.5" cy="6" r="1.4" />
   </svg>
 </template>

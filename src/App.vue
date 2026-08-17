@@ -1,36 +1,5 @@
 <template>
   <div class="app-layout">
-    <Toast position="top-right" :style="{ top: '150px' }">
-    <template #message="slotProps">
-      <div class="p-toast-message-text" style="flex: 1">
-        
-        <!-- Summary / Title -->
-        <div 
-          v-if="slotProps.message.summary" 
-          class="p-toast-summary font-bold" 
-          style="line-height: 1.2; margin-bottom: 4px;"
-        >
-          {{ slotProps.message.summary }}
-        </div>
-
-        <!-- Detail / Message Content -->
-        <div 
-          class="p-toast-detail" 
-          style="line-height: 1.5;"
-        >
-          <component 
-            v-if="typeof slotProps.message.detail === 'object'" 
-            :is="slotProps.message.detail" 
-          />
-          <div 
-            v-else 
-            v-html="slotProps.message.detail" 
-          />
-        </div>
-
-      </div>
-    </template>
-  </Toast>
     <header class="global-nav">
       <!-- <div class="image-container">
         
@@ -71,7 +40,6 @@ import InputText from 'primevue/inputtext'
 import { useLibraryStore } from './stores/libraryStore'
 
 import ConfirmDialog from './components/ConfirmDialog.vue'
-import { Toast } from 'primevue'
 
 const appVersion = __APP_VERSION__ + __BUILD_STATE_MARKER__
 const route = useRoute()

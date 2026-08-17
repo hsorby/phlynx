@@ -35,3 +35,4 @@ stats.html
 .env.local
 __pycache__/
 tests/playwright/test_generated.py
+coverage/
