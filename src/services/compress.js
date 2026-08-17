@@ -31,7 +31,7 @@ export async function createCellMLDataFragment(cellmlBlob, fileName) {
     compressionOptions: { level: 9 },
   })
 
-  return createDataFragment(zipBlob, 'cellml')
+  return createDataFragment(zipBlob, 'application/x.vnd.zip-cellml+zip')
 }
 
 /**
@@ -72,12 +72,12 @@ export async function generateOmexArchive(cellmlData, simData = {}, addInfo = {}
 }
 
 export async function createOmexDataFragment(omexBlob) {
-  return createDataFragment(omexBlob, 'omex')
+  return createDataFragment(omexBlob, 'application/zip')
 }
 
-export async function createDataFragment(zipBlob, subMimeType) {
+export async function createDataFragment(zipBlob, mimeType) {
 
   const base64String = await blobToBase64(zipBlob)
 
-  return `data:application/x.vnd.zip-${subMimeType}+zip;base64,${base64String}`
+  return `data:${mimeType};base64,${base64String}`
 }
