@@ -58,7 +58,7 @@
                         isFieldExpanded(field.key) ? formState[field.key].files.size : MAX_VISIBLE_TAGS
                       )"
                       :key="filename"
-                      :severity="fileData.isValid ? 'success' : 'warning'"
+                      :severity="fileData.isValid ? 'success' : 'warn'"
                       class="file-tag"
                     >
                       <span class="tag-content">
@@ -228,7 +228,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch, toRaw } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch, toRaw } from 'vue'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Message from 'primevue/message'
@@ -298,6 +298,7 @@ const { filesFromDataTransfer } = useFileDrop()
 const isDraggingOverForm = ref(false)
 let formDragCounter = 0
 const fieldsDraggedOver = ref(new Set())
+const fieldDragCounters = new Map() // fieldKey -> counter
 
 function handleFormDragEnter() {
   if (isLoading.value) return
@@ -315,16 +316,34 @@ function handleFormDragLeave() {
 
 function handleFieldDragEnter(fieldKey) {
   if (isLoading.value) return
+  const count = (fieldDragCounters.get(fieldKey) || 0) + 1
+  fieldDragCounters.set(fieldKey, count)
   fieldsDraggedOver.value.add(fieldKey)
 }
 
 function handleFieldDragLeave(fieldKey) {
   if (isLoading.value) return
-  fieldsDraggedOver.value.delete(fieldKey)
+  const count = Math.max(0, (fieldDragCounters.get(fieldKey) || 0) - 1)
+  fieldDragCounters.set(fieldKey, count)
+  if (count === 0) {
+    fieldsDraggedOver.value.delete(fieldKey)
+  }
+}
+
+function resetAllDragState() {
+  formDragCounter = 0
+  isDraggingOverForm.value = false
+  fieldDragCounters.clear()
+  fieldsDraggedOver.value = new Set()
 }
 
 onMounted(() => {
   restoreFolder()
+  window.addEventListener('dragend', resetAllDragState)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('dragend', resetAllDragState)
 })
 
 const isInstanceArrayImport = computed(() =>
@@ -639,8 +658,8 @@ function acceptsExtension(fieldConfig, filename) {
 
 function importPriority(filename) {
   const ext = extensionOf(filename)
-  if (ext === '.json') return 0
-  if (ext === '.csv') return 1
+  if (ext === '.csv') return 0
+  if (ext === '.json') return 1
   if (ext === '.cellml' || ext === '.xml') return 2
   return 3
 }
@@ -777,11 +796,11 @@ async function classifyIntoOtherFields(rawFile, excludeKey) {
   return null
 }
 
-async function processIncomingFiles(field, rawFiles) {
-  return withImportLock(() => runProcessIncomingFiles(field, rawFiles))
+async function processIncomingFiles(field, rawFiles, { strict = false } = {}) {
+  return withImportLock(() => runProcessIncomingFiles(field, rawFiles, { strict }))
 }
 
-async function runProcessIncomingFiles(field, rawFiles) {
+async function runProcessIncomingFiles(field, rawFiles, { strict = false } = {}) {
   const limit = field?.limit
   let files = sortConfigsFirst(rawFiles)
   if (limit && files.length > limit) {
@@ -794,8 +813,10 @@ async function runProcessIncomingFiles(field, rawFiles) {
     if (primary.ok) continue
     if (primary.skip) continue
 
-    const matchedField = await classifyIntoOtherFields(rawFile, field.key)
-    if (matchedField) continue
+    if (!strict) {
+      const matchedField = await classifyIntoOtherFields(rawFile, field.key)
+      if (matchedField) continue
+    }
 
     trackEvent('import_action', {
       category: 'Import',
@@ -805,7 +826,7 @@ async function runProcessIncomingFiles(field, rawFiles) {
     })
     notify.error({
       title: 'Import Error',
-      message: primary.error?.message || `"${rawFile.name}" did not match this or any other expected import file.`,
+      message: primary.error?.message || `"${rawFile.name}" is not a valid ${field.label || 'file'} for this field.`,
     })
   }
 }
@@ -820,6 +841,7 @@ const handleFileChange = async (event, field) => {
 }
 
 async function handleFieldDrop(event, field) {
+  fieldDragCounters.set(field.key, 0)
   fieldsDraggedOver.value.delete(field.key)
   if (isLoading.value) return
 
@@ -834,7 +856,8 @@ async function handleFieldDrop(event, field) {
 
   await processIncomingFiles(
     field,
-    entries.map((e) => e.file)
+    entries.map((e) => e.file),
+    { strict: true }
   )
 }
 
@@ -1242,8 +1265,9 @@ defineExpose({
 
 .file-input-box {
   display: flex;
-  align-items: stretch;
-  width: 100%;
+  align-items: center;
+  width: 95%;
+  margin-left: 2.5%;
   min-height: 40px;
   border: 1px solid var(--p-form-field-border-color, var(--p-content-border-color));
   border-radius: 6px;
@@ -1265,6 +1289,7 @@ defineExpose({
   border-color: var(--p-primary-color);
   box-shadow: 0 0 0 1px var(--p-primary-color);
   background-color: color-mix(in srgb, var(--p-primary-color) 8%, transparent);
+  stroke: dashed;
 }
 
 .file-input-box.is-valid:focus-within {
