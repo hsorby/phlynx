@@ -64,6 +64,12 @@ export function useImportExport({
       icon: 'pi pi-sliders-h',
       disabled: false,
     },
+    {
+      key: IMPORT_KEYS.OMEX,
+      label: 'COMBINE Archive',
+      icon: 'pi pi-box',
+      disabled: libcellml.status !== 'ready',
+    },
   ])
 
   currentImportMode.value = importOptions.value[0]
