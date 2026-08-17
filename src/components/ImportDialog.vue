@@ -13,13 +13,68 @@
       }
     "
   >
-    <div class="dialog-content">
+    <div
+      class="dialog-content"
+      :class="{ 'is-drag-active': isDraggingOverForm }"
+      @dragenter.prevent="handleFormDragEnter"
+      @dragover.prevent
+      @dragleave.prevent="handleFormDragLeave"
+      @drop.prevent="handleFormDrop"
+    >
       <div v-if="isLoading" class="loading-overlay">
         <ProgressSpinner />
         <span class="loading-text">{{ loadingText }}</span>
       </div>
 
+      <div v-if="isDraggingOverForm" class="drop-overlay">
+        <i class="pi pi-cloud-upload drop-overlay-icon" />
+        <span>Drop a folder, multiple files, or a single file</span>
+      </div>
+
       <form class="import-form" :class="{ 'is-loading-content': isLoading }">
+        <div v-if="isInstanceArrayImport" class="folder-import-row">
+          <div class="folder-import-info">
+            <i class="pi pi-folder" />
+            <span v-if="folderStatus === 'connected'">
+              Auto-loading from <strong>{{ folderName }}</strong>
+            </span>
+            <span v-else-if="folderStatus === 'needs-permission'"> Folder access needs to be re-confirmed. </span>
+            <span v-else-if="supportsFolderAccess">
+              Connect a folder to auto-load required files, or drag & drop / select several files at once below.
+            </span>
+            <span v-else> Drag & drop a folder or several files below and we'll sort them automatically. </span>
+          </div>
+          <div class="folder-import-actions">
+            <Button
+              v-if="supportsFolderAccess && folderStatus === 'disconnected'"
+              label="Connect Folder"
+              size="small"
+              text
+              icon="pi pi-folder-open"
+              @click="handleConnectFolder"
+            />
+            <Button
+              v-if="folderStatus === 'needs-permission'"
+              label="Reconnect"
+              size="small"
+              text
+              severity="warn"
+              icon="pi pi-refresh"
+              @click="handleReconnectFolder"
+            />
+            <Button
+              v-if="folderStatus === 'connected'"
+              label="Disconnect"
+              size="small"
+              text
+              severity="secondary"
+              icon="pi pi-times"
+              @click="handleForgetFolder"
+            />
+            <ProgressSpinner v-if="isScanningFolder" style="width: 18px; height: 18px" strokeWidth="6" />
+          </div>
+        </div>
+
         <div class="form-header" v-if="requiredFieldsCount > 0">
           <span class="required-asterisk">*</span> Indicates required field
         </div>
@@ -32,7 +87,14 @@
             </label>
 
             <div class="upload-row">
-              <div class="file-input-box" :class="{ 'is-valid': isFieldReady(field.key) }">
+              <div
+                class="file-input-box"
+                :class="{ 'is-valid': isFieldReady(field.key), 'is-drag-active': fieldsDraggedOver.has(field.key) }"
+                @dragenter.stop.prevent="handleFieldDragEnter(field.key)"
+                @dragover.stop.prevent
+                @dragleave.stop.prevent="handleFieldDragLeave(field.key)"
+                @drop.stop.prevent="(event) => handleFieldDrop(event, field)"
+              >
                 <div class="file-names-area" @click.stop>
                   <span
                     v-if="!formState[field.key]?.files || formState[field.key]?.files.size === 0"
@@ -48,14 +110,20 @@
                       )"
                       :key="filename"
                       :severity="fileData.isValid ? 'success' : 'warning'"
-                      closable
-                      @close="removeFile(field.key, filename)"
                       class="file-tag"
                     >
                       <span class="tag-content">
                         <i v-if="fileData.isValid" class="pi pi-check tag-icon" />
                         <i v-else class="pi pi-exclamation-triangle tag-icon" />
                         <span>{{ filename }}</span>
+                        <i
+                          class="pi pi-times tag-remove-icon"
+                          role="button"
+                          tabindex="0"
+                          :aria-label="`Remove ${filename}`"
+                          @click.stop="removeFile(field.key, filename)"
+                          @keydown.enter.stop="removeFile(field.key, filename)"
+                        />
                       </span>
                     </Tag>
 
@@ -152,7 +220,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, reactive, ref, watch, toRaw } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch, toRaw } from 'vue'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Message from 'primevue/message'
@@ -161,9 +229,11 @@ import Tag from 'primevue/tag'
 
 import { useLibraryStore } from '../stores/libraryStore'
 import { useGtm } from '../composables/useGtm'
+import { useFolderImport } from '../composables/useFolderImport'
+import { useFileDrop } from '../composables/useFileDrop'
 import { notify } from '../utils/notify'
 import { IMPORT_KEYS, MAX_VISIBLE_TAGS } from '../utils/constants'
-import { createDynamicFields, checkResourcesAreLoaded } from '../utils/import'
+import { createDynamicFields, checkResourcesAreLoaded, getImportConfig } from '../utils/import'
 import { normaliseConfig } from '../utils/config'
 import { processCellMLData } from '../utils/cellml'
 
@@ -192,6 +262,95 @@ const stagedFiles = ref({
   mathFiles: [], // { filename: string, payload: object }
   configFiles: [], // { filename: string, payload: object }
 })
+
+// --- Folder-based auto-import ---
+const {
+  supportsFolderAccess,
+  folderStatus, // 'disconnected' | 'connected' | 'needs-permission'
+  folderName,
+  restoreFolder,
+  pickFolder,
+  reconnectFolder,
+  forgetFolder,
+  scanFolder,
+} = useFolderImport()
+
+// --- Serialize batch imports ---
+// Folder auto-fill, whole-form drops, per-field drops, and multi-select all
+// stage files into the same shared state (formState/stagedFiles/dynamicFields).
+// Running two of those batches concurrently can interleave their awaits and
+// let a stale readiness check overwrite a more complete one. Routing every
+// batch through this queue means only one is ever in flight at a time.
+let importQueue = Promise.resolve()
+function withImportLock(taskFn) {
+  const run = importQueue.then(taskFn, taskFn)
+  importQueue = run.catch(() => {})
+  return run
+}
+
+const isScanningFolder = ref(false)
+// Filenames we've already attempted to classify from the connected folder,
+// so re-scans (triggered as new requirements appear) don't re-process files
+// that were already tried (and either staged or rejected).
+const foldersAttemptedFilenames = ref(new Set())
+
+// --- Drag-and-drop ---
+const { filesFromDataTransfer } = useFileDrop()
+const isDraggingOverForm = ref(false)
+let formDragCounter = 0
+const fieldsDraggedOver = ref(new Set())
+
+function handleFormDragEnter() {
+  if (isLoading.value) return
+  formDragCounter += 1
+  isDraggingOverForm.value = true
+}
+
+function handleFormDragLeave() {
+  if (isLoading.value) return
+  formDragCounter = Math.max(0, formDragCounter - 1)
+  if (formDragCounter === 0) {
+    isDraggingOverForm.value = false
+  }
+}
+
+function handleFieldDragEnter(fieldKey) {
+  if (isLoading.value) return
+  fieldsDraggedOver.value.add(fieldKey)
+}
+
+function handleFieldDragLeave(fieldKey) {
+  if (isLoading.value) return
+  fieldsDraggedOver.value.delete(fieldKey)
+}
+
+onMounted(() => {
+  restoreFolder()
+})
+
+const isInstanceArrayImport = computed(() =>
+  (props.config.fields || []).some((f) => f.key === IMPORT_KEYS.INSTANCE_ARRAY)
+)
+
+async function handleConnectFolder() {
+  try {
+    await pickFolder()
+  } catch (error) {
+    notify.error({ title: 'Folder Access Failed', message: error.message || 'Could not access the folder.' })
+  }
+}
+
+async function handleReconnectFolder() {
+  const granted = await reconnectFolder()
+  if (!granted) {
+    notify.warning({ title: 'Folder Access', message: 'Permission was not granted for the remembered folder.' })
+  }
+}
+
+async function handleForgetFolder() {
+  await forgetFolder()
+  foldersAttemptedFilenames.value = new Set()
+}
 
 function handleExceed(field) {
   nextTick(() => {
@@ -291,6 +450,9 @@ const resetForm = (keepInstanceArray = false) => {
     if (input) input.value = ''
   })
   expandedFields.value = new Set()
+  if (!keepInstanceArray) {
+    foldersAttemptedFilenames.value = new Set()
+  }
 }
 
 // Initialize formState when config changes
@@ -310,6 +472,7 @@ watch(
       resetFormState()
       initFormFromConfig(props.config?.fields)
       unstageFiles()
+      foldersAttemptedFilenames.value = new Set()
     }
   }
 )
@@ -478,97 +641,355 @@ async function parseFile(field, rawFile) {
   return field.parser(rawFile)
 }
 
-const handleFileChange = async (event, field) => {
-  const selectedFiles = Array.from(event.target.files || [])
-  if (!selectedFiles.length) return
+function extensionOf(filename) {
+  const dot = filename.lastIndexOf('.')
+  return dot === -1 ? '' : filename.slice(dot).toLowerCase()
+}
 
-  const limit = field?.limit
-  if (limit && selectedFiles.length > limit) {
-    handleExceed(field)
-    selectedFiles.splice(limit)
+function acceptsExtension(fieldConfig, filename) {
+  if (!fieldConfig?.accept) return true
+  return fieldConfig.accept
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .includes(extensionOf(filename))
+}
+
+// Config first, math second, everything else last. Configs declare which
+// CellML components are needed (via component_file/component_type), so
+// staging them before CellML files means the dependency the CellML file
+// resolves is already known by the time it's processed.
+function importPriority(filename) {
+  const ext = extensionOf(filename)
+  if (ext === '.json') return 0
+  if (ext === '.csv') return 1
+  if (ext === '.cellml' || ext === '.xml') return 2
+  return 3
+}
+
+function sortConfigsFirst(files, getName = (f) => f.name) {
+  return [...files].sort((a, b) => importPriority(getName(a)) - importPriority(getName(b)))
+}
+
+// Attempts to parse + stage `rawFile` into `field`. On success, updates
+// readiness/dynamic-fields exactly as a normal single-field upload would.
+// On failure, `cleanupOnFailure` controls whether the (now-invalid) file
+// entry is left visible in that field's box — true for speculative
+// classification guesses the user never targeted, false for a file the
+// user deliberately dropped into this box.
+async function ingestFileIntoField(field, rawFile, { cleanupOnFailure = false, notifyStaging = true } = {}) {
+  const filename = rawFile.name
+
+  if (field.processUpload === 'cellml' && !validateCellMLFilename(rawFile, { silent: cleanupOnFailure })) {
+    // A speculative guess (cleanupOnFailure) fails quietly so the caller can
+    // keep trying other fields; a direct user selection already raised its
+    // own notification here, so the caller shouldn't notify again.
+    return { ok: false, error: null, skip: !cleanupOnFailure }
   }
 
-  for (const rawFile of selectedFiles) {
-    const filename = rawFile.name
+  if (field.key === IMPORT_KEYS.INSTANCE_ARRAY) {
+    const existingFiles = formState[IMPORT_KEYS.INSTANCE_ARRAY]?.files
+    if (existingFiles?.size > 0 && !existingFiles.has(filename)) {
+      resetForm(/* keepInstanceArray */ true)
+    }
+  }
 
-    if (field.processUpload === 'cellml' && !validateCellMLFilename(rawFile)) {
-      continue
+  if (!formState[field.key]) {
+    formState[field.key] = createEmptyFieldState()
+  }
+  const state = formState[field.key]
+  state.files.set(filename, { isValid: false, payload: null })
+
+  try {
+    const parsed = await parseFile(field, rawFile)
+
+    state.files.get(filename).payload = parsed?.data ?? parsed // parameter files have different structure
+    state.readiness = parsed?.completionStatus ?? null
+    state.warnings = parsed?.completionStatus?.warnings ?? []
+
+    if (field.processUpload) {
+      stageValidatedFile(field, parsed, filename)
     }
 
-    if (field.key === IMPORT_KEYS.INSTANCE_ARRAY) {
-      const existingFiles = formState[IMPORT_KEYS.INSTANCE_ARRAY]?.files
-      if (existingFiles?.size > 0 && !existingFiles.has(filename)) {
-        resetForm(/* keepInstanceArray */ true)
+    state.files.get(filename).isValid = true
+
+    const instanceArrayPayload = getInstanceArrayPayload()
+    if (instanceArrayPayload) {
+      const status = checkReadiness(instanceArrayPayload)
+
+      if (status && !status.resourcesAreLoaded) {
+        await syncDynamicFields(status)
+      }
+
+      if (field.processUpload && notifyStaging) {
+        notifyAfterStaging(field, filename, status)
+      }
+    } else {
+      importReadiness.value = {
+        resourcesAreLoaded: true,
+        errors: [],
+        warnings: [],
       }
     }
 
-    const state = formState[field.key]
-    state.files.set(filename, { isValid: false, payload: null })
-
-    try {
-      const parsed = await parseFile(field, rawFile)
-
-      state.files.get(filename).payload = parsed?.data ?? parsed // parameter files have different structure
-      state.readiness = parsed?.completionStatus ?? null
-      state.warnings = parsed?.completionStatus?.warnings ?? []
-
-      if (field.processUpload) {
-        stageValidatedFile(field, parsed, filename)
+    if (state.warnings.length) {
+      await nextTick()
+      for (const w of state.warnings) {
+        notify.warning({
+          title: 'Import Warning',
+          message: w,
+        })
       }
+    }
 
-      state.files.get(filename).isValid = true
-
-      const instanceArrayPayload = getInstanceArrayPayload()
-      if (instanceArrayPayload) {
-        const status = checkReadiness(instanceArrayPayload)
-
-        if (status && !status.resourcesAreLoaded) {
-          await syncDynamicFields(status)
-        }
-
-        if (field.processUpload) {
-          notifyAfterStaging(field, filename, status)
-        }
-      } else {
-        importReadiness.value = {
-          resourcesAreLoaded: true,
-          errors: [],
-          warnings: [],
-        }
-      }
-
-      if (state.warnings.length) {
-        await nextTick()
-        for (const w of state.warnings) {
-          notify.warning({
-            title: 'Import Warning',
-            message: w,
-          })
-        }
-      }
-    } catch (error) {
+    return { ok: true }
+  } catch (error) {
+    if (cleanupOnFailure) {
+      state.files.delete(filename)
+    } else {
       const fileEntry = state.files.get(filename)
       if (fileEntry) {
         fileEntry.isValid = false
         fileEntry.payload = null
       }
-      state.warnings = []
+    }
+    state.warnings = []
 
-      trackEvent('import_action', {
-        category: 'Import',
-        action: 'import_error',
-        label: field.key || 'unknown_field',
-        file_type: 'various',
-      })
+    // Our own parsers only ever throw plain `Error` for "this file doesn't
+    // belong here" — that's expected and fine to swallow during speculative
+    // classification. Anything else (TypeError, ReferenceError, ...) means
+    // something downstream is actually broken, not that the file was a bad
+    // guess, and staying silent about that turns a real bug into a
+    // mysteriously "stuck" readiness state. Surface it regardless.
+    const isUnexpectedError = error instanceof Error && error.constructor !== Error
+    if (isUnexpectedError) {
+      console.error(`[ImportDialog] Unexpected error while processing "${filename}" for field "${field.key}":`, error)
       notify.error({
         title: 'Import Error',
-        message: error.message || 'Failed to parse file.',
+        message: `Something went wrong while checking readiness after loading "${filename}": ${error.message}`,
       })
     }
+
+    return { ok: false, error }
   }
+}
+
+// Only the standalone per-type dialogs' field configs are reachable via
+// getImportConfig; the processUpload flag that actually triggers staging
+// into stagedFiles is normally only attached by createDynamicFields, once
+// a resource is known to be genuinely missing. Classification runs before
+// that's known, so it needs its own copy of that mapping.
+const PROCESS_UPLOAD_BY_KEY = {
+  [IMPORT_KEYS.CELLML_FILE]: 'cellml',
+  [IMPORT_KEYS.MODULE_CONFIG]: 'config',
+}
+
+// Which other import field keys are worth guessing for a file that didn't
+// fit the box it was dropped into (or was found while scanning a folder).
+function candidateKeysExcluding(excludeKey) {
+  const keys = [IMPORT_KEYS.MODULE_CONFIG, IMPORT_KEYS.CELLML_FILE, IMPORT_KEYS.PARAMETER]
+  // Only worth guessing the instance array itself if it hasn't been supplied yet.
+  if (!formState[IMPORT_KEYS.INSTANCE_ARRAY]?.files?.size) {
+    keys.unshift(IMPORT_KEYS.INSTANCE_ARRAY)
+  }
+  return keys.filter((k) => k !== excludeKey)
+}
+
+// Tries each other known import field in turn until one successfully parses
+// the file, then reveals that field's box (if not already visible) with the
+// file already staged in it. Returns the matched field config, or null.
+async function classifyIntoOtherFields(rawFile, excludeKey) {
+  for (const key of candidateKeysExcluding(excludeKey)) {
+    const baseCandidateConfig = getImportConfig(key)?.fields?.[0]
+    if (!baseCandidateConfig) continue
+    if (!acceptsExtension(baseCandidateConfig, rawFile.name)) continue
+
+    // Ensure config/cellml candidates actually get staged into
+    // stagedFiles, not just marked valid in the UI — see comment above.
+    const candidateConfig =
+      PROCESS_UPLOAD_BY_KEY[key] && !baseCandidateConfig.processUpload
+        ? { ...baseCandidateConfig, processUpload: PROCESS_UPLOAD_BY_KEY[key] }
+        : baseCandidateConfig
+
+    const result = await ingestFileIntoField(candidateConfig, rawFile, { cleanupOnFailure: true })
+    if (result.ok) {
+      const alreadyVisible =
+        (props.config.fields || []).some((f) => f.key === candidateConfig.key) ||
+        dynamicFields.value.some((f) => f.key === candidateConfig.key)
+      if (!alreadyVisible) {
+        dynamicFields.value.push(candidateConfig)
+      }
+      return candidateConfig
+    }
+  }
+  return null
+}
+
+// Runs each file through field's own parser first, falling back to
+// cross-field classification if it doesn't fit. Shared by the file input's
+// change event and by drag-and-drop, so both behave identically. Routed
+// through the import lock since it mutates shared staging state.
+async function processIncomingFiles(field, rawFiles) {
+  return withImportLock(() => runProcessIncomingFiles(field, rawFiles))
+}
+
+async function runProcessIncomingFiles(field, rawFiles) {
+  const limit = field?.limit
+  let files = sortConfigsFirst(rawFiles)
+  if (limit && files.length > limit) {
+    handleExceed(field)
+    files = files.slice(0, limit)
+  }
+
+  for (const rawFile of files) {
+    const primary = await ingestFileIntoField(field, rawFile)
+    if (primary.ok) continue
+    if (primary.skip) continue
+
+    // Doesn't fit the box the user dropped it into — maybe it's a companion
+    // file selected in the same trip (e.g. instance array + CellML + config
+    // all chosen together). Try routing it to the field it actually matches.
+    const matchedField = await classifyIntoOtherFields(rawFile, field.key)
+    if (matchedField) continue
+
+    trackEvent('import_action', {
+      category: 'Import',
+      action: 'import_error',
+      label: field.key || 'unknown_field',
+      file_type: 'various',
+    })
+    notify.error({
+      title: 'Import Error',
+      message: primary.error?.message || `"${rawFile.name}" did not match this or any other expected import file.`,
+    })
+  }
+}
+
+const handleFileChange = async (event, field) => {
+  const selectedFiles = Array.from(event.target.files || [])
+  if (!selectedFiles.length) return
+
+  await processIncomingFiles(field, selectedFiles)
 
   event.target.value = ''
 }
+
+// A file was dropped directly onto a specific field's box — try that field
+// first (folders get expanded and every file inside gets the same
+// treatment, cross-classifying into other fields as needed).
+async function handleFieldDrop(event, field) {
+  fieldsDraggedOver.value.delete(field.key)
+  if (isLoading.value) return
+
+  const entries = await filesFromDataTransfer(event.dataTransfer)
+  if (!entries.length) {
+    notify.warning({
+      title: 'Nothing to Import',
+      message: 'No supported files were found in what you dropped.',
+    })
+    return
+  }
+
+  await processIncomingFiles(
+    field,
+    entries.map((e) => e.file)
+  )
+}
+
+// A file was dropped anywhere else in the dialog — there's no single field
+// to try first, so classify every file against every known import type.
+async function handleFormDrop(event) {
+  formDragCounter = 0
+  isDraggingOverForm.value = false
+  if (isLoading.value) return
+
+  const entries = await filesFromDataTransfer(event.dataTransfer)
+  if (!entries.length) {
+    notify.warning({
+      title: 'Nothing to Import',
+      message: 'No supported files were found in what you dropped.',
+    })
+    return
+  }
+
+  await withImportLock(() => runFormDropClassification(entries))
+}
+
+async function runFormDropClassification(entries) {
+  const sorted = sortConfigsFirst(entries, (e) => e.file.name)
+  const unmatched = []
+  for (const { file } of sorted) {
+    const matched = await classifyIntoOtherFields(file, undefined)
+    if (!matched) unmatched.push(file.name)
+  }
+
+  if (unmatched.length) {
+    notify.warning({
+      title: 'Some Files Skipped',
+      message: `${unmatched.length} file${unmatched.length > 1 ? 's' : ''} didn't match any expected import type: ${unmatched
+        .slice(0, 5)
+        .join(', ')}${unmatched.length > 5 ? '…' : ''}`,
+    })
+  }
+}
+
+// --- Folder-based auto-import ---
+
+async function attemptAutoFillFromFolder() {
+  return withImportLock(() => runAutoFillFromFolder())
+}
+
+async function runAutoFillFromFolder() {
+  if (isScanningFolder.value || folderStatus.value !== 'connected') return
+
+  isScanningFolder.value = true
+  let stagedAny = false
+
+  try {
+    const entries = sortConfigsFirst(await scanFolder(), (e) => e.file.name)
+
+    for (const { file } of entries) {
+      if (foldersAttemptedFilenames.value.has(file.name)) continue
+      foldersAttemptedFilenames.value.add(file.name)
+
+      const alreadyPresent = Object.values(formState).some((s) => s.files?.has(file.name))
+      if (alreadyPresent) continue
+
+      const matched = await classifyIntoOtherFields(file, IMPORT_KEYS.INSTANCE_ARRAY)
+      if (matched) stagedAny = true
+    }
+  } catch (error) {
+    notify.error({
+      title: 'Folder Import',
+      message: error.message || 'Failed to read files from the connected folder.',
+    })
+  } finally {
+    isScanningFolder.value = false
+  }
+
+  // Recurse directly (not through the lock) — staging a config file can
+  // reveal a newly-required CellML component, and this continuation should
+  // run immediately rather than wait behind whatever else queued up.
+  if (stagedAny && importReadiness.value && !importReadiness.value.resourcesAreLoaded) {
+    await runAutoFillFromFolder()
+  } else if (stagedAny) {
+    notify.success({
+      title: 'Folder Import',
+      message: 'Loaded the required files from the connected folder.',
+    })
+  }
+}
+
+watch(importReadiness, (status) => {
+  if (!status || status.resourcesAreLoaded) return
+  attemptAutoFillFromFolder()
+})
+
+watch(folderStatus, (status) => {
+  if (status !== 'connected') return
+  if (importReadiness.value && !importReadiness.value.resourcesAreLoaded) {
+    attemptAutoFillFromFolder()
+  }
+})
 
 async function updateDynamicFields(completionStatus) {
   importReadiness.value = completionStatus
@@ -578,20 +999,22 @@ async function updateDynamicFields(completionStatus) {
   await syncDynamicFields(completionStatus)
 }
 
-function validateCellMLFilename(rawFile) {
+function validateCellMLFilename(rawFile, { silent = false } = {}) {
   const componentFileIssues = importReadiness.value?.missingResources?.componentFileIssues
   if (!componentFileIssues?.length) return true
 
   const expectedFilenames = componentFileIssues.filter((issue) => issue.file).map((issue) => issue.file)
 
   if (expectedFilenames.length > 0 && !expectedFilenames.includes(rawFile.name)) {
-    notify.error({
-      title: 'Incorrect File Provided',
-      message: `The configuration expects: "${expectedFilenames.join(', ')}". You provided "${
-        rawFile.name
-      }". This file will not be processed.`,
-      duration: 6000,
-    })
+    if (!silent) {
+      notify.error({
+        title: 'Incorrect File Provided',
+        message: `The configuration expects: "${expectedFilenames.join(', ')}". You provided "${
+          rawFile.name
+        }". This file will not be processed.`,
+        duration: 6000,
+      })
+    }
     return false
   }
   return true
@@ -721,6 +1144,33 @@ defineExpose({
   min-height: 220px;
 }
 
+.dialog-content.is-drag-active {
+  outline: 2px dashed var(--p-primary-color);
+  outline-offset: -4px;
+  border-radius: 8px;
+}
+
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: color-mix(in srgb, var(--p-primary-color) 10%, var(--p-content-background) 90%);
+  border-radius: 8px;
+  pointer-events: none;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--p-primary-color);
+}
+
+.drop-overlay-icon {
+  font-size: 2rem;
+}
+
 .loading-overlay {
   position: absolute;
   inset: 0;
@@ -794,6 +1244,13 @@ defineExpose({
   border-color: var(--p-green-500, #16a34a);
 }
 
+.file-input-box.is-drag-active {
+  border-color: var(--p-primary-color);
+  border-style: dashed;
+  box-shadow: 0 0 0 1px var(--p-primary-color);
+  background-color: color-mix(in srgb, var(--p-primary-color) 8%, transparent);
+}
+
 .file-input-box.is-valid:focus-within {
   box-shadow: 0 0 0 1px var(--p-green-500, rgba(22, 163, 74, 0.25));
 }
@@ -860,6 +1317,51 @@ defineExpose({
 
 .tag-icon {
   font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.tag-remove-icon {
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  margin-left: 2px;
+  padding: 2px;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.tag-remove-icon:hover,
+.tag-remove-icon:focus-visible {
+  opacity: 1;
+  background-color: rgba(0, 0, 0, 0.1);
+  outline: none;
+}
+
+.folder-import-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  border: 1px dashed var(--p-content-border-color);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--p-primary-color) 5%, transparent);
+}
+
+.folder-import-info {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color);
+}
+
+.folder-import-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
   flex-shrink: 0;
 }
 

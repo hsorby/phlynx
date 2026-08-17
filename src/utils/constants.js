@@ -118,15 +118,6 @@ export const GHOST_MODULE_DEFINITION = {
   variables: [],
 }
 
-export function normaliseConfig(config) {
-  return {
-    moduleRef: `${config.module_type}:${config.module_subtype}`,
-    mathRef: `${config.component_file}:${config.component_type}`,
-    ports: normalisePorts(config),
-    variables: normaliseVariables(config.variables_and_units),
-  }
-}
-
 export const DEFAULT_INSTANCE_REF = {
   name: 'new_instance',
   module_type: 'new_module',
@@ -155,6 +146,7 @@ export const DEFAULT_PROJECT_TYPE = 'Phlynx-Project'
 
 export const FORMAT_VERSION = '1.0.0'
 
+/*--- Folder and File Handling ---*/
 export const IMPORT_KEYS = {
   INSTANCE_ARRAY: 'instanceArray',
   MODULE_CONFIG: 'moduleConfig',
@@ -203,6 +195,12 @@ export const ZIP_FILE_TYPES = [
   },
 ]
 
+export const RELEVANT_EXTENSIONS = new Set(['.csv', '.json', '.omex', '.cellml'])
+export const DB_NAME = 'phlynx-import'
+export const STORE_NAME = 'handles'
+export const HANDLE_KEY = 'importFolderHandle'
+
+/*--- Instance Handles ---*/
 export const HANDLE_SIDES = ["left", "right", "top", "bottom"]
 export const SOURCE_HANDLE_PRIORITY = ["right", "bottom", "top", "left"]
 export const TARGET_HANDLE_PRIORITY = ["left", "top", "bottom", "right"]
