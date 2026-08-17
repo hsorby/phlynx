@@ -1265,9 +1265,8 @@ defineExpose({
 
 .file-input-box {
   display: flex;
-  align-items: center;
-  width: 95%;
-  margin-left: 2.5%;
+  align-items: stretch;
+  width: 100%;
   min-height: 40px;
   border: 1px solid var(--p-form-field-border-color, var(--p-content-border-color));
   border-radius: 6px;
@@ -1278,7 +1277,7 @@ defineExpose({
 
 .file-input-box:focus-within {
   border-color: var(--p-primary-color);
-  box-shadow: 0 0 0 1px var(--p-primary-color);
+  box-shadow: inset 0 0 0 1px var(--p-primary-color);
 }
 
 .file-input-box.is-valid {
@@ -1287,13 +1286,12 @@ defineExpose({
 
 .file-input-box.is-drag-active {
   border-color: var(--p-primary-color);
-  box-shadow: 0 0 0 1px var(--p-primary-color);
+  box-shadow: inset 0 0 0 1px var(--p-primary-color);
   background-color: color-mix(in srgb, var(--p-primary-color) 8%, transparent);
-  stroke: dashed;
 }
 
 .file-input-box.is-valid:focus-within {
-  box-shadow: 0 0 0 1px var(--p-green-500, rgba(22, 163, 74, 0.25));
+  box-shadow: inset 0 0 0 1px var(--p-green-500, rgba(22, 163, 74, 0.25));
 }
 
 .file-names-area {
