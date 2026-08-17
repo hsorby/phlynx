@@ -276,11 +276,6 @@ const {
 } = useFolderImport()
 
 // --- Serialize batch imports ---
-// Folder auto-fill, whole-form drops, per-field drops, and multi-select all
-// stage files into the same shared state (formState/stagedFiles/dynamicFields).
-// Running two of those batches concurrently can interleave their awaits and
-// let a stale readiness check overwrite a more complete one. Routing every
-// batch through this queue means only one is ever in flight at a time.
 let importQueue = Promise.resolve()
 function withImportLock(taskFn) {
   const run = importQueue.then(taskFn, taskFn)
@@ -289,9 +284,7 @@ function withImportLock(taskFn) {
 }
 
 const isScanningFolder = ref(false)
-// Filenames we've already attempted to classify from the connected folder,
-// so re-scans (triggered as new requirements appear) don't re-process files
-// that were already tried (and either staged or rejected).
+
 const foldersAttemptedFilenames = ref(new Set())
 
 // --- Drag-and-drop ---
@@ -610,7 +603,7 @@ const isFieldReady = (fieldKey) => {
     return !(importReadiness.value?.missingResources?.modules.size > 0 ?? true)
   }
 
-  // Math field is ready if all required math have been supplied - TODO - could be orange if all configs aren't yet provided
+  // Math field is ready if all required math have been supplied
   if (fieldKey === IMPORT_KEYS.CELLML_FILE) {
     return !(importReadiness.value?.missingResources?.math.size > 0 ?? true)
   }
@@ -654,14 +647,10 @@ function acceptsExtension(fieldConfig, filename) {
     .includes(extensionOf(filename))
 }
 
-// Config first, math second, everything else last. Configs declare which
-// CellML components are needed (via component_file/component_type), so
-// staging them before CellML files means the dependency the CellML file
-// resolves is already known by the time it's processed.
 function importPriority(filename) {
   const ext = extensionOf(filename)
-  if (ext === '.json') return 0
-  if (ext === '.csv') return 1
+  if (ext === '.csv') return 0
+  if (ext === '.json') return 1
   if (ext === '.cellml' || ext === '.xml') return 2
   return 3
 }
@@ -670,19 +659,10 @@ function sortConfigsFirst(files, getName = (f) => f.name) {
   return [...files].sort((a, b) => importPriority(getName(a)) - importPriority(getName(b)))
 }
 
-// Attempts to parse + stage `rawFile` into `field`. On success, updates
-// readiness/dynamic-fields exactly as a normal single-field upload would.
-// On failure, `cleanupOnFailure` controls whether the (now-invalid) file
-// entry is left visible in that field's box — true for speculative
-// classification guesses the user never targeted, false for a file the
-// user deliberately dropped into this box.
 async function ingestFileIntoField(field, rawFile, { cleanupOnFailure = false, notifyStaging = true } = {}) {
   const filename = rawFile.name
 
   if (field.processUpload === 'cellml' && !validateCellMLFilename(rawFile, { silent: cleanupOnFailure })) {
-    // A speculative guess (cleanupOnFailure) fails quietly so the caller can
-    // keep trying other fields; a direct user selection already raised its
-    // own notification here, so the caller shouldn't notify again.
     return { ok: false, error: null, skip: !cleanupOnFailure }
   }
 
@@ -754,12 +734,6 @@ async function ingestFileIntoField(field, rawFile, { cleanupOnFailure = false, n
     }
     state.warnings = []
 
-    // Our own parsers only ever throw plain `Error` for "this file doesn't
-    // belong here" — that's expected and fine to swallow during speculative
-    // classification. Anything else (TypeError, ReferenceError, ...) means
-    // something downstream is actually broken, not that the file was a bad
-    // guess, and staying silent about that turns a real bug into a
-    // mysteriously "stuck" readiness state. Surface it regardless.
     const isUnexpectedError = error instanceof Error && error.constructor !== Error
     if (isUnexpectedError) {
       console.error(`[ImportDialog] Unexpected error while processing "${filename}" for field "${field.key}":`, error)
@@ -773,18 +747,11 @@ async function ingestFileIntoField(field, rawFile, { cleanupOnFailure = false, n
   }
 }
 
-// Only the standalone per-type dialogs' field configs are reachable via
-// getImportConfig; the processUpload flag that actually triggers staging
-// into stagedFiles is normally only attached by createDynamicFields, once
-// a resource is known to be genuinely missing. Classification runs before
-// that's known, so it needs its own copy of that mapping.
 const PROCESS_UPLOAD_BY_KEY = {
   [IMPORT_KEYS.CELLML_FILE]: 'cellml',
   [IMPORT_KEYS.MODULE_CONFIG]: 'config',
 }
 
-// Which other import field keys are worth guessing for a file that didn't
-// fit the box it was dropped into (or was found while scanning a folder).
 function candidateKeysExcluding(excludeKey) {
   const keys = [IMPORT_KEYS.MODULE_CONFIG, IMPORT_KEYS.CELLML_FILE, IMPORT_KEYS.PARAMETER]
   // Only worth guessing the instance array itself if it hasn't been supplied yet.
@@ -794,17 +761,12 @@ function candidateKeysExcluding(excludeKey) {
   return keys.filter((k) => k !== excludeKey)
 }
 
-// Tries each other known import field in turn until one successfully parses
-// the file, then reveals that field's box (if not already visible) with the
-// file already staged in it. Returns the matched field config, or null.
 async function classifyIntoOtherFields(rawFile, excludeKey) {
   for (const key of candidateKeysExcluding(excludeKey)) {
     const baseCandidateConfig = getImportConfig(key)?.fields?.[0]
     if (!baseCandidateConfig) continue
     if (!acceptsExtension(baseCandidateConfig, rawFile.name)) continue
 
-    // Ensure config/cellml candidates actually get staged into
-    // stagedFiles, not just marked valid in the UI — see comment above.
     const candidateConfig =
       PROCESS_UPLOAD_BY_KEY[key] && !baseCandidateConfig.processUpload
         ? { ...baseCandidateConfig, processUpload: PROCESS_UPLOAD_BY_KEY[key] }
@@ -824,10 +786,6 @@ async function classifyIntoOtherFields(rawFile, excludeKey) {
   return null
 }
 
-// Runs each file through field's own parser first, falling back to
-// cross-field classification if it doesn't fit. Shared by the file input's
-// change event and by drag-and-drop, so both behave identically. Routed
-// through the import lock since it mutates shared staging state.
 async function processIncomingFiles(field, rawFiles) {
   return withImportLock(() => runProcessIncomingFiles(field, rawFiles))
 }
@@ -845,9 +803,6 @@ async function runProcessIncomingFiles(field, rawFiles) {
     if (primary.ok) continue
     if (primary.skip) continue
 
-    // Doesn't fit the box the user dropped it into — maybe it's a companion
-    // file selected in the same trip (e.g. instance array + CellML + config
-    // all chosen together). Try routing it to the field it actually matches.
     const matchedField = await classifyIntoOtherFields(rawFile, field.key)
     if (matchedField) continue
 
@@ -873,9 +828,6 @@ const handleFileChange = async (event, field) => {
   event.target.value = ''
 }
 
-// A file was dropped directly onto a specific field's box — try that field
-// first (folders get expanded and every file inside gets the same
-// treatment, cross-classifying into other fields as needed).
 async function handleFieldDrop(event, field) {
   fieldsDraggedOver.value.delete(field.key)
   if (isLoading.value) return
@@ -895,8 +847,6 @@ async function handleFieldDrop(event, field) {
   )
 }
 
-// A file was dropped anywhere else in the dialog — there's no single field
-// to try first, so classify every file against every known import type.
 async function handleFormDrop(event) {
   formDragCounter = 0
   isDraggingOverForm.value = false
@@ -933,7 +883,6 @@ async function runFormDropClassification(entries) {
 }
 
 // --- Folder-based auto-import ---
-
 async function attemptAutoFillFromFolder() {
   return withImportLock(() => runAutoFillFromFolder())
 }
@@ -966,9 +915,6 @@ async function runAutoFillFromFolder() {
     isScanningFolder.value = false
   }
 
-  // Recurse directly (not through the lock) — staging a config file can
-  // reveal a newly-required CellML component, and this continuation should
-  // run immediately rather than wait behind whatever else queued up.
   if (stagedAny && importReadiness.value && !importReadiness.value.resourcesAreLoaded) {
     await runAutoFillFromFolder()
   } else if (stagedAny) {
