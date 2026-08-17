@@ -250,7 +250,7 @@
                       <template #body="slotProps">
                         <MultiSelect
                           v-model="slotProps.data.variables"
-                          :options="variables"
+                          :options="parameterRows"
                           optionLabel="name"
                           optionValue="name"
                           size="small"
@@ -354,6 +354,7 @@
 <script setup>
 import { ref, computed, watch, onBeforeUnmount, onMounted, onUnmounted, nextTick } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
+import { useDebounceFn } from '@vueuse/core'
 
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
@@ -383,7 +384,7 @@ import { isEditableVariableType, isEmpty } from '../utils/variables'
 import { sanitiseName } from '../utils/nodes'
 import { detachReactivity } from '../utils/reactivity'
 import { notify } from '../utils/notify'
-import { getModelComponentNames, areModelsEquivalent } from '../utils/cellml'
+import { getModelComponentNames, areModelsEquivalent, extractVariablesFromMath } from '../utils/cellml'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -640,8 +641,32 @@ watch(
   }
 )
 
+function reconcileStagedState(newCode) {
+  const extractedVariables = extractVariablesFromMath(newCode)
+  if (!extractedVariables || extractedVariables.length === 0) return
+
+  const currentMap = new Map(parameterRows.value.map((row) => [row.name, row]))
+
+  parameterRows.value = extractedVariables.map((variable) => {
+    const existing = currentMap.get(variable.name)
+
+    return {
+      name: variable.name,
+      units: variable.units,
+      access: variable.access || 'access',
+      value: existing ? existing.value : variable.value ?? '',
+      type: existing ? existing.type : variable.type ?? 'constant',
+    }
+  })
+}
+
+const debouncedReconcile = useDebounceFn((code) => {
+  reconcileStagedState(code)
+}, 300)
+
 function handleCodeUpdate(newCode) {
   currentModel.value = newCode
+  debouncedReconcile(newCode)
 }
 
 function handleEditorReady(canonicalMath) {
