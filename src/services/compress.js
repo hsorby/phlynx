@@ -21,8 +21,9 @@ const blobToBase64 = (blob) => {
 }
 
 export async function createCellMLDataFragment(cellmlBlob, fileName) {
-  const zip = new JSZip()
   const internalName = fileName ? (fileName.endsWith('.cellml') ? fileName : `${fileName}.cellml`) : 'model.cellml'
+
+  const zip = new JSZip()
   zip.file(internalName, cellmlBlob)
 
   const zipBlob = await zip.generateAsync({
