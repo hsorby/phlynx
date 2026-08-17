@@ -397,7 +397,7 @@ const props = defineProps({
   defaultTab: { type: String, default: 'parameters' }, // 'parameters' or 'ports'
 })
 
-const emit = defineEmits(['update:modelValue', 'save'])
+const emit = defineEmits(['update:modelValue', 'confirm'])
 
 const store = useLibraryStore()
 const { trackEvent } = useGtm()
@@ -643,7 +643,9 @@ watch(
 
 function reconcileStagedState(newCode) {
   const extractedVariables = extractVariablesFromMath(newCode)
-  if (!extractedVariables || extractedVariables.length === 0) return
+  if (!extractedVariables) return
+
+  const validVarNames = new Set(extractedVariables.map((v) => v.name))
 
   const currentMap = new Map(parameterRows.value.map((row) => [row.name, row]))
 
@@ -654,8 +656,14 @@ function reconcileStagedState(newCode) {
       name: variable.name,
       units: variable.units,
       access: variable.access || 'access',
-      value: existing ? existing.value : variable.value ?? '',
-      type: existing ? existing.type : variable.type ?? 'constant',
+      value: existing ? existing.value : (variable.value || ''),
+      type: existing ? existing.type : (variable.type || 'constant'),
+    }
+  })
+
+  editablePorts.value.forEach((port) => {
+    if (Array.isArray(port.variables)) {
+      port.variables = port.variables.filter((varName) => validVarNames.has(varName))
     }
   })
 }
