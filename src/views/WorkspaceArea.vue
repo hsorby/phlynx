@@ -169,7 +169,7 @@
           <SplitButton
             text
             size="small"
-            icon="pi pi-file-import"
+            icon="pi pi-upload"
             :model="importMenuItems"
             severity="primary"
             @click="triggerCurrentImport"
@@ -198,7 +198,7 @@
           <SplitButton
             text
             size="small"
-            icon="pi pi-file-export"
+            icon="pi pi-download"
             :model="exportMenuItems"
             severity="primary"
             style="margin-left: 10px"
