@@ -162,6 +162,7 @@ import vTooltip from 'primevue/tooltip'
 
 import { useLibraryProxyStore } from '../stores/libraryProxyStore'
 import { useLibraryStore } from '../stores/libraryStore'
+import { useFlowHistoryStore } from '../stores/historyStore.js'
 import useDragAndDrop from '../composables/useDnD'
 import ModulePreviewDialog from './ModulePreviewDialog.vue'
 
@@ -173,6 +174,8 @@ const emit = defineEmits(['select'])
 
 const view = useLibraryProxyStore()
 const store = useLibraryStore()
+const history = useFlowHistoryStore()
+
 const { onDragStart } = useDragAndDrop()
 
 const filterText = ref('')
@@ -241,6 +244,18 @@ function activeModule(card) {
 }
 
 function deleteModule(card) {
+  const deletedModule = store.availableModules.get(card.moduleRef)
+
+  history.executeAndAddCommand({
+    type: 'remove-module',
+    undo: async () => {
+      store.addModule(deletedModule)
+    },
+    redo: async () => {
+      store.removeModule(deletedModule.moduleRef)
+    },
+  })
+
   store.removeModule(card.moduleRef)
 }
 
