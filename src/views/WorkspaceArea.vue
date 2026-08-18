@@ -529,6 +529,7 @@ import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore.js'
+
 import useDragAndDrop from '../composables/useDnD'
 import { useHandleManagement } from '../composables/useHandleManagement'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
@@ -536,6 +537,9 @@ import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
 import { useColorScheme } from '../composables/useColorScheme'
 import { useGtm } from '../composables/useGtm'
+import { useConfirmDialog } from '../composables/useConfirmDialog'
+import { useImportExport } from '../composables/useImportExport'
+
 import LibraryArea from '../components/LibraryArea.vue'
 import ResizableLibraryPanel from '../components/ResizableLibraryPanel.vue'
 import Workbench from '../components/WorkbenchArea.vue'
@@ -549,16 +553,28 @@ import EdgeConnectionDialog from '../components/EdgeConnectionDialog.vue'
 import SettingsDialog from '../components/SettingsDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
 import PaneContextMenu from '../components/PaneContextMenu.vue'
+import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
+import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
+import PortEditorDialog from '../components/PortEditorDialog.vue'
+import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
+import CreateInspectionModuleDialog from '../components/dialogs/CreateInspectorModule.vue'
+import ContextSidebar from '../components/ContextSidebar.vue'
+import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
+import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
+import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
+import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
+import DustpanBrush from '../components/icons/DustpanBrush.vue'
+
 import { useScreenshot } from '../services/useScreenshot'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { migrateWorkspace } from '../services/workspaceMigrator'
+import { relayoutNodes } from '../services/layouts/physics'
+
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
-import { useConfirmDialog } from '../composables/useConfirmDialog'
-import { useImportExport } from '../composables/useImportExport'
-import { relayoutNodes } from '../services/layouts/physics'
+import { readFileAsText } from '../utils/misc'
 import { initLibCellML, processCellMLData, extractVariablesFromMath } from '../utils/cellml'
 import {
   edgeLineOptions,
@@ -584,17 +600,6 @@ import {
   ensureExtension,
   legacyDownload,
 } from '../utils/save'
-import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
-import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
-import PortEditorDialog from '../components/PortEditorDialog.vue'
-import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
-import CreateInspectionModuleDialog from '../components/dialogs/CreateInspectorModule.vue'
-import ContextSidebar from '../components/ContextSidebar.vue'
-import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
-import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
-import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
-import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
-import DustpanBrush from '../components/icons/DustpanBrush.vue'
 
 const workspaceFileInput = ref(null)
 
@@ -706,17 +711,6 @@ const notifyMultiFileResults = (
     notify.error({ title: failTitle, message: `Failed to load all ${fileWord(failed)}.` })
   }
 }
-
-/**
- * Read a File object as text.
- */
-const readFileAsText = (file) =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (e) => resolve(e.target.result)
-    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`))
-    reader.readAsText(file)
-  })
 
 /**
  * Load an array of CellML entries, each being either a browser File object or a
@@ -2020,7 +2014,6 @@ async function onMacroBuilderGenerate(data) {
 }
 
 async function onSettingsConfirm(data) {
-  console.log('settings updated')
   settingsDialogVisible.value = false
 }
 

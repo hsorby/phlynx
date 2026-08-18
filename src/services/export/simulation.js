@@ -15,7 +15,8 @@
  * @param {object} voiInformation - Information for the VOI (typically the time axis variable).
  * @returns {object} The simulation.json object — JSON.stringify() before writing to the archive.
  */
-export function buildSimulationJson(plotConfig, parameterScan, voiInformation) {
+export function buildSimulationJson(plotConfig, parameterScan, supplementalData) {
+  const voiInformation = supplementalData.voi
   const selections = plotConfig?.selections || []
   const scanSelections = parameterScan?.selections || []
   const timeVariable = { id: formVoiVariableId(voiInformation), name: formVoiVariableName(voiInformation), units: voiInformation.units }
@@ -23,7 +24,7 @@ export function buildSimulationJson(plotConfig, parameterScan, voiInformation) {
   const input = buildInput(scanSelections)
   const data = buildOutputData(selections, timeVariable)
   const plots = buildOutputPlots(plotConfig, selections, timeVariable)
-  const parameters = buildParameters(scanSelections)
+  const parameters = buildParameters(scanSelections, supplementalData.mappedParameters)
 
   return JSON.stringify({
     input,
@@ -119,11 +120,17 @@ function buildOutputPlots(plotConfig, selections, timeVariable) {
 // parameters: node-qualified constant name -> the id used for it in `input`
 // above. Per spec this is simplified to just reuse the constant's own name
 // (rather than inventing a separate short alias, as the example archive does).
-function buildParameters(scanSelections) {
+function buildParameters(scanSelections, mappedParameters) {
   return scanSelections.map((sel) => {
-    const namePrefix = sel.type === 'constant' ? 'parameters' : 'parameters_global'
+    const sourceName = `${sel.nodeName}/${sel.parameterName}`
+    const mapped = mappedParameters[sourceName]
+    if (!mapped) {
+      console.warn(`No mapped parameter found for ${sourceName}. This may indicate a problem with the CellML model or the parameter scan configuration.`)
+    }
+    const parameterName = mapped ? mapped.name : sel.parameterName
+    const componentName = mapped ? mapped.componentName : sel.nodeName
     return {
-      name: `${namePrefix}/${sel.parameterName}`,
+      name: `${componentName}/${parameterName}`,
       value: `id__${sel.nodeName}__${sel.parameterName}`,
     }
   })

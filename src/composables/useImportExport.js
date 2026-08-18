@@ -16,9 +16,10 @@ import OpenCORIcon from '../components/icons/OpenCORIcon.vue'
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
-import { generateFlattenedModel, extractVoiFromBlob } from '../utils/cellml'
 import { createCellMLDataFragment, generateOmexArchive, createOmexDataFragment } from '../services/compress'
 import { generateExportZip } from '../services/export/ca'
+import { generateFlattenedModel, extractVoiAndParametersFromModel } from '../utils/cellml'
+import { readFileAsText } from '../utils/misc'
 
 export function useImportExport({
   libcellml,
@@ -118,7 +119,8 @@ export function useImportExport({
       message: 'Generating OMEX archive for Web OpenCOR.',
       action: async (finalName) => {
         const blob = await generateFlattenedModel(nodes.value, edges.value, libraryStore, inspectionModuleStore.modules)
-        const voiInformation = await extractVoiFromBlob(blob)
+        const rehydratedModel = await readFileAsText(blob)
+        const extractedData = extractVoiAndParametersFromModel(rehydratedModel, parameterScanConfig.value)
         return generateOmexArchive(
           { blob, finalName },
           {
@@ -126,7 +128,7 @@ export function useImportExport({
             plotConfig: plotConfig.value,
             parameterScanConfig: parameterScanConfig.value,
           },
-          { voiInformation }
+          { extractedData }
         )},
       successMessage: async (blob, finalName) => {
         const dataUri = await createOmexDataFragment(blob)

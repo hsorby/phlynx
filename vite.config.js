@@ -84,5 +84,6 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'happy-dom',
+    exclude: ['tests/playwright/**', 'tests/e2e/**'],
   },
 })
