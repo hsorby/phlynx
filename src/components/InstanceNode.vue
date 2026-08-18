@@ -444,6 +444,8 @@ function openContextMenu(event) {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .detail-item {
