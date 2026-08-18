@@ -145,3 +145,83 @@ export function isCornerHandle(handle, allHandles) {
 
   return positionIndex === 0 || positionIndex === n - 1
 }
+
+export function reorganiseHandles(nodes, edges) {
+  const nodeById = new Map(nodes.map((n) => [n.id, n]))
+
+  const centerOf = (node) => ({
+    x: node.position.x + (node.dimensions?.width ?? 0) / 2,
+    y: node.position.y + (node.dimensions?.height ?? 0) / 2,
+  })
+
+  const neighbourCenter = (node, handle) => {
+    const edge = edges.find(
+      (e) => e.sourceHandle === getHandleId(handle) || e.targetHandle === getHandleId(handle)
+    )
+    if (!edge) return null
+    const neighbourId = edge.source === node.id ? edge.target : edge.source
+    const neighbour = nodeById.get(neighbourId)
+    return neighbour ? centerOf(neighbour) : null
+  }
+
+  nodes.forEach((node) => {
+    if (!node.data.handles) return
+    const { x, y } = centerOf(node)
+
+    node.data.handles.forEach((handle) => {
+      if (handle.variant !== HANDLE_VARIANT.DEFAULT) return
+      const nCenter = neighbourCenter(node, handle)
+      if (!nCenter) return
+
+      const dx = nCenter.x - x
+      const dy = nCenter.y - y
+      const newSide = Math.abs(dx) > Math.abs(dy)
+        ? (dx > 0 ? 'right' : 'left')
+        : (dy > 0 ? 'bottom' : 'top')
+
+      if (newSide === handle.side) return
+
+      const ghost = findMostCentralGhostHandle(newSide, node.data.handles)
+      if (ghost) {
+        const oldSide = handle.side
+        ghost.side = oldSide
+        handle.side = newSide
+      } else {
+        console.warn(
+          `[reorganiseHandles] No free "${newSide}" ghost slot to swap with on "${node.data.name}" — bucket sizes will be uneven.`
+        )
+        handle.side = newSide
+      }
+    })
+
+    const sides = { top: [], right: [], bottom: [], left: [] }
+    node.data.handles.forEach((h) => { if (sides[h.side]) sides[h.side].push(h) })
+
+    Object.entries(sides).forEach(([side, handlesOnSide]) => {
+      const isVertical = side === 'left' || side === 'right'
+
+      const active = handlesOnSide
+        .filter((h) => h.variant === HANDLE_VARIANT.DEFAULT)
+        .sort((a, b) => {
+          const ca = neighbourCenter(node, a)
+          const cb = neighbourCenter(node, b)
+          if (!ca || !cb) return 0
+          return isVertical ? ca.y - cb.y : ca.x - cb.x
+        })
+
+      const ghosts = handlesOnSide.filter((h) => h.variant !== HANDLE_VARIANT.DEFAULT)
+
+      const n = handlesOnSide.length
+      const k = active.length
+      const startIdx = Math.max(0, Math.floor((n - k) / 2))
+
+      sides[side] = [
+        ...ghosts.slice(0, startIdx),
+        ...active,
+        ...ghosts.slice(startIdx),
+      ]
+    })
+
+    node.data.handles = [...sides.top, ...sides.right, ...sides.bottom, ...sides.left]
+  })
+}

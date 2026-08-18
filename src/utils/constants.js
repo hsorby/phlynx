@@ -213,9 +213,9 @@ export const OMEX_FILE_TYPES = [
   },
 ]
 
-export const HANDLE_SIDES = ["left", "right", "top", "bottom"]
-export const SOURCE_HANDLE_PRIORITY = ["right", "bottom", "top", "left"]
-export const TARGET_HANDLE_PRIORITY = ["left", "top", "bottom", "right"]
+export const HANDLE_SIDES = ['left', 'right', 'top', 'bottom']
+export const SOURCE_HANDLE_PRIORITY = ['right', 'bottom', 'top', 'left']
+export const TARGET_HANDLE_PRIORITY = ['left', 'top', 'bottom', 'right']
 
 export const BASELINE_SIMULATION_SETTINGS = {
   pointInterval: 0.01,
