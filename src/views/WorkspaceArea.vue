@@ -32,14 +32,16 @@
           <Divider layout="vertical" style="margin: 0 15px" />
 
           <Button
-            icon="pi pi-sparkles"
+            iconOnly
             size="small"
             variant="text"
             severity="warn"
             v-tooltip.bottom="{ value: 'Clean up workspace', showDelay: 300 }"
             @click="handleAutoLayout"
             :disabled="!somethingAvailable"
-          />
+          >
+            <DustpanBrush />
+          </Button>
 
           <Button
             icon="pi pi-eraser"
@@ -83,80 +85,102 @@
             iconOnly
             variant="text"
             severity="secondary"
-            v-tooltip.bottom="{ value: 'Add left handle', showDelay: 300 }"
+            v-tooltip.bottom="{ value: 'Add top handle', showDelay: 300 }"
             :disabled="!somethingSelected"
             @click="addHandle('left')"
           >
-            <AddHandleLeft/>
+            <AddHandleLeft />
           </Button>
 
           <Button
             iconOnly
-            style="margin-left: 10px"
+            style="margin-left: 5px"
             variant="text"
             severity="secondary"
             v-tooltip.bottom="{ value: 'Add top handle', showDelay: 300 }"
             :disabled="!somethingSelected"
             @click="addHandle('top')"
           >
-            <AddHandleTop/>
+            <AddHandleTop />
           </Button>
 
           <Button
             iconOnly
-            style="margin-left: 10px"
+            style="margin-left: 5px"
             variant="text"
             severity="secondary"
             v-tooltip.bottom="{ value: 'Add right handle', showDelay: 300 }"
             :disabled="!somethingSelected"
             @click="addHandle('right')"
           >
-            <AddHandleRight/>
+            <AddHandleRight />
           </Button>
 
           <Button
             iconOnly
-            style="margin-left: 10px"
+            style="margin-left: 5px"
             variant="text"
             severity="secondary"
             v-tooltip.bottom="{ value: 'Add bottom handle', showDelay: 300 }"
             :disabled="!somethingSelected"
             @click="addHandle('bottom')"
           >
-            <AddHandleBottom/>
+            <AddHandleBottom />
           </Button>
 
           <Divider layout="vertical" style="margin: 0 15px" />
 
           <Button
-            label="Macro Build"
+            iconOnly
+            icon="pi pi-hammer"
             size="small"
             variant="text"
             severity="info"
+            v-tooltip.bottom="{ value: 'Open macrobuilder', showDelay: 300 }"
             @click="onOpenMacroBuilderDialog"
+          />
+
+          <Button
+            iconOnly
+            style="margin-left: 10px"
+            icon="pi pi-chart-line"
+            size="small"
+            variant="text"
+            severity="info"
+            :disabled="!somethingAvailable"
+            v-tooltip.bottom="{ value: 'Configure sim. settings', showDelay: 300 }"
+            @click="onOpenSimSettingsDialog"
+          />
+
+          <Button
+            iconOnly
+            style="margin-left: 10px"
+            icon="pi pi-cog"
+            size="small"
+            variant="text"
+            severity="info"
+            v-tooltip.bottom="{ value: 'Adjust settings', showDelay: 300 }"
+            @click="onOpenSettingsDialog"
           />
 
           <Divider layout="vertical" style="margin: 0 15px" />
 
           <!-- Import Dropdown / SplitButton -->
           <SplitButton
-            :label="`Import ${currentImportMode.label}`"
             text
             size="small"
-            :icon="typeof currentImportMode.icon === 'string' ? currentImportMode.icon : undefined"
+            icon="pi pi-file-import"
             :model="importMenuItems"
-            severity="secondary"
+            severity="primary"
             @click="triggerCurrentImport"
             :disabled="currentImportMode.disabled"
-            v-tooltip.bottom="
-              currentImportMode.disabled ? 'The Import option is disabled because CellML library is not ready yet.' : ''
-            "
+            v-tooltip.bottom="{
+              value: currentImportMode.disabled
+                ? 'The Import option is disabled because CellML library is not ready yet.'
+                : `Import ${currentImportMode.label}`,
+              showDelay: 300,
+            }"
           >
-            <!-- Main Button Icon (for custom Vue component icons) -->
-            <template #icon v-if="typeof currentImportMode.icon !== 'string'">
-              <component :is="currentImportMode.icon" class="p-button-icon p-button-icon-left" />
-            </template>
-
             <!-- Dropdown Menu Item Icons -->
             <template #item="{ item, props }">
               <a class="p-menuitem-link" v-ripple v-bind="props.action">
@@ -172,22 +196,22 @@
 
           <!-- Export Dropdown / SplitButton -->
           <SplitButton
-            :label="`Export ${currentExportMode.label}`"
             text
             size="small"
-            :icon="typeof currentExportMode.icon === 'string' ? currentExportMode.icon : undefined"
+            icon="pi pi-file-export"
             :model="exportMenuItems"
-            severity="secondary"
+            severity="primary"
             style="margin-left: 10px"
             @click="triggerCurrentExport"
-            :disabled="!somethingAvailable || currentExportMode.disabled"
-            v-tooltip.bottom="!somethingAvailable || currentExportMode.disabled ? cellMlExportTooltip : ''"
+            :disabled="!somethingAvailable || currentExportDisabled"
+            v-tooltip.bottom="{
+              value:
+                !somethingAvailable || currentExportDisabled
+                  ? cellMlExportTooltip
+                  : `Export ${currentExportMode.label}`,
+              showDelay: 300,
+            }"
           >
-            <!-- Main Button Icon (for custom Vue component icons) -->
-            <template #icon v-if="typeof currentExportMode.icon !== 'string'">
-              <component :is="currentExportMode.icon" class="p-button-icon p-button-icon-left" />
-            </template>
-
             <!-- Dropdown Menu Item Icons -->
             <template #item="{ item, props }">
               <a class="p-menuitem-link" v-ripple v-bind="props.action">
@@ -204,20 +228,21 @@
       </div>
 
       <div class="header-right-actions">
-        <a href="https://github.com/physiomelinks/phlynx/issues/new" style="font-size: 13px;" target="_blank" class="report-link">
+        <a
+          href="https://github.com/physiomelinks/phlynx/issues/new"
+          style="font-size: 13px"
+          target="_blank"
+          class="report-link"
+        >
           Report Issue
         </a>
         <!-- Light / Dark Mode Toggle Slider -->
-        <div 
-          class="theme-slider-container" 
-          style="display: flex; align-items: center; margin-left: 20px; gap: 8px;"
+        <div
+          class="theme-slider-container"
+          style="display: flex; align-items: center; margin-left: 20px; gap: 8px"
           v-tooltip.bottom="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
         >
-          <ToggleSwitch 
-            :model-value="isDarkMode" 
-            @change="toggleDarkMode" 
-            aria-label="Toggle Theme"
-          >
+          <ToggleSwitch :model-value="isDarkMode" @change="toggleDarkMode" aria-label="Toggle Theme">
             <template #handle="{ checked }">
               <i :class="['pi', checked ? 'pi-moon' : 'pi-sun']" style="font-size: 0.75rem"></i>
             </template>
@@ -253,7 +278,7 @@
                 @focus="searchBarFocused = true"
                 @blur="searchBarFocused = false"
               />
-              <InputIcon v-if="searchQuery" class="search-clear-input pi pi-times-circle" @click="clearSearch"/>
+              <InputIcon v-if="searchQuery" class="search-clear-input pi pi-times-circle" @click="clearSearch" />
             </IconField>
           </div>
           <div v-if="searchQuery" class="search-suffix-content">
@@ -420,11 +445,7 @@
     @save="handleParameterSave"
   />
 
-  <SaveDialog
-    v-model="saveDialogVisible"
-    :default-name="libraryStore.lastSaveName"
-    @confirm="onSaveConfirm"
-  />
+  <SaveDialog v-model="saveDialogVisible" :default-name="libraryStore.lastSaveName" @confirm="onSaveConfirm" />
 
   <SaveDialog
     v-model="exportDialogVisible"
@@ -454,6 +475,10 @@
     @edit-node="onOpenPortEditorDialog"
   />
 
+  <SimSettingsDialog v-model="simSettingsDialogVisible" :nodes="nodes" />
+
+  <SettingsDialog v-model="settingsDialogVisible" @confirm="onSettingsConfirm" />
+
   <ImportDialog
     ref="importDialogRef"
     v-model="importDialogVisible"
@@ -461,10 +486,7 @@
     @confirm="onImportConfirm"
   />
 
-  <PaneContextMenu
-    ref="contextMenuRef"
-    :items="contextMenuItems"
-  />
+  <PaneContextMenu ref="contextMenuRef" :items="contextMenuItems" />
 
   <EdgeConnectionDialog
     v-model="edgeConnectionDialogVisible"
@@ -485,7 +507,9 @@ export default {
 
 <script setup>
 import { computed, h, inject, markRaw, nextTick, onMounted, onUnmounted, ref, watch, watchPostEffect } from 'vue'
+import { storeToRefs } from 'pinia'
 import { connectionExists, useVueFlow, VueFlow } from '@vue-flow/core'
+import { useRoute } from 'vue-router'
 
 import Button from 'primevue/button'
 import SplitButton from 'primevue/splitbutton'
@@ -496,14 +520,16 @@ import InputIcon from 'primevue/inputicon'
 import ConfirmDialog from 'primevue/confirmdialog'
 import ToggleSwitch from 'primevue/toggleswitch'
 import { Toast } from 'primevue'
+import { useToast } from 'primevue/usetoast'
 
 import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
-import { useToast } from 'primevue/usetoast'
-import { useRoute } from 'vue-router'
+import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
+import { useInspectionModuleStore } from '../stores/inspectionModuleStore.js'
+
 import useDragAndDrop from '../composables/useDnD'
 import { useHandleManagement } from '../composables/useHandleManagement'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
@@ -511,6 +537,9 @@ import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
 import { useColorScheme } from '../composables/useColorScheme'
 import { useGtm } from '../composables/useGtm'
+import { useConfirmDialog } from '../composables/useConfirmDialog'
+import { useImportExport } from '../composables/useImportExport'
+
 import LibraryArea from '../components/LibraryArea.vue'
 import ResizableLibraryPanel from '../components/ResizableLibraryPanel.vue'
 import Workbench from '../components/WorkbenchArea.vue'
@@ -519,35 +548,40 @@ import ImportDialog from '../components/ImportDialog.vue'
 import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
 import SaveDialog from '../components/SaveDialog.vue'
 import MacroBuilderDialog from '../components/MacroBuilderDialog.vue'
+import SimSettingsDialog from '../components/SimSettingsDialog.vue'
 import EdgeConnectionDialog from '../components/EdgeConnectionDialog.vue'
+import SettingsDialog from '../components/SettingsDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
 import PaneContextMenu from '../components/PaneContextMenu.vue'
+import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
+import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
+import PortEditorDialog from '../components/PortEditorDialog.vue'
+import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
+import CreateInspectionModuleDialog from '../components/dialogs/CreateInspectorModule.vue'
+import ContextSidebar from '../components/ContextSidebar.vue'
+import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
+import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
+import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
+import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
+import DustpanBrush from '../components/icons/DustpanBrush.vue'
+
 import { useScreenshot } from '../services/useScreenshot'
-import { generateExportZip } from '../services/caExport'
-import { createCellMLDataFragment } from '../services/cellml'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { migrateWorkspace } from '../services/workspaceMigrator'
+import { relayoutNodes } from '../services/layouts/physics'
+
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
-import { useConfirmDialog } from '../composables/useConfirmDialog'
-import { relayoutNodes } from '../services/layouts/physics'
-import {
-  generateFlattenedModel,
-  initLibCellML,
-  processCellMLData,
-  extractVariablesFromMath,
-  extractComponentsFromCellmlString,
-} from '../utils/cellml'
+import { readFileAsText } from '../utils/misc'
+import { initLibCellML, processCellMLData, extractVariablesFromMath } from '../utils/cellml'
 import {
   edgeLineOptions,
   CELLML_FILE_TYPES,
   FLOW_IDS,
   IMPORT_KEYS,
-  EXPORT_KEYS,
   JSON_FILE_TYPES,
-  ZIP_FILE_TYPES,
   DEFAULT_FILE_NAME,
   NEW_INSTANCE_MODULE_REF,
   FORMAT_VERSION,
@@ -566,18 +600,6 @@ import {
   ensureExtension,
   legacyDownload,
 } from '../utils/save'
-import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
-import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
-import PortEditorDialog from '../components/PortEditorDialog.vue'
-import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
-import CreateInspectionModuleDialog from '../components/dialogs/CreateInspectorModule.vue'
-import ContextSidebar from '../components/ContextSidebar.vue'
-import CellMLIcon from '../components/icons/CellMLIcon.vue'
-import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
-import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
-import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
-import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
-import { useInspectionModuleStore } from '../stores/inspectionModuleStore.js'
 
 const workspaceFileInput = ref(null)
 
@@ -644,8 +666,7 @@ const {
   revertHandlesForEdge,
   reactivateEdgeHandles,
   revertHandleIfUnused,
-} =
-  useHandleManagement()
+} = useHandleManagement()
 
 const dialogVisible = computed(() => {
   return (
@@ -657,6 +678,8 @@ const dialogVisible = computed(() => {
     exportDialogVisible.value ||
     replacementDialogVisible.value ||
     macroBuilderDialogVisible.value ||
+    simSettingsDialogVisible.value ||
+    settingsDialogVisible.value ||
     edgeConnectionDialogVisible.value ||
     instanceEditorDialogVisible.value ||
     inspectionModuleDialogVisible.value
@@ -688,17 +711,6 @@ const notifyMultiFileResults = (
     notify.error({ title: failTitle, message: `Failed to load all ${fileWord(failed)}.` })
   }
 }
-
-/**
- * Read a File object as text.
- */
-const readFileAsText = (file) =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (e) => resolve(e.target.result)
-    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`))
-    reader.readAsText(file)
-  })
 
 /**
  * Load an array of CellML entries, each being either a browser File object or a
@@ -874,6 +886,7 @@ const onDrop = async (event) => {
 }
 
 const historyStore = useFlowHistoryStore()
+const simulationSettingsStore = useSimulationSettingsStore()
 const { loadFromInstanceArray } = useLoadFromInstanceArray()
 const { loadFromCellML } = useLoadFromCellML()
 const { capture } = useScreenshot()
@@ -897,6 +910,8 @@ const importDialogVisible = ref(false)
 const exportDialogVisible = ref(false)
 const replacementDialogVisible = ref(false)
 const macroBuilderDialogVisible = ref(false)
+const simSettingsDialogVisible = ref(false)
+const settingsDialogVisible = ref(false)
 const edgeConnectionDialogVisible = ref(false)
 const inspectionModuleDialogVisible = ref(false)
 const editingInspectionModule = ref(null)
@@ -914,10 +929,8 @@ const currentEditingNode = ref({
   id: '',
   ports: [],
 })
-const currentImportMode = ref(null)
 const currentImportConfig = ref({})
 
-const currentExportKey = ref(EXPORT_KEYS.CELLML)
 const activeExportNotification = ref(null)
 
 const activeInteractionBuffer = new Map()
@@ -938,85 +951,29 @@ const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
 const somethingSelected = computed(() => getSelectedNodes.value.length > 0)
 
-const importOptions = computed(() => [
-  {
-    key: IMPORT_KEYS.INSTANCE_ARRAY,
-    label: 'Instance Array',
-    icon: 'pi pi-th-large',
-    disabled: false,
-  },
-  {
-    key: IMPORT_KEYS.CELLML_FILE,
-    label: 'CellML File',
-    icon: markRaw(CellMLIcon),
-    disabled: libcellml.status !== 'ready',
-  },
-  {
-    key: IMPORT_KEYS.MODULE_CONFIG,
-    label: 'Module Config',
-    icon: 'pi pi-sliders-v',
-    disabled: libcellml.status !== 'ready',
-  },
-  {
-    key: IMPORT_KEYS.PARAMETER,
-    label: 'Parameters',
-    icon: 'pi pi-sliders-h',
-    disabled: false,
-  },
-])
-currentImportMode.value = importOptions.value[0]
-
-const exportOptions = computed(() => [
-  {
-    key: EXPORT_KEYS.CELLML,
-    label: 'CellML',
-    icon: markRaw(CellMLIcon),
-    suffix: '.cellml',
-    disabled: libcellml.status !== 'ready' || !somethingAvailable.value,
-  },
-  {
-    key: EXPORT_KEYS.CA,
-    label: 'Circulatory Autogen',
-    icon: 'pi pi-box',
-    disabled: !somethingAvailable.value,
-    suffix: '.zip',
-  },
-])
-
-const importMenuItems = computed(() =>
-  importOptions.value.map((opt) => ({
-    label: opt.label,
-    icon: opt.icon,
-    disabled: opt.disabled,
-    command: () => handleImportCommand(opt),
-  }))
-)
-
-const exportMenuItems = computed(() =>
-  exportOptions.value.map((opt) => ({
-    label: opt.label,
-    icon: opt.icon,
-    disabled: opt.disabled,
-    command: () => handleExportCommand(opt),
-  }))
-)
-
-const cellMlExportTooltip = computed(() => {
-  const prefix = 'The CellML export option is disabled because '
-  if (libcellml.status !== 'ready') {
-    return prefix + 'the CellML library is not ready yet. Please wait a moment and try again.'
-  }
-  if (!somethingAvailable.value) {
-    return prefix + 'there is nothing to export. Please add some modules to the workspace first.'
-  }
-  return 'This should not be shown when CellML export is enabled.'
-})
-
-const currentExportMode = computed(() => {
-  // Find the selected option in the current list
-  const found = exportOptions.value.find((opt) => opt.key === currentExportKey.value)
-  // Fallback to the first option if nothing is found
-  return found || exportOptions.value[0]
+const {
+  currentImportMode,
+  currentExportKey,
+  importMenuItems,
+  exportMenuItems,
+  cellMlExportTooltip,
+  currentExportMode,
+  currentExportDisabled,
+  triggerCurrentImport,
+  triggerCurrentExport,
+  handleImportCommand,
+  handleExportCommand,
+} = useImportExport({
+  libcellml,
+  somethingAvailable,
+  nodes,
+  edges,
+  importDialogVisible,
+  exportDialogVisible,
+  currentImportConfig,
+  getImportConfig,
+  getFileHandle,
+  onExportConfirm,
 })
 
 onConnectEnd(() => {
@@ -1030,18 +987,12 @@ onConnect(async (connection) => {
   if (!sourceNode || !targetNode) return
   if (sourceNode === targetNode) return
 
-  const duplicate = edges.value.find(
-    (e) => e.source === connection.source && e.target === connection.target
-  )
+  const duplicate = edges.value.find((e) => e.source === connection.source && e.target === connection.target)
 
   const duplicateSnapshot = duplicate ? detachReactivity(duplicate) : null
 
-  const sourceHandleUid = connection.sourceHandle
-    ? getHandleUidFromHandleId(connection.sourceHandle)
-    : null
-  const targetHandleUid = connection.targetHandle
-    ? getHandleUidFromHandleId(connection.targetHandle)
-    : null
+  const sourceHandleUid = connection.sourceHandle ? getHandleUidFromHandleId(connection.sourceHandle) : null
+  const targetHandleUid = connection.targetHandle ? getHandleUidFromHandleId(connection.targetHandle) : null
 
   confirmActivation()
 
@@ -1527,9 +1478,7 @@ const onEdgeChange = (changes) => {
     historyStore.addCommand({
       undo: () => {
         removeEdges(idsToRemove)
-        edgesToRestore.forEach((edge) =>
-          revertHandlesForEdge(edge, idsToRemove, { trackHistory: false })
-        )
+        edgesToRestore.forEach((edge) => revertHandlesForEdge(edge, idsToRemove, { trackHistory: false }))
       },
       redo: () => {
         addEdges(edgesToRestore)
@@ -1542,8 +1491,8 @@ const onEdgeChange = (changes) => {
     const edgesToRestore = removeChanges.map((change) => change.edge)
     const idsToRemove = removeChanges.map((change) => change.edge.id)
 
-    // Ghost out any handle that no longer has an edge attached to it. 
-    // excludeEdgeIds is passed because edges.value hasn't actually 
+    // Ghost out any handle that no longer has an edge attached to it.
+    // excludeEdgeIds is passed because edges.value hasn't actually
     // dropped these ids yet at this point.
     edgesToRestore.forEach((edge) => revertHandlesForEdge(edge, idsToRemove))
 
@@ -1554,9 +1503,7 @@ const onEdgeChange = (changes) => {
       },
       redo: () => {
         removeEdges(idsToRemove)
-        edgesToRestore.forEach((edge) =>
-          revertHandlesForEdge(edge, idsToRemove, { trackHistory: false })
-        )
+        edgesToRestore.forEach((edge) => revertHandlesForEdge(edge, idsToRemove, { trackHistory: false }))
       },
     })
   }
@@ -1772,23 +1719,6 @@ const loadConfigData = async (content, filename, { notify: shouldNotify = true }
   }
 }
 
-const performImport = (mode) => {
-  currentImportConfig.value = getImportConfig(mode.key)
-
-  if (currentImportConfig.value) {
-    importDialogVisible.value = true
-  }
-}
-
-const triggerCurrentImport = () => {
-  performImport(currentImportMode.value)
-}
-
-const handleImportCommand = (option) => {
-  currentImportMode.value = option
-  performImport(option)
-}
-
 async function onImportConfirm(importPayload, updateProgress) {
   if (currentImportMode.value.key === IMPORT_KEYS.INSTANCE_ARRAY) {
     const instanceArrayFiles = importPayload.get(IMPORT_KEYS.INSTANCE_ARRAY)
@@ -1861,31 +1791,6 @@ async function onImportConfirm(importPayload, updateProgress) {
   }
 }
 
-const performExport = async () => {
-  currentExportKey.value = currentExportMode.value.key
-
-  const baseName = libraryStore.lastExportName || DEFAULT_FILE_NAME
-  const fileTypes = currentExportKey.value === EXPORT_KEYS.CELLML ? CELLML_FILE_TYPES : ZIP_FILE_TYPES
-
-  // Get handle first
-  const result = await getFileHandle(baseName, fileTypes, currentExportMode.value.suffix)
-  if (result.success && result.handle) {
-    onExportConfirm(result.cleanName, result.handle)
-  } else if (result.needsLegacyDialog) {
-    // Show custom dialog for legacy browsers
-    exportDialogVisible.value = true
-  }
-}
-
-const triggerCurrentExport = () => {
-  performExport()
-}
-
-const handleExportCommand = (option) => {
-  currentExportKey.value = option.key
-  performExport(option)
-}
-
 function onOpenPortEditorDialog(eventPayload) {
   currentEditingNode.value = {
     ...eventPayload,
@@ -1913,6 +1818,18 @@ function onOpenInstanceEditorDialog(eventPayload, tab = 'parameters') {
   }
   instanceEditorDefaultTab.value = tab
   instanceEditorDialogVisible.value = true
+}
+
+function onOpenMacroBuilderDialog() {
+  macroBuilderDialogVisible.value = true
+}
+
+function onOpenSimSettingsDialog() {
+  simSettingsDialogVisible.value = true
+}
+
+function onOpenSettingsDialog() {
+  settingsDialogVisible.value = true
 }
 
 function filterConfig(config, validPortNames, validVariableNames, updatedModule) {
@@ -2019,10 +1936,6 @@ async function handleParameterSave(saveData) {
   updateNodeData(id, { variables })
 }
 
-function onOpenMacroBuilderDialog() {
-  macroBuilderDialogVisible.value = true
-}
-
 /**
  * Recomputes couplings on every edge touching a given node, using the node's
  * current ports. Call this after any operation that changes ports on
@@ -2078,10 +1991,10 @@ async function onInstanceEditConfirm(updatedData) {
     updateAll: updatedData.updateAll,
     mathRef: updatedData.mathRef,
     math: updatedData.math,
-    siblings: updatedData.siblings
+    siblings: updatedData.siblings,
   }
 
-  updateNodeData(updatedData.id, {name: updatedData.name, variables: updatedData.variables, ports: updatedData.ports})
+  updateNodeData(updatedData.id, { name: updatedData.name, variables: updatedData.variables, ports: updatedData.ports })
   await handleCellMLSave(saveData)
 }
 
@@ -2098,6 +2011,10 @@ const nodeRefs = ref({})
 async function onMacroBuilderGenerate(data) {
   handleMacroGeneration(data)
   macroBuilderDialogVisible.value = false
+}
+
+async function onSettingsConfirm(data) {
+  settingsDialogVisible.value = false
 }
 
 function handleMacroGeneration(macroPayload) {
@@ -2345,51 +2262,37 @@ async function onExportConfirm(fileName, handle) {
     activeExportNotification.value = null
   }
 
-  const caExport = currentExportMode.value.key === EXPORT_KEYS.CA
-  const message = caExport ? 'Generating and zipping CA files.' : 'Generating flattened CellML model.'
+  const exportMode = currentExportMode.value
+
   const notification = notify.info({
     title: 'Exporting...',
-    message: message,
+    message: exportMode.message,
     duration: 0,
   })
 
   try {
     const finalName = fileName || libraryStore.lastExportName || DEFAULT_FILE_NAME
 
-    const blob = caExport
-      ? await generateExportZip(finalName, nodes.value, edges.value, libraryStore)
-      : generateFlattenedModel(nodes.value, edges.value, libraryStore, inspectionModuleStore.modules)
+    if (!exportMode.action) {
+      throw new Error(`The ${exportMode.label} export isn't implemented yet.`)
+    }
 
-    const result = await saveWithDialog(blob, handle, finalName, currentExportMode.value.suffix)
+    const blob = await exportMode.action(finalName)
+
+    const result = await saveWithDialog(blob, handle, finalName, exportMode.suffix)
 
     libraryStore.setLastExportName(result.savedName)
     notification.close()
 
-    let exportMessage = ''
-    if (caExport) {
-      exportMessage = 'Circulatory Autogen export zip generated.'
-    } else {
-      const dataUri = await createCellMLDataFragment(blob, finalName)
-      exportMessage = h('div', null, [
-        'Model exported to CellML. Open this model directly in ',
-        h(
-          'a',
-          {
-            href: `https://opencor.ws/app/?opencor://openFile/#${dataUri}`,
-            rel: 'noopener noreferrer',
-            style: { color: 'var(--p-primary-color)', fontWeight: 'bold' },
-            target: '_blank',
-          },
-          'OpenCOR'
-        ),
-      ])
-    }
+    const exportMessage = exportMode.successMessage
+      ? await exportMode.successMessage(blob, finalName)
+      : `${exportMode.label} export generated.`
 
     trackEvent('export_action', {
       category: 'Export',
       action: 'export_model',
       label: `File: ${finalName}`,
-      file_type: currentExportMode.value.key,
+      file_type: exportMode.key,
     })
 
     activeExportNotification.value = notify.success({
@@ -2403,7 +2306,7 @@ async function onExportConfirm(fileName, handle) {
       category: 'Export',
       action: 'export_model',
       label: `Error: ${error.message}`,
-      file_type: currentExportMode.value.key,
+      file_type: exportMode.key,
     })
 
     notify.error({ title: 'Export failed', message: `${error.message}` })
@@ -2469,6 +2372,7 @@ function createSaveBlob() {
     },
     flow: toObject(),
     store: libraryStore.getState(),
+    simulation: simulationSettingsStore.getState(),
     inspectionModules: inspectionModuleStore.getState(),
   }
 
@@ -2524,6 +2428,7 @@ function handleLoadWorkspace(event) {
 
       // Restore Pinia store state.
       libraryStore.loadState(migratedState.store)
+      simulationSettingsStore.loadState(migratedState.simulation)
       inspectionModuleStore.loadState(migratedState.inspectionModules)
 
       trackEvent('workflow_load_action', {
@@ -2801,12 +2706,12 @@ const handleKeyDown = (event) => {
     handleRedo()
   }
 
-  if (isCtrl && event.key.toLowerCase() === 'e' && !currentExportMode.disabled) {
+  if (isCtrl && event.key.toLowerCase() === 'e' && !currentExportDisabled.value) {
     event.preventDefault()
     triggerCurrentExport()
   }
 
-  if (isCtrl && event.key.toLowerCase() === 'i' && !currentImportMode.disabled) {
+  if (isCtrl && event.key.toLowerCase() === 'i' && !currentImportMode.value.disabled) {
     event.preventDefault()
     triggerCurrentImport()
   }
@@ -2865,10 +2770,7 @@ const moduleConfigs = import.meta.glob('../assets/module_configs/*.json', {
   eager: true,
 })
 
-onMounted(async () => {
-  document.addEventListener('keydown', handleKeyDown)
-  document.addEventListener('mousemove', onMouseMove)
-
+const hydrateCellmlAndDependents = async () => {
   // Load the manifest and the libCellML WebAssembly module.
   const [manifest, instance] = await Promise.all([loadManifest(), libcellmlReadyPromise])
   initLibCellML(instance)
@@ -2945,6 +2847,17 @@ onMounted(async () => {
   for (const [path, content] of Object.entries(moduleConfigs)) {
     libraryStore.addConfigFile(path.split('/').pop(), content.default)
   }
+
+  return manifest
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeyDown)
+  document.addEventListener('mousemove', onMouseMove)
+
+  void hydrateCellmlAndDependents().catch((error) => {
+    console.error('Failed to initialize libCellML resources in background:', error)
+  })
 })
 
 const onMouseMove = (event) => {
