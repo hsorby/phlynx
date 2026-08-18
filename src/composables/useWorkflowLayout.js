@@ -5,6 +5,7 @@ import { useFlowHistoryStore } from '../stores/historyStore'
 import { runFcoseLayout } from '../services/layouts/cytoscape'
 import { runRescaleLayout } from '../services/layouts/rescale'
 import { notify } from '../utils/notify'
+import { reorganiseHandles } from '../utils/handles'
 
 export function useWorkflowLayout() {
   const { onNodesInitialized, addEdges, updateNodeInternals, fitView } = useVueFlow()
@@ -42,11 +43,10 @@ export function useWorkflowLayout() {
         runRescaleLayout(initializedNodes)
       } else {
         await runFcoseLayout(initializedNodes, pendingEdges)
+        reorganiseHandles(initializedNodes, pendingEdges)
       }
 
       await nextTick()
-
-      // Handles may have moved from initial positions
       updateNodeInternals(initializedNodes.map((n) => n.id))
 
       if (callback) callback(initializedNodes.length, initializedNodes.length, 'Connecting nodes...')
