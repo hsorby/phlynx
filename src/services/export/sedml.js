@@ -31,21 +31,3 @@ export function generateSedmlData(simData) {
   </listOfTasks>
 </sedML>`
 }
-
-// return
-
-// const mathML = `<math xmlns="http://www.w3.org/1998/Math/MathML" xmlns:cellml="http://www.cellml.org/cellml/2.0#">
-//       <apply>
-//         <eq/>
-//         <ci>${outNewName}</ci>
-//         <apply>
-//           <plus/>
-//           <apply>
-//             <times/>
-//             <cn cellml:units="dimensionless">${scale}</cn>
-//             <ci>${inNewName}</ci>
-//           </apply>
-//           <cn cellml:units="${outUnitName}">${offset}</cn>
-//         </apply>
-//       </apply>
-//     </math>`
