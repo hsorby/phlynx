@@ -164,6 +164,11 @@ export const IMPORT_KEYS = {
   OMEX: 'omex',
 }
 
+export const SEND_KEYS = {
+  OPENCOR: 'OpenCOR',
+  CUFLYNX: 'CUFLynx',
+}
+
 export const IMPORT_LABELS = {
   INSTANCE_ARRAY: 'Instance Array (.csv)',
   MODULE_CONFIG: 'Module Configurations (.json)',
