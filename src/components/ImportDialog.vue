@@ -337,13 +337,27 @@ function resetAllDragState() {
   fieldsDraggedOver.value = new Set()
 }
 
+const blockOutsideDrop = (e) => {
+  const isMask = e.target.classList.contains('p-dialog-mask')
+  const insideContent = e.target.closest('.p-dialog')
+  if (isMask || !insideContent) {
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'none'
+  }
+}
+
 onMounted(() => {
   restoreFolder()
   window.addEventListener('dragend', resetAllDragState)
+  window.addEventListener('dragover', blockOutsideDrop)
+  window.addEventListener('drop', blockOutsideDrop)
 })
 
 onUnmounted(() => {
   window.removeEventListener('dragend', resetAllDragState)
+  window.removeEventListener('dragover', blockOutsideDrop)
+  window.removeEventListener('drop', blockOutsideDrop)
 })
 
 const isInstanceArrayImport = computed(() =>
