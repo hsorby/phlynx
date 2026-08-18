@@ -389,7 +389,8 @@ function openContextMenu(event) {
 }
 
 .instance-node {
-  display: block;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
   min-width: 200px;
@@ -399,8 +400,8 @@ function openContextMenu(event) {
 }
 
 .instance-card {
-  width: 100%;
-  height: 100%;
+  flex: 1 1 auto; 
+  min-height: 0;   
   margin: 0;
   border-radius: 10px;
   box-sizing: border-box;
