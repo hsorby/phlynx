@@ -8,11 +8,14 @@ import {
   OMEX_FILE_TYPES,
   IMPORT_KEYS,
   EXPORT_KEYS,
+  SEND_KEYS,
 } from '../utils/constants'
 
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
 import CUFLynxIcon from '../components/icons/CUFLynxIcon.vue'
 import OpenCORIcon from '../components/icons/OpenCORIcon.vue'
+import CombineIcon from '../components/icons/CombineIcon.vue'
+
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
@@ -21,7 +24,7 @@ import { generateExportZip } from '../services/export/ca'
 import { generateFlattenedModel, extractVoiAndParametersFromModel } from '../utils/cellml'
 import { readFileAsText } from '../utils/misc'
 
-export function useImportExport({
+export function useImportExportSend({
   libcellml,
   somethingAvailable,
   nodes,
@@ -37,8 +40,9 @@ export function useImportExport({
   const libraryStore = useLibraryStore()
   const inspectionModuleStore = useInspectionModuleStore()
 
-  const currentImportMode = ref(null)
+  const currentImportKey = ref(IMPORT_KEYS.INSTANCE_ARRAY)
   const currentExportKey = ref(EXPORT_KEYS.CELLML)
+  const currentSendKey = ref(SEND_KEYS.OPENCOR)
 
   const { simulationSettings, plotConfig, parameterScanConfig } = storeToRefs(simulationSettingsStore)
 
@@ -52,7 +56,7 @@ export function useImportExport({
     {
       key: IMPORT_KEYS.CELLML_FILE,
       label: 'CellML File',
-      icon: markRaw(CellMLIcon),
+      icon: CellMLIcon,
       disabled: libcellml.status !== 'ready',
     },
     {
@@ -67,16 +71,24 @@ export function useImportExport({
       icon: 'pi pi-sliders-h',
       disabled: false,
     },
+    {
+      key: IMPORT_KEYS.OMEX,
+      label: 'COMBINE Archive',
+      icon: CombineIcon,
+      disabled: libcellml.status !== 'ready',
+    },
   ])
 
-  currentImportMode.value = importOptions.value[0]
+  const currentImportMode = computed(
+    () => importOptions.value.find((option) => option.key === currentImportKey.value) ?? importOptions.value[0] ?? null
+  )
 
   const exportOptions = computed(() => [
     {
       key: EXPORT_KEYS.CELLML,
       label: 'CellML',
-      icon: markRaw(CellMLIcon),
-      disabled: libcellml.status !== 'ready' || !somethingAvailable.value,
+      icon: CellMLIcon,
+      disabled: libcellml.status !== 'ready',
       suffix: '.cellml',
       fileTypes: CELLML_FILE_TYPES,
       message: 'Generating flattened CellML model.',
@@ -102,7 +114,7 @@ export function useImportExport({
       key: EXPORT_KEYS.CA,
       label: 'Circulatory Autogen',
       icon: 'pi pi-box',
-      disabled: !somethingAvailable.value,
+      disabled: false,
       suffix: '.zip',
       fileTypes: ZIP_FILE_TYPES,
       message: 'Generating and zipping CA files.',
@@ -112,8 +124,8 @@ export function useImportExport({
     {
       key: EXPORT_KEYS.OMEX,
       label: 'OpenCOR',
-      icon: markRaw(OpenCORIcon),
-      disabled: libcellml.status !== 'ready' || !somethingAvailable.value,
+      icon: OpenCORIcon,
+      disabled: libcellml.status !== 'ready',
       suffix: '.omex',
       fileTypes: OMEX_FILE_TYPES,
       message: 'Generating OMEX archive for Web OpenCOR.',
@@ -129,7 +141,8 @@ export function useImportExport({
             parameterScanConfig: parameterScanConfig.value,
           },
           { extractedData }
-        )},
+        )
+      },
       successMessage: async (blob, finalName) => {
         const dataUri = await createOmexDataFragment(blob)
         return h('div', null, [
@@ -158,12 +171,46 @@ export function useImportExport({
     },
   ])
 
+  const currentExportMode = computed(
+    () => exportOptions.value.find((option) => option.key === currentExportKey.value) ?? exportOptions.value[0] ?? null
+  )
+
+  const sendOptions = computed(() => [
+    {
+      key: SEND_KEYS.OPENCOR,
+      label: 'OpenCOR',
+      icon: OpenCORIcon,
+      disabled: libcellml.status !== 'ready',
+      suffix: '.omex',
+      fileTypes: OMEX_FILE_TYPES,
+      message: 'Generating OMEX archive for Web OpenCOR.',
+      action: async (finalName) => {
+        const blob = await generateFlattenedModel(nodes.value, edges.value, libraryStore, inspectionModuleStore.modules)
+        const rehydratedModel = await readFileAsText(blob)
+        const extractedData = extractVoiAndParametersFromModel(rehydratedModel, parameterScanConfig.value)
+        return generateOmexArchive(
+          { blob, finalName },
+          {
+            simulationSettings: simulationSettings.value,
+            plotConfig: plotConfig.value,
+            parameterScanConfig: parameterScanConfig.value,
+          },
+          { extractedData }
+        )
+      },
+    },
+  ])
+
+  const currentSendMode = computed(
+    () => sendOptions.value.find((option) => option.key === currentSendKey.value) ?? sendOptions.value[0] ?? null
+  )
+
   const importMenuItems = computed(() =>
     importOptions.value.map((opt) => ({
       label: opt.label,
       icon: opt.icon,
       disabled: opt.disabled,
-      command: () => handleImportCommand(opt),
+      command: () => performImport(opt),
     }))
   )
 
@@ -172,29 +219,41 @@ export function useImportExport({
       label: opt.label,
       icon: opt.icon,
       disabled: opt.disabled || !opt.action,
-      command: () => handleExportCommand(opt),
+      command: () => {
+        currentExportKey.value = opt.key
+        performExport(opt)
+      },
     }))
   )
 
-  const cellMlExportTooltip = computed(() => {
-    const prefix = 'The CellML export option is disabled because '
-    if (libcellml.status !== 'ready') {
-      return prefix + 'the CellML library is not ready yet. Please wait a moment and try again.'
-    }
-    if (!somethingAvailable.value) {
-      return prefix + 'there is nothing to export. Please add some modules to the workspace first.'
-    }
-    return 'This should not be shown when CellML export is enabled.'
-  })
+  const sendMenuItems = computed(() =>
+    sendOptions.value.map((opt) => ({
+      label: opt.label,
+      icon: opt.icon,
+      disabled: opt.disabled || !opt.action,
+      command: () => {
+        currentSendKey.value = opt.key
+        performSend(opt)
+      },
+    }))
+  )
 
-  const currentExportMode = computed(() => {
-    const found = exportOptions.value.find((opt) => opt.key === currentExportKey.value)
-    return found || exportOptions.value[0]
-  })
+  const currentExportDisabled = computed(() => !currentExportMode.value || currentExportMode.value.disabled)
 
-  const currentExportDisabled = computed(() => currentExportMode.value.disabled || !currentExportMode.value.action)
+  const currentImportDisabled = computed(() => !currentImportMode.value || currentImportMode.value.disabled)
+
+  const currentSendDisabled = computed(() => !currentSendMode.value || currentSendMode.value.disabled)
+
+  const triggerCurrentImport = () => {
+    performImport(currentImportMode.value)
+  }
+
+  const triggerCurrentSend = () => {
+    performSend(currentSendMode.value)
+  }
 
   const performImport = (mode) => {
+    currentImportKey.value = mode.key
     currentImportConfig.value = getImportConfig(mode.key)
 
     if (currentImportConfig.value) {
@@ -202,19 +261,7 @@ export function useImportExport({
     }
   }
 
-  const triggerCurrentImport = () => {
-    performImport(currentImportMode.value)
-  }
-
-  const handleImportCommand = (option) => {
-    currentImportMode.value = option
-    performImport(option)
-  }
-
-  const performExport = async (modeOverride = currentExportMode.value) => {
-    const mode = modeOverride || currentExportMode.value
-    currentExportKey.value = mode.key
-
+  const performExport = async (mode) => {
     const baseName = libraryStore.lastExportName || DEFAULT_FILE_NAME
     const fileTypes = mode.fileTypes || ZIP_FILE_TYPES
 
@@ -226,30 +273,37 @@ export function useImportExport({
     }
   }
 
-  const triggerCurrentExport = () => {
-    performExport(currentExportMode.value)
+  const performSend = async (mode) => {
+    const baseName = libraryStore.lastExportName || DEFAULT_FILE_NAME
+    const fileTypes = mode.fileTypes || ZIP_FILE_TYPES
+
+    console.log('Performing send with mode:', mode.key, 'baseName:', baseName, 'fileTypes:', fileTypes)
+    const blob = await mode.action(baseName)
+    const dataUri = await createOmexDataFragment(blob)
+    // Open the generated OMEX archive in Web OpenCOR
+    // This needs to change to support other send modes in the future, but for now we only have OpenCOR.
+    const url = `https://opencor.ws/app/?opencor://openFile/#${dataUri}`
+    window.open(url, '_blank', 'noreferrer')
   }
 
-  const handleExportCommand = (option) => {
-    const mode = exportOptions.value.find((opt) => opt.key === option.key) || option
-    performExport(mode)
+  const triggerCurrentExport = () => {
+    if (currentExportMode.value) {
+      performExport(currentExportMode.value)
+    }
   }
 
   return {
-    currentImportMode,
-    currentExportKey,
-    importOptions,
-    exportOptions,
-    importMenuItems,
-    exportMenuItems,
-    cellMlExportTooltip,
     currentExportMode,
+    currentImportMode,
+    currentSendMode,
+    exportMenuItems,
+    importMenuItems,
+    sendMenuItems,
     currentExportDisabled,
-    triggerCurrentImport,
+    currentImportDisabled,
+    currentSendDisabled,
     triggerCurrentExport,
-    handleImportCommand,
-    handleExportCommand,
-    performImport,
-    performExport,
+    triggerCurrentImport,
+    triggerCurrentSend,
   }
 }
