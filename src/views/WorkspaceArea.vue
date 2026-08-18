@@ -561,7 +561,7 @@ import { parseCellMLConnections } from '../services/import/parseCellmlConnection
 import { useColorScheme } from '../composables/useColorScheme'
 import { useGtm } from '../composables/useGtm'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
-import { useImportExport } from '../composables/useImportExport'
+import { useImportExportSend } from '../composables/useImportExportSend.js'
 
 import LibraryArea from '../components/LibraryArea.vue'
 import ResizableLibraryPanel from '../components/ResizableLibraryPanel.vue'
@@ -986,7 +986,7 @@ const {
   triggerCurrentExport,
   triggerCurrentImport,
   triggerCurrentSend,
-} = useImportExport({
+} = useImportExportSend({
   libcellml,
   somethingAvailable,
   nodes,

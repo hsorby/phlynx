@@ -24,7 +24,7 @@ import { generateExportZip } from '../services/export/ca'
 import { generateFlattenedModel, extractVoiAndParametersFromModel } from '../utils/cellml'
 import { readFileAsText } from '../utils/misc'
 
-export function useImportExport({
+export function useImportExportSend({
   libcellml,
   somethingAvailable,
   nodes,
