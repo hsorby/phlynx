@@ -240,9 +240,7 @@ export function useImportExport({
 
   const currentExportDisabled = computed(() => !currentExportMode.value || currentExportMode.value.disabled)
 
-  const currentSendDisabled = computed(() => {
-    return !currentSendMode.value || currentSendMode.value.disabled || !currentSendMode.value.action
-  })
+  const currentSendDisabled = computed(() => !currentSendMode.value || currentSendMode.value.disabled)
 
   const triggerCurrentImport = () => {
     performImport(currentImportMode.value)
@@ -277,12 +275,13 @@ export function useImportExport({
     const baseName = libraryStore.lastExportName || DEFAULT_FILE_NAME
     const fileTypes = mode.fileTypes || ZIP_FILE_TYPES
 
-    const result = await getFileHandle(baseName, fileTypes, mode.suffix)
-    if (result.success && result.handle) {
-      onExportConfirm(result.cleanName, result.handle)
-    } else if (result.needsLegacyDialog) {
-      exportDialogVisible.value = true
-    }
+    console.log('Performing send with mode:', mode.key, 'baseName:', baseName, 'fileTypes:', fileTypes)
+    const blob = await mode.action(baseName)
+    const dataUri = await createOmexDataFragment(blob)
+    // Open the generated OMEX archive in Web OpenCOR
+    // This needs to change to support other send modes in the future, but for now we only have OpenCOR.
+    const url = `https://opencor.ws/app/?opencor://openFile/#${dataUri}`
+    window.open(url, '_blank', 'noreferrer')
   }
 
   const triggerCurrentExport = () => {
