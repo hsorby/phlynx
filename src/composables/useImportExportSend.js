@@ -56,7 +56,7 @@ export function useImportExportSend({
     {
       key: IMPORT_KEYS.CELLML_FILE,
       label: 'CellML File',
-      icon: markRaw(CellMLIcon),
+      icon: CellMLIcon,
       disabled: libcellml.status !== 'ready',
     },
     {
@@ -87,7 +87,7 @@ export function useImportExportSend({
     {
       key: EXPORT_KEYS.CELLML,
       label: 'CellML',
-      icon: markRaw(CellMLIcon),
+      icon: CellMLIcon,
       disabled: libcellml.status !== 'ready',
       suffix: '.cellml',
       fileTypes: CELLML_FILE_TYPES,
@@ -124,7 +124,7 @@ export function useImportExportSend({
     {
       key: EXPORT_KEYS.OMEX,
       label: 'OpenCOR',
-      icon: markRaw(OpenCORIcon),
+      icon: OpenCORIcon,
       disabled: libcellml.status !== 'ready',
       suffix: '.omex',
       fileTypes: OMEX_FILE_TYPES,
@@ -179,7 +179,7 @@ export function useImportExportSend({
     {
       key: SEND_KEYS.OPENCOR,
       label: 'OpenCOR',
-      icon: markRaw(OpenCORIcon),
+      icon: OpenCORIcon,
       disabled: libcellml.status !== 'ready',
       suffix: '.omex',
       fileTypes: OMEX_FILE_TYPES,
@@ -240,6 +240,8 @@ export function useImportExportSend({
 
   const currentExportDisabled = computed(() => !currentExportMode.value || currentExportMode.value.disabled)
 
+  const currentImportDisabled = computed(() => !currentImportMode.value || currentImportMode.value.disabled)
+
   const currentSendDisabled = computed(() => !currentSendMode.value || currentSendMode.value.disabled)
 
   const triggerCurrentImport = () => {
@@ -298,6 +300,7 @@ export function useImportExportSend({
     importMenuItems,
     sendMenuItems,
     currentExportDisabled,
+    currentImportDisabled,
     currentSendDisabled,
     triggerCurrentExport,
     triggerCurrentImport,

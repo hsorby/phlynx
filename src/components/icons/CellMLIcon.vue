@@ -1,3 +1,12 @@
+<script>
+import BaseIcon from '@primevue/icons/baseicon'
+
+export default {
+  name: 'CellMLIcon',
+  extends: BaseIcon,
+}
+</script>
+
 <template>
   <svg
     xmlns="http://www.w3.org/2000/svg"
