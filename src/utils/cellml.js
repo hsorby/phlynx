@@ -1543,7 +1543,7 @@ export function extractVoiAndParametersFromModel(modelString, parameterInfo) {
     const voi = analyserModel.voi()
     garbageCollector.add(voi)
 
-    for (const param of parameterInfo.selections) {
+    for (const param of parameterInfo?.selections || []) {
       const paramComp = model.componentByName(param.nodeName, true)
       garbageCollector.add(paramComp)
       if (paramComp) {
