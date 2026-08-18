@@ -61,9 +61,9 @@
                     <div class="mlc__card-header">
                       <Button
                         v-if="activeModule(card).moduleRef !== 'new_module:phlynx'"
-                        icon="pi pi-times-circle"
-                        severity="secondary"
-                        iconOnly
+                        icon="pi pi-trash"
+                        severity="danger"
+                        text
                         rounded
                         size="small"
                         class="mlc__preview-btn"
