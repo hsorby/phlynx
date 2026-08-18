@@ -13,6 +13,8 @@ import {
 import CellMLIcon from '../components/icons/CellMLIcon.vue'
 import CUFLynxIcon from '../components/icons/CUFLynxIcon.vue'
 import OpenCORIcon from '../components/icons/OpenCORIcon.vue'
+import CombineIcon from '../components/icons/CombineIcon.vue'
+
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
@@ -70,7 +72,7 @@ export function useImportExport({
     {
       key: IMPORT_KEYS.OMEX,
       label: 'COMBINE Archive',
-      icon: 'pi pi-box',
+      icon: CombineIcon,
       disabled: libcellml.status !== 'ready',
     },
   ])
