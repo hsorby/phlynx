@@ -12,6 +12,17 @@
     <div :class="[domainTypeClass, 'instance-card']">
       <!-- Top Actions Row -->
       <div class="card-header-actions">
+        <div class="instance-details">
+          <div class="detail-item">
+            <i class="pi pi-box detail-icon"></i>
+            <span class="detail-value">{{ componentName }}</span>
+          </div>
+          <div class="detail-item">
+            <i class="pi pi-file detail-icon"></i>
+            <span class="detail-value">{{ mathFile }}</span>
+          </div>
+        </div>
+        <div style="flex-grow: 1; min-width: 1.5em;"></div> <!-- Spacer to push buttons to the right -->
         <div v-if="isMissingParameters" class="status-indicator">
           <i
             class="pi pi-exclamation-triangle warning-icon"
@@ -36,18 +47,6 @@
           {{ data.name }}
         </span>
         <InputText v-else ref="inputRef" v-model="editingName" size="small" @blur="saveEdit" @keyup.enter="saveEdit" />
-      </div>
-
-      <!-- Metadata Footer Block -->
-      <div class="instance-details">
-        <div class="detail-item">
-          <i class="pi pi-box detail-icon"></i>
-          <span class="detail-value">{{ componentName }}</span>
-        </div>
-        <div class="detail-item">
-          <i class="pi pi-file detail-icon"></i>
-          <span class="detail-value">{{ mathFile }}</span>
-        </div>
       </div>
     </div>
 
@@ -368,11 +367,13 @@ function openContextMenu(event) {
   margin-left: 1%;
   display: flex;
   align-items: center;
+  justify-content: center;
   width: 100%; 
   font-weight: 600;
   font-size: 1.2rem;
   padding-bottom: 0.25rem;
-  margin-bottom: 0.35rem;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
 }
 
 .instance-name :deep(.p-inputtext) {

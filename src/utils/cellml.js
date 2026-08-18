@@ -1514,3 +1514,82 @@ export function getModelComponentNames(modelString) {
   }
   return componentNames
 }
+
+export function extractVoiAndParametersFromModel(modelString, parameterInfo) {
+  const mappedParameters = {}
+  const garbageCollector = new Set()
+  try {
+    const parser = new _libcellml.Parser(false)
+    garbageCollector.add(parser)
+
+    const model = parser.parseModel(modelString)
+    garbageCollector.add(model)
+
+    const analyser = new _libcellml.Analyser()
+    garbageCollector.add(analyser)
+
+    analyser.analyseModel(model)
+    const analyserModel = analyser.model()
+    // This change is for version 0.7.0 of libCellML, where the analyser.model() method is deprecated and replaced with analyser.analyserModel(). If you are using a version of libCellML prior to 0.7.0, you should use the commented line below instead.
+    // const analyserModel = analyser.analyserModel()
+    garbageCollector.add(analyserModel)
+
+    const voi = analyserModel.voi()
+    garbageCollector.add(voi)
+
+    for (const param of parameterInfo.selections) {
+      const paramComp = model.componentByName(param.nodeName, true)
+      garbageCollector.add(paramComp)
+      if (paramComp) {
+        const paramVar = paramComp.variableByName(param.parameterName)
+        garbageCollector.add(paramVar)
+        if (paramVar) {
+          for (let i = 0; i < paramVar.equivalentVariableCount(); i++) {
+            const eqVar = paramVar.equivalentVariable(i)
+            garbageCollector.add(eqVar)
+            const mappedParent = eqVar.parent()
+            garbageCollector.add(mappedParent)
+            const mappedParentName = mappedParent?.name()
+            if (param.type === 'global_constant' && mappedParentName === GLOBAL_PARAMETERS) {
+              mappedParameters[`${param.nodeName}/${param.parameterName}`] = {
+                name: eqVar.name(),
+                componentName: mappedParentName,
+              }
+              break
+            } else if (param.type === 'constant' && mappedParentName === MODEL_PARAMETERS) {
+              mappedParameters[`${param.nodeName}/${param.parameterName}`] = {
+                name: eqVar.name(),
+                componentName: mappedParentName,
+              }
+              break
+            }
+          }
+        }
+      }
+    }
+
+    if (!voi) {
+      console.log('Current bug in analysing CellML models using constants for initialising variables.')
+      console.log('VOI variable is null because the model is not valid. This is a known issue in libCellML.')
+      console.log('Returning {name: time, componentName: environment, units: second} for VOI variable.')
+      console.log('But it should return null to indicate an error.')
+      // resolve(null)
+      return { voi: { name: 'time', componentName: 'environment', units: 'second' }, mappedParameters }
+    }
+
+    const voiVariable = voi.variable()
+    garbageCollector.add(voiVariable)
+
+    const component = voiVariable.parent()
+    garbageCollector.add(component)
+
+    const units = voiVariable.units()
+    garbageCollector.add(units)
+
+    const voiVariableData = { name: voiVariable.name(), componentName: component?.name(), units: units?.name() }
+
+    return { voi: voiVariableData, mappedParameters }
+  } finally {
+    garbageCollector.forEach((obj) => obj?.delete())
+  }
+}

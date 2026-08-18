@@ -1,8 +1,9 @@
 import JSZip from 'jszip'
 import Papa from 'papaparse'
-import { notify } from '../utils/notify'
-import { parseMathRef, parseModuleRef, restorePorts, restoreVariables } from '../utils/config'
-import { PORT_TYPE_OPTIONS } from '../utils/constants'
+
+import { notify } from '../../utils/notify'
+import { parseMathRef, parseModuleRef, restorePorts, restoreVariables } from '../../utils/config'
+import { PORT_TYPE_OPTIONS } from '../../utils/constants'
 
 /**
  * Generates a zip blob for the Circulatory Autogen export.
