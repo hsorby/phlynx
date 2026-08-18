@@ -59,6 +59,17 @@
                   <div class="mlc__card-body">
                     <!-- Name + actions row -->
                     <div class="mlc__card-header">
+                      <Button
+                        v-if="activeModule(card).moduleRef !== 'new_module:phlynx'"
+                        icon="pi pi-times-circle"
+                        severity="secondary"
+                        iconOnly
+                        rounded
+                        size="small"
+                        class="mlc__preview-btn"
+                        v-tooltip.top="'Delete module'"
+                        @click.stop="deleteModule(activeModule(card))"
+                      />
                       <span class="mlc__card-name">{{ card.label }}</span>
                       <div class="mlc__card-actions">
                         <Tag
@@ -227,6 +238,10 @@ function configLabel(config) {
 function activeModule(card) {
   const index = selectedModuleIndex[card.cardKey] ?? 0
   return card.modules[index] ?? card.modules[0]
+}
+
+function deleteModule(card) {
+  store.removeModule(card.moduleRef)
 }
 
 // ─── Drag & Drop ──────────────────────────────────────────────────────────────
