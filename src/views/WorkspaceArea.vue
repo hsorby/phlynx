@@ -173,9 +173,9 @@
             :model="importMenuItems"
             severity="primary"
             @click="triggerCurrentImport"
-            :disabled="currentImportMode.disabled"
+            :disabled="currentImportDisabled"
             v-tooltip.bottom="{
-              value: currentImportMode.disabled
+              value: currentImportDisabled
                 ? 'The Import option is disabled because CellML library is not ready yet.'
                 : `Import ${currentImportMode.label}`,
               showDelay: 300,
@@ -982,6 +982,7 @@ const {
   exportMenuItems,
   sendMenuItems,
   currentExportDisabled,
+  currentImportDisabled,
   currentSendDisabled,
   triggerCurrentExport,
   triggerCurrentImport,
@@ -2745,7 +2746,7 @@ const handleKeyDown = (event) => {
     triggerCurrentExport()
   }
 
-  if (isCtrl && event.key.toLowerCase() === 'i' && !currentImportMode.value.disabled) {
+  if (isCtrl && event.key.toLowerCase() === 'i' && !currentImportDisabled.value) {
     event.preventDefault()
     triggerCurrentImport()
   }
