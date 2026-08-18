@@ -315,12 +315,13 @@ const selectedNode = computed(() => getSelectedNodes.value[0] || null)
 
 const isMultipleSelected = computed(() => getSelectedNodes.value.length > 1)
 
-watch(selectedNode, (node) => {
-  if (node) {
-    activeTabId.value = 'params'
-    if (isCollapsed.value) toggleCollapsed()
-  }
-})
+// Leaving this for future settings configuration to enable auto-popout / switch to instance parameters
+// watch(selectedNode, (node) => {
+//   if (node && !isCollapsed) {
+//     activeTabId.value = 'params'
+//     // if (isCollapsed.value) toggleCollapsed()
+//   }
+// })
 
 // ── Global constants (top subsection) ───────────────────────────────────────
 const globalConstantRows = ref([])
