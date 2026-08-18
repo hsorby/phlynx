@@ -301,6 +301,26 @@ const parseCellML = (file) => {
   })
 }
 
+const parseOMEX = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const content = e.target.result
+        // Basic validation for OMEX (COMBINE Archive)
+        if (!file.name.endsWith('.omex')) {
+          reject(new Error('Invalid OMEX file.'))
+          return
+        }
+        resolve(content)
+      } catch (err) {
+        reject(err)
+      }
+    }
+    reader.readAsArrayBuffer(file)
+  })
+}
+
 export function createDynamicFields(completionStatus) {
   const fields = []
 
@@ -397,6 +417,17 @@ const configs = {
         label: IMPORT_LABELS.UNITS,
         accept: '.cellml, .xml',
         parser: parseCellML,
+      },
+    ],
+  },
+  [IMPORT_KEYS.OMEX]: {
+    title: 'Import COMBINE Archive (OMEX)',
+    fields: [
+      {
+        key: IMPORT_KEYS.OMEX,
+        label: IMPORT_LABELS.OMEX,
+        accept: '.omex',
+        parser: parseOMEX,
       },
     ],
   },
