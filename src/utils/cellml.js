@@ -1282,11 +1282,12 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
   }
 }
 
-function isPossibleParameter(variable) {
-  // A variable is possibly a parameter if it does not have an initial value (i.e. it's set externally)
-  // and it's not the time variable.
+function isPossibleParameter(variable, includeInitialised = false) {
   const varName = variable.name()
-  return variable.initialValue() === '' && varName !== 't' && varName !== 'time'
+  if (varName === 't' || varName === 'time') return false
+  if (!includeInitialised && variable.initialValue() !== '') return false
+  if (variable.hasInterfaceType('public') || variable.hasInterfaceType('public_and_private')) return false
+  return true
 }
 
 /**
@@ -1295,7 +1296,7 @@ function isPossibleParameter(variable) {
 export function extractVariablesFromMath(math, includeInitialisedVariables = true) {
   const garbageCollector = new Set() // To track created objects for cleanup.
   try {
-    const variables = new Set()
+    const variables = []
     if (math) {
       const parser = new _libcellml.Parser(false)
       garbageCollector.add(parser)
@@ -1310,13 +1311,18 @@ export function extractVariablesFromMath(math, includeInitialisedVariables = tru
         garbageCollector.add(variable)
         const units = variable.units()
         garbageCollector.add(units)
-        if (isPossibleParameter(variable)) {
-          variables.add({ name: variable.name(), units: units.name() })
+        if (isPossibleParameter(variable, includeInitialisedVariables)) {
+          variables.push({ 
+            name: variable.name(),
+            units: units.name(),
+            value: variable.initialValue(),
+            type: variable.initialValue() !== '' ? 'constant' : 'variable',
+          })
         }
       }
     }
 
-    return Array.from(variables)
+    return variables
   } finally {
     garbageCollector.forEach((obj) => obj?.delete())
   }

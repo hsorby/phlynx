@@ -1876,8 +1876,8 @@ function updateVariablesFromMath(node, updatedMath) {
         name: updated.name,
         units: updated.units,
         access: 'access',
-        value: null,
-        type: null,
+        value: updated.value ?? null,
+        type: updated.type ?? null,
       }
     }
   })
