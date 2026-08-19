@@ -54,20 +54,25 @@ export async function createCellMLDataFragment(cellmlBlob, fileName) {
  */
 export async function generateOmexArchive(cellmlData, simData = {}, addInfo = {}) {
   const sedmlText = generateSedmlData(simData.simulationSettings)
+  const simulationJson = buildSimulationJson(simData.plotConfig, simData.parameterScanConfig, addInfo.extractedData)
 
-  const manifestXml = buildManifestXml([
+  const manifestEntries = [
     { location: 'document.sedml', format: 'http://identifiers.org/combine.specifications/sed-ml', master: true },
     { location: 'model.cellml', format: 'http://identifiers.org/combine.specifications/cellml' },
-    { location: 'simulation.json', format: 'http://purl.org/NET/mediatypes/application/json' },
-  ])
-
-  const simulationJson = buildSimulationJson(simData.plotConfig, simData.parameterScanConfig, addInfo.extractedData)
+  ]
+  if (simulationJson !== null) {
+    manifestEntries.push({ location: 'simulation.json', format: 'http://purl.org/NET/mediatypes/application/json' })
+  }
+  const manifestXml = buildManifestXml(manifestEntries)
 
   const zip = new JSZip()
   zip.file('manifest.xml', manifestXml)
   zip.file('model.cellml', cellmlData.blob)
   zip.file('document.sedml', sedmlText)
-  zip.file('simulation.json', simulationJson)
+
+  if (simulationJson !== null) {
+    zip.file('simulation.json', simulationJson)
+  }
 
   return zip.generateAsync({ type: 'blob' })
 }
