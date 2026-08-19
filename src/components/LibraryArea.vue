@@ -61,13 +61,12 @@
                     <div class="mlc__card-header">
                       <Button
                         v-if="activeModule(card).moduleRef !== 'new_module:phlynx'"
-                        icon="pi pi-trash"
-                        severity="danger"
+                        icon="pi pi-times scale-60"
+                        severity="secondary"
                         text
                         rounded
-                        size="small"
                         class="mlc__preview-btn"
-                        v-tooltip.top="'Delete module'"
+                        v-tooltip.top="'Remove module'"
                         @click.stop="deleteModule(activeModule(card))"
                       />
                       <span class="mlc__card-name">{{ card.label }}</span>
