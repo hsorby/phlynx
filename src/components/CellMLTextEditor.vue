@@ -55,6 +55,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Codemirror } from 'vue-codemirror'
 import { basicSetup } from 'codemirror'
 import { keymap } from '@codemirror/view'
+import { Prec } from '@codemirror/state'
 import { oneDark } from '@codemirror/theme-one-dark' 
 import 'katex/dist/katex.min.css'
 
@@ -72,7 +73,11 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:code', 'save', 'ready'])
+const emit = defineEmits(['update:code', 'save', 'ready', 'undo', 'redo'])
+
+// When true, the next `cellmlText` change came from setText() (an app-level
+// undo/redo replay), not a user keystroke
+let applyingExternalText = false
 
 const generator = new CellMLTextGenerator()
 const parser = new CellMLTextParser()
@@ -136,7 +141,11 @@ const checkDarkMode = () => {
   isDarkMode.value = document.documentElement.classList.contains('p-dark')
 }
 
+let cmView = null
+
 const handleStateUpdate = (viewUpdate) => {
+  cmView = viewUpdate.view
+
   if (viewUpdate.selectionSet || viewUpdate.docChanged) {
     const state = viewUpdate.state
     const pos = state.selection.main.head
@@ -156,9 +165,36 @@ const shiftSpaceKeymap = keymap.of([
   },
 ])
 
+// Intercept undo/redo ahead of basicSetup's own historyKeymap (Mod-z / Mod-Shift-z / Mod-y)
+const appHistoryKeymap = Prec.highest(
+  keymap.of([
+    {
+      key: 'Mod-z',
+      run: () => {
+        emit('undo')
+        return true
+      },
+    },
+    {
+      key: 'Mod-Shift-z',
+      run: () => {
+        emit('redo')
+        return true
+      },
+    },
+    {
+      key: 'Mod-y',
+      run: () => {
+        emit('redo')
+        return true
+      },
+    },
+  ])
+)
+
 // Dynamically inject theme extensions based on light vs. dark mode
 const extensions = computed(() => {
-  const base = [basicSetup, cellml(), shiftSpaceKeymap]
+  const base = [basicSetup, cellml(), shiftSpaceKeymap, appHistoryKeymap]
   return isDarkMode.value ? [...base, oneDark] : base
 })
 
@@ -246,22 +282,88 @@ const handleSave = () => {
 }
 
 watch(cellmlText, (newText) => {
+  if (applyingExternalText) return
+
   if (debouncer) clearTimeout(debouncer)
   debouncer = setTimeout(async () => {
     try {
       const parsed = parser.parse(newText)
       errors.value = parsed.errors
-      if (errors.value.length === 0 && parsed.xml) {
+      const valid = errors.value.length === 0 && !!parsed.xml
+
+      if (valid) {
         currentDoc = parser['doc']
-        emit('update:code', parsed.xml)
+      }
+
+      emit('update:code', valid ? parsed.xml : null, newText, valid)
+
+      if (valid) {
         await nextTick()
         updatePreview()
       }
     } catch (e) {
-      // Do nothing for invalid syntax while typing.
+      // Parse threw outright - still emit so undo has a text snapshot.
+      emit('update:code', null, newText, false)
     }
   }, 500)
 })
+
+async function setText(newText) {
+  if (debouncer) {
+    clearTimeout(debouncer)
+    debouncer = null
+  }
+
+  applyingExternalText = true
+
+  const oldText = cellmlText.value
+
+  if (cmView && oldText !== newText) {
+    const maxPrefix = Math.min(oldText.length, newText.length)
+    let prefixLen = 0
+    while (prefixLen < maxPrefix && oldText[prefixLen] === newText[prefixLen]) {
+      prefixLen++
+    }
+
+    const maxSuffix = Math.min(oldText.length, newText.length) - prefixLen
+    let suffixLen = 0
+    while (
+      suffixLen < maxSuffix &&
+      oldText[oldText.length - 1 - suffixLen] === newText[newText.length - 1 - suffixLen]
+    ) {
+      suffixLen++
+    }
+
+    const from = prefixLen
+    const to = oldText.length - suffixLen
+    const insert = newText.slice(prefixLen, newText.length - suffixLen)
+
+    cmView.dispatch({
+      changes: { from, to, insert },
+      selection: { anchor: from + insert.length },
+    })
+  } else {
+    // No view yet (shouldn't normally happen) - fall back to a full replace.
+    cellmlText.value = newText
+  }
+
+  await nextTick()
+  applyingExternalText = false
+
+  try {
+    const parsed = parser.parse(newText)
+    errors.value = parsed.errors
+    if (errors.value.length === 0 && parsed.xml) {
+      currentDoc = parser['doc']
+      await nextTick()
+      updatePreview()
+    }
+  } catch (e) {
+    // Do nothing for invalid syntax.
+  }
+}
+
+defineExpose({ setText })
 
 onMounted(() => {
   checkDarkMode()
@@ -274,7 +376,7 @@ onMounted(() => {
     if (errors.value.length === 0 && parsed.xml) {
       currentDoc = parser['doc']
       updatePreview()
-      emit('ready', parsed.xml)
+      emit('ready', parsed.xml, cellmlText.value)
     }
   } catch (e) {
     // Do nothing for initial syntax load

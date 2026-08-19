@@ -36,11 +36,14 @@
       <div class="pane left-pane" :style="leftPaneStyle" :class="{ 'left-pane--collapsed': rightCollapsed }">
         <div class="editor-wrapper">
           <CellMLTextEditor
+            ref="cellmlEditorRef"
             :key="mathRef"
             :model-value="currentModel"
             @update:code="handleCodeUpdate"
             @ready="handleEditorReady"
             @save="handleSave"
+            @undo="handleEditorUndo"
+            @redo="handleEditorRedo"
           />
         </div>
       </div>
@@ -352,7 +355,6 @@
 <script setup>
 import { ref, computed, watch, onBeforeUnmount, onMounted, onUnmounted, nextTick } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
-import { useDebounceFn } from '@vueuse/core'
 
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
@@ -412,7 +414,8 @@ const loading = ref(false)
 const activeTab = ref('parameters')
 
 // CellML State
-const currentModel = ref('')
+const currentModel = ref('')       // parsed XML representation - used for variable extraction, save, etc.
+const currentCellmlText = ref('')  // raw CellML source text - what the editor actually displays
 const originalModel = ref('')
 const applyToAll = ref(false)
 
@@ -433,6 +436,9 @@ const sortOrder = ref(1)
 // Port & Instance State
 const editableName = ref('')
 const editablePorts = ref([])
+
+// Ref to the CellML editor, used to imperatively replay text during undo/redo
+const cellmlEditorRef = ref(null)
 
 // ── Split / Collapse State ──────────────────────────────────────────────────
 const SPLIT_STORAGE_KEY = 'instanceEditorDialog.leftPanePercent'
@@ -644,15 +650,20 @@ watch(
   }
 )
 
-function reconcileStagedState(newCode) {
+async function reconcileStagedState(newCode, newRawText) {
   const extractedVariables = extractVariablesFromMath(newCode)
   if (!extractedVariables) return
+
+  const previousCode = currentModel.value
+  const previousRawText = currentCellmlText.value
+  if (previousCode === newCode) return
 
   const validVarNames = new Set(extractedVariables.map((v) => v.name))
 
   const currentMap = new Map(parameterRows.value.map((row) => [row.name, row]))
+  const previousParameterRows = parameterRows.value
 
-  parameterRows.value = extractedVariables.map((variable) => {
+  const newParameterRows = extractedVariables.map((variable) => {
     const existing = currentMap.get(variable.name)
 
     return {
@@ -664,39 +675,93 @@ function reconcileStagedState(newCode) {
     }
   })
 
-  editablePorts.value.forEach((port) => {
-    if (Array.isArray(port.variables)) {
-      const portVars = port.variables
-      const removed = port.variables.filter((varName) => !validVarNames.has(varName))
+  history.startBatch()
 
-      if (removed.length > 0) {
-        history.executeAndAddCommand({
-          type: 'remove-variable-from-port',
-          undo: async () => {
-            port.variables = portVars
-          },
-          redo: async () => {
-            port.variables = port.variables.filter((varName) => validVarNames.has(varName))
-          },
-        })
-      }
-    }
+  await history.executeAndAddCommand({
+    type: 'update-cellml-code',
+    undo: async () => {
+      currentModel.value = previousCode
+      currentCellmlText.value = previousRawText
+      await cellmlEditorRef.value?.setText(previousRawText)
+    },
+    redo: async () => {
+      currentModel.value = newCode
+      currentCellmlText.value = newRawText
+      await cellmlEditorRef.value?.setText(newRawText)
+    },
+  })
+
+  await history.executeAndAddCommand({
+    type: 'update-parameter-rows',
+    undo: async () => {
+      parameterRows.value = previousParameterRows
+    },
+    redo: async () => {
+      parameterRows.value = newParameterRows
+    },
+  })
+
+  for (const port of editablePorts.value) {
+    if (!Array.isArray(port.variables)) continue
+
+    const portVars = port.variables
+    const removed = portVars.filter((varName) => !validVarNames.has(varName))
+    if (removed.length === 0) continue
+
+    await history.executeAndAddCommand({
+      type: 'remove-variable-from-port',
+      undo: async () => {
+        port.variables = portVars
+      },
+      redo: async () => {
+        port.variables = port.variables.filter((varName) => validVarNames.has(varName))
+      },
+    })
+  }
+
+  history.endBatch()
+}
+
+function handleCodeUpdate(newCode, rawText, isValid) {
+  if (isValid) {
+    reconcileStagedState(newCode, rawText)
+  } else {
+    trackRawTextOnly(rawText)
+  }
+}
+
+async function trackRawTextOnly(rawText) {
+  const previousRawText = currentCellmlText.value
+  if (previousRawText === rawText) return
+
+  await history.executeAndAddCommand({
+    type: 'update-cellml-text-only',
+    undo: async () => {
+      currentCellmlText.value = previousRawText
+      await cellmlEditorRef.value?.setText(previousRawText)
+    },
+    redo: async () => {
+      currentCellmlText.value = rawText
+      await cellmlEditorRef.value?.setText(rawText)
+    },
   })
 }
 
-const debouncedReconcile = useDebounceFn((code) => {
-  reconcileStagedState(code)
-}, 300)
-
-function handleCodeUpdate(newCode) {
-  currentModel.value = newCode
-  debouncedReconcile(newCode)
+async function handleEditorUndo() {
+  if (!history.canUndo) return
+  await history.undo()
 }
 
-function handleEditorReady(canonicalMath) {
+async function handleEditorRedo() {
+  if (!history.canRedo) return
+  await history.redo()
+}
+
+function handleEditorReady(canonicalMath, rawText) {
   void isDirty.value
   currentModel.value = canonicalMath
   originalModel.value = canonicalMath
+  currentCellmlText.value = rawText ?? currentCellmlText.value
 }
 
 function sortParameterRows(field = 'type', order = 1) {
