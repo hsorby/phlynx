@@ -186,13 +186,17 @@ export const useLibraryStore = defineStore('library', () => {
     availableCollections.value.set(newMathRef, existingSet)
   }
 
-  // Remove a specific moduleRef from a mathRef's Set
-  function removeModule(mathRef, moduleRef) {
+  function removeModule(moduleRef) {
+    if (!availableModules.value.has(moduleRef)) return
+
+    const mathRef = availableModules.value.get(moduleRef).mathRef
     const set = availableCollections.value.get(mathRef)
     if (!set) return
 
     set.delete(moduleRef)
     if (set.size === 0) availableCollections.value.delete(mathRef)
+
+    availableModules.value.delete(moduleRef)
   }
 
   function updateStubStatus(mathRef) {
