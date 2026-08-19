@@ -1,5 +1,9 @@
 <template>
-  <div class="resizable-library-panel" ref="panelRef">
+  <div
+    class="resizable-library-panel"
+    :class="{ 'resizable-library-panel--inline': !overlay }"
+    ref="panelRef"
+  >
     <aside
       :style="{ width: isCollapsed ? '0px' : width + 'px' }"
       class="module-aside"
@@ -50,6 +54,10 @@ const props = defineProps({
     type: Number,
     default: 400,
   },
+  overlay: {
+    type: Boolean,
+    default: true,
+  },
 })
 
 const emit = defineEmits(['resize'])
@@ -76,12 +84,20 @@ function toggleCollapsed() {
 
 <style scoped>
 .resizable-library-panel {
+  display: flex;
+  height: 100%;
+}
+
+.resizable-library-panel:not(.resizable-library-panel--inline) {
   position: absolute;
   top: 0;
   left: 0;
   z-index: 20;
-  display: flex;
-  height: 100%;
+}
+
+.resizable-library-panel--inline {
+  position: relative;
+  flex-shrink: 0;
 }
 
 .module-aside {
