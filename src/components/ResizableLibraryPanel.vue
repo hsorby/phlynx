@@ -1,5 +1,5 @@
 <template>
-  <div class="resizable-library-panel">
+  <div class="resizable-library-panel" ref="panelRef">
     <aside
       :style="{ width: isCollapsed ? '0px' : width + 'px' }"
       class="module-aside"
@@ -54,7 +54,15 @@ const props = defineProps({
 
 const emit = defineEmits(['resize'])
 
-const { width, startResize } = useResizableAside(props.initialWidth, props.minWidth, props.maxWidth)
+const panelRef = ref(null)
+
+const { width, startResize } = useResizableAside(
+  props.initialWidth,
+  props.minWidth,
+  props.maxWidth,
+  'left',
+  panelRef
+)
 const isCollapsed = ref(false)
 
 const effectiveWidth = computed(() => (isCollapsed.value ? 0 : width.value))
