@@ -376,6 +376,7 @@ import Tag from 'primevue/tag'
 
 import CellMLTextEditor from './CellMLTextEditor.vue'
 import { useLibraryStore } from '../stores/libraryStore'
+import { useFlowHistoryStore } from '../stores/historyStore'
 import { useGtm } from '../composables/useGtm'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
 
@@ -400,6 +401,8 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'confirm'])
 
 const store = useLibraryStore()
+const history = useFlowHistoryStore()
+
 const { trackEvent } = useGtm()
 const { nodes } = useVueFlow()
 const { alert, confirm } = useConfirmDialog()
@@ -663,7 +666,20 @@ function reconcileStagedState(newCode) {
 
   editablePorts.value.forEach((port) => {
     if (Array.isArray(port.variables)) {
-      port.variables = port.variables.filter((varName) => validVarNames.has(varName))
+      const portVars = port.variables
+      const removed = port.variables.filter((varName) => !validVarNames.has(varName))
+
+      if (removed.length > 0) {
+        history.executeAndAddCommand({
+          type: 'remove-variable-from-port',
+          undo: async () => {
+            port.variables = portVars
+          },
+          redo: async () => {
+            port.variables = port.variables.filter((varName) => validVarNames.has(varName))
+          },
+        })
+      }
     }
   })
 }
