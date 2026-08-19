@@ -103,23 +103,21 @@
               <div class="parameters-tab-body">
                 <div class="toolbar-container">
                   <div class="search-group">
-                    <div class="search-input-wrapper">
-                      <InputText
-                        v-model="searchQuery"
-                        size="small"
-                        :placeholder="`Search by ${searchColumn}...`"
-                        class="search-input"
-                      />
-                      <Button
-                        v-if="searchQuery"
-                        icon="pi pi-times"
-                        text
-                        rounded
-                        severity="secondary"
-                        size="small"
-                        class="clear-search-btn"
-                        @click="searchQuery = ''"
-                      />
+                    <div class="search-input-wrapper flex-1">
+                      <IconField class="w-full">
+                        <InputIcon class="pi pi-search" />
+                        <InputText
+                          v-model="searchQuery"
+                          class="w-full"
+                          size="small"
+                          :placeholder="`Search by ${searchColumn}...`"
+                        />
+                        <InputIcon
+                          v-if="searchQuery"
+                          class="clear-search-btn pi pi-times-circle"
+                          @click="searchQuery = ''"
+                        />
+                      </IconField>
                     </div>
                     <Select
                       v-model="searchColumn"
@@ -364,6 +362,8 @@ import Dialog from 'primevue/dialog'
 import Divider from 'primevue/divider'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
+import InputIcon from 'primevue/inputicon'
+import IconField from 'primevue/iconfield'
 import ProgressSpinner from 'primevue/progressspinner'
 import Select from 'primevue/select'
 import MultiSelect from 'primevue/multiselect'
@@ -1154,21 +1154,6 @@ async function handleSave() {
 
 .search-input-wrapper {
   position: relative;
-  display: flex;
-  align-items: center;
-  flex: 1 1 160px;
-  min-width: 120px;
-}
-
-.search-input-wrapper :deep(.p-inputtext) {
-  width: 100%;
-}
-
-.clear-search-btn {
-  position: absolute;
-  right: 2px;
-  width: 1.25rem !important;
-  height: 1.25rem !important;
 }
 
 .bulk-controls {
