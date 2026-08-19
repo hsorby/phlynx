@@ -63,7 +63,7 @@
         v-tooltip.bottom="{ value: handle.name, showDelay: 1000 }"
         @mouseenter="onHandleEnter(handle.uid)"
         @mouseleave="onHandleLeave"
-        @pointerdown="!(selected && isCornerHandle(handle, data.handles)) && handle.variant === HANDLE_VARIANT.GHOST && beginGhostActivation(props.id, handle.uid)"
+        @pointerdown="!isEditing && !(selected && isCornerHandle(handle, data.handles)) && handle.variant === HANDLE_VARIANT.GHOST && beginGhostActivation(props.id, handle.uid)"
       >
         <Button
           v-show="hoveredHandleUid === handle.uid && handle.variant !== HANDLE_VARIANT.GHOST"
@@ -104,7 +104,7 @@ import { useHandleManagement } from '../composables/useHandleManagement'
 import '../assets/vueflownode.css'
 
 const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } = useVueFlow()
-const { beginGhostActivation, activateHandle, addHandle } = useHandleManagement()
+const { beginGhostActivation, activateHandle, addHandle, revertPendingGhostIfUnused } = useHandleManagement()
 const historyStore = useFlowHistoryStore()
 const libraryStore = useLibraryStore()
 
@@ -295,6 +295,7 @@ function StopDrag(event) {
 
 // This is triggered by pressing Enter or clicking away
 function saveEdit() {
+  revertPendingGhostIfUnused()
   if (!editingName.value || editingName.value.trim() === '') {
     isEditing.value = false
     return
