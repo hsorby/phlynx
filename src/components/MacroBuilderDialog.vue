@@ -13,7 +13,7 @@
     @hide="closeDialog"
   >
     <div class="macro-dialog-body">
-      <ResizableLibraryPanel title="Module Library" :initial-width="200" :min-width="150" :max-width="400">
+      <ResizableLibraryPanel title="Module Library" :initial-width="300" :min-width="150" :max-width="400">
         <LibraryArea />
       </ResizableLibraryPanel>
       <main class="workbench-macro">
