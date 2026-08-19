@@ -60,7 +60,7 @@
                     <!-- Name + actions row -->
                     <div class="mlc__card-header">
                       <Button
-                        v-if="activeModule(card).moduleRef !== 'new_module:phlynx'"
+                        v-if="![GHOST_MODULE_REF, NEW_MODULE_REF].includes(activeModule(card).moduleRef)"
                         icon="pi pi-times scale-60"
                         severity="secondary"
                         text
@@ -164,6 +164,7 @@ import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore.js'
 import useDragAndDrop from '../composables/useDnD'
 import ModulePreviewDialog from './ModulePreviewDialog.vue'
+import { GHOST_MODULE_REF, NEW_MODULE_REF } from '../utils/constants.js'
 
 const props = defineProps({
   selectable: { type: Boolean, default: false },

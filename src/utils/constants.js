@@ -110,6 +110,7 @@ export const GHOST_NODE_TYPE = 'ghostNode'
 export const GHOST_MODULE_FILENAME = 'ghost_module.cellml'
 export const GHOST_MATH_REF = `${GHOST_MODULE_FILENAME}:ghost`
 export const GHOST_MODULE_REF = 'ghost:ghost'
+export const NEW_MODULE_REF = 'new_module:phlynx'
 
 export const GHOST_MODULE_DEFINITION = {
   moduleRef: GHOST_MODULE_REF,

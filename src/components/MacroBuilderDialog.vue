@@ -298,7 +298,7 @@ watch(
   (newVal) => {
     newVal
       ? libraryStore.addModule(GHOST_MODULE_DEFINITION)
-      : libraryStore.removeModule(GHOST_MATH_REF, GHOST_MODULE_REF)
+      : libraryStore.removeModule(GHOST_MODULE_REF)
   }
 )
 
