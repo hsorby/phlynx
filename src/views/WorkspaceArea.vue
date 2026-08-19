@@ -553,6 +553,8 @@ import { useFlowHistoryStore } from '../stores/historyStore'
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore.js'
 
+import { importOmexFile } from '../services/import/omex'
+
 import useDragAndDrop from '../composables/useDnD'
 import { useHandleManagement } from '../composables/useHandleManagement'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
@@ -1818,6 +1820,24 @@ async function onImportConfirm(importPayload, updateProgress) {
     )
     if (multiFile) {
       notifyMultiFileResults(results, { successTitle: 'Parameters Loaded' })
+    }
+  } else if (currentImportMode.value.key === IMPORT_KEYS.OMEX) {
+    try {
+      await importOmexFile(importPayload, (current, total, statusMessage) => {
+        if (updateProgress) {
+          updateProgress(`${statusMessage || 'Importing OMEX file...'} (${current}/${total})`)
+        }
+      })
+
+      notify.success({
+        title: 'OMEX Import Complete',
+        message: 'Workflow built successfully!',
+      })
+    } catch (error) {
+      notify.error({
+        title: 'OMEX Import Failed',
+        message: error.message,
+      })
     }
   }
 
