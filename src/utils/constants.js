@@ -153,6 +153,12 @@ export const IMPORT_KEYS = {
   CELLML_FILE: 'cellMLFile',
   PARAMETER: 'parameter',
   TURTLE: 'turtle',
+  OMEX: 'omex',
+}
+
+export const SEND_KEYS = {
+  OPENCOR: 'OpenCOR',
+  CUFLYNX: 'CUFLynx',
 }
 
 export const IMPORT_LABELS = {
@@ -161,6 +167,7 @@ export const IMPORT_LABELS = {
   CELLML_FILE: 'CellML File (.cellml or .xml)',
   PARAMETER: 'Parameters (.csv)',
   TURTLE: 'Annotations (.ttl)',
+  OMEX: 'COMBINE Archive (OMEX)',
 }
 
 export const EXPORT_KEYS = {

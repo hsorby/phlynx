@@ -84,61 +84,6 @@ export async function runFcoseLayout(nodes, edges) {
       y: y - h / 2,
     }
 
-    // Handle Sorting.
-    // Physics layouts put handles anywhere (top, bottom, left, right).
-    // We need to dynamically decide which side handles should be on based on their neighbours.
-    if (node.data.handles) {
-      // A. Determine Side dynamically based on neighbours.
-      node.data.handles.forEach((handle) => {
-        // Find the neighbour node for this handle.
-        const edge = edges.find((e) => e.sourceHandle === getHandleId(handle) || e.targetHandle === getHandleId(handle))
-        if (!edge) return
-
-        const neighbourId = edge.source === node.id ? edge.target : edge.source
-        const neighbour = cy.getElementById(neighbourId)
-
-        if (neighbour) {
-          // Check relative position.
-          const dx = neighbour.position('x') - x
-          const dy = neighbour.position('y') - y
-
-          // If strictly horizontal > vertical distance, put on Left/Right.
-          if (Math.abs(dx) > Math.abs(dy)) {
-            handle.side = dx > 0 ? 'right' : 'left'
-          } else {
-            handle.side = dy > 0 ? 'bottom' : 'top'
-          }
-        }
-      })
-
-      // B. Sort Handles on those sides.
-      const sides = { top: [], right: [], bottom: [], left: [] }
-      node.data.handles.forEach((h) => {
-        if (sides[h.side]) sides[h.side].push(h)
-      })
-
-      const sortHandlesByCoord = (list, isVertical) => {
-        list.sort((a, b) => {
-          // Look up neighbour positions again for sorting.
-          const getNeighborPos = (handle) => {
-            const edge = edges.find((e) => e.sourceHandle === getHandleId(handle) || e.targetHandle === getHandleId(handle))
-            if (!edge) return 0
-            const nId = edge.source === node.id ? edge.target : edge.source
-            const n = cy.getElementById(nId)
-            return isVertical ? n.position('y') : n.position('x')
-          }
-          return getNeighborPos(a) - getNeighborPos(b)
-        })
-      }
-
-      sortHandlesByCoord(sides.top, false) // Top varies by X.
-      sortHandlesByCoord(sides.bottom, false) // Bottom varies by X.
-      sortHandlesByCoord(sides.left, true) // Left varies by Y.
-      sortHandlesByCoord(sides.right, true) // Right varies by Y.
-
-      node.data.handles = [...sides.top, ...sides.right, ...sides.bottom, ...sides.left]
-    }
-
-    node.style = { opacity: 1 }
+    node.style = { ...node.style, opacity: 1 }
   })
 }

@@ -1282,11 +1282,12 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
   }
 }
 
-function isPossibleParameter(variable) {
-  // A variable is possibly a parameter if it does not have an initial value (i.e. it's set externally)
-  // and it's not the time variable.
+function isPossibleParameter(variable, includeInitialised = false) {
   const varName = variable.name()
-  return variable.initialValue() === '' && varName !== 't' && varName !== 'time'
+  if (varName === 't' || varName === 'time') return false
+  if (!includeInitialised && variable.initialValue() !== '') return false
+  if (variable.hasInterfaceType('public') || variable.hasInterfaceType('public_and_private')) return false
+  return true
 }
 
 /**
@@ -1295,7 +1296,7 @@ function isPossibleParameter(variable) {
 export function extractVariablesFromMath(math, includeInitialisedVariables = true) {
   const garbageCollector = new Set() // To track created objects for cleanup.
   try {
-    const variables = new Set()
+    const variables = []
     if (math) {
       const parser = new _libcellml.Parser(false)
       garbageCollector.add(parser)
@@ -1310,13 +1311,18 @@ export function extractVariablesFromMath(math, includeInitialisedVariables = tru
         garbageCollector.add(variable)
         const units = variable.units()
         garbageCollector.add(units)
-        if (isPossibleParameter(variable)) {
-          variables.add({ name: variable.name(), units: units.name() })
+        if (isPossibleParameter(variable, includeInitialisedVariables)) {
+          variables.push({ 
+            name: variable.name(),
+            units: units.name(),
+            value: variable.initialValue(),
+            type: variable.initialValue() !== '' ? 'constant' : 'variable',
+          })
         }
       }
     }
 
-    return Array.from(variables)
+    return variables
   } finally {
     garbageCollector.forEach((obj) => obj?.delete())
   }
@@ -1515,61 +1521,81 @@ export function getModelComponentNames(modelString) {
   return componentNames
 }
 
-export function extractVoiFromBlob(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const cellmlString = reader.result
-      console.log('Extracting VOI from CellML string:', cellmlString.substring(0, 100)) // Log first 100 characters for debugging
-      const garbageCollector = new Set()
-      try {
-        const parser = new _libcellml.Parser(false)
-        garbageCollector.add(parser)
+export function extractVoiAndParametersFromModel(modelString, parameterInfo) {
+  const mappedParameters = {}
+  const garbageCollector = new Set()
+  try {
+    const parser = new _libcellml.Parser(false)
+    garbageCollector.add(parser)
 
-        const model = parser.parseModel(cellmlString)
-        garbageCollector.add(model)
+    const model = parser.parseModel(modelString)
+    garbageCollector.add(model)
 
-        const analyser = new _libcellml.Analyser()
-        garbageCollector.add(analyser)
+    const analyser = new _libcellml.Analyser()
+    garbageCollector.add(analyser)
 
-        analyser.analyseModel(model)
-        const analyserModel = analyser.model()
-        // This change is for version 0.7.0 of libCellML, where the analyser.model() method is deprecated and replaced with analyser.analyserModel(). If you are using a version of libCellML prior to 0.7.0, you should use the commented line below instead.
-        // const analyserModel = analyser.analyserModel()
-        garbageCollector.add(analyserModel)
+    analyser.analyseModel(model)
+    const analyserModel = analyser.model()
+    // This change is for version 0.7.0 of libCellML, where the analyser.model() method is deprecated and replaced with analyser.analyserModel(). If you are using a version of libCellML prior to 0.7.0, you should use the commented line below instead.
+    // const analyserModel = analyser.analyserModel()
+    garbageCollector.add(analyserModel)
 
-        const voi = analyserModel.voi()
-        garbageCollector.add(voi)
+    const voi = analyserModel.voi()
+    garbageCollector.add(voi)
 
-        if (!voi) {
-          console.log('Current bug in analysing CellML models using constants for initialising variables.')
-          console.log('VOI variable is null because the model is not valid. This is a known issue in libCellML.')
-          console.log('Returning {name: time, componentName: environment, units: second} for VOI variable.')
-          console.log('But it should return null to indicate an error.')
-          // resolve(null)
-          resolve({name: 'time', componentName: 'environment', units: 'second'})
-          return
+    for (const param of parameterInfo?.selections || []) {
+      const paramComp = model.componentByName(param.nodeName, true)
+      garbageCollector.add(paramComp)
+      if (paramComp) {
+        const paramVar = paramComp.variableByName(param.parameterName)
+        garbageCollector.add(paramVar)
+        if (paramVar) {
+          for (let i = 0; i < paramVar.equivalentVariableCount(); i++) {
+            const eqVar = paramVar.equivalentVariable(i)
+            garbageCollector.add(eqVar)
+            const mappedParent = eqVar.parent()
+            garbageCollector.add(mappedParent)
+            const mappedParentName = mappedParent?.name()
+            if (param.type === 'global_constant' && mappedParentName === GLOBAL_PARAMETERS) {
+              mappedParameters[`${param.nodeName}/${param.parameterName}`] = {
+                name: eqVar.name(),
+                componentName: mappedParentName,
+              }
+              break
+            } else if (param.type === 'constant' && mappedParentName === MODEL_PARAMETERS) {
+              mappedParameters[`${param.nodeName}/${param.parameterName}`] = {
+                name: eqVar.name(),
+                componentName: mappedParentName,
+              }
+              break
+            }
+          }
         }
-
-        const voiVariable = voi.variable()
-        garbageCollector.add(voiVariable)
-
-        const component = voiVariable.parent()
-        garbageCollector.add(component)
-
-        const units = voiVariable.units()
-        garbageCollector.add(units)
-
-        const voiVariableData = {name: voiVariable.name(), componentName: component?.name(), units: units?.name()}
-
-        resolve(voiVariableData)
-      } finally {
-        garbageCollector.forEach((obj) => obj?.delete())
       }
     }
-    reader.onerror = () => {
-      reject(reader.error)
+
+    if (!voi) {
+      console.log('Current bug in analysing CellML models using constants for initialising variables.')
+      console.log('VOI variable is null because the model is not valid. This is a known issue in libCellML.')
+      console.log('Returning {name: time, componentName: environment, units: second} for VOI variable.')
+      console.log('But it should return null to indicate an error.')
+      // resolve(null)
+      return { voi: { name: 'time', componentName: 'environment', units: 'second' }, mappedParameters }
     }
-    reader.readAsText(blob)
-  })
+
+    const voiVariable = voi.variable()
+    garbageCollector.add(voiVariable)
+
+    const component = voiVariable.parent()
+    garbageCollector.add(component)
+
+    const units = voiVariable.units()
+    garbageCollector.add(units)
+
+    const voiVariableData = { name: voiVariable.name(), componentName: component?.name(), units: units?.name() }
+
+    return { voi: voiVariableData, mappedParameters }
+  } finally {
+    garbageCollector.forEach((obj) => obj?.delete())
+  }
 }

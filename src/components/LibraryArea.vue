@@ -59,6 +59,16 @@
                   <div class="mlc__card-body">
                     <!-- Name + actions row -->
                     <div class="mlc__card-header">
+                      <Button
+                        v-if="activeModule(card).moduleRef !== 'new_module:phlynx'"
+                        icon="pi pi-times scale-60"
+                        severity="secondary"
+                        text
+                        rounded
+                        class="mlc__preview-btn"
+                        v-tooltip.top="'Remove module'"
+                        @click.stop="deleteModule(activeModule(card))"
+                      />
                       <span class="mlc__card-name">{{ card.label }}</span>
                       <div class="mlc__card-actions">
                         <Tag
@@ -151,6 +161,7 @@ import vTooltip from 'primevue/tooltip'
 
 import { useLibraryProxyStore } from '../stores/libraryProxyStore'
 import { useLibraryStore } from '../stores/libraryStore'
+import { useFlowHistoryStore } from '../stores/historyStore.js'
 import useDragAndDrop from '../composables/useDnD'
 import ModulePreviewDialog from './ModulePreviewDialog.vue'
 
@@ -162,6 +173,8 @@ const emit = defineEmits(['select'])
 
 const view = useLibraryProxyStore()
 const store = useLibraryStore()
+const history = useFlowHistoryStore()
+
 const { onDragStart } = useDragAndDrop()
 
 const filterText = ref('')
@@ -227,6 +240,22 @@ function configLabel(config) {
 function activeModule(card) {
   const index = selectedModuleIndex[card.cardKey] ?? 0
   return card.modules[index] ?? card.modules[0]
+}
+
+function deleteModule(card) {
+  const deletedModule = store.availableModules.get(card.moduleRef)
+
+  history.executeAndAddCommand({
+    type: 'remove-module',
+    undo: async () => {
+      store.addModule(deletedModule)
+    },
+    redo: async () => {
+      store.removeModule(deletedModule.moduleRef)
+    },
+  })
+
+  store.removeModule(card.moduleRef)
 }
 
 // ─── Drag & Drop ──────────────────────────────────────────────────────────────

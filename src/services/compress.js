@@ -61,7 +61,7 @@ export async function generateOmexArchive(cellmlData, simData = {}, addInfo = {}
     { location: 'simulation.json', format: 'http://purl.org/NET/mediatypes/application/json' },
   ])
 
-  const simulationJson = buildSimulationJson(simData.plotConfig, simData.parameterScanConfig, addInfo.voiInformation)
+  const simulationJson = buildSimulationJson(simData.plotConfig, simData.parameterScanConfig, addInfo.extractedData)
 
   const zip = new JSZip()
   zip.file('manifest.xml', manifestXml)

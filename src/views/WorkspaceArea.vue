@@ -169,13 +169,13 @@
           <SplitButton
             text
             size="small"
-            icon="pi pi-file-import"
+            icon="pi pi-upload"
             :model="importMenuItems"
             severity="primary"
             @click="triggerCurrentImport"
-            :disabled="currentImportMode.disabled"
+            :disabled="currentImportDisabled"
             v-tooltip.bottom="{
-              value: currentImportMode.disabled
+              value: currentImportDisabled
                 ? 'The Import option is disabled because CellML library is not ready yet.'
                 : `Import ${currentImportMode.label}`,
               showDelay: 300,
@@ -198,7 +198,7 @@
           <SplitButton
             text
             size="small"
-            icon="pi pi-file-export"
+            icon="pi pi-download"
             :model="exportMenuItems"
             severity="primary"
             style="margin-left: 10px"
@@ -209,6 +209,35 @@
                 !somethingAvailable || currentExportDisabled
                   ? cellMlExportTooltip
                   : `Export ${currentExportMode.label}`,
+              showDelay: 300,
+            }"
+          >
+            <!-- Dropdown Menu Item Icons -->
+            <template #item="{ item, props }">
+              <a class="p-menuitem-link" v-ripple v-bind="props.action">
+                <!-- If icon is a Vue component -->
+                <component :is="item.icon" v-if="typeof item.icon !== 'string'" class="p-menuitem-icon" />
+                <!-- If icon is a PrimeIcon class string -->
+                <span v-else :class="[item.icon, 'p-menuitem-icon']"></span>
+
+                <span class="p-menuitem-text">{{ item.label }}</span>
+              </a>
+            </template>
+          </SplitButton>
+
+          <!-- Send Dropdown / SplitButton -->
+          <SplitButton
+            text
+            size="small"
+            icon="pi pi-send"
+            :model="sendMenuItems"
+            severity="primary"
+            @click="triggerCurrentSend"
+            :disabled="!somethingAvailable || currentSendDisabled"
+            v-tooltip.bottom="{
+              value: !somethingAvailable || currentSendDisabled
+                ? 'The Send option is disabled because CellML library is not ready yet.'
+                : `Send ${currentSendMode.label}`,
               showDelay: 300,
             }"
           >
@@ -261,12 +290,18 @@
       >
         <LibraryArea />
       </ResizableLibraryPanel>
-      <main class="workbench-main" :style="{
-        '--library-panel-width': libraryPanelWidth + 'px',
-        '--context-sidebar-width': contextSidebarWidth + 'px',
-        }">
-        
-        <div ref="searchBarEl" class="workspace-search-container" :class="{ 'search-inactive': !searchBarFocused && !searchQuery }">
+      <main
+        class="workbench-main"
+        :style="{
+          '--library-panel-width': libraryPanelWidth + 'px',
+          '--context-sidebar-width': contextSidebarWidth + 'px',
+        }"
+      >
+        <div
+          ref="searchBarEl"
+          class="workspace-search-container"
+          :class="{ 'search-inactive': !searchBarFocused && !searchQuery }"
+        >
           <div class="workspace-search-input-wrapper">
             <IconField>
               <InputIcon class="pi pi-search" />
@@ -320,36 +355,25 @@
 
         <div class="dnd-flow" @drop="onDrop">
           <Toast position="top-right" :style="{ top: `${toastTop}px`, right: `${contextSidebarWidth + 25}px` }">
-          <template #message="slotProps">
-            <div class="p-toast-message-text" style="flex: 1">
-              
-              <!-- Summary / Title -->
-              <div 
-                v-if="slotProps.message.summary" 
-                class="p-toast-summary font-bold" 
-                style="line-height: 1.2; margin-bottom: 4px;"
-              >
-                {{ slotProps.message.summary }}
-              </div>
+            <template #message="slotProps">
+              <div class="p-toast-message-text" style="flex: 1">
+                <!-- Summary / Title -->
+                <div
+                  v-if="slotProps.message.summary"
+                  class="p-toast-summary font-bold"
+                  style="line-height: 1.2; margin-bottom: 4px"
+                >
+                  {{ slotProps.message.summary }}
+                </div>
 
-              <!-- Detail / Message Content -->
-              <div 
-                class="p-toast-detail" 
-                style="line-height: 1.5;"
-              >
-                <component 
-                  v-if="typeof slotProps.message.detail === 'object'" 
-                  :is="slotProps.message.detail" 
-                />
-                <div 
-                  v-else 
-                  v-html="slotProps.message.detail" 
-                />
+                <!-- Detail / Message Content -->
+                <div class="p-toast-detail" style="line-height: 1.5">
+                  <component v-if="typeof slotProps.message.detail === 'object'" :is="slotProps.message.detail" />
+                  <div v-else v-html="slotProps.message.detail" />
+                </div>
               </div>
-
-            </div>
-          </template>
-        </Toast>
+            </template>
+          </Toast>
           <VueFlow
             :id="FLOW_IDS.MAIN"
             @dragover="onDragOver"
@@ -496,7 +520,6 @@
     :subgraph="edgeDialogSubgraph"
     @confirm="onEdgeConnectionConfirm"
   />
-
 </template>
 
 <script>
@@ -529,6 +552,7 @@ import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore.js'
+
 import useDragAndDrop from '../composables/useDnD'
 import { useHandleManagement } from '../composables/useHandleManagement'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
@@ -536,6 +560,9 @@ import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
 import { useColorScheme } from '../composables/useColorScheme'
 import { useGtm } from '../composables/useGtm'
+import { useConfirmDialog } from '../composables/useConfirmDialog'
+import { useImportExportSend } from '../composables/useImportExportSend.js'
+
 import LibraryArea from '../components/LibraryArea.vue'
 import ResizableLibraryPanel from '../components/ResizableLibraryPanel.vue'
 import Workbench from '../components/WorkbenchArea.vue'
@@ -549,16 +576,28 @@ import EdgeConnectionDialog from '../components/EdgeConnectionDialog.vue'
 import SettingsDialog from '../components/SettingsDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
 import PaneContextMenu from '../components/PaneContextMenu.vue'
+import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
+import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
+import PortEditorDialog from '../components/PortEditorDialog.vue'
+import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
+import CreateInspectionModuleDialog from '../components/dialogs/CreateInspectorModule.vue'
+import ContextSidebar from '../components/ContextSidebar.vue'
+import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
+import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
+import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
+import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
+import DustpanBrush from '../components/icons/DustpanBrush.vue'
+
 import { useScreenshot } from '../services/useScreenshot'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { migrateWorkspace } from '../services/workspaceMigrator'
+import { relayoutNodes } from '../services/layouts/physics'
+
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../utils/workspace'
-import { useConfirmDialog } from '../composables/useConfirmDialog'
-import { useImportExport } from '../composables/useImportExport'
-import { relayoutNodes } from '../services/layouts/physics'
+import { readFileAsText } from '../utils/misc'
 import { initLibCellML, processCellMLData, extractVariablesFromMath } from '../utils/cellml'
 import {
   edgeLineOptions,
@@ -584,17 +623,6 @@ import {
   ensureExtension,
   legacyDownload,
 } from '../utils/save'
-import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
-import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
-import PortEditorDialog from '../components/PortEditorDialog.vue'
-import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
-import CreateInspectionModuleDialog from '../components/dialogs/CreateInspectorModule.vue'
-import ContextSidebar from '../components/ContextSidebar.vue'
-import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
-import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
-import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
-import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
-import DustpanBrush from '../components/icons/DustpanBrush.vue'
 
 const workspaceFileInput = ref(null)
 
@@ -706,17 +734,6 @@ const notifyMultiFileResults = (
     notify.error({ title: failTitle, message: `Failed to load all ${fileWord(failed)}.` })
   }
 }
-
-/**
- * Read a File object as text.
- */
-const readFileAsText = (file) =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (e) => resolve(e.target.result)
-    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`))
-    reader.readAsText(file)
-  })
 
 /**
  * Load an array of CellML entries, each being either a browser File object or a
@@ -958,18 +975,19 @@ const somethingAvailable = computed(() => nodes.value.length > 0)
 const somethingSelected = computed(() => getSelectedNodes.value.length > 0)
 
 const {
+  currentExportMode,
   currentImportMode,
-  currentExportKey,
+  currentSendMode,
   importMenuItems,
   exportMenuItems,
-  cellMlExportTooltip,
-  currentExportMode,
+  sendMenuItems,
   currentExportDisabled,
-  triggerCurrentImport,
+  currentImportDisabled,
+  currentSendDisabled,
   triggerCurrentExport,
-  handleImportCommand,
-  handleExportCommand,
-} = useImportExport({
+  triggerCurrentImport,
+  triggerCurrentSend,
+} = useImportExportSend({
   libcellml,
   somethingAvailable,
   nodes,
@@ -980,6 +998,17 @@ const {
   getImportConfig,
   getFileHandle,
   onExportConfirm,
+})
+
+const cellMlExportTooltip = computed(() => {
+  const prefix = 'The CellML export option is disabled because '
+  if (libcellml.status !== 'ready') {
+    return prefix + 'the CellML library is not ready yet. Please wait a moment and try again.'
+  }
+  if (!somethingAvailable.value) {
+    return prefix + 'there is nothing to export. Please add some modules to the workspace first.'
+  }
+  return 'This should not be shown when CellML export is enabled.'
 })
 
 onConnectEnd(() => {
@@ -1437,7 +1466,7 @@ const onNodeChange = (changes) => {
         removedConstants.forEach((c) => {
           libraryStore.removeGlobalConstant(c.name)
         })
-      }
+      },
     })
   }
   if (selectChanges.length) {
@@ -1882,8 +1911,8 @@ function updateVariablesFromMath(node, updatedMath) {
         name: updated.name,
         units: updated.units,
         access: 'access',
-        value: null,
-        type: null,
+        value: updated.value ?? null,
+        type: updated.type ?? null,
       }
     }
   })
@@ -2020,7 +2049,6 @@ async function onMacroBuilderGenerate(data) {
 }
 
 async function onSettingsConfirm(data) {
-  console.log('settings updated')
   settingsDialogVisible.value = false
 }
 
@@ -2718,7 +2746,7 @@ const handleKeyDown = (event) => {
     triggerCurrentExport()
   }
 
-  if (isCtrl && event.key.toLowerCase() === 'i' && !currentImportMode.value.disabled) {
+  if (isCtrl && event.key.toLowerCase() === 'i' && !currentImportDisabled.value) {
     event.preventDefault()
     triggerCurrentImport()
   }
