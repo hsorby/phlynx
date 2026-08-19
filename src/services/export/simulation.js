@@ -74,7 +74,6 @@ function buildOutputData(selections, timeVariable) {
     name: `${sel.nodeName}/${sel.variableName}`,
   }))
 
-
   data.push({id: timeVariable.id, name: timeVariable.name})
 
   return data
