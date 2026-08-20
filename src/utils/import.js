@@ -1,7 +1,49 @@
 import Papa from 'papaparse'
 
-import { IMPORT_KEYS, IMPORT_LABELS } from './constants'
+import { IMPORT_KEYS, IMPORT_LABELS, RELEVANT_EXTENSIONS } from './constants'
 import { isCellML, doesComponentExistInModel } from './cellml'
+
+export function hasRelevantExtension(filename) {
+  const dot = filename.lastIndexOf('.')
+  if (dot === -1) return false
+  return RELEVANT_EXTENSIONS.has(filename.slice(dot).toLowerCase())
+}
+
+export function readEntries(dirReader) {
+  return new Promise((resolve, reject) => dirReader.readEntries(resolve, reject))
+}
+
+export function fileFromEntry(fileEntry) {
+  return new Promise((resolve, reject) => fileEntry.file(resolve, reject))
+}
+
+export async function collectEntry(entry, path, depth, maxDepth, results) {
+  if (!entry || depth > maxDepth) return
+  if (entry.name.startsWith('.') || entry.name === 'node_modules') return
+
+  const fullPath = path ? `${path}/${entry.name}` : entry.name
+
+  if (entry.isFile) {
+    if (!hasRelevantExtension(entry.name)) return
+    try {
+      const file = await fileFromEntry(entry)
+      results.push({ file, path: fullPath })
+    } catch {
+      // Unreadable file — skip it rather than aborting the whole drop.
+    }
+  } else if (entry.isDirectory) {
+    const reader = entry.createReader()
+    // readEntries only returns a batch at a time; must be called
+    // repeatedly until it resolves an empty array.
+    let batch
+    do {
+      batch = await readEntries(reader)
+      for (const child of batch) {
+        await collectEntry(child, fullPath, depth + 1, maxDepth, results)
+      }
+    } while (batch.length > 0)
+  }
+}
 
 export const checkResourcesAreLoaded = (requestedModules, store) => {
   const warnings = []
