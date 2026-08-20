@@ -2429,12 +2429,12 @@ function snapshotFlowState() {
     id: node.id,
     data: node.data,
   }))
-  for (const data in nodeData) {
-    if (nodeData[data].data?.mathRef) {
-      const mathRef = nodeData[data].data.mathRef
+  for (const index in nodeData) {
+    if (nodeData[index].data?.mathRef) {
+      const mathRef = nodeData[index].data.mathRef
       const math = libraryStore.availableMath.get(mathRef)
       if (math) {
-        nodeData[data].data.math = math
+        nodeData[index].data.math = math
       }
     }
   }
