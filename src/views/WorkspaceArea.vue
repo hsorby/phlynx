@@ -136,7 +136,7 @@
             size="small"
             variant="text"
             severity="info"
-            v-tooltip.bottom="{ value: 'Open macrobuilder', showDelay: 300 }"
+            v-tooltip.bottom="{ value: 'Open macro builder', showDelay: 300 }"
             @click="onOpenMacroBuilderDialog"
           />
 
@@ -596,7 +596,7 @@ import { relayoutNodes } from '../services/layouts/physics'
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
-import { useClearWorkspace } from '../utils/workspace'
+import { useClearWorkspace } from '../composables/useClearWorkspace'
 import { readFileAsText } from '../utils/misc'
 import { initLibCellML, processCellMLData, extractVariablesFromMath } from '../utils/cellml'
 import {

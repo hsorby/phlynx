@@ -1,6 +1,7 @@
 import { useVueFlow } from '@vue-flow/core'
 import { ref, shallowRef, watch } from 'vue'
 import {
+  FLOW_IDS,
   GHOST_MODULE_FILENAME,
   GHOST_NODE_TYPE,
   MAIN_NODE_TYPE,
@@ -27,10 +28,10 @@ const state = {
   isDragging: ref(false),
 }
 
-export default function useDragAndDrop(pendingHistoryNodes) {
+export default function useDragAndDrop(pendingHistoryNodes, flowId = FLOW_IDS.MAIN) {
   const { draggedType, isDragOver, isDragging } = state
 
-  const { addNodes, getNodes, onNodesInitialized, screenToFlowCoordinate, updateNode } = useVueFlow()
+  const { addNodes, getNodes, onNodesInitialized, screenToFlowCoordinate, updateNode } = useVueFlow(flowId)
   const store = useLibraryStore()
 
   const isGhostSetupOpen = ref(false)

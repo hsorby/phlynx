@@ -13,7 +13,6 @@
           <span class="label truncate">{{ ghostLabel }}</span>
         </div>
       </template>
-      <!-- <button debug>Debug</button>  -->
     </Card>
 
     <template v-for="handle in targetHandles" :key="handle.uid">
@@ -34,17 +33,14 @@ import Card from 'primevue/card'
 
 import { useVueFlow, Handle } from '@vue-flow/core'
 import { getHandleId, getHandleStyle, handlePosition } from '../utils/handles'
+import { FLOW_IDS } from '../utils/constants'
 
 const props = defineProps(['id', 'data'])
-const { findNode, updateNodeInternals } = useVueFlow()
+const { findNode, updateNodeInternals } = useVueFlow(FLOW_IDS.MACRO)
 
 const ghostLabel = computed(() => {
   return `${props.data.mathRef.split(':')[1]} [${props.data.mathRef.split(':')[0]}]`
 })
-
-function debug() {
-  console.log(targetNode)
-}
 
 const targetNode = computed(() => {
   if (!props.data.targetNodeId) return null
@@ -58,7 +54,6 @@ const targetHandles = computed(() => {
 const nodeStyle = computed(() => {
   const node = targetNode.value
 
-  // If we can't find dimensions yet, fallback or let content dictate size
   if (!node || !node.dimensions) {
     return {}
   }
