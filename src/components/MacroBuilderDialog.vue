@@ -223,7 +223,7 @@ onConnect(async (connection) => {
   if (connection.targetHandle) { 
     const targetNode = findNode(connection.target)
     if (targetNode.type === GHOST_NODE_TYPE) {
-      activateHandle(connection.source, getHandleUidFromHandleId(connection.targetHandle))
+      activateHandle(targetNode.data.targetNodeId, getHandleUidFromHandleId(connection.targetHandle))
     } else {
       activateHandle(connection.target, getHandleUidFromHandleId(connection.targetHandle))
     }
