@@ -2,6 +2,7 @@ import JSZip from 'jszip'
 import { describe, expect, it } from 'vitest'
 
 import { generateOmexArchive } from '../../../src/services/compress.js'
+import { SIM_STEPS } from '../../../src/services/export/simulation.js'
 
 async function readArchive(blob) {
   return JSZip.loadAsync(await blob.arrayBuffer())
@@ -104,7 +105,7 @@ describe('generateOmexArchive', () => {
         defaultValue: 1,
         minimumValue: 0.1,
         maximumValue: 10,
-        stepValue: 0.099,
+        stepValue: 9.9/SIM_STEPS,
       },
     ])
 

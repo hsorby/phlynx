@@ -33,7 +33,7 @@ export function buildSimulationJson(plotConfig, parameterScan, supplementalData)
   })
 }
 
-const SIM_STEPS = 30
+export const SIM_STEPS = 30
 
 // input: one entry per parameter-scan selection. id/name are both just the
 // constant's own name (per spec: "id and name can just be the variable name").
