@@ -31,7 +31,7 @@
       <main class="workbench-macro">
         <Menubar :model="items">
           <template #item="{ item, props }">
-            <a class="p-menubar-item-link" v-bind="props.action">
+            <a class="p-menubar-item-link" v-bind="props.action" v-tooltip.bottom="item.tooltip">
               <i v-if="typeof item.icon === 'string'" :class="item.icon" />
               <component :is="item.icon" v-else-if="item.icon" />
               <span v-if="item.label">{{ item.label }}</span>
@@ -105,7 +105,6 @@ import AddHandleBottom from './icons/AddHandles/AddHandleBottom.vue'
 import AddHandleLeft from './icons/AddHandles/AddHandleLeft.vue'
 import AddHandleRight from './icons/AddHandles/AddHandleRight.vue'
 import AddHandleTop from './icons/AddHandles/AddHandleTop.vue'
-import DustpanBrush from './icons/DustpanBrush.vue'
 
 import WorkbenchArea from './WorkbenchArea.vue'
 import LibraryArea from './LibraryArea.vue'
@@ -183,36 +182,41 @@ const suppressedEdgeIds = new Set()
 const isEmpty = computed(() => nodes.value.length === 0)
 const isNodeSelected = computed(() => getSelectedNodes.value.length > 0)
 
-const items = ref([
+const items = computed(() => [
   {
     label: '', 
     icon: 'pi pi-eraser',
     command: () => clearWorkspace(),
-    disabled: !isEmpty,
+    tooltip: 'Clear Macro Builder',
+    disabled: isEmpty.value,
   },
   { 
     label: '', 
     icon: markRaw(AddHandleLeft),
     command: () => addHandle('left'),
-    disabled: !isNodeSelected,
+    tooltip: 'Add left handle',
+    disabled: !isNodeSelected.value,
   },
   { 
     label: '', 
     icon: markRaw(AddHandleTop),
     command: () => addHandle('top'),
-    disabled: !isNodeSelected,
+    tooltip: 'Add top handle',
+    disabled: !isNodeSelected.value,
   },
   { 
     label: '', 
     icon: markRaw(AddHandleRight),
     command: () => addHandle('right'),
-    disabled: !isNodeSelected,
+    tooltip: 'Add right handle',
+    disabled: !isNodeSelected.value,
   },
   { 
     label: '', 
     icon: markRaw(AddHandleBottom),
     command: () => addHandle('bottom'),
-    disabled: !isNodeSelected,
+    tooltip: 'Add bottom handle',
+    disabled: !isNodeSelected.value,
   },
 ])
 
