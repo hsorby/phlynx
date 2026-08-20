@@ -19,14 +19,28 @@
           <label for="inspection-module-name">
             Module Name <span class="subtle">(optional — defaults to '{{ defaultName }}')</span>
           </label>
-          <InputText
-            id="inspection-module-name"
-            v-model="moduleName"
-            placeholder="e.g., total_volume"
-            :invalid="isNameDuplicate"
-            class="w-full"
-            autofocus
-          />
+          <div class="input-wrapper">
+            <InputText
+              id="inspection-module-name"
+              v-model="moduleName"
+              placeholder="e.g., total_volume"
+              :invalid="isNameDuplicate"
+              fluid
+              autofocus
+              class="header-input"
+              :class="{ 'header-input--warning': isNameUnsanitary }"
+              @blur="sanitiseNameOnBlur"
+              @keydown.enter="sanitiseNameOnBlur"
+            />
+            <Transition name="name-warning-pop">
+              <div v-if="isNameUnsanitary" class="name-warning-popover" role="alert">
+                <div class="name-warning-arrow"></div>
+                <i class="pi pi-exclamation-triangle name-warning-icon"></i>
+                <span>Will be renamed to <strong>{{ sanitiseName(moduleName) }}</strong></span>
+              </div>
+            </Transition>
+          </div>
+          
           <small v-if="isNameDuplicate" class="error-text">
             A module with the name "{{ sanitiseName(moduleName) }}" already exists. Please choose a unique name.
           </small>
@@ -295,6 +309,19 @@ function buildVariableRows(nodes, editingModule) {
   })
 }
 
+function sanitiseNameOnBlur() {
+  if (!moduleName.value || !moduleName.value.trim()) {
+    return
+  }
+
+  const sanitised = sanitiseName(moduleName.value)
+  if (sanitised) {
+    moduleName.value = sanitised
+  }
+}
+
+const isNameUnsanitary = computed(() => moduleName.value !== sanitiseName(moduleName.value))
+
 function initialiseDialog() {
   const editing = props.editingModule
   moduleName.value = editing ? editing.name : ''
@@ -478,6 +505,72 @@ const closeDialog = () => {
 </script>
 
 <style scoped>
+
+.header-input--warning {
+  border-color: var(--p-yellow-500, #eab308) !important;
+}
+
+.header-input--warning:enabled:focus {
+  box-shadow: 0 0 0 1px var(--p-yellow-500, #eab308);
+}
+
+/* ── Name warning popover ── */
+.name-warning-popover {
+  position: absolute;
+  top: calc(100% + 9px);
+  left: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: max-content;
+  max-width: 280px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--p-yellow-500, #eab308);
+  color: #1f1300;
+  font-size: 0.8125rem;
+  font-weight: normal;
+  line-height: 1.4;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.name-warning-arrow {
+  position: absolute;
+  top: -5px;
+  left: 16px;
+  width: 10px;
+  height: 10px;
+  background: inherit;
+  transform: rotate(45deg);
+  border-radius: 2px 0 0 0;
+}
+
+.name-warning-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.name-warning-pop-enter-active,
+.name-warning-pop-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.name-warning-pop-enter-from,
+.name-warning-pop-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.input-wrapper {
+  position: relative;
+  display: block; 
+  width: 100%;
+}
+
 .dialog-content {
   display: flex;
   flex-direction: column;
