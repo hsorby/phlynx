@@ -1,7 +1,6 @@
 <template>
   <Dialog
     v-model:visible="visible"
-    header="Macro Builder"
     class="macro-dialog"
     :modal="true"
     :draggable="false"
@@ -12,11 +11,33 @@
     @show="onDialogShow"
     @hide="closeDialog"
   >
+    <template #header>
+      <div class="flex items-center gap-2">
+        <i class="pi pi-hammer text-xl" />
+        <span class="font-bold text-lg">Macro Builder</span>
+      </div>
+    </template>
+
     <div class="macro-dialog-body">
-      <ResizableLibraryPanel title="Module Library" :initial-width="200" :min-width="150" :max-width="400">
+      <ResizableLibraryPanel
+        title="Module Library"
+        :initial-width="300"
+        :min-width="150"
+        :max-width="400"
+        :overlay="false"
+      >
         <LibraryArea />
       </ResizableLibraryPanel>
       <main class="workbench-macro">
+        <Menubar :model="items">
+          <template #item="{ item, props }">
+            <a class="p-menubar-item-link" v-bind="props.action" v-tooltip.bottom="item.tooltip">
+              <i v-if="typeof item.icon === 'string'" :class="item.icon" />
+              <component :is="item.icon" v-else-if="item.icon" />
+              <span v-if="item.label">{{ item.label }}</span>
+            </a>
+          </template>
+        </Menubar>
         <div class="dnd-flow" @drop="onDrop" @dragover.prevent ref="canvasEl">
           <Transition name="fade">
             <div v-if="!isFlowReady" class="flow-loading-overlay">
@@ -72,12 +93,18 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick, markRaw } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
 import ConfirmDialog from 'primevue/confirmdialog'
+import Menubar from 'primevue/menubar'
+
+import AddHandleBottom from './icons/AddHandles/AddHandleBottom.vue'
+import AddHandleLeft from './icons/AddHandles/AddHandleLeft.vue'
+import AddHandleRight from './icons/AddHandles/AddHandleRight.vue'
+import AddHandleTop from './icons/AddHandles/AddHandleTop.vue'
 
 import WorkbenchArea from './WorkbenchArea.vue'
 import LibraryArea from './LibraryArea.vue'
@@ -104,19 +131,22 @@ import {
 import { detachReactivity } from '../utils/reactivity'
 import { getHandleUidFromHandleId } from '../utils/handles'
 import { useConfirm } from 'primevue'
+import { useClearWorkspace } from '../composables/useClearWorkspace.js'
 
 const { addEdges, removeEdges, edges,  onEdgeChange,
   findNode, nodes, onNodeChange, removeNodes,
   onConnect, onConnectEnd, 
-  onDragLeave, updateNodeInternals } =
+  onDragLeave, updateNodeInternals, getSelectedNodes } =
   useVueFlow(FLOW_IDS.MACRO)
 
 const confirm = useConfirmDialog()
+const { clearWorkspace } = useClearWorkspace(FLOW_IDS.MACRO)
+
 const previousNodes = new Set()
-const { onDrop, isGhostSetupOpen, pendingGhostNodeId } = useDragAndDrop(previousNodes)
+const { onDrop, isGhostSetupOpen, pendingGhostNodeId } = useDragAndDrop(previousNodes, FLOW_IDS.MACRO)
 const { trackEvent } = useGtm()
 
-const { revertPendingGhostIfUnused, confirmActivation, activateHandle } = useHandleManagement()
+const { revertPendingGhostIfUnused, confirmActivation, activateHandle, addHandle: addHandleToNode } = useHandleManagement()
 
 const libraryStore = useLibraryStore()
 
@@ -149,6 +179,53 @@ const macroEdgeOptions = {
 
 const suppressedEdgeIds = new Set()
 
+const isEmpty = computed(() => nodes.value.length === 0)
+const isNodeSelected = computed(() => getSelectedNodes.value.length > 0)
+
+const items = computed(() => [
+  {
+    label: '', 
+    icon: 'pi pi-eraser',
+    command: () => clearWorkspace(),
+    tooltip: 'Clear Macro Builder',
+    disabled: isEmpty.value,
+  },
+  { 
+    label: '', 
+    icon: markRaw(AddHandleLeft),
+    command: () => addHandle('left'),
+    tooltip: 'Add left handle',
+    disabled: !isNodeSelected.value,
+  },
+  { 
+    label: '', 
+    icon: markRaw(AddHandleTop),
+    command: () => addHandle('top'),
+    tooltip: 'Add top handle',
+    disabled: !isNodeSelected.value,
+  },
+  { 
+    label: '', 
+    icon: markRaw(AddHandleRight),
+    command: () => addHandle('right'),
+    tooltip: 'Add right handle',
+    disabled: !isNodeSelected.value,
+  },
+  { 
+    label: '', 
+    icon: markRaw(AddHandleBottom),
+    command: () => addHandle('bottom'),
+    tooltip: 'Add bottom handle',
+    disabled: !isNodeSelected.value,
+  },
+])
+
+const addHandle = async (side) => {
+  for (const node of getSelectedNodes.value) {
+    await addHandleToNode(node.id, side)
+  }
+}
+
 onConnect(async (connection) => {
   confirmActivation()
   if (connection.sourceHandle) {
@@ -158,7 +235,7 @@ onConnect(async (connection) => {
   if (connection.targetHandle) { 
     const targetNode = findNode(connection.target)
     if (targetNode.type === GHOST_NODE_TYPE) {
-      activateHandle(connection.source, getHandleUidFromHandleId(connection.targetHandle))
+      activateHandle(targetNode.data.targetNodeId, getHandleUidFromHandleId(connection.targetHandle))
     } else {
       activateHandle(connection.target, getHandleUidFromHandleId(connection.targetHandle))
     }
@@ -298,7 +375,7 @@ watch(
   (newVal) => {
     newVal
       ? libraryStore.addModule(GHOST_MODULE_DEFINITION)
-      : libraryStore.removeModule(GHOST_MATH_REF, GHOST_MODULE_REF)
+      : libraryStore.removeModule(GHOST_MODULE_REF)
   }
 )
 
@@ -401,57 +478,6 @@ const cancelGhostNode = () => {
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
-}
-
-.module-aside {
-  flex-shrink: 0;
-  border-right: 1px solid var(--p-surface-border);
-  padding: 1rem;
-  overflow: auto;
-  background: var(--p-surface-0);
-}
-
-.module-aside-title {
-  margin: 0 0 0.75rem;
-  font-size: 1rem;
-}
-
-.resize-handle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 12px;
-  cursor: col-resize;
-  background: var(--p-surface-100);
-  transition: background-color 0.2s ease;
-}
-
-.resize-handle--disabled {
-  cursor: default;
-}
-
-.aside-collapse-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: 9999px;
-  background: var(--p-surface-0);
-  color: var(--p-text-muted-color);
-  cursor: pointer;
-  box-shadow: 0 0 0 1px var(--p-surface-border);
-}
-
-.aside-collapse-toggle:hover {
-  background: var(--p-surface-100);
-}
-
-.module-aside--collapsed {
-  overflow: hidden;
-  padding: 0;
-  border-right: 0;
 }
 
 .workbench-macro {
