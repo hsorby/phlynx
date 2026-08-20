@@ -104,6 +104,7 @@ import AddHandleBottom from './icons/AddHandles/AddHandleBottom.vue'
 import AddHandleLeft from './icons/AddHandles/AddHandleLeft.vue'
 import AddHandleRight from './icons/AddHandles/AddHandleRight.vue'
 import AddHandleTop from './icons/AddHandles/AddHandleTop.vue'
+import DustpanBrush from './icons/DustpanBrush.vue'
 
 import WorkbenchArea from './WorkbenchArea.vue'
 import LibraryArea from './LibraryArea.vue'
@@ -130,6 +131,7 @@ import {
 import { detachReactivity } from '../utils/reactivity'
 import { getHandleUidFromHandleId } from '../utils/handles'
 import { useConfirm } from 'primevue'
+import { useClearWorkspace } from '../composables/useClearWorkspace.js'
 
 const { addEdges, removeEdges, edges,  onEdgeChange,
   findNode, nodes, onNodeChange, removeNodes,
@@ -138,8 +140,10 @@ const { addEdges, removeEdges, edges,  onEdgeChange,
   useVueFlow(FLOW_IDS.MACRO)
 
 const confirm = useConfirmDialog()
+const { clearWorkspace } = useClearWorkspace(FLOW_IDS.MACRO)
+
 const previousNodes = new Set()
-const { onDrop, isGhostSetupOpen, pendingGhostNodeId } = useDragAndDrop(previousNodes)
+const { onDrop, isGhostSetupOpen, pendingGhostNodeId } = useDragAndDrop(previousNodes, FLOW_IDS.MACRO)
 const { trackEvent } = useGtm()
 
 const { revertPendingGhostIfUnused, confirmActivation, activateHandle, addHandle: addHandleToNode } = useHandleManagement()
@@ -176,6 +180,12 @@ const macroEdgeOptions = {
 const suppressedEdgeIds = new Set()
 
 const items = ref([
+  {
+    label: '', 
+    icon: markRaw(DustpanBrush),
+    command: () => clearWorkspace(),
+  },
+  { separator: true },
   { 
     label: '', 
     icon: markRaw(AddHandleLeft),

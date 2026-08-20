@@ -1,7 +1,7 @@
 import { useVueFlow } from '@vue-flow/core'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useGtm } from './useGtm'
-import { useClearWorkspace } from '../utils/workspace' 
+import { useClearWorkspace } from '../composables/useClearWorkspace' 
 import { buildWorkflowGraph } from '../services/import/buildWorkflow'
 import { notify } from '../utils/notify'
 import { useWorkflowLayout } from './useWorkflowLayout'
