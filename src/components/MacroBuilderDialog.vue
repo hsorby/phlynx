@@ -32,7 +32,8 @@
         <Menubar :model="items">
           <template #item="{ item, props }">
             <a class="p-menubar-item-link" v-bind="props.action">
-              <component :is="item.icon" v-if="item.icon" />
+              <i v-if="typeof item.icon === 'string'" :class="item.icon" />
+              <component :is="item.icon" v-else-if="item.icon" />
               <span v-if="item.label">{{ item.label }}</span>
             </a>
           </template>
@@ -179,32 +180,39 @@ const macroEdgeOptions = {
 
 const suppressedEdgeIds = new Set()
 
+const isEmpty = computed(() => nodes.value.length === 0)
+const isNodeSelected = computed(() => getSelectedNodes.value.length > 0)
+
 const items = ref([
   {
     label: '', 
-    icon: markRaw(DustpanBrush),
+    icon: 'pi pi-eraser',
     command: () => clearWorkspace(),
+    disabled: !isEmpty,
   },
-  { separator: true },
   { 
     label: '', 
     icon: markRaw(AddHandleLeft),
     command: () => addHandle('left'),
+    disabled: !isNodeSelected,
   },
   { 
     label: '', 
     icon: markRaw(AddHandleTop),
     command: () => addHandle('top'),
+    disabled: !isNodeSelected,
   },
   { 
     label: '', 
     icon: markRaw(AddHandleRight),
     command: () => addHandle('right'),
+    disabled: !isNodeSelected,
   },
   { 
     label: '', 
     icon: markRaw(AddHandleBottom),
     command: () => addHandle('bottom'),
+    disabled: !isNodeSelected,
   },
 ])
 
