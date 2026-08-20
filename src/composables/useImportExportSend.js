@@ -277,7 +277,6 @@ export function useImportExportSend({
     const baseName = libraryStore.lastExportName || DEFAULT_FILE_NAME
     const fileTypes = mode.fileTypes || ZIP_FILE_TYPES
 
-    console.log('Performing send with mode:', mode.key, 'baseName:', baseName, 'fileTypes:', fileTypes)
     const blob = await mode.action(baseName)
     const dataUri = await createOmexDataFragment(blob)
     // Open the generated OMEX archive in Web OpenCOR

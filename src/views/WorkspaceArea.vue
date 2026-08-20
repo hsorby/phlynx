@@ -237,7 +237,7 @@
             v-tooltip.bottom="{
               value: !somethingAvailable || currentSendDisabled
                 ? 'The Send option is disabled because CellML library is not ready yet.'
-                : `Send ${currentSendMode.label}`,
+                : `Send to ${currentSendMode.label}`,
               showDelay: 300,
             }"
           >
