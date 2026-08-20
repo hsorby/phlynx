@@ -353,7 +353,7 @@
           </div>
         </div>
 
-        <div class="dnd-flow" @drop="onDrop">
+        <div class="dnd-flow" @drop="onDrop" @dragover.prevent @dragenter.prevent>
           <Toast position="top-right" :style="{ top: `${toastTop}px`, right: `${contextSidebarWidth + 25}px` }">
             <template #message="slotProps">
               <div class="p-toast-message-text" style="flex: 1">
