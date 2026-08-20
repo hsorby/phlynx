@@ -945,6 +945,7 @@ const edgeDialogTargetNode = ref({})
 const edgeDialogActiveEdge = ref({})
 const edgeDialogSubgraph = ref(new Map())
 const importDialogRef = ref(null)
+const savedFlowSnapshot = ref('')
 
 const currentEditingNode = ref({
   name: '',
@@ -975,6 +976,7 @@ const currentMatchIndex = ref(0)
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
 const somethingSelected = computed(() => getSelectedNodes.value.length > 0)
+const isFlowDirty = computed(() => snapshotFlowState() !== savedFlowSnapshot.value)
 
 const {
   currentExportMode,
@@ -2417,6 +2419,29 @@ function recomputeMissingCouplings() {
 }
 
 /**
+ * Creates a snapshot of the current flow state, including nodes and edges, and returns it as a JSON string.
+ * This is used to determine if the workspace has been modified that would change the Math or Port configurations.
+ * Leading us to set the CUFLynx modified state to true, which will let CUFLynx know that existing analysis is now invalid.
+ */
+function snapshotFlowState() {
+  const flowState = toObject()
+  const nodeData = flowState.nodes.map((node) => ({
+    id: node.id,
+    data: node.data,
+  }))
+  for (const data in nodeData) {
+    if (nodeData[data].data?.mathRef) {
+      const mathRef = nodeData[data].data.mathRef
+      const math = libraryStore.availableMath.get(mathRef)
+      if (math) {
+        nodeData[data].data.math = math
+      }
+    }
+  }
+  return JSON.stringify({nodeData, edges: flowState.edges})
+}
+
+/**
  * Collects all state and creates blob from it.
  */
 function createSaveBlob() {
@@ -2486,6 +2511,7 @@ function handleLoadWorkspace(event) {
       simulationSettingsStore.loadState(migratedState.simulation)
       inspectionModuleStore.loadState(migratedState.inspectionModules)
 
+      savedFlowSnapshot.value = snapshotFlowState()
       trackEvent('workflow_load_action', {
         category: 'Workflow',
         action: 'load_workflow',
