@@ -46,24 +46,32 @@
         <span v-if="!isEditing" class="name-text">
           {{ data.name }}
         </span>
-        <InputText
-          v-else 
-          ref="inputRef"
-          v-model="editingName"
-          size="small"
-          @blur="saveEdit"
-          @keydown.enter="saveEdit"
-          class="header-input"
-          :class="{ 'header-input--warning': isNameUnsanitary }"
-        />
+        <div v-else ref="inputWrapperRef" class="header-input-wrapper">
+          <InputText
+            ref="inputRef"
+            v-model="editingName"
+            size="small"
+            @blur="saveEdit"
+            @keydown.enter="saveEdit"
+            class="header-input"
+            :class="{ 'header-input--warning': isNameUnsanitary }"
+          />
+        </div>
+      </div>
+      <Teleport to="body">
         <Transition name="name-warning-pop">
-          <div v-if="isNameUnsanitary && isEditing" class="name-warning-popover" role="alert">
+          <div
+            v-if="isNameUnsanitary && isEditing"
+            class="name-warning-popover"
+            role="alert"
+            :style="popoverStyle"
+          >
             <div class="name-warning-arrow"></div>
             <i class="pi pi-exclamation-triangle name-warning-icon"></i>
             <span>Will be renamed to <strong>{{ sanitiseName(editingName) }}</strong></span>
           </div>
         </Transition>
-      </div>
+      </Teleport>
     </div>
 
     <template v-for="handle in data.handles" :key="handle.uid">
@@ -100,7 +108,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { Handle, useVueFlow } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
 import Button from 'primevue/button'
@@ -118,7 +126,7 @@ import { useHandleManagement } from '../composables/useHandleManagement'
 
 import '../assets/vueflownode.css'
 
-const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } = useVueFlow()
+const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes, viewport } = useVueFlow()
 const { beginGhostActivation, revertPendingGhostIfUnused } = useHandleManagement()
 const historyStore = useFlowHistoryStore()
 const libraryStore = useLibraryStore()
@@ -288,6 +296,29 @@ async function removeHandle(handleIdToRemove) {
 const isEditing = ref(false)
 const editingName = ref('')
 const inputRef = ref(null)
+const inputWrapperRef = ref(null)
+const popoverStyle = ref({})
+
+function updatePopoverPosition() {
+  const el = inputWrapperRef.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  popoverStyle.value = {
+    position: 'fixed',
+    top: `${rect.bottom + 9}px`,
+    left: `${rect.left}px`,
+  }
+}
+
+watch(viewport, () => {
+  if (isEditing.value) updatePopoverPosition()
+})
+
+function onWindowResize() {
+  if (isEditing.value) updatePopoverPosition()
+}
+window.addEventListener('resize', onWindowResize)
+onBeforeUnmount(() => window.removeEventListener('resize', onWindowResize))
 
 async function startEditing(event) {
   event.stopPropagation()
@@ -296,8 +327,7 @@ async function startEditing(event) {
   editingName.value = props.data.name
 
   await nextTick()
-  // InputText may or may not expose focus() directly depending on version,
-  // so fall back to the underlying native input element.
+  updatePopoverPosition()
   ;(inputRef.value?.$el ?? inputRef.value)?.focus()
 }
 
@@ -391,6 +421,11 @@ function openContextMenu(event) {
   margin-bottom: 0.5em;
 }
 
+.header-input-wrapper {
+  display: inline-flex;
+  width: 100%;
+}
+
 .instance-name :deep(.p-inputtext) {
   width: 100%;
   padding-top: 0.2rem;
@@ -405,11 +440,9 @@ function openContextMenu(event) {
   box-shadow: 0 0 0 1px var(--p-yellow-500, #eab308);
 }
 
-/* ── Name warning popover ── */
+/* ── Name warning popover ──*/
 .name-warning-popover {
-  position: absolute;
-  top: calc(100% + 9px);
-  left: 0;
+  position: fixed;
   z-index: 1100;
   display: flex;
   align-items: flex-start;
