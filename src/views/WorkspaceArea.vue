@@ -136,7 +136,7 @@
             size="small"
             variant="text"
             severity="info"
-            v-tooltip.bottom="{ value: 'Open macrobuilder', showDelay: 300 }"
+            v-tooltip.bottom="{ value: 'Open macro builder', showDelay: 300 }"
             @click="onOpenMacroBuilderDialog"
           />
 
