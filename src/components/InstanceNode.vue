@@ -128,9 +128,6 @@ const emit = defineEmits([
   'open-context-menu',
 ])
 
-const domainMenuId = `domain-type-menu-${props.id}`
-const portMenuId = `port-menu-${props.id}`
-
 function openInstanceEditor(defaultTab = 'parameters') {
   emit('open-instance-editor', {
     id: props.id,
