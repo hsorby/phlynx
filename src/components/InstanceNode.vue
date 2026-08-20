@@ -46,7 +46,23 @@
         <span v-if="!isEditing" class="name-text">
           {{ data.name }}
         </span>
-        <InputText v-else ref="inputRef" v-model="editingName" size="small" @blur="saveEdit" @keyup.enter="saveEdit" />
+        <InputText
+          v-else 
+          ref="inputRef"
+          v-model="editingName"
+          size="small"
+          @blur="saveEdit"
+          @keydown.enter="saveEdit"
+          class="header-input"
+          :class="{ 'header-input--warning': isNameUnsanitary }"
+        />
+        <Transition name="name-warning-pop">
+          <div v-if="isNameUnsanitary && isEditing" class="name-warning-popover" role="alert">
+            <div class="name-warning-arrow"></div>
+            <i class="pi pi-exclamation-triangle name-warning-icon"></i>
+            <span>Will be renamed to <strong>{{ sanitiseName(editingName) }}</strong></span>
+          </div>
+        </Transition>
       </div>
     </div>
 
@@ -89,8 +105,7 @@ import { Handle, useVueFlow } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
-import Menu from 'primevue/menu'
-import CellMLIcon from './icons/CellMLIcon.vue'
+
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { getHandleId, getHandleStyle, handlePosition, isCornerHandle } from '../utils/handles'
@@ -98,13 +113,13 @@ import { sanitiseName } from '../utils/nodes'
 import { notify } from '../utils/notify'
 import { isEditableVariableType, isEmpty } from '../utils/variables'
 import { detachReactivity } from '../utils/reactivity'
-import { TARGET_HANDLE_TYPE, SOURCE_HANDLE_TYPE, HANDLE_VARIANT } from '../utils/constants'
+import { HANDLE_VARIANT } from '../utils/constants'
 import { useHandleManagement } from '../composables/useHandleManagement'
 
 import '../assets/vueflownode.css'
 
 const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes } = useVueFlow()
-const { beginGhostActivation, activateHandle, addHandle, revertPendingGhostIfUnused } = useHandleManagement()
+const { beginGhostActivation, revertPendingGhostIfUnused } = useHandleManagement()
 const historyStore = useFlowHistoryStore()
 const libraryStore = useLibraryStore()
 
@@ -128,9 +143,6 @@ const emit = defineEmits([
   'open-context-menu',
 ])
 
-const domainMenuId = `domain-type-menu-${props.id}`
-const portMenuId = `port-menu-${props.id}`
-
 function openInstanceEditor(defaultTab = 'parameters') {
   emit('open-instance-editor', {
     id: props.id,
@@ -142,6 +154,8 @@ function openInstanceEditor(defaultTab = 'parameters') {
     defaultTab,
   })
 }
+
+const isNameUnsanitary = computed(() => editingName.value !== sanitiseName(editingName.value))
 
 const componentName = props.data.mathRef.split(':')[1]
 
@@ -381,6 +395,65 @@ function openContextMenu(event) {
   width: 100%;
   padding-top: 0.2rem;
   padding-bottom: 0.2rem;
+}
+
+.header-input--warning {
+  border-color: var(--p-yellow-500, #eab308) !important;
+}
+
+.header-input--warning:enabled:focus {
+  box-shadow: 0 0 0 1px var(--p-yellow-500, #eab308);
+}
+
+/* ── Name warning popover ── */
+.name-warning-popover {
+  position: absolute;
+  top: calc(100% + 9px);
+  left: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: max-content;
+  max-width: 280px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--p-yellow-500, #eab308);
+  color: #1f1300;
+  font-size: 0.8125rem;
+  font-weight: normal;
+  line-height: 1.4;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.name-warning-arrow {
+  position: absolute;
+  top: -5px;
+  left: 16px;
+  width: 10px;
+  height: 10px;
+  background: inherit;
+  transform: rotate(45deg);
+  border-radius: 2px 0 0 0;
+}
+
+.name-warning-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.name-warning-pop-enter-active,
+.name-warning-pop-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.name-warning-pop-enter-from,
+.name-warning-pop-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .name-text {
