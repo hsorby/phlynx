@@ -11,15 +11,27 @@
     <template #header>
       <div class="custom-dialog-header">
         <span class="header-prefix">Editing: </span>
-        <InputText 
-          v-model="editableName" 
-          placeholder="Enter instance name..." 
-          size="small"
-          class="header-input"
-        />
+        <div class="header-input-wrapper">
+          <InputText
+            v-model="editableName"
+            placeholder="Enter instance name..."
+            size="small"
+            class="header-input"
+            :class="{ 'header-input--warning': isNameUnsanitary }"
+            @blur="sanitiseNameOnBlur"
+          />
+          <Transition name="name-warning-pop">
+            <div v-if="isNameUnsanitary" class="name-warning-popover" role="alert">
+              <div class="name-warning-arrow"></div>
+              <i class="pi pi-exclamation-triangle name-warning-icon"></i>
+              <span>Will be renamed to <strong>{{ sanitiseName(editableName) }}</strong></span>
+            </div>
+          </Transition>
+        </div>
         <span class="header-suffix">({{ componentName }} - {{ componentFile }})</span>
       </div>
     </template>
+
     <div v-if="loading" class="loading-overlay">
       <ProgressSpinner style="width: 44px; height: 44px" strokeWidth="4" />
       <span>Loading instance data...</span>
@@ -361,7 +373,6 @@ import Checkbox from 'primevue/checkbox'
 import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
 import Dialog from 'primevue/dialog'
-import Divider from 'primevue/divider'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import ProgressSpinner from 'primevue/progressspinner'
@@ -402,7 +413,20 @@ const emit = defineEmits(['update:modelValue', 'confirm'])
 const store = useLibraryStore()
 const { trackEvent } = useGtm()
 const { nodes } = useVueFlow()
-const { alert, confirm } = useConfirmDialog()
+const { confirm } = useConfirmDialog()
+
+const isNameUnsanitary = computed(() => editableName.value !== sanitiseName(editableName.value))
+
+function sanitiseNameOnBlur() {
+  if (!editableName.value || !editableName.value.trim()) {
+    return
+  }
+
+  const sanitised = sanitiseName(editableName.value)
+  if (sanitised) {
+    editableName.value = sanitised
+  }
+}
 
 // ── State ────────────────────────────────────────────────────────────────────
 const loading = ref(false)
@@ -573,10 +597,6 @@ onUnmounted(() => {
 // ── Computed ─────────────────────────────────────────────────────────────────
 const componentFile = computed(() => props.mathRef?.split(':')[0])
 const componentName = computed(() => props.mathRef?.split(':')[1])
-
-const dialogTitle = computed(() => {
-  return `Editing: ${editableName.value || props.initialName} (${componentName.value} - ${componentFile.value})`
-})
 
 const siblings = computed(() => {
   if (!componentName.value || !componentFile.value) return []
@@ -766,6 +786,7 @@ async function handleSave() {
   }
 
   const sanitised = sanitiseName(editableName.value)
+
   if (!sanitised) {
     notify.error({ message: 'Instance name is invalid.' })
     activeTab.value = 'ports'
@@ -846,10 +867,16 @@ async function handleSave() {
   font-size: 1.125rem;
   font-weight: 600;
   width: 100%;
+  overflow: visible;
 }
 
 .header-prefix {
   color: var(--p-text-color);
+}
+
+.header-input-wrapper {
+  position: relative;
+  display: inline-flex;
 }
 
 .header-input {
@@ -858,10 +885,69 @@ async function handleSave() {
   font-weight: normal;
 }
 
+.header-input--warning {
+  border-color: var(--p-yellow-500, #eab308) !important;
+}
+
+.header-input--warning:enabled:focus {
+  box-shadow: 0 0 0 1px var(--p-yellow-500, #eab308);
+}
+
 .header-suffix {
   color: var(--p-text-muted-color);
   font-size: 0.9rem;
   font-weight: normal;
+}
+
+/* ── Name warning popover ── */
+.name-warning-popover {
+  position: absolute;
+  top: calc(100% + 9px);
+  left: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: max-content;
+  max-width: 280px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--p-yellow-500, #eab308);
+  color: #1f1300;
+  font-size: 0.8125rem;
+  font-weight: normal;
+  line-height: 1.4;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.name-warning-arrow {
+  position: absolute;
+  top: -5px;
+  left: 16px;
+  width: 10px;
+  height: 10px;
+  background: inherit;
+  transform: rotate(45deg);
+  border-radius: 2px 0 0 0;
+}
+
+.name-warning-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.name-warning-pop-enter-active,
+.name-warning-pop-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.name-warning-pop-enter-from,
+.name-warning-pop-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .module-editor-dialog {
@@ -869,6 +955,10 @@ async function handleSave() {
   flex-direction: column;
   overflow: auto;
   box-sizing: border-box;
+}
+
+.module-editor-dialog :deep(.p-dialog-header) {
+  overflow: visible;
 }
 
 .module-editor-dialog :deep(.p-dialog-content) {
