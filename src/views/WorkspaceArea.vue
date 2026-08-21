@@ -639,8 +639,8 @@ function onContextSidebarResize(width) {
 
 const fitViewParams = computed(() => ({
   padding: {
-    left: libraryPanelWidth.value,
-    right: 0,
+    left: libraryPanelWidth.value + 0.05,
+    right: 0.05,
     top: 0,
     bottom: 0,
   },
