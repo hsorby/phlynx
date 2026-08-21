@@ -607,8 +607,8 @@ import {
   JSON_FILE_TYPES,
   DEFAULT_FILE_NAME,
   NEW_INSTANCE_MODULE_REF,
-  FORMAT_VERSION,
-  DEFAULT_PROJECT_TYPE,
+  PHLYNX_PROJECT_IDENTIFIER,
+  PHLYNX_PROJECT_VERSION,
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
@@ -2401,10 +2401,8 @@ function recomputeMissingCouplings() {
  */
 function createSaveBlob() {
   const saveState = {
-    info: {
-      format_version: FORMAT_VERSION,
-      project: DEFAULT_PROJECT_TYPE,
-    },
+    id: PHLYNX_PROJECT_IDENTIFIER,
+    version: PHLYNX_PROJECT_VERSION,
     flow: toObject(),
     store: libraryStore.getState(),
     simulation: simulationSettingsStore.getState(),
