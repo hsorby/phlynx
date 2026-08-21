@@ -349,16 +349,23 @@ const blockOutsideDrop = (e) => {
 
 onMounted(() => {
   restoreFolder()
-  window.addEventListener('dragend', resetAllDragState)
-  window.addEventListener('dragover', blockOutsideDrop)
-  window.addEventListener('drop', blockOutsideDrop)
 })
 
-onUnmounted(() => {
-  window.removeEventListener('dragend', resetAllDragState)
-  window.removeEventListener('dragover', blockOutsideDrop)
-  window.removeEventListener('drop', blockOutsideDrop)
-})
+watch(
+  () => props.modelValue,
+  (isOpen) => {
+    if (isOpen) {
+      window.addEventListener('dragend', resetAllDragState)
+      window.addEventListener('dragover', blockOutsideDrop)
+      window.addEventListener('drop', blockOutsideDrop)
+    } else {
+      window.removeEventListener('dragend', resetAllDragState)
+      window.removeEventListener('dragover', blockOutsideDrop)
+      window.removeEventListener('drop', blockOutsideDrop)
+    }
+  },
+  { immediate: true }
+)
 
 const isInstanceArrayImport = computed(() =>
   (props.config.fields || []).some((f) => f.key === IMPORT_KEYS.INSTANCE_ARRAY)
