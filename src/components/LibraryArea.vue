@@ -11,6 +11,7 @@
           size="small"
           class="w-full"
         />
+        <InputIcon v-if="filterText" class="mlc__clear pi pi-times-circle" @click="filterText=''"/>
       </IconField>
     </div>
 
@@ -331,6 +332,10 @@ function handleSelect(module) {
   border-bottom: 1px solid var(--mlc-border);
   flex-shrink: 0;
   background: var(--mlc-surface);
+}
+
+.mlc__clear:hover {
+  color: var(--p-text-color);
 }
 
 /* ── Scroll container ────────────────────────────────────────────────────────── */
