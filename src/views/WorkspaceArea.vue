@@ -235,9 +235,10 @@
             @click="triggerCurrentSend"
             :disabled="!somethingAvailable || currentSendDisabled"
             v-tooltip.bottom="{
-              value: !somethingAvailable || currentSendDisabled
-                ? 'The Send option is disabled because CellML library is not ready yet.'
-                : `Send to ${currentSendMode.label}`,
+              value:
+                !somethingAvailable || currentSendDisabled
+                  ? 'The Send option is disabled because CellML library is not ready yet.'
+                  : `Send to ${currentSendMode.label}`,
               showDelay: 300,
             }"
           >
@@ -945,7 +946,7 @@ const edgeDialogTargetNode = ref({})
 const edgeDialogActiveEdge = ref({})
 const edgeDialogSubgraph = ref(new Map())
 const importDialogRef = ref(null)
-const savedFlowSnapshot = ref('')
+const savedFlowHash = ref('')
 
 const currentEditingNode = ref({
   name: '',
@@ -976,7 +977,7 @@ const currentMatchIndex = ref(0)
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
 const somethingSelected = computed(() => getSelectedNodes.value.length > 0)
-const isFlowDirty = computed(() => snapshotFlowState() !== savedFlowSnapshot.value)
+const isFlowDirty = computed(() => cyrb53(snapshotFlowState()) !== savedFlowHash.value)
 
 const {
   currentExportMode,
@@ -2419,6 +2420,27 @@ function recomputeMissingCouplings() {
 }
 
 /**
+ * Hash a string to a 53-bit integer using the cyrb53 algorithm.
+ * @param str Input string to hash.
+ * @param seed Integer seed for the hash function (default: 0).
+ * @returns A 53-bit integer hash of the input string.
+ */
+const cyrb53 = (str, seed = 0) => {
+    let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+    for(let i = 0, ch; i < str.length; i++) {
+        ch = str.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1  = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+    h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2  = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+    h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+
+    return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+};
+
+/**
  * Creates a snapshot of the current flow state, including nodes and edges, and returns it as a JSON string.
  * This is used to determine if the workspace has been modified that would change the Math or Port configurations.
  * Leading us to set the CUFLynx modified state to true, which will let CUFLynx know that existing analysis is now invalid.
@@ -2427,8 +2449,12 @@ function snapshotFlowState() {
   const flowState = toObject()
   const nodeData = flowState.nodes.map((node) => ({
     id: node.id,
-    data: node.data,
+    data: {
+      ...node.data,
+      handles: node.data?.handles?.filter((handle) => handle.variant !== 'ghost') ?? [],
+    },
   }))
+
   for (const index in nodeData) {
     if (nodeData[index].data?.mathRef) {
       const mathRef = nodeData[index].data.mathRef
@@ -2438,7 +2464,8 @@ function snapshotFlowState() {
       }
     }
   }
-  return JSON.stringify({nodeData, edges: flowState.edges})
+
+  return JSON.stringify({ nodeData, edges: flowState.edges })
 }
 
 /**
@@ -2511,7 +2538,7 @@ function handleLoadWorkspace(event) {
       simulationSettingsStore.loadState(migratedState.simulation)
       inspectionModuleStore.loadState(migratedState.inspectionModules)
 
-      savedFlowSnapshot.value = snapshotFlowState()
+      savedFlowHash.value = cyrb53(snapshotFlowState())
       trackEvent('workflow_load_action', {
         category: 'Workflow',
         action: 'load_workflow',
