@@ -393,7 +393,7 @@
           >
             <HelperLines :horizontal="helperLineHorizontal" :vertical="helperLineVertical" :alignment="alignment" />
             <MiniMap :pannable="true" :zoomable="true" class="mini-map" />
-            <Controls>
+            <Controls :fit-view-params="fitViewParams">
               <ControlButton :disabled="screenshotDisabled" title="PNG Screenshot" @click="doPngScreenshot">
                 <i class="pi pi-image"></i>
               </ControlButton>
@@ -634,6 +634,16 @@ const contextSidebarWidth = ref(0)
 function onContextSidebarResize(width) {
   contextSidebarWidth.value = width
 }
+
+const fitViewParams = computed(() => ({
+  padding: {
+    left: libraryPanelWidth.value,
+    right: 0,
+    top: 0,
+    bottom: 0,
+  },
+  duration: 200,
+}))
 
 const SEARCH_BAR_TOP = 150
 const TOAST_GAP_BELOW_SEARCH_BAR = 16
@@ -2213,7 +2223,7 @@ const paneContextMenuItems = [
   },
   {
     label: 'Fit View',
-    action: () => fitView(),
+    action: () => fitView(fitViewParams.value),
   },
   {
     label: 'Clear Workspace',
