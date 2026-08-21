@@ -11,10 +11,6 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
-      path: '/api/',
-      component: WorkspaceArea,
-    },
-    {
       path: '/',
       name: 'workspace',
       component: WorkspaceArea,
