@@ -557,11 +557,13 @@ import useDragAndDrop from '../composables/useDnD'
 import { useHandleManagement } from '../composables/useHandleManagement'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
 import { useLoadFromCellML } from '../composables/useLoadFromCellml'
+import { useLoadFromUrl } from '../composables/useLoadFromUrl'
+import { createUrlLoaders } from '../services/urlLoaders'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
 import { useColorScheme } from '../composables/useColorScheme'
 import { useGtm } from '../composables/useGtm'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
-import { useImportExportSend } from '../composables/useImportExportSend.js'
+import { useImportExportSend } from '../composables/useImportExportSend'
 
 import LibraryArea from '../components/LibraryArea.vue'
 import ResizableLibraryPanel from '../components/ResizableLibraryPanel.vue'
@@ -2442,62 +2444,79 @@ const onSaveConfirm = async (fileName) => {
 /**
  * Reads a JSON file and restores the application state.
  */
+async function applyWorkspaceState(loadedState, { source = 'json' } = {}) {
+  const { clearWorkspace } = useClearWorkspace()
+
+  try {
+    // Validate the loaded file
+    if (!loadedState.flow || !loadedState.store) {
+      throw new Error('Invalid workflow file format.')
+    }
+
+    // Handles legacy formats if needed
+    const migratedState = migrateWorkspace(loadedState)
+
+    // Clear the current Vue Flow state.
+    await clearWorkspace()
+
+    setViewport(migratedState.flow.viewport)
+    fromObject(migratedState.flow)
+
+    // Rebuild the edge index so the EdgeConnectionDialog subgraph is correct.
+    rebuildNodeEdgeIndex()
+    recomputeMissingCouplings()
+
+    // Restore Pinia store state.
+    libraryStore.loadState(migratedState.store)
+    simulationSettingsStore.loadState(migratedState.simulation)
+    inspectionModuleStore.loadState(migratedState.inspectionModules)
+
+    trackEvent('workflow_load_action', {
+      category: 'Workflow',
+      action: 'load_workflow',
+      label: `Nodes: ${nodes.value.length}, Edges: ${edges.value.length}`,
+      file_type: source,
+    })
+    notify.success({
+      title: 'Workflow loaded successfully!',
+    })
+  } catch (error) {
+    trackEvent('workflow_load_action', {
+      category: 'Workflow',
+      action: 'load_workflow',
+      label: `Error: ${error.message}`,
+      file_type: source,
+    })
+    notify.error({ title: 'Failed to load workflow', message: `${error.message}` })
+  }
+}
+
+/**
+ * Reads a JSON file and restores the application state.
+ */
 function handleLoadWorkspace(event) {
   const file = event.target?.files?.[0] || event.raw || event
   if (!file) return
 
   const reader = new FileReader()
-  const { clearWorkspace } = useClearWorkspace()
-
-  reader.onload = async (e) => {
+  reader.onload = (e) => {
+    let loadedState
     try {
-      const loadedState = JSON.parse(e.target.result)
-
-      // Validate the loaded file
-      if (!loadedState.flow || !loadedState.store) {
-        throw new Error('Invalid workflow file format.')
-      }
-
-      // Handles legacy formats if needed
-      const migratedState = migrateWorkspace(loadedState)
-
-      // Clear the current Vue Flow state.
-      await clearWorkspace()
-
-      setViewport(migratedState.flow.viewport)
-      fromObject(migratedState.flow)
-
-      // Rebuild the edge index so the EdgeConnectionDialog subgraph is correct.
-      rebuildNodeEdgeIndex()
-      recomputeMissingCouplings()
-
-      // Restore Pinia store state.
-      libraryStore.loadState(migratedState.store)
-      simulationSettingsStore.loadState(migratedState.simulation)
-      inspectionModuleStore.loadState(migratedState.inspectionModules)
-
-      trackEvent('workflow_load_action', {
-        category: 'Workflow',
-        action: 'load_workflow',
-        label: `Nodes: ${nodes.value.length}, Edges: ${edges.value.length}`,
-        file_type: 'json',
-      })
-      notify.success({
-        title: 'Workflow loaded successfully!',
-      })
+      loadedState = JSON.parse(e.target.result)
     } catch (error) {
-      trackEvent('workflow_load_action', {
-        category: 'Workflow',
-        action: 'load_workflow',
-        label: `Error: ${error.message}`,
-        file_type: 'json',
-      })
       notify.error({ title: 'Failed to load workflow', message: `${error.message}` })
+      return
     }
+    applyWorkspaceState(loadedState, { source: 'json' })
   }
-
   reader.readAsText(file)
 }
+
+const urlLoaders = createUrlLoaders({ applyWorkspaceState, loadCellMLFiles })
+
+useLoadFromUrl(urlLoaders, (message) => {
+  notify.error({ title: 'Failed to load from link', message })
+})
 
 const handleUndo = () => {
   historyStore.undo()
