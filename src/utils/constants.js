@@ -143,9 +143,9 @@ export const MULTIPORT_OPTIONS = [
 
 export const DEFAULT_FILE_NAME = 'phlynx-export'
 
-export const DEFAULT_PROJECT_TYPE = 'Phlynx-Project'
+export const PHLYNX_PROJECT_IDENTIFIER = 'phlynx-project'
 
-export const FORMAT_VERSION = '1.0.0'
+export const PHLYNX_PROJECT_VERSION = '1.0.0'
 
 /*--- Folder and File Handling ---*/
 export const IMPORT_KEYS = {
