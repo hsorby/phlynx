@@ -149,7 +149,7 @@
 </template>
 
 <script setup>
-import { computed, ref, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, reactive, onMounted, onUnmounted } from 'vue'
 
 // PrimeVue Imports
 import InputText from 'primevue/inputtext'
@@ -196,7 +196,7 @@ onMounted(() => {
   scrollEl.value?.addEventListener('wheel', blockScroll, { passive: false })
 })
 
-onBeforeUnmount(() => {
+onUnmounted(() => {
   scrollEl.value?.removeEventListener('wheel', blockScroll)
 })
 
