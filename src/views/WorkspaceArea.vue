@@ -354,7 +354,13 @@
         </div>
 
         <div class="dnd-flow" @drop="onDrop">
-          <Toast position="top-right" :style="{ top: `${toastTop}px`, right: `${contextSidebarWidth + 25}px` }">
+          <Transition name="fade">
+            <div v-if="isUrlLoading" class="flow-loading-overlay">
+              <i class="pi pi-spin pi-spinner loading-icon" />
+              <span>Populating Workspace...</span>
+            </div>
+          </Transition>
+          <Toast v-if="!isUrlLoading" position="top-right" :style="{ top: `${toastTop}px`, right: `${contextSidebarWidth + 25}px` }">
             <template #message="slotProps">
               <div class="p-toast-message-text" style="flex: 1">
                 <!-- Summary / Title -->
@@ -639,10 +645,10 @@ function onContextSidebarResize(width) {
 
 const fitViewParams = computed(() => ({
   padding: {
-    left: libraryPanelWidth.value + 0.05,
-    right: 0.05,
-    top: 0,
-    bottom: 0,
+    left: 0.5,
+    right: 0,
+    top: 0.1,
+    bottom: 0.1,
   },
   duration: 200,
 }))
@@ -2514,9 +2520,7 @@ function handleLoadWorkspace(event) {
 
 const urlLoaders = createUrlLoaders({ applyWorkspaceState, loadCellMLFiles })
 
-useLoadFromUrl(urlLoaders, (message) => {
-  notify.error({ title: 'Failed to load from link', message })
-})
+const { load: loadFromUrl, isLoading: isUrlLoading } = useLoadFromUrl()
 
 const handleUndo = () => {
   historyStore.undo()
@@ -2915,12 +2919,16 @@ const hydrateCellmlAndDependents = async () => {
   return manifest
 }
 
-onMounted(() => {
+onMounted(async() => {
   document.addEventListener('keydown', handleKeyDown)
   document.addEventListener('mousemove', onMouseMove)
 
   void hydrateCellmlAndDependents().catch((error) => {
     console.error('Failed to initialize libCellML resources in background:', error)
+  })
+
+  await loadFromUrl(urlLoaders, (message) => {
+    notify.error({ title: 'Failed to load from link', message })
   })
 })
 
@@ -3054,8 +3062,39 @@ watch(
   stroke-width: 7px;
 }
 
+.flow-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--p-content-background, #18181b) 85%, transparent);
+  backdrop-filter: blur(4px);
+  z-index: 20;
+  color: var(--p-text-muted-color, #909399);
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.loading-icon {
+  font-size: 22px;
+  color: var(--p-primary-color, #409eff);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.25s ease-in-out;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
 /* ==========================================================================
-   3. Vue Flow Elements (Tutorial Dark Colors)
+   3. Vue Flow Elements 
    ========================================================================== */
 /* Controls Toolbar Container */
 .p-dark .vue-flow__controls {
