@@ -11,10 +11,10 @@ import {
   NUM_GHOST_HANDLES_SIDES,
   NUM_GHOST_HANDLES_TOP_BOT,
   PORT_TYPE_OPTIONS,
-  FORMAT_VERSION,
-  DEFAULT_PROJECT_TYPE,
   HANDLE_SIDES,
   BASELINE_SIMULATION_SETTINGS,
+  PHLYNX_PROJECT_VERSION,
+  PHLYNX_PROJECT_IDENTIFIER,
 } from '../utils/constants'
 import { normalisePorts, normaliseVariables } from '../utils/config'
 import { buildGhostHandles, findMostCentralGhostHandle } from '../utils/handles'
@@ -310,11 +310,14 @@ function convertStore(oldStore, globalConstantNames) {
   }
 }
 
-export function migrateWorkspace(doc, projectName = DEFAULT_PROJECT_TYPE) {
-  // New versions (i.e., containing info field) don't need migrating, but may
-  // predate the Inspection Modules feature and therefore lack that key.
-  if (doc && doc.info) {
-    return { ...doc, inspectionModules: doc.inspectionModules || [] }
+export function migrateWorkspace(doc) {
+  if (doc && doc.version) {
+    return {
+      ...doc,
+      id: PHLYNX_PROJECT_IDENTIFIER,
+      version: PHLYNX_PROJECT_VERSION,
+      inspectionModules: doc.inspectionModules || []
+    }
   }
 
   const oldFlow = doc.flow
@@ -346,10 +349,8 @@ export function migrateWorkspace(doc, projectName = DEFAULT_PROJECT_TYPE) {
   }
 
   return {
-    info: {
-      format_version: FORMAT_VERSION,
-      project: projectName,
-    },
+    id: PHLYNX_PROJECT_IDENTIFIER,
+    version: PHLYNX_PROJECT_VERSION,
     flow: newFlow,
     store: convertStore(oldStore, globalConstantNames),
     simulation: {

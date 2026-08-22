@@ -355,7 +355,13 @@
         </div>
 
         <div class="dnd-flow" @drop="onDrop" @dragover.prevent @dragenter.prevent>
-          <Toast position="top-right" :style="{ top: `${toastTop}px`, right: `${contextSidebarWidth + 25}px` }">
+          <Transition name="fade">
+            <div v-if="isUrlLoading" class="flow-loading-overlay">
+              <i class="pi pi-spin pi-spinner loading-icon" />
+              <span>Populating Workspace...</span>
+            </div>
+          </Transition>
+          <Toast v-if="!isUrlLoading" position="top-right" :style="{ top: `${toastTop}px`, right: `${contextSidebarWidth + 25}px` }">
             <template #message="slotProps">
               <div class="p-toast-message-text" style="flex: 1">
                 <!-- Summary / Title -->
@@ -394,7 +400,7 @@
           >
             <HelperLines :horizontal="helperLineHorizontal" :vertical="helperLineVertical" :alignment="alignment" />
             <MiniMap :pannable="true" :zoomable="true" class="mini-map" />
-            <Controls>
+            <Controls :fit-view-params="fitViewParams">
               <ControlButton :disabled="screenshotDisabled" title="PNG Screenshot" @click="doPngScreenshot">
                 <i class="pi pi-image"></i>
               </ControlButton>
@@ -560,11 +566,13 @@ import useDragAndDrop from '../composables/useDnD'
 import { useHandleManagement } from '../composables/useHandleManagement'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
 import { useLoadFromCellML } from '../composables/useLoadFromCellml'
+import { useLoadFromUrl } from '../composables/useLoadFromUrl'
+import { createUrlLoaders } from '../services/urlLoaders'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
 import { useColorScheme } from '../composables/useColorScheme'
 import { useGtm } from '../composables/useGtm'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
-import { useImportExportSend } from '../composables/useImportExportSend.js'
+import { useImportExportSend } from '../composables/useImportExportSend'
 
 import LibraryArea from '../components/LibraryArea.vue'
 import ResizableLibraryPanel from '../components/ResizableLibraryPanel.vue'
@@ -610,8 +618,8 @@ import {
   JSON_FILE_TYPES,
   DEFAULT_FILE_NAME,
   NEW_INSTANCE_MODULE_REF,
-  FORMAT_VERSION,
-  DEFAULT_PROJECT_TYPE,
+  PHLYNX_PROJECT_IDENTIFIER,
+  PHLYNX_PROJECT_VERSION,
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
@@ -637,6 +645,16 @@ const contextSidebarWidth = ref(0)
 function onContextSidebarResize(width) {
   contextSidebarWidth.value = width
 }
+
+const fitViewParams = computed(() => ({
+  padding: {
+    left: 0.5,
+    right: 0,
+    top: 0.1,
+    bottom: 0.1,
+  },
+  duration: 200,
+}))
 
 const SEARCH_BAR_TOP = 150
 const TOAST_GAP_BELOW_SEARCH_BAR = 16
@@ -2236,7 +2254,7 @@ const paneContextMenuItems = [
   },
   {
     label: 'Fit View',
-    action: () => fitView(),
+    action: () => fitView(fitViewParams.value),
   },
   {
     label: 'Clear Workspace',
@@ -2473,10 +2491,8 @@ function snapshotFlowState() {
  */
 function createSaveBlob() {
   const saveState = {
-    info: {
-      format_version: FORMAT_VERSION,
-      project: DEFAULT_PROJECT_TYPE,
-    },
+    id: PHLYNX_PROJECT_IDENTIFIER,
+    version: PHLYNX_PROJECT_VERSION,
     flow: toObject(),
     store: libraryStore.getState(),
     simulation: simulationSettingsStore.getState(),
@@ -2504,63 +2520,78 @@ const onSaveConfirm = async (fileName) => {
 /**
  * Reads a JSON file and restores the application state.
  */
+async function applyWorkspaceState(loadedState, { source = 'json' } = {}) {
+  const { clearWorkspace } = useClearWorkspace()
+
+  try {
+    // Validate the loaded file
+    if (!loadedState.flow || !loadedState.store) {
+      throw new Error('Invalid workflow file format.')
+    }
+
+    // Handles legacy formats if needed
+    const migratedState = migrateWorkspace(loadedState)
+
+    // Clear the current Vue Flow state.
+    await clearWorkspace()
+
+    setViewport(migratedState.flow.viewport)
+    fromObject(migratedState.flow)
+
+    // Rebuild the edge index so the EdgeConnectionDialog subgraph is correct.
+    rebuildNodeEdgeIndex()
+    recomputeMissingCouplings()
+
+    // Restore Pinia store state.
+    libraryStore.loadState(migratedState.store)
+    simulationSettingsStore.loadState(migratedState.simulation)
+    inspectionModuleStore.loadState(migratedState.inspectionModules)
+
+    savedFlowHash.value = cyrb53(snapshotFlowState())
+    trackEvent('workflow_load_action', {
+      category: 'Workflow',
+      action: 'load_workflow',
+      label: `Nodes: ${nodes.value.length}, Edges: ${edges.value.length}`,
+      file_type: source,
+    })
+    notify.success({
+      title: 'Workflow loaded successfully!',
+    })
+  } catch (error) {
+    trackEvent('workflow_load_action', {
+      category: 'Workflow',
+      action: 'load_workflow',
+      label: `Error: ${error.message}`,
+      file_type: source,
+    })
+    notify.error({ title: 'Failed to load workflow', message: `${error.message}` })
+  }
+}
+
+/**
+ * Reads a JSON file and restores the application state.
+ */
 function handleLoadWorkspace(event) {
   const file = event.target?.files?.[0] || event.raw || event
   if (!file) return
 
   const reader = new FileReader()
-  const { clearWorkspace } = useClearWorkspace()
-
-  reader.onload = async (e) => {
+  reader.onload = (e) => {
+    let loadedState
     try {
-      const loadedState = JSON.parse(e.target.result)
-
-      // Validate the loaded file
-      if (!loadedState.flow || !loadedState.store) {
-        throw new Error('Invalid workflow file format.')
-      }
-
-      // Handles legacy formats if needed
-      const migratedState = migrateWorkspace(loadedState)
-
-      // Clear the current Vue Flow state.
-      await clearWorkspace()
-
-      setViewport(migratedState.flow.viewport)
-      fromObject(migratedState.flow)
-
-      // Rebuild the edge index so the EdgeConnectionDialog subgraph is correct.
-      rebuildNodeEdgeIndex()
-      recomputeMissingCouplings()
-
-      // Restore Pinia store state.
-      libraryStore.loadState(migratedState.store)
-      simulationSettingsStore.loadState(migratedState.simulation)
-      inspectionModuleStore.loadState(migratedState.inspectionModules)
-
-      savedFlowHash.value = cyrb53(snapshotFlowState())
-      trackEvent('workflow_load_action', {
-        category: 'Workflow',
-        action: 'load_workflow',
-        label: `Nodes: ${nodes.value.length}, Edges: ${edges.value.length}`,
-        file_type: 'json',
-      })
-      notify.success({
-        title: 'Workflow loaded successfully!',
-      })
+      loadedState = JSON.parse(e.target.result)
     } catch (error) {
-      trackEvent('workflow_load_action', {
-        category: 'Workflow',
-        action: 'load_workflow',
-        label: `Error: ${error.message}`,
-        file_type: 'json',
-      })
-      notify.error({ title: 'Failed to load workflow', message: `${error.message}` })
+      notify.error({ title: 'Failed to read workflow', message: `${error.message}` })
+      return
     }
+    applyWorkspaceState(loadedState, { source: 'json' })
   }
-
   reader.readAsText(file)
 }
+
+const urlLoaders = createUrlLoaders({ applyWorkspaceState, loadCellMLFiles })
+
+const { load: loadFromUrl, isLoading: isUrlLoading } = useLoadFromUrl()
 
 const handleUndo = () => {
   historyStore.undo()
@@ -2959,12 +2990,16 @@ const hydrateCellmlAndDependents = async () => {
   return manifest
 }
 
-onMounted(() => {
+onMounted(async() => {
   document.addEventListener('keydown', handleKeyDown)
   document.addEventListener('mousemove', onMouseMove)
 
   void hydrateCellmlAndDependents().catch((error) => {
     console.error('Failed to initialize libCellML resources in background:', error)
+  })
+
+  await loadFromUrl(urlLoaders, (message) => {
+    notify.error({ title: 'Failed to load from link', message })
   })
 })
 
@@ -3098,8 +3133,39 @@ watch(
   stroke-width: 7px;
 }
 
+.flow-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--p-content-background, #18181b) 85%, transparent);
+  backdrop-filter: blur(4px);
+  z-index: 20;
+  color: var(--p-text-muted-color, #909399);
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.loading-icon {
+  font-size: 22px;
+  color: var(--p-primary-color, #409eff);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.25s ease-in-out;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
 /* ==========================================================================
-   3. Vue Flow Elements (Tutorial Dark Colors)
+   3. Vue Flow Elements 
    ========================================================================== */
 /* Controls Toolbar Container */
 .p-dark .vue-flow__controls {

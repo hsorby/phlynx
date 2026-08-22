@@ -36,11 +36,14 @@
       <div class="pane left-pane" :style="leftPaneStyle" :class="{ 'left-pane--collapsed': rightCollapsed }">
         <div class="editor-wrapper">
           <CellMLTextEditor
+            ref="cellmlEditorRef"
             :key="mathRef"
             :model-value="currentModel"
             @update:code="handleCodeUpdate"
             @ready="handleEditorReady"
             @save="handleSave"
+            @undo="handleEditorUndo"
+            @redo="handleEditorRedo"
           />
         </div>
       </div>
@@ -103,23 +106,21 @@
               <div class="parameters-tab-body">
                 <div class="toolbar-container">
                   <div class="search-group">
-                    <div class="search-input-wrapper">
-                      <InputText
-                        v-model="searchQuery"
-                        size="small"
-                        :placeholder="`Search by ${searchColumn}...`"
-                        class="search-input"
-                      />
-                      <Button
-                        v-if="searchQuery"
-                        icon="pi pi-times"
-                        text
-                        rounded
-                        severity="secondary"
-                        size="small"
-                        class="clear-search-btn"
-                        @click="searchQuery = ''"
-                      />
+                    <div class="search-input-wrapper flex-1">
+                      <IconField class="w-full">
+                        <InputIcon class="pi pi-search" />
+                        <InputText
+                          v-model="searchQuery"
+                          class="w-full"
+                          size="small"
+                          :placeholder="`Search by ${searchColumn}...`"
+                        />
+                        <InputIcon
+                          v-if="searchQuery"
+                          class="clear-search-btn pi pi-times-circle"
+                          @click="searchQuery = ''"
+                        />
+                      </IconField>
                     </div>
                     <Select
                       v-model="searchColumn"
@@ -354,7 +355,6 @@
 <script setup>
 import { ref, computed, watch, onBeforeUnmount, onMounted, onUnmounted, nextTick } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
-import { useDebounceFn } from '@vueuse/core'
 
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
@@ -364,6 +364,8 @@ import Dialog from 'primevue/dialog'
 import Divider from 'primevue/divider'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
+import InputIcon from 'primevue/inputicon'
+import IconField from 'primevue/iconfield'
 import ProgressSpinner from 'primevue/progressspinner'
 import Select from 'primevue/select'
 import MultiSelect from 'primevue/multiselect'
@@ -376,6 +378,7 @@ import Tag from 'primevue/tag'
 
 import CellMLTextEditor from './CellMLTextEditor.vue'
 import { useLibraryStore } from '../stores/libraryStore'
+import { useFlowHistoryStore } from '../stores/historyStore'
 import { useGtm } from '../composables/useGtm'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
 
@@ -400,6 +403,8 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'confirm'])
 
 const store = useLibraryStore()
+const history = useFlowHistoryStore()
+
 const { trackEvent } = useGtm()
 const { nodes } = useVueFlow()
 const { alert, confirm } = useConfirmDialog()
@@ -409,7 +414,8 @@ const loading = ref(false)
 const activeTab = ref('parameters')
 
 // CellML State
-const currentModel = ref('')
+const currentModel = ref('')       // parsed XML representation - used for variable extraction, save, etc.
+const currentCellmlText = ref('')  // raw CellML source text - what the editor actually displays
 const originalModel = ref('')
 const applyToAll = ref(false)
 
@@ -430,6 +436,9 @@ const sortOrder = ref(1)
 // Port & Instance State
 const editableName = ref('')
 const editablePorts = ref([])
+
+// Ref to the CellML editor, used to imperatively replay text during undo/redo
+const cellmlEditorRef = ref(null)
 
 // ── Split / Collapse State ──────────────────────────────────────────────────
 const SPLIT_STORAGE_KEY = 'instanceEditorDialog.leftPanePercent'
@@ -641,15 +650,20 @@ watch(
   }
 )
 
-function reconcileStagedState(newCode) {
+async function reconcileStagedState(newCode, newRawText) {
   const extractedVariables = extractVariablesFromMath(newCode)
   if (!extractedVariables) return
+
+  const previousCode = currentModel.value
+  const previousRawText = currentCellmlText.value
+  if (previousCode === newCode) return
 
   const validVarNames = new Set(extractedVariables.map((v) => v.name))
 
   const currentMap = new Map(parameterRows.value.map((row) => [row.name, row]))
+  const previousParameterRows = parameterRows.value
 
-  parameterRows.value = extractedVariables.map((variable) => {
+  const newParameterRows = extractedVariables.map((variable) => {
     const existing = currentMap.get(variable.name)
 
     return {
@@ -661,26 +675,93 @@ function reconcileStagedState(newCode) {
     }
   })
 
-  editablePorts.value.forEach((port) => {
-    if (Array.isArray(port.variables)) {
-      port.variables = port.variables.filter((varName) => validVarNames.has(varName))
-    }
+  history.startBatch()
+
+  await history.executeAndAddCommand({
+    type: 'update-cellml-code',
+    undo: async () => {
+      currentModel.value = previousCode
+      currentCellmlText.value = previousRawText
+      await cellmlEditorRef.value?.setText(previousRawText)
+    },
+    redo: async () => {
+      currentModel.value = newCode
+      currentCellmlText.value = newRawText
+      await cellmlEditorRef.value?.setText(newRawText)
+    },
+  })
+
+  await history.executeAndAddCommand({
+    type: 'update-parameter-rows',
+    undo: async () => {
+      parameterRows.value = previousParameterRows
+    },
+    redo: async () => {
+      parameterRows.value = newParameterRows
+    },
+  })
+
+  for (const port of editablePorts.value) {
+    if (!Array.isArray(port.variables)) continue
+
+    const portVars = port.variables
+    const removed = portVars.filter((varName) => !validVarNames.has(varName))
+    if (removed.length === 0) continue
+
+    await history.executeAndAddCommand({
+      type: 'remove-variable-from-port',
+      undo: async () => {
+        port.variables = portVars
+      },
+      redo: async () => {
+        port.variables = port.variables.filter((varName) => validVarNames.has(varName))
+      },
+    })
+  }
+
+  history.endBatch()
+}
+
+function handleCodeUpdate(newCode, rawText, isValid) {
+  if (isValid) {
+    reconcileStagedState(newCode, rawText)
+  } else {
+    trackRawTextOnly(rawText)
+  }
+}
+
+async function trackRawTextOnly(rawText) {
+  const previousRawText = currentCellmlText.value
+  if (previousRawText === rawText) return
+
+  await history.executeAndAddCommand({
+    type: 'update-cellml-text-only',
+    undo: async () => {
+      currentCellmlText.value = previousRawText
+      await cellmlEditorRef.value?.setText(previousRawText)
+    },
+    redo: async () => {
+      currentCellmlText.value = rawText
+      await cellmlEditorRef.value?.setText(rawText)
+    },
   })
 }
 
-const debouncedReconcile = useDebounceFn((code) => {
-  reconcileStagedState(code)
-}, 300)
-
-function handleCodeUpdate(newCode) {
-  currentModel.value = newCode
-  debouncedReconcile(newCode)
+async function handleEditorUndo() {
+  if (!history.canUndo) return
+  await history.undo()
 }
 
-function handleEditorReady(canonicalMath) {
+async function handleEditorRedo() {
+  if (!history.canRedo) return
+  await history.redo()
+}
+
+function handleEditorReady(canonicalMath, rawText) {
   void isDirty.value
   currentModel.value = canonicalMath
   originalModel.value = canonicalMath
+  currentCellmlText.value = rawText ?? currentCellmlText.value
 }
 
 function sortParameterRows(field = 'type', order = 1) {
@@ -1138,21 +1219,6 @@ async function handleSave() {
 
 .search-input-wrapper {
   position: relative;
-  display: flex;
-  align-items: center;
-  flex: 1 1 160px;
-  min-width: 120px;
-}
-
-.search-input-wrapper :deep(.p-inputtext) {
-  width: 100%;
-}
-
-.clear-search-btn {
-  position: absolute;
-  right: 2px;
-  width: 1.25rem !important;
-  height: 1.25rem !important;
 }
 
 .bulk-controls {

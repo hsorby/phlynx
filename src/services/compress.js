@@ -20,6 +20,34 @@ const blobToBase64 = (blob) => {
   })
 }
 
+export const base64ToBlob = async (base64data, mimeType = 'application/zip') => {
+  const dataUrl = `data:${mimeType};base64,${base64data}`
+  const res = await fetch(dataUrl)
+  return await res.blob()
+}
+
+async function gzipBlob(blob) {
+  const stream = blob.stream().pipeThrough(new CompressionStream('gzip'))
+  return await new Response(stream).blob()
+}
+
+async function gunzipBlob(blob) {
+  const stream = blob.stream().pipeThrough(new DecompressionStream('gzip'))
+  return await new Response(stream).blob()
+}
+
+export const utf8ToGzippedBase64 = async (text) => {
+  const blob = new Blob([text], { type: 'text/plain' })
+  const gzipped = await gzipBlob(blob)
+  return await blobToBase64(gzipped)
+}
+
+export const base64ToUtf8 = async (base64data) => {
+  const compressedBlob = await base64ToBlob(base64data, 'application/gzip')
+  const blob = await gunzipBlob(compressedBlob)
+  return await blob.text()
+}
+
 export async function createCellMLDataFragment(cellmlBlob, fileName) {
   const internalName = fileName ? (fileName.endsWith('.cellml') ? fileName : `${fileName}.cellml`) : 'model.cellml'
 
