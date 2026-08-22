@@ -364,7 +364,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onBeforeUnmount, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import { useDebounceFn } from '@vueuse/core'
 
@@ -529,7 +529,7 @@ function toggleRightPanel() {
   rightCollapsed.value = !rightCollapsed.value
 }
 
-onBeforeUnmount(() => {
+onUnmounted(() => {
   window.removeEventListener('pointermove', onResizeMove)
 })
 

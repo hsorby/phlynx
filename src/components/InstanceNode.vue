@@ -108,7 +108,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Handle, useVueFlow } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
 import Button from 'primevue/button'
@@ -317,8 +317,11 @@ watch(viewport, () => {
 function onWindowResize() {
   if (isEditing.value) updatePopoverPosition()
 }
-window.addEventListener('resize', onWindowResize)
-onBeforeUnmount(() => window.removeEventListener('resize', onWindowResize))
+
+onMounted(() => {
+  window.addEventListener('resize', onWindowResize)
+})
+onUnmounted(() => window.removeEventListener('resize', onWindowResize))
 
 async function startEditing(event) {
   event.stopPropagation()
