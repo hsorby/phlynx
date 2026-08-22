@@ -21,6 +21,7 @@ import 'primeicons/primeicons.css'
 
 import './assets/style.css'
 import './assets/main.css'
+import './assets/sanitisewarning.css'
 
 import router from './router'
 import App from './App.vue'

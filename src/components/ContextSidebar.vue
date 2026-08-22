@@ -200,11 +200,14 @@
                 <div v-for="module in inspectionModuleStore.modules" :key="module.id" class="module-card">
                   <div class="module-card-header">
                     <div class="module-card-title-group">
-                      <i
-                        class="pi pi-calculator module-card-icon module-card-icon-button"
+                      <Button
+                        icon="pi pi-pencil"
+                        text
+                        rounded
+                        size="small"
                         v-tooltip.top="'Edit module'"
                         @click="emit('open-inspection-module-dialog', module)"
-                      ></i>
+                      />
                       <span class="module-card-name" :title="module.name">{{ module.name }}</span>
                     </div>
                     <div class="module-card-actions">

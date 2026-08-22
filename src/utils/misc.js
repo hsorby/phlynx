@@ -12,7 +12,6 @@ export const readFileAsText = (file) =>
   })
 
 export function sanitiseNameOnBlur(name) {
-  console.log('sanitiseNameOnBlur', name)
   if (name && name?.trim()) {
     const sanitised = sanitiseName(name)
     if (sanitised) {

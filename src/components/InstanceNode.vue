@@ -421,11 +421,6 @@ function openContextMenu(event) {
   margin-bottom: 0.5em;
 }
 
-.header-input-wrapper {
-  display: inline-flex;
-  width: 100%;
-}
-
 .instance-name :deep(.p-inputtext) {
   width: 100%;
   padding-top: 0.2rem;
