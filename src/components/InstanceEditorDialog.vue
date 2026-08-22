@@ -18,7 +18,7 @@
             size="small"
             class="header-input"
             :class="{ 'header-input--warning': isNameUnsanitary }"
-            @blur="sanitiseNameOnBlur"
+            @blur="sanitiseNameOnBlur(editableName)"
           />
           <Transition name="name-warning-pop">
             <div v-if="isNameUnsanitary" class="name-warning-popover" role="alert">
@@ -396,6 +396,7 @@ import { sanitiseName } from '../utils/nodes'
 import { detachReactivity } from '../utils/reactivity'
 import { notify } from '../utils/notify'
 import { getModelComponentNames, areModelsEquivalent, extractVariablesFromMath } from '../utils/cellml'
+import { sanitiseNameOnBlur } from '../utils/misc'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -416,17 +417,6 @@ const { nodes } = useVueFlow()
 const { confirm } = useConfirmDialog()
 
 const isNameUnsanitary = computed(() => editableName.value !== sanitiseName(editableName.value))
-
-function sanitiseNameOnBlur() {
-  if (!editableName.value || !editableName.value.trim()) {
-    return
-  }
-
-  const sanitised = sanitiseName(editableName.value)
-  if (sanitised) {
-    editableName.value = sanitised
-  }
-}
 
 // ── State ────────────────────────────────────────────────────────────────────
 const loading = ref(false)

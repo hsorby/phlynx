@@ -29,8 +29,8 @@
               autofocus
               class="header-input"
               :class="{ 'header-input--warning': isNameUnsanitary }"
-              @blur="sanitiseNameOnBlur"
-              @keydown.enter="sanitiseNameOnBlur"
+              @blur="sanitiseNameOnBlur(moduleName)"
+              @keydown.enter="sanitiseNameOnBlur(moduleName)"
             />
             <Transition name="name-warning-pop">
               <div v-if="isNameUnsanitary" class="name-warning-popover" role="alert">
@@ -237,6 +237,8 @@ import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 
+import { sanitiseNameOnBlur } from '../../utils/misc'
+
 const props = defineProps({
   modelValue: Boolean,
   nodes: {
@@ -307,17 +309,6 @@ function buildVariableRows(nodes, editingModule) {
     if (nodeDiff !== 0) return nodeDiff
     return a.variableName.localeCompare(b.variableName)
   })
-}
-
-function sanitiseNameOnBlur() {
-  if (!moduleName.value || !moduleName.value.trim()) {
-    return
-  }
-
-  const sanitised = sanitiseName(moduleName.value)
-  if (sanitised) {
-    moduleName.value = sanitised
-  }
 }
 
 const isNameUnsanitary = computed(() => moduleName.value !== sanitiseName(moduleName.value))
