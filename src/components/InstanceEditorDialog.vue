@@ -11,15 +11,27 @@
     <template #header>
       <div class="custom-dialog-header">
         <span class="header-prefix">Editing: </span>
-        <InputText 
-          v-model="editableName" 
-          placeholder="Enter instance name..." 
-          size="small"
-          class="header-input"
-        />
+        <div class="header-input-wrapper">
+          <InputText
+            v-model="editableName"
+            placeholder="Enter instance name..."
+            size="small"
+            class="header-input"
+            :class="{ 'header-input--warning': isNameUnsanitary }"
+            @blur="sanitiseNameOnBlur(editableName)"
+          />
+          <Transition name="name-warning-pop">
+            <div v-if="isNameUnsanitary" class="name-warning-popover" role="alert">
+              <div class="name-warning-arrow"></div>
+              <i class="pi pi-exclamation-triangle name-warning-icon"></i>
+              <span>Will be renamed to <strong>{{ sanitiseName(editableName) }}</strong></span>
+            </div>
+          </Transition>
+        </div>
         <span class="header-suffix">({{ componentName }} - {{ componentFile }})</span>
       </div>
     </template>
+
     <div v-if="loading" class="loading-overlay">
       <ProgressSpinner style="width: 44px; height: 44px" strokeWidth="4" />
       <span>Loading instance data...</span>
@@ -353,7 +365,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onBeforeUnmount, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
@@ -361,7 +373,6 @@ import Checkbox from 'primevue/checkbox'
 import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
 import Dialog from 'primevue/dialog'
-import Divider from 'primevue/divider'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import InputIcon from 'primevue/inputicon'
@@ -388,6 +399,7 @@ import { sanitiseName } from '../utils/nodes'
 import { detachReactivity } from '../utils/reactivity'
 import { notify } from '../utils/notify'
 import { getModelComponentNames, areModelsEquivalent, extractVariablesFromMath } from '../utils/cellml'
+import { sanitiseNameOnBlur } from '../utils/misc'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -407,7 +419,9 @@ const history = useFlowHistoryStore()
 
 const { trackEvent } = useGtm()
 const { nodes } = useVueFlow()
-const { alert, confirm } = useConfirmDialog()
+const { confirm } = useConfirmDialog()
+
+const isNameUnsanitary = computed(() => editableName.value !== sanitiseName(editableName.value))
 
 // ── State ────────────────────────────────────────────────────────────────────
 const loading = ref(false)
@@ -524,7 +538,7 @@ function toggleRightPanel() {
   rightCollapsed.value = !rightCollapsed.value
 }
 
-onBeforeUnmount(() => {
+onUnmounted(() => {
   window.removeEventListener('pointermove', onResizeMove)
 })
 
@@ -582,10 +596,6 @@ onUnmounted(() => {
 // ── Computed ─────────────────────────────────────────────────────────────────
 const componentFile = computed(() => props.mathRef?.split(':')[0])
 const componentName = computed(() => props.mathRef?.split(':')[1])
-
-const dialogTitle = computed(() => {
-  return `Editing: ${editableName.value || props.initialName} (${componentName.value} - ${componentFile.value})`
-})
 
 const siblings = computed(() => {
   if (!componentName.value || !componentFile.value) return []
@@ -847,6 +857,7 @@ async function handleSave() {
   }
 
   const sanitised = sanitiseName(editableName.value)
+
   if (!sanitised) {
     notify.error({ message: 'Instance name is invalid.' })
     activeTab.value = 'ports'
@@ -927,6 +938,7 @@ async function handleSave() {
   font-size: 1.125rem;
   font-weight: 600;
   width: 100%;
+  overflow: visible;
 }
 
 .header-prefix {
@@ -950,6 +962,10 @@ async function handleSave() {
   flex-direction: column;
   overflow: auto;
   box-sizing: border-box;
+}
+
+.module-editor-dialog :deep(.p-dialog-header) {
+  overflow: visible;
 }
 
 .module-editor-dialog :deep(.p-dialog-content) {

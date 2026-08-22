@@ -19,14 +19,28 @@
           <label for="inspection-module-name">
             Module Name <span class="subtle">(optional — defaults to '{{ defaultName }}')</span>
           </label>
-          <InputText
-            id="inspection-module-name"
-            v-model="moduleName"
-            placeholder="e.g., total_volume"
-            :invalid="isNameDuplicate"
-            class="w-full"
-            autofocus
-          />
+          <div class="input-wrapper">
+            <InputText
+              id="inspection-module-name"
+              v-model="moduleName"
+              placeholder="e.g., total_volume"
+              :invalid="isNameDuplicate"
+              fluid
+              autofocus
+              class="header-input"
+              :class="{ 'header-input--warning': isNameUnsanitary }"
+              @blur="sanitiseNameOnBlur(moduleName)"
+              @keydown.enter="sanitiseNameOnBlur(moduleName)"
+            />
+            <Transition name="name-warning-pop">
+              <div v-if="isNameUnsanitary" class="name-warning-popover" role="alert">
+                <div class="name-warning-arrow"></div>
+                <i class="pi pi-exclamation-triangle name-warning-icon"></i>
+                <span>Will be renamed to <strong>{{ sanitiseName(moduleName) }}</strong></span>
+              </div>
+            </Transition>
+          </div>
+          
           <small v-if="isNameDuplicate" class="error-text">
             A module with the name "{{ sanitiseName(moduleName) }}" already exists. Please choose a unique name.
           </small>
@@ -223,6 +237,8 @@ import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 
+import { sanitiseNameOnBlur } from '../../utils/misc'
+
 const props = defineProps({
   modelValue: Boolean,
   nodes: {
@@ -294,6 +310,8 @@ function buildVariableRows(nodes, editingModule) {
     return a.variableName.localeCompare(b.variableName)
   })
 }
+
+const isNameUnsanitary = computed(() => moduleName.value !== sanitiseName(moduleName.value))
 
 function initialiseDialog() {
   const editing = props.editingModule
@@ -478,6 +496,7 @@ const closeDialog = () => {
 </script>
 
 <style scoped>
+
 .dialog-content {
   display: flex;
   flex-direction: column;

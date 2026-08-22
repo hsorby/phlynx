@@ -1,3 +1,4 @@
+import { sanitiseName } from '../utils/nodes'
 
 /**
  * Read a File object as text.
@@ -9,3 +10,12 @@ export const readFileAsText = (file) =>
     reader.onerror = () => reject(new Error(`Failed to read ${file.name}`))
     reader.readAsText(file)
   })
+
+export function sanitiseNameOnBlur(name) {
+  if (name && name?.trim()) {
+    const sanitised = sanitiseName(name)
+    if (sanitised) {
+      name = sanitised
+    }
+  }
+}
