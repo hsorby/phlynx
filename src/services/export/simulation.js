@@ -33,11 +33,13 @@ export function buildSimulationJson(plotConfig, parameterScan, supplementalData)
   })
 }
 
+export const SIM_STEPS = 30
+
 // input: one entry per parameter-scan selection. id/name are both just the
 // constant's own name (per spec: "id and name can just be the variable name").
 function buildInput(scanSelections) {
   return scanSelections.map((sel) => {
-    const stepValue = (sel.max - sel.min) / 100
+    const stepValue = (sel.max - sel.min) / SIM_STEPS
     return {
       id: `id__${sel.nodeName}__${sel.parameterName}`,
       name: sel.parameterName,
