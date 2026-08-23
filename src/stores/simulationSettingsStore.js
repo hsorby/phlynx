@@ -20,7 +20,7 @@ export const useSimulationSettingsStore = defineStore('simulationSettings', () =
   const plotConfig = ref({})
   const parameterScanConfig = ref({})
 
-  function resetStore() {
+  function resetState() {
     simulationSettings.value = cloneSimulationSettings()
     plotConfig.value = {}
     parameterScanConfig.value = {}
@@ -40,7 +40,7 @@ export const useSimulationSettingsStore = defineStore('simulationSettings', () =
 
   function loadState(state) {
     if (!state) {
-      resetStore()
+      resetState()
       return
     }
 
@@ -61,7 +61,7 @@ export const useSimulationSettingsStore = defineStore('simulationSettings', () =
     simulationSettings,
     plotConfig,
     parameterScanConfig,
-    resetStore,
+    resetState,
     setSimulationSettings,
     setPlotConfig,
     setParameterScanConfig,

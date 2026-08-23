@@ -56,11 +56,11 @@ export function useClearWorkspace(flowId = FLOW_IDS.MAIN) {
         nodes.value = []
         edges.value = []
         if (flowId === FLOW_IDS.MAIN) {
-          simStore.resetStore()
+          simStore.resetState()
           libraryStore.resetGlobalConstants()
-          inspectionStore.resetStore()
-          omexStore.resetStore()
-          sessionMetadataStore.resetStore()
+          inspectionStore.resetState()
+          omexStore.resetState()
+          sessionMetadataStore.resetState()
         }
         setViewport({ x: 0, y: 0, zoom: 1 })
       },

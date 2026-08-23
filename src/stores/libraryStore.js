@@ -86,7 +86,7 @@ export const useLibraryStore = defineStore('library', () => {
     return removedConstants
   }
 
-  function resetStore() {
+  function resetState() {
     resetGlobalConstants()
     availableMath.value.clear()
     availableCollections.value.clear()
@@ -202,7 +202,7 @@ export const useLibraryStore = defineStore('library', () => {
 
   function loadState(state) {
 
-    resetStore()
+    resetState()
 
     if (state.availableCollections) {
       const collections = Array.isArray(state.availableCollections)

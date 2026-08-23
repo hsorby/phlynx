@@ -81,13 +81,19 @@ export const useOmexStore = defineStore('omex', () => {
   const manifestXml = ref('')
   const archiveFiles = ref([])
   const preservedExtras = ref([])
+  const archiveHash = ref(0)
 
-  function resetStore() {
+  function resetState() {
     archiveName.value = ''
     archiveType.value = 'omex'
     manifestXml.value = ''
     archiveFiles.value = []
     preservedExtras.value = []
+    archiveHash.value = 0
+  }
+
+  function setHash(hash) {
+    archiveHash.value = hash
   }
 
   function setArchive({
@@ -110,18 +116,15 @@ export const useOmexStore = defineStore('omex', () => {
       .map((entry) => ({ ...entry, payload: decodeEntryPayload(entry.payload) }))
   }
 
-  function clearArchive() {
-    resetStore()
-  }
-
   function loadState(state) {
-    resetStore()
+    resetState()
 
     if (!state) {
       return
     }
 
     setArchive({
+      archiveHash: state.archiveHash || 0,
       archiveName: state.archiveName || '',
       archiveType: state.archiveType || 'omex',
       manifestXml: state.manifestXml || '',
@@ -138,6 +141,7 @@ export const useOmexStore = defineStore('omex', () => {
 
   function getState() {
     return {
+      archiveHash: archiveHash.value,
       archiveName: archiveName.value,
       archiveType: archiveType.value,
       manifestXml: manifestXml.value,
@@ -153,14 +157,14 @@ export const useOmexStore = defineStore('omex', () => {
   }
 
   return {
+    archiveHash,
     archiveName,
     archiveType,
     manifestXml,
     archiveFiles,
     preservedExtras,
-    resetStore,
-    setArchive,
-    clearArchive,
+    resetState,
+    setHash,
     loadState,
     getState,
   }

@@ -10,7 +10,7 @@ export const useSessionMetadataStore = defineStore('SessionMetadata', () => {
 
   // --- ACTIONS ---
 
-  function resetStore() {
+  function resetState() {
     lastSaveName.value = DEFAULT_PROJECT_NAME
   }
 
@@ -22,7 +22,7 @@ export const useSessionMetadataStore = defineStore('SessionMetadata', () => {
 
   function loadState(state) {
 
-    resetStore()
+    resetState()
 
     lastSaveName.value = state.lastSaveName || DEFAULT_PROJECT_NAME
   }
@@ -40,7 +40,7 @@ export const useSessionMetadataStore = defineStore('SessionMetadata', () => {
     lastSaveName,
 
     // Actions
-    resetStore,
+    resetState,
 
     // Setters
     loadState,
