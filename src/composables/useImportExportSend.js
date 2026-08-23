@@ -88,9 +88,6 @@ export function useImportExportSend({
 
   const generateOmexArchiveAction = async (finalName) => {
 
-    console.log('Generating OMEX archive for CUFLynx.')
-    console.log(hasModelChanged.value)
-    console.log(finalName)
     const blob = await generateFlattenedModel(nodes.value, edges.value, libraryStore, inspectionModuleStore.modules)
     const rehydratedModel = await readFileAsText(blob)
     const extractedData = extractVoiAndParametersFromModel(rehydratedModel, parameterScanConfig.value)
@@ -153,21 +150,7 @@ export function useImportExportSend({
       suffix: '.omex',
       fileTypes: OMEX_FILE_TYPES,
       message: 'Generating OMEX archive for Web OpenCOR.',
-      action: async (finalName) => {
-        const blob = await generateFlattenedModel(nodes.value, edges.value, libraryStore, inspectionModuleStore.modules)
-        const rehydratedModel = await readFileAsText(blob)
-        const extractedData = extractVoiAndParametersFromModel(rehydratedModel, parameterScanConfig.value)
-        return generateOmexArchive(
-          { blob, finalName },
-          snapshotFlowState(),
-          {
-            simulationSettings: simulationSettings.value,
-            plotConfig: plotConfig.value,
-            parameterScanConfig: parameterScanConfig.value,
-          },
-          { extractedData, modified: hasModelChanged.value }
-        )
-      },
+      action: generateOmexArchiveAction,
       successMessage: async (blob, finalName) => {
         const dataUri = await createOmexDataFragment(blob)
         return h('div', null, [
@@ -226,21 +209,7 @@ export function useImportExportSend({
       suffix: '.omex',
       fileTypes: OMEX_FILE_TYPES,
       message: 'Generating OMEX archive for Web OpenCOR.',
-      action: async (finalName) => {
-        const blob = await generateFlattenedModel(nodes.value, edges.value, libraryStore, inspectionModuleStore.modules)
-        const rehydratedModel = await readFileAsText(blob)
-        const extractedData = extractVoiAndParametersFromModel(rehydratedModel, parameterScanConfig.value)
-        return generateOmexArchive(
-          { blob, finalName },
-          snapshotFlowState(),
-          {
-            simulationSettings: simulationSettings.value,
-            plotConfig: plotConfig.value,
-            parameterScanConfig: parameterScanConfig.value,
-          },
-          { extractedData }
-        )
-      },
+      action: generateOmexArchiveAction,
     },
   ])
 

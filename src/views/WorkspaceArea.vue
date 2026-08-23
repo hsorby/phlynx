@@ -2461,7 +2461,7 @@ function snapshotFlowState() {
     }
   }
 
-  return JSON.stringify({ nodeData, edges: flowState.edges })
+  return JSON.stringify({ id: 'phlynx-flow-snapshot', version: '1.0.0', nodeData, edges: flowState.edges })
 }
 
 /**

@@ -1,5 +1,26 @@
 import JSZip from 'jszip'
-import { isModuleConfigFile } from './omexClassifiers'
+import { isPhlynxFlowSnapshotFile, isSimulationJsonFile } from './omexClassifiers'
+
+const jsonMimeTypeRegex = /^application\/(?:json|.+\+json)$/i
+const CELLML_FORMAT = 'http://identifiers.org/combine.specifications/cellml'
+const SEDML_FORMAT = 'http://identifiers.org/combine.specifications/sed-ml'
+
+export function validateCellmlEntries(cellmlEntries) {
+  if (!Array.isArray(cellmlEntries) || cellmlEntries.length === 0) {
+    throw new Error('Invalid OMEX file: no CellML files found.')
+  }
+
+  if (cellmlEntries.length === 1) {
+    return cellmlEntries[0].location
+  }
+
+  const masters = cellmlEntries.filter((entry) => entry.isMaster)
+  if (masters.length !== 1) {
+    throw new Error('Invalid OMEX file: multiple CellML files require exactly one master CellML file.')
+  }
+
+  return masters[0].location
+}
 
 export const importOmexFile = async (importPayload, updateProgress) => {
   const omexFiles = importPayload instanceof Map ? importPayload.get('omex') : null
@@ -21,8 +42,8 @@ export const importOmexFile = async (importPayload, updateProgress) => {
   } catch {
     throw new Error('Invalid OMEX file: is not a valid ZIP archive')
   }
-  const manifestFile = archive.file('manifest.xml')
 
+  const manifestFile = archive.file('manifest.xml')
   if (!manifestFile) {
     throw new Error('Invalid OMEX file: missing manifest.xml')
   }
@@ -42,7 +63,16 @@ export const importOmexFile = async (importPayload, updateProgress) => {
     throw new Error('Invalid OMEX file: manifest.xml is not a valid omexManifest')
   }
 
-  const foundFiles = {}
+  const foundFiles = {
+    extras: [],
+    cellmls: [],
+    sedml: null,
+    simulationJson: null,
+    parameterSets: null,
+    moduleConfig: null,
+    flowSnapshot: null,
+  }
+
   for (const contentElement of rootElement.getElementsByTagNameNS(expectedNamespace, 'content')) {
     let location = contentElement.getAttribute('location')
     const format = contentElement.getAttribute('format')
@@ -55,29 +85,46 @@ export const importOmexFile = async (importPayload, updateProgress) => {
       location = location.slice(2)
     }
 
+    if (location === '.' || location === 'manifest.xml') {
+      continue
+    }
+
     const fileObject = archive.file(location)
     if (location !== '.' && !fileObject) {
       throw new Error(`Invalid OMEX file: manifest.xml references missing file "${location}"`)
     }
 
-    if (format === 'http://identifiers.org/combine.specifications/cellml') {
-      foundFiles.cellml = location
-    } else if (format === 'http://identifiers.org/combine.specifications/sed-ml') {
-      foundFiles.sedml = location
-    } else if (format === 'http://purl.org/NET/mediatypes/application/json' || format === 'application/json') {
-      if (await isModuleConfigFile(fileObject)) {
-        foundFiles.moduleConfig = location
-      } else {
-        foundFiles.simulationJson = location
-      }
-    } else if (format === 'http://purl.org/NET/mediatypes/text/csv' || format === 'text/csv') {
-      foundFiles.parameterSets = location
+    if (format === CELLML_FORMAT) {
+      foundFiles.cellmls.push({ location, isMaster: contentElement.getAttribute('master') === 'true' })
+      continue
     }
+
+    if (format === SEDML_FORMAT) {
+      foundFiles.sedml = location
+      continue
+    }
+
+    if (format === 'text/csv' || location.toLowerCase().endsWith('.csv')) {
+      foundFiles.parameterSets = location
+      continue
+    }
+
+    if (jsonMimeTypeRegex.test(format) || format === 'http://purl.org/NET/mediatypes/application/json') {
+      if (await isPhlynxFlowSnapshotFile(fileObject)) {
+        foundFiles.flowSnapshot = location
+        continue
+      }
+
+      if (await isSimulationJsonFile(fileObject)) {
+        foundFiles.simulationJson = location
+        continue
+      }
+    }
+
+    foundFiles.extras.push({ location, format })
   }
 
-  // for (const file in archive.files) {
-  //   console.log('Checking file in archive:', file)
-  // }
+  const cellmlLocation = validateCellmlEntries(foundFiles.cellmls)
 
   if (typeof updateProgress === 'function') {
     updateProgress(100)
@@ -85,8 +132,13 @@ export const importOmexFile = async (importPayload, updateProgress) => {
 
   return {
     fileName: firstEntry?.[0] || 'unknown.omex',
-    files: foundFiles,
-    // manifest: manifestDocument,
+    files: {
+      cellml: cellmlLocation,
+      simulationJson: foundFiles.simulationJson,
+      parameterSets: foundFiles.parameterSets,
+      moduleConfig: foundFiles.moduleConfig,
+    },
+    extras: foundFiles.extras,
     fileType: 'omex',
   }
 }
