@@ -29,13 +29,14 @@ import { getImportConfig } from '../utils/import'
 
 export function useImportExportSend({
   libcellml,
-  somethingAvailable,
   nodes,
   edges,
   importDialogVisible,
   exportDialogVisible,
   currentImportConfig,
   onExportConfirm,
+  hasModelChanged,
+  snapshotFlowState,
 }) {
   const simulationSettingsStore = useSimulationSettingsStore()
   const libraryStore = useLibraryStore()
@@ -86,18 +87,23 @@ export function useImportExportSend({
   )
 
   const generateOmexArchiveAction = async (finalName) => {
+
     console.log('Generating OMEX archive for CUFLynx.')
+    console.log(hasModelChanged.value)
+    console.log(finalName)
     const blob = await generateFlattenedModel(nodes.value, edges.value, libraryStore, inspectionModuleStore.modules)
     const rehydratedModel = await readFileAsText(blob)
     const extractedData = extractVoiAndParametersFromModel(rehydratedModel, parameterScanConfig.value)
+    const snapshot = snapshotFlowState()
     return generateOmexArchive(
       { blob, finalName },
+      snapshot,
       {
         simulationSettings: simulationSettings.value,
         plotConfig: plotConfig.value,
         parameterScanConfig: parameterScanConfig.value,
       },
-      { extractedData }
+      { extractedData, modified: hasModelChanged.value }
     )
   }
 
@@ -153,12 +159,13 @@ export function useImportExportSend({
         const extractedData = extractVoiAndParametersFromModel(rehydratedModel, parameterScanConfig.value)
         return generateOmexArchive(
           { blob, finalName },
+          snapshotFlowState(),
           {
             simulationSettings: simulationSettings.value,
             plotConfig: plotConfig.value,
             parameterScanConfig: parameterScanConfig.value,
           },
-          { extractedData }
+          { extractedData, modified: hasModelChanged.value }
         )
       },
       successMessage: async (blob, finalName) => {
@@ -225,6 +232,7 @@ export function useImportExportSend({
         const extractedData = extractVoiAndParametersFromModel(rehydratedModel, parameterScanConfig.value)
         return generateOmexArchive(
           { blob, finalName },
+          snapshotFlowState(),
           {
             simulationSettings: simulationSettings.value,
             plotConfig: plotConfig.value,

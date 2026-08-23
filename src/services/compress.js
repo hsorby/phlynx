@@ -76,20 +76,25 @@ export async function createCellMLDataFragment(cellmlBlob, fileName) {
  * generateSedmlData is fleshed out — right now it's simply ignored.
  *
  * @param {object} cellmlData - The flattened CellML model data.
+ * @param {object} flowSnapshot - The current workspace flow snapshot (nodes/edges).
  * @param {object} [simData] - Simulation/plot/parameter-scan config for the SED-ML doc. Currently unused by generateSedmlData.
  * @param {object} [addInfo] - Additional information not carried by the other parameters.
  * @returns {Promise<Blob>} The .omex archive as a zip Blob.
  */
-export async function generateOmexArchive(cellmlData, simData = {}, addInfo = {}) {
+export async function generateOmexArchive(cellmlData, flowSnapshot, simData = {}, addInfo = {}) {
   const sedmlText = generateSedmlData(simData.simulationSettings)
   const simulationJson = buildSimulationJson(simData.plotConfig, simData.parameterScanConfig, addInfo.extractedData)
 
   const manifestEntries = [
     { location: 'document.sedml', format: 'http://identifiers.org/combine.specifications/sed-ml', master: true },
     { location: 'model.cellml', format: 'http://identifiers.org/combine.specifications/cellml' },
+    { location: 'flow-snapshot.json', format: 'application/x.vnd.phlynx-flow+json' },
   ]
   if (simulationJson !== null) {
     manifestEntries.push({ location: 'simulation.json', format: 'http://purl.org/NET/mediatypes/application/json' })
+  }
+  if (addInfo.modified) {
+    manifestEntries.push({ location: 'changes.json', format: 'application/x.vnd.phlynx-changes+json' })
   }
   const manifestXml = buildManifestXml(manifestEntries)
 
@@ -97,9 +102,13 @@ export async function generateOmexArchive(cellmlData, simData = {}, addInfo = {}
   zip.file('manifest.xml', manifestXml)
   zip.file('model.cellml', cellmlData.blob)
   zip.file('document.sedml', sedmlText)
+  zip.file('flow-snapshot.json', flowSnapshot)
 
   if (simulationJson !== null) {
     zip.file('simulation.json', simulationJson)
+  }
+  if (addInfo.modified) {
+    zip.file('changes.json', JSON.stringify({ id: 'phlynx-changes', 'version': '1.0.0', modified: addInfo.modified }))
   }
 
   return zip.generateAsync({ type: 'blob' })

@@ -20,6 +20,7 @@ describe('generateOmexArchive', () => {
         finalName: 'test-model.cellml',
         blob: new Blob([cellmlSource], { type: 'application/xml' }),
       },
+      {},
       {
         simulationSettings: {
           startingPoint: 10,

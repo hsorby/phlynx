@@ -609,7 +609,7 @@ import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../composables/useClearWorkspace'
-import { readFileAsText } from '../utils/misc'
+import { readFileAsText, cyrb53 } from '../utils/misc'
 import { initLibCellML, processCellMLData, extractVariablesFromMath } from '../utils/cellml'
 import {
   edgeLineOptions,
@@ -996,7 +996,7 @@ const currentMatchIndex = ref(0)
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
 const somethingSelected = computed(() => getSelectedNodes.value.length > 0)
-const isFlowDirty = computed(() => cyrb53(snapshotFlowState()) !== savedFlowHash.value)
+const hasModelChanged = computed(() => cyrb53(snapshotFlowState()) !== savedFlowHash.value)
 
 const {
   currentExportMode,
@@ -1013,13 +1013,14 @@ const {
   triggerCurrentSend,
 } = useImportExportSend({
   libcellml,
-  somethingAvailable,
   nodes,
   edges,
   importDialogVisible,
   exportDialogVisible,
   currentImportConfig,
   onExportConfirm,
+  hasModelChanged,
+  snapshotFlowState,
 })
 
 const cellMlExportTooltip = computed(() => {
@@ -2434,27 +2435,6 @@ function recomputeMissingCouplings() {
     targetInCount.set(edge.target, targetIndex + 1)
   }
 }
-
-/**
- * Hash a string to a 53-bit integer using the cyrb53 algorithm.
- * @param str Input string to hash.
- * @param seed Integer seed for the hash function (default: 0).
- * @returns A 53-bit integer hash of the input string.
- */
-const cyrb53 = (str, seed = 0) => {
-    let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
-    for(let i = 0, ch; i < str.length; i++) {
-        ch = str.charCodeAt(i);
-        h1 = Math.imul(h1 ^ ch, 2654435761);
-        h2 = Math.imul(h2 ^ ch, 1597334677);
-    }
-    h1  = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
-    h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-    h2  = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
-    h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-
-    return 4294967296 * (2097151 & h2) + (h1 >>> 0);
-};
 
 /**
  * Creates a snapshot of the current flow state, including nodes and edges, and returns it as a JSON string.
