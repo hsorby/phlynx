@@ -2,7 +2,6 @@ import { computed, h, markRaw, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 
 import {
-  DEFAULT_FILE_NAME,
   ZIP_FILE_TYPES,
   CELLML_FILE_TYPES,
   OMEX_FILE_TYPES,
@@ -19,10 +18,14 @@ import CombineIcon from '../components/icons/CombineIcon.vue'
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
+import { useSessionMetadataStore } from '../stores/sessionMetadataStore'
+
 import { createCellMLDataFragment, generateOmexArchive, createOmexDataFragment } from '../services/compress'
 import { generateExportZip } from '../services/export/ca'
 import { generateFlattenedModel, extractVoiAndParametersFromModel } from '../utils/cellml'
 import { readFileAsText } from '../utils/misc'
+import { getFileHandle } from '../utils/save'
+import { getImportConfig } from '../utils/import'
 
 export function useImportExportSend({
   libcellml,
@@ -32,13 +35,12 @@ export function useImportExportSend({
   importDialogVisible,
   exportDialogVisible,
   currentImportConfig,
-  getImportConfig,
-  getFileHandle,
   onExportConfirm,
 }) {
   const simulationSettingsStore = useSimulationSettingsStore()
   const libraryStore = useLibraryStore()
   const inspectionModuleStore = useInspectionModuleStore()
+  const sessionMetadataStore = useSessionMetadataStore()
 
   const currentImportKey = ref(IMPORT_KEYS.INSTANCE_ARRAY)
   const currentExportKey = ref(EXPORT_KEYS.CELLML)
@@ -82,6 +84,22 @@ export function useImportExportSend({
   const currentImportMode = computed(
     () => importOptions.value.find((option) => option.key === currentImportKey.value) ?? importOptions.value[0] ?? null
   )
+
+  const generateOmexArchiveAction = async (finalName) => {
+    console.log('Generating OMEX archive for CUFLynx.')
+    const blob = await generateFlattenedModel(nodes.value, edges.value, libraryStore, inspectionModuleStore.modules)
+    const rehydratedModel = await readFileAsText(blob)
+    const extractedData = extractVoiAndParametersFromModel(rehydratedModel, parameterScanConfig.value)
+    return generateOmexArchive(
+      { blob, finalName },
+      {
+        simulationSettings: simulationSettings.value,
+        plotConfig: plotConfig.value,
+        parameterScanConfig: parameterScanConfig.value,
+      },
+      { extractedData }
+    )
+  }
 
   const exportOptions = computed(() => [
     {
@@ -164,10 +182,27 @@ export function useImportExportSend({
       key: EXPORT_KEYS.CUFLYNX,
       label: 'CUFLynx',
       icon: CUFLynxIcon,
-      disabled: true,
+      disabled: libcellml.status !== 'ready',
       suffix: '.omex',
       fileTypes: OMEX_FILE_TYPES,
       message: 'Generating OMEX archive for CUFLynx.',
+      action: generateOmexArchiveAction,
+      successMessage: async (blob, finalName) => {
+        const dataUri = await createOmexDataFragment(blob)
+        return h('div', null, [
+          'OMEX archive generated for CUFLynx. Open this model directly in ',
+          h(
+            'a',
+            {
+              href: `cuflynx://api?import=omex#${dataUri}`,
+              rel: 'noopener noreferrer',
+              style: { color: 'var(--p-primary-color)', fontWeight: 'bold' },
+              target: '_blank',
+            },
+            'CUFLynx'
+          ),
+        ])
+      },
     },
   ])
 
@@ -262,7 +297,7 @@ export function useImportExportSend({
   }
 
   const performExport = async (mode) => {
-    const baseName = libraryStore.lastExportName || DEFAULT_FILE_NAME
+    const baseName = sessionMetadataStore.lastSaveName
     const fileTypes = mode.fileTypes || ZIP_FILE_TYPES
 
     const result = await getFileHandle(baseName, fileTypes, mode.suffix)
@@ -274,7 +309,7 @@ export function useImportExportSend({
   }
 
   const performSend = async (mode) => {
-    const baseName = libraryStore.lastExportName || DEFAULT_FILE_NAME
+    const baseName = sessionMetadataStore.lastSaveName
     const fileTypes = mode.fileTypes || ZIP_FILE_TYPES
 
     const blob = await mode.action(baseName)

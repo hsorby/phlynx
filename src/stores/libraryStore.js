@@ -34,8 +34,6 @@ export const useLibraryStore = defineStore('library', () => {
   const availableModules = ref(new Map())
   const availableMath = ref(new Map())
   const availableUnits = ref([])
-  const lastSaveName = ref('phlynx-project')
-  const lastExportName = ref('phlynx-export')
   const globalConstants = ref(new Map())
 
   // --- ACTIONS ---
@@ -97,14 +95,6 @@ export const useLibraryStore = defineStore('library', () => {
   }
 
   // --- SETTERS ---
-
-  function setLastSaveName(name) {
-    lastSaveName.value = name
-  }
-
-  function setLastExportName(name) {
-    lastExportName.value = name
-  }
 
   function addConfigFile(filename, configs) {
     let totalAdded = 0
@@ -239,9 +229,6 @@ export const useLibraryStore = defineStore('library', () => {
     if (state.globalConstants) {
       mergeIn(new Map(state.globalConstants), globalConstants.value)
     }
-
-    lastSaveName.value = state.lastSaveName || 'phlynx-project'
-    lastExportName.value = state.lastExportName || 'phlynx-export'
   }
 
   function removeCollection(componentFile) {
@@ -268,8 +255,6 @@ export const useLibraryStore = defineStore('library', () => {
       availableModules: Array.from(availableModules.value.entries()),
       availableUnits: availableUnits.value,
       globalConstants: Array.from(globalConstants.value.entries()),
-      lastExportName: lastExportName.value,
-      lastSaveName: lastSaveName.value,
     }
   }
 
@@ -281,8 +266,6 @@ export const useLibraryStore = defineStore('library', () => {
     availableMath,
     availableModules,
     availableUnits,
-    lastExportName,
-    lastSaveName,
 
     // Derived State
     globalVariables,
@@ -300,8 +283,6 @@ export const useLibraryStore = defineStore('library', () => {
     removeCollection,
     removeGlobalConstant,
     cleanupUnusedGlobalConstants,
-    setLastExportName,
-    setLastSaveName,
 
     // Query
     getGlobalConstant,

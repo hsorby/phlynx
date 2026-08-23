@@ -305,7 +305,6 @@ function convertStore(oldStore, globalConstantNames) {
     availableMath: Object.entries(newAvailableMath),
     availableUnits: newUnits,
     globalConstants: buildGlobalConstants(availableParameters, globalConstantNames),
-    lastExportName: oldStore.lastExportName,
     lastSaveName: oldStore.lastSaveName,
   }
 }

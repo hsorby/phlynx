@@ -148,7 +148,7 @@
             variant="text"
             severity="info"
             :disabled="!somethingAvailable"
-            v-tooltip.bottom="{ value: 'Configure sim. settings', showDelay: 300 }"
+            v-tooltip.bottom="{ value: 'Configure simulation settings', showDelay: 300 }"
             @click="onOpenSimSettingsDialog"
           />
 
@@ -476,12 +476,12 @@
     @save="handleParameterSave"
   />
 
-  <SaveDialog v-model="saveDialogVisible" :default-name="libraryStore.lastSaveName" @confirm="onSaveConfirm" />
+  <SaveDialog v-model="saveDialogVisible" :default-name="sessionMetadataStore.lastSaveName" @confirm="onSaveConfirm" />
 
   <SaveDialog
     v-model="exportDialogVisible"
     :title="`Export for ${currentExportMode.label}`"
-    :default-name="libraryStore.lastExportName"
+    :default-name="sessionMetadataStore.lastSaveName"
     :suffix="currentExportMode.suffix"
     @confirm="onExportConfirm"
   />
@@ -556,6 +556,7 @@ import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 
 import { useLibraryStore } from '../stores/libraryStore'
+import { useSessionMetadataStore } from '../stores/sessionMetadataStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore.js'
@@ -616,7 +617,6 @@ import {
   FLOW_IDS,
   IMPORT_KEYS,
   JSON_FILE_TYPES,
-  DEFAULT_FILE_NAME,
   NEW_INSTANCE_MODULE_REF,
   PHLYNX_PROJECT_IDENTIFIER,
   PHLYNX_PROJECT_VERSION,
@@ -624,15 +624,15 @@ import {
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
 import { getHandleId, getHandleUidFromHandleId, findMostCentralGhostHandle } from '../utils/handles'
-import { getImportConfig, parseParametersFile } from '../utils/import'
+import { parseParametersFile } from '../utils/import'
 import { detachReactivity } from '../utils/reactivity'
 import {
-  saveFileHandle,
-  saveWithDialog,
-  getFileHandle,
-  writeFileHandle,
   ensureExtension,
   legacyDownload,
+  saveFileHandle,
+  saveWithDialog,
+  stripExtension,
+  writeFileHandle,
 } from '../utils/save'
 
 const workspaceFileInput = ref(null)
@@ -940,6 +940,7 @@ const helperLineVertical = ref(null)
 const alignment = ref('edge')
 
 const libraryStore = useLibraryStore()
+const sessionMetadataStore = useSessionMetadataStore()
 const inspectionModuleStore = useInspectionModuleStore()
 
 const libcellmlReadyPromise = inject('$libcellml_ready')
@@ -1018,8 +1019,6 @@ const {
   importDialogVisible,
   exportDialogVisible,
   currentImportConfig,
-  getImportConfig,
-  getFileHandle,
   onExportConfirm,
 })
 
@@ -2296,14 +2295,14 @@ function handleAutoLayout() {
 }
 
 async function handleSaveWorkspace() {
-  const safeName = ensureExtension(libraryStore.lastSaveName, '.json')
+  const safeName = ensureExtension(sessionMetadataStore.lastSaveName, '.json')
   const result = await saveFileHandle(safeName, JSON_FILE_TYPES)
   if (result.status) {
     if (result.handle) {
       const blob = createSaveBlob()
       try {
         writeFileHandle(result.handle, blob)
-        libraryStore.setLastSaveName(result.handle.name)
+        sessionMetadataStore.setLastSaveName(result.handle.name)
         trackEvent('save_action', {
           category: 'Save',
           action: 'save_workflow',
@@ -2347,7 +2346,7 @@ async function onExportConfirm(fileName, handle) {
   })
 
   try {
-    const finalName = fileName || libraryStore.lastExportName || DEFAULT_FILE_NAME
+    const finalName = fileName || sessionMetadataStore.lastSaveName
 
     if (!exportMode.action) {
       throw new Error(`The ${exportMode.label} export isn't implemented yet.`)
@@ -2357,7 +2356,6 @@ async function onExportConfirm(fileName, handle) {
 
     const result = await saveWithDialog(blob, handle, finalName, exportMode.suffix)
 
-    libraryStore.setLastExportName(result.savedName)
     notification.close()
 
     const exportMessage = exportMode.successMessage
@@ -2507,13 +2505,13 @@ function createSaveBlob() {
  * Collects all state and downloads it as a JSON file.
  */
 const onSaveConfirm = async (fileName) => {
-  const baseName = fileName || libraryStore.lastSaveName || DEFAULT_FILE_NAME
+  const baseName = fileName || sessionMetadataStore.lastSaveName
   const finalName = ensureExtension(baseName, '.json')
   const blob = createSaveBlob()
 
   legacyDownload(finalName, blob)
 
-  libraryStore.setLastSaveName(fileName)
+  sessionMetadataStore.setLastSaveName(fileName)
   notify.success({ title: 'Workflow saved!' })
 }
 
@@ -2585,6 +2583,7 @@ function handleLoadWorkspace(event) {
       return
     }
     applyWorkspaceState(loadedState, { source: 'json' })
+    sessionMetadataStore.setLastSaveName(stripExtension(file.name))
   }
   reader.readAsText(file)
 }

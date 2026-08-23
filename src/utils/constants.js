@@ -141,7 +141,7 @@ export const MULTIPORT_OPTIONS = [
   { value: 'None',  label: 'None'  },
 ]
 
-export const DEFAULT_FILE_NAME = 'phlynx-export'
+export const DEFAULT_PROJECT_NAME = 'phlynx-project'
 
 export const PHLYNX_PROJECT_IDENTIFIER = 'phlynx-project'
 
