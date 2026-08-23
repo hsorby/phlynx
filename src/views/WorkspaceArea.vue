@@ -1002,7 +1002,7 @@ const currentMatchIndex = ref(0)
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
 const somethingSelected = computed(() => getSelectedNodes.value.length > 0)
-const hasModelChanged = computed(() => cyrb53(snapshotFlowState()) !== omexStore.getHash())
+const hasModelChanged = computed(() => cyrb53(snapshotFlowState()) !== omexStore.archiveHash.value)
 
 const {
   currentExportMode,
@@ -1850,12 +1850,14 @@ async function onImportConfirm(importPayload, updateProgress) {
     }
   } else if (currentImportMode.value.key === IMPORT_KEYS.OMEX) {
     try {
-      await importOmexFile(importPayload, (current, total, statusMessage) => {
+      const result = await importOmexFile(importPayload, (current, total, statusMessage) => {
         if (updateProgress) {
           updateProgress(`${statusMessage || 'Importing OMEX file...'} (${current}/${total})`)
         }
       })
 
+      console.log('===========================')
+      console.log('OMEX import result:', result)
       notify.success({
         title: 'OMEX Import Complete',
         message: 'Workflow built successfully!',

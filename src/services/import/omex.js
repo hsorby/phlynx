@@ -128,6 +128,8 @@ export const importOmexFile = async (importPayload, updateProgress) => {
     files: {
       cellml: cellmlLocation,
       simulationJson: foundFiles.simulationJson,
+      sedml: foundFiles.sedml,
+      flowSnapshot: foundFiles.flowSnapshot,
     },
     extras: foundFiles.extras,
     fileType: 'omex',
