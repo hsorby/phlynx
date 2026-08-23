@@ -1,4 +1,3 @@
-
 export const isSimulationJsonFile = async (fileObject) => {
   if (!fileObject || typeof fileObject.async !== 'function') {
     return false
@@ -25,6 +24,49 @@ export const isSimulationJsonFile = async (fileObject) => {
       Array.isArray(parsed.data_items)
 
     return hasLegacyShape || hasArchiveSimulationShape
+  } catch {
+    return false
+  }
+}
+
+// May not need this function, but leaving it here for now in case we want to check for Phlynx Flow Snapshot files in the future.
+export const isModuleConfigJson = async (fileObject, location = '') => {
+  if (!fileObject || typeof fileObject.async !== 'function') {
+    return false
+  }
+
+  const normalisedLocation = (location || '').toLowerCase()
+  if (normalisedLocation.endsWith('module_config.json') || normalisedLocation.includes('module_config.json')) {
+    return true
+  }
+
+  try {
+    const fileText = await fileObject.async('string')
+    const parsed = JSON.parse(fileText)
+
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      const firstEntry = parsed[0]
+      return (
+        firstEntry &&
+        typeof firstEntry === 'object' &&
+        'entrance_ports' in firstEntry &&
+        'exit_ports' in firstEntry &&
+        'general_ports' in firstEntry &&
+        'module_subtype' in firstEntry &&
+        'module_type' in firstEntry &&
+        'module_format' in firstEntry &&
+        'component_file' in firstEntry &&
+        'component_type' in firstEntry
+      )
+    }
+
+    return (
+      parsed &&
+      typeof parsed === 'object' &&
+      Array.isArray(parsed.modules) &&
+      typeof parsed.model === 'string' &&
+      typeof parsed.source === 'string'
+    )
   } catch {
     return false
   }

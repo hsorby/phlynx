@@ -56,10 +56,12 @@ describe('Import OMEX', () => {
       files: {
         cellml: '3compartment_flat.cellml',
         simulationJson: '3compartment_obs_data.json',
-        parameterSets: '3compartment_params_for_id.csv',
-        moduleConfig: 'module_config.json',
       },
-      extras: [],
+      extras: [
+        { location: '3compartment_params_for_id.csv', format: 'text/csv' },
+        { location: 'module_config.json', format: 'application/json' },
+        // { location: '3compartment_obs_data.json', format: 'application/json' },
+      ],
       fileType: 'omex',
     })
 

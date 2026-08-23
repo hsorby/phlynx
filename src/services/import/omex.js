@@ -68,8 +68,6 @@ export const importOmexFile = async (importPayload, updateProgress) => {
     cellmls: [],
     sedml: null,
     simulationJson: null,
-    parameterSets: null,
-    moduleConfig: null,
     flowSnapshot: null,
   }
 
@@ -104,11 +102,6 @@ export const importOmexFile = async (importPayload, updateProgress) => {
       continue
     }
 
-    if (format === 'text/csv' || location.toLowerCase().endsWith('.csv')) {
-      foundFiles.parameterSets = location
-      continue
-    }
-
     if (jsonMimeTypeRegex.test(format) || format === 'http://purl.org/NET/mediatypes/application/json') {
       if (await isPhlynxFlowSnapshotFile(fileObject)) {
         foundFiles.flowSnapshot = location
@@ -135,8 +128,6 @@ export const importOmexFile = async (importPayload, updateProgress) => {
     files: {
       cellml: cellmlLocation,
       simulationJson: foundFiles.simulationJson,
-      parameterSets: foundFiles.parameterSets,
-      moduleConfig: foundFiles.moduleConfig,
     },
     extras: foundFiles.extras,
     fileType: 'omex',

@@ -361,7 +361,11 @@
               <span>Populating Workspace...</span>
             </div>
           </Transition>
-          <Toast v-if="!isUrlLoading" position="top-right" :style="{ top: `${toastTop}px`, right: `${contextSidebarWidth + 25}px` }">
+          <Toast
+            v-if="!isUrlLoading"
+            position="top-right"
+            :style="{ top: `${toastTop}px`, right: `${contextSidebarWidth + 25}px` }"
+          >
             <template #message="slotProps">
               <div class="p-toast-message-text" style="flex: 1">
                 <!-- Summary / Title -->
@@ -560,6 +564,7 @@ import { useSessionMetadataStore } from '../stores/sessionMetadataStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore.js'
+import { useOmexStore } from '../stores/omexStore'
 
 import { importOmexFile } from '../services/import/omex'
 
@@ -931,6 +936,7 @@ const onDrop = async (event) => {
 
 const historyStore = useFlowHistoryStore()
 const simulationSettingsStore = useSimulationSettingsStore()
+const omexStore = useOmexStore()
 const { loadFromInstanceArray } = useLoadFromInstanceArray()
 const { loadFromCellML } = useLoadFromCellML()
 const { capture } = useScreenshot()
@@ -2475,6 +2481,8 @@ function createSaveBlob() {
     store: libraryStore.getState(),
     simulation: simulationSettingsStore.getState(),
     inspectionModules: inspectionModuleStore.getState(),
+    workspace: omexStore.getState(),
+    savedFlowHash: savedFlowHash.value,
   }
 
   const jsonString = JSON.stringify(saveState, null, 2)
@@ -2524,8 +2532,12 @@ async function applyWorkspaceState(loadedState, { source = 'json' } = {}) {
     libraryStore.loadState(migratedState.store)
     simulationSettingsStore.loadState(migratedState.simulation)
     inspectionModuleStore.loadState(migratedState.inspectionModules)
+    omexStore.loadState(migratedState.omex)
 
-    savedFlowHash.value = cyrb53(snapshotFlowState())
+    // Update the saved flow hash.
+    savedFlowHash.value = migratedState.savedFlowHash || ''
+    // savedFlowHash.value = cyrb53(snapshotFlowState())
+    
     trackEvent('workflow_load_action', {
       category: 'Workflow',
       action: 'load_workflow',
@@ -2969,7 +2981,7 @@ const hydrateCellmlAndDependents = async () => {
   return manifest
 }
 
-onMounted(async() => {
+onMounted(async () => {
   document.addEventListener('keydown', handleKeyDown)
   document.addEventListener('mousemove', onMouseMove)
 

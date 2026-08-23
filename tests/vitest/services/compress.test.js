@@ -20,7 +20,7 @@ describe('generateOmexArchive', () => {
         finalName: 'test-model.cellml',
         blob: new Blob([cellmlSource], { type: 'application/xml' }),
       },
-      {},
+      JSON.stringify({}),
       {
         simulationSettings: {
           startingPoint: 10,
@@ -67,7 +67,7 @@ describe('generateOmexArchive', () => {
     const archive = await readArchive(archiveBlob)
     const entryNames = Object.keys(archive.files).sort()
 
-    expect(entryNames).toEqual(['document.sedml', 'manifest.xml', 'model.cellml', 'simulation.json'])
+    expect(entryNames).toEqual(['document.sedml', 'flow-snapshot.json', 'manifest.xml', 'model.cellml', 'simulation.json'])
 
     const manifestXml = await archive.file('manifest.xml').async('string')
     expect(manifestXml).toContain('<omexManifest')
@@ -84,6 +84,9 @@ describe('generateOmexArchive', () => {
 
     const modelCellml = await archive.file('model.cellml').async('string')
     expect(modelCellml).toBe(cellmlSource)
+
+    const flowSnapshot = await archive.file('flow-snapshot.json').async('string')
+    expect(flowSnapshot).toBe('{}')
 
     const sedmlDocument = await archive.file('document.sedml').async('string')
     expect(sedmlDocument).toContain('<sedML xmlns="http://sed-ml.org/sed-ml/level1/version4" level="1" version="4">')
