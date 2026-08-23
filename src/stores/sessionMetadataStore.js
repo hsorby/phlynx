@@ -40,6 +40,9 @@ export const useSessionMetadataStore = defineStore('SessionMetadata', () => {
     lastSaveName,
 
     // Actions
+    resetStore,
+
+    // Setters
     loadState,
     setLastSaveName,
 

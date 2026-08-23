@@ -1,18 +1,24 @@
 import { useVueFlow } from '@vue-flow/core'
 import { nextTick } from 'vue'
+
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
+import { useOmexStore } from '../stores/omexStore'
+import { useSessionMetadataStore } from '../stores/sessionMetadataStore'
+
 import { FLOW_IDS } from '../utils/constants'
 
 export function useClearWorkspace(flowId = FLOW_IDS.MAIN) {
   const { nodes, edges, setViewport, getViewport } = useVueFlow(flowId)
 
-  const store = useLibraryStore()
+  const libraryStore = useLibraryStore()
   const history = useFlowHistoryStore()
   const inspectionStore = useInspectionModuleStore()
   const simStore = useSimulationSettingsStore()
+  const omexStore = useOmexStore()
+  const sessionMetadataStore = useSessionMetadataStore()
 
   const clearWorkspace = async () => {
 
@@ -20,8 +26,10 @@ export function useClearWorkspace(flowId = FLOW_IDS.MAIN) {
     const oldEdges = edges.value
     const oldInspectStore = inspectionStore.getState()
     const oldSimStore = simStore.getState()
-    const oldGlobalConstants = Array.from(store.globalVariables.entries())
+    const oldGlobalConstants = Array.from(libraryStore.globalVariables.entries())
     const oldViewport = getViewport()
+    const oldOmexState = omexStore.getState()
+    const oldSessionMetadata = sessionMetadataStore.getState()
 
     history.executeAndAddCommand({
       type: 'clear-workspace',
@@ -29,10 +37,12 @@ export function useClearWorkspace(flowId = FLOW_IDS.MAIN) {
         nodes.value = oldNodes
         edges.value = oldEdges
         if (flowId === FLOW_IDS.MAIN) {
+          omexStore.loadState(oldOmexState)
           inspectionStore.loadState(oldInspectStore)
+          sessionMetadataStore.loadState(oldSessionMetadata)
           simStore.loadState(oldSimStore)
           for (const [name, data] of oldGlobalConstants) {
-            store.assignGlobalConstant(
+            libraryStore.assignGlobalConstant(
               name, 
               data.value, 
               data.units, 
@@ -47,8 +57,10 @@ export function useClearWorkspace(flowId = FLOW_IDS.MAIN) {
         edges.value = []
         if (flowId === FLOW_IDS.MAIN) {
           simStore.resetStore()
-          store.clearGlobalConstants()
-          inspectionStore.clearModules()
+          libraryStore.resetGlobalConstants()
+          inspectionStore.resetStore()
+          omexStore.resetStore()
+          sessionMetadataStore.resetStore()
         }
         setViewport({ x: 0, y: 0, zoom: 1 })
       },

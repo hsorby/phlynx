@@ -47,7 +47,7 @@ export const useLibraryStore = defineStore('library', () => {
     return String(num)
   }
 
-  function clearGlobalConstants() {
+  function resetGlobalConstants() {
     globalConstants.value.clear()
   }
 
@@ -87,7 +87,7 @@ export const useLibraryStore = defineStore('library', () => {
   }
 
   function resetStore() {
-    clearGlobalConstants()
+    resetGlobalConstants()
     availableMath.value.clear()
     availableCollections.value.clear()
     availableModules.value.clear()
@@ -277,7 +277,7 @@ export const useLibraryStore = defineStore('library', () => {
     addMath,
     addUnitsFile,
     assignGlobalConstant,
-    clearGlobalConstants,
+    resetGlobalConstants,
     loadState,
     removeModule,
     removeCollection,
