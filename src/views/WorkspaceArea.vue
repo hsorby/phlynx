@@ -971,7 +971,7 @@ const edgeDialogTargetNode = ref({})
 const edgeDialogActiveEdge = ref({})
 const edgeDialogSubgraph = ref(new Map())
 const importDialogRef = ref(null)
-const savedFlowHash = ref('')
+// const savedFlowHash = ref('')
 
 const currentEditingNode = ref({
   name: '',
@@ -1002,7 +1002,7 @@ const currentMatchIndex = ref(0)
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
 const somethingSelected = computed(() => getSelectedNodes.value.length > 0)
-const hasModelChanged = computed(() => cyrb53(snapshotFlowState()) !== savedFlowHash.value)
+const hasModelChanged = computed(() => cyrb53(snapshotFlowState()) !== omexStore.getHash())
 
 const {
   currentExportMode,
@@ -2482,7 +2482,7 @@ function createSaveBlob() {
     simulation: simulationSettingsStore.getState(),
     inspectionModules: inspectionModuleStore.getState(),
     workspace: omexStore.getState(),
-    savedFlowHash: savedFlowHash.value,
+    // savedFlowHash: savedFlowHash.value,
   }
 
   const jsonString = JSON.stringify(saveState, null, 2)
@@ -2535,9 +2535,9 @@ async function applyWorkspaceState(loadedState, { source = 'json' } = {}) {
     omexStore.loadState(migratedState.omex)
 
     // Update the saved flow hash.
-    savedFlowHash.value = migratedState.savedFlowHash || ''
+    // savedFlowHash.value = migratedState.savedFlowHash || ''
     // savedFlowHash.value = cyrb53(snapshotFlowState())
-    
+
     trackEvent('workflow_load_action', {
       category: 'Workflow',
       action: 'load_workflow',
