@@ -63,7 +63,7 @@ export function extractPlotSelections(plots = [], groups = []) {
   const selections = []
 
   for (const [plotIndex, plot] of (Array.isArray(plots) ? plots : []).entries()) {
-    const groupId = plot?.groupId || groups?.[plotIndex]?.id || `plot_${plotIndex}`
+    const groupId = plot?.groupId || groups?.[plotIndex]?.id || `plot_${plotIndex + 1}`
     const traces = [plot, ...(Array.isArray(plot?.additionalTraces) ? plot.additionalTraces : [])]
 
     for (const trace of traces) {
