@@ -116,13 +116,13 @@ export function buildHandles(instanceRef, ghostHandles) {
   return handles
 }
 
-export function buildGhostHandles(countTopBot = 7, countSides = 5) {
+export function buildGhostHandles(countTopBot = 7, countLeftRight = 5) {
   const handles = []
 
   HANDLE_SIDES.forEach((side, sideIndex) => {
     let n = countTopBot
     if (side === "left" || side === "right"){
-      n = countSides
+      n = countLeftRight
     }
 
     for (let i = 0; i < n; i++) {

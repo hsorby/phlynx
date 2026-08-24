@@ -612,12 +612,14 @@ import { migrateWorkspace } from '../services/workspaceMigrator'
 import { relayoutNodes } from '../services/layouts/physics'
 import { extractSimData as extractSimDataFromSedml } from '../services/import/sedml'
 import { extractSimData as extractSimDataFromSimulationJson } from '../services/import/simulation'
+import { buildInstance } from '../services/import/buildWorkflow'
 
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../composables/useClearWorkspace'
 import { readFileAsText, cyrb53 } from '../utils/misc'
+import { buildGhostHandles } from '../utils/handles'
 import { initLibCellML, processCellMLData, extractVariablesFromMath } from '../utils/cellml'
 import {
   edgeLineOptions,
@@ -628,12 +630,16 @@ import {
   NEW_INSTANCE_MODULE_REF,
   PHLYNX_PROJECT_IDENTIFIER,
   PHLYNX_PROJECT_VERSION,
+  NUM_GHOST_HANDLES_TOP_BOT,
+  NUM_GHOST_HANDLES_LEFT_RIGHT,
+  MAIN_NODE_TYPE,
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
 import { getHandleId, getHandleUidFromHandleId, findMostCentralGhostHandle } from '../utils/handles'
 import { parseParametersFile } from '../utils/import'
 import { detachReactivity } from '../utils/reactivity'
+import { extractGlobalConstants } from '../utils/variables'
 import {
   ensureExtension,
   legacyDownload,
@@ -1786,6 +1792,60 @@ const loadConfigData = async (content, filename, { notify: shouldNotify = true }
   }
 }
 
+function loadFlowSnapshot(flowSnapshot) {
+  if (!flowSnapshot || !flowSnapshot.nodeData || !flowSnapshot.edges) {
+    notify.error({
+      title: 'Invalid Flow Snapshot',
+      message: 'The provided flow snapshot is missing required nodes or edges data.',
+    })
+    return
+  }
+
+  // Convert nodeData to nodes format expected by the workspace.
+  const nodes = flowSnapshot.nodeData.map((node) => {
+    // Check node math is the same as the math in the library store
+    const nodeMath = libraryStore.availableMath.get(node.data.mathRef)
+    if (nodeMath) {
+      if (nodeMath !== node.data.math) {
+        notify.warning({
+          title: 'Math Mismatch',
+          message: `The math for node "${node.data.name}" does not match the math in the library store. The library version will be used.`,
+        })
+      }
+      delete node.data.math // Remove math from the node if it already exists in the library store.
+    } else {
+      // Put math from the node into the library store.
+      libraryStore.addMath(node.data.mathRef, node.data.math)
+    }
+    return node
+  })
+
+  // Clear the current workspace before loading the new snapshot
+  handleClearWorkspace()
+
+  const newNodes = nodes.map((node) => { 
+    const allHandles = [...node.data.handles, ...buildGhostHandles(NUM_GHOST_HANDLES_TOP_BOT, NUM_GHOST_HANDLES_LEFT_RIGHT)]
+
+    const globalConstants = extractGlobalConstants(node.data.variables)
+    
+    console.log(`Assigning ${globalConstants.length} global constants for node "${node.data.name}"`)
+    console.log('Global constants:', globalConstants)
+    for (const g of globalConstants) {
+      libraryStore.assignGlobalConstant(g.name, g.value, g.units, g.data_reference)
+    }
+
+    return buildInstance(node.id, node.data.name, node.type, node.data, allHandles, node.position)
+  })
+
+  addNodes(newNodes)
+  addEdges(flowSnapshot.edges)
+
+  notify.success({
+    title: 'Flow Snapshot Loaded',
+    message: 'The flow snapshot has been successfully loaded into the workspace.',
+  })
+}
+
 async function processImportedOmexArchive(importPayload, result) {
   const omexEntry = importPayload.get('omex')?.get(result.fileName)
   if (!(omexEntry?.payload instanceof ArrayBuffer)) {
@@ -1820,15 +1880,43 @@ async function processImportedOmexArchive(importPayload, result) {
     result.files?.flowSnapshot,
   ].filter(Boolean)
 
+  if (result.files?.flowSnapshot) {
+    const flowSnapshotFile = archive.file(result.files.flowSnapshot)
+    if (flowSnapshotFile) {
+      console.log(`Loading flow snapshot from OMEX archive: ${result.files.flowSnapshot}`)
+      const flowSnapshot = JSON.parse(await flowSnapshotFile.async('string'))
+      console.log('Flow snapshot data:', flowSnapshot)
+      loadFlowSnapshot(flowSnapshot, { notify: false })
+    }
+  } else if (result.files?.cellml) {
+    const cellmlFile = archive.file(result.files.cellml)
+    if (cellmlFile) {
+      console.log(`Loading CellML file from OMEX archive: ${result.files.cellml}`)
+      await loadCellMLData(await cellmlFile.async('string'), result.files.cellml, { notify: false })
+    }
+  }
+
   if (result.files?.simulationJson) {
     const simJsonFile = archive.file(result.files.simulationJson)
     if (simJsonFile) {
       console.log(`Loading simulation JSON from OMEX archive: ${result.files.simulationJson}`)
-      const simData = await extractSimDataFromSimulationJson(await simJsonFile.async('string'), result.files.simulationJson, {
-        notify: false,
-      })
+      const simData = await extractSimDataFromSimulationJson(
+        await simJsonFile.async('string'),
+        result.files.simulationJson,
+        {
+          notify: false,
+        }
+      )
+
+      if (simData?.plotConfig) {
+        simulationSettingsStore.setPlotConfig(simData.plotConfig)
+      }
+
+      if (simData?.parameterScanConfig) {
+        simulationSettingsStore.setParameterScanConfig(simData.parameterScanConfig)
+      }
+
       console.log('Extracted simulation data from simulation JSON:', simData)
-      // await loadSimulationJson(await simJsonFile.async('string'), result.files.simulationJson, { notify: false })
     }
   }
 
@@ -1836,23 +1924,20 @@ async function processImportedOmexArchive(importPayload, result) {
     const sedmlFile = archive.file(result.files.sedml)
     if (sedmlFile) {
       console.log(`Loading SED-ML file from OMEX archive: ${result.files.sedml}`)
-      const simData = await extractSimDataFromSedml(await sedmlFile.async('string'), result.files.sedml, { notify: false })
+      const simData = await extractSimDataFromSedml(await sedmlFile.async('string'), result.files.sedml, {
+        notify: false,
+      })
       console.log('Extracted simulation data from SED-ML:', simData)
       // await loadSedmlData(await sedmlFile.async('string'), result.files.sedml, { notify: false })
     }
   }
 
-  if (result.files?.cellml) {
-    const cellmlFile = archive.file(result.files.cellml)
-    if (cellmlFile) {
-      console.log(`Loading CellML file from OMEX archive: ${result.files.cellml}`)
-      // await loadCellMLData(await cellmlFile.async('string'), result.files.cellml, { notify: false })
-    }
-  }
-
   const preservedExtras = archiveEntries.filter(({ location }) => !criticalLocations.includes(location))
 
-  console.log('Preserved extras from OMEX archive:', preservedExtras.map((e) => e.location))
+  console.log(
+    'Preserved extras from OMEX archive:',
+    preservedExtras.map((e) => e.location)
+  )
   omexStore.setArchive({
     archiveName: result.fileName,
     archiveType: result.fileType,
@@ -2535,6 +2620,9 @@ function snapshotFlowState() {
       ...node.data,
       handles: node.data?.handles?.filter((handle) => handle.variant !== 'ghost') ?? [],
     },
+    position: node.position,
+    dimensions: node.dimensions,
+    type: node.type,
   }))
 
   for (const index in nodeData) {

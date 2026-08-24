@@ -2,13 +2,83 @@ import JSZip from 'jszip'
 import { describe, expect, it } from 'vitest'
 
 import { generateOmexArchive } from '../../../src/services/compress.js'
-import { SIM_STEPS } from '../../../src/services/export/simulation.js'
+import { buildSimulationJson, SIM_STEPS } from '../../../src/services/export/simulation.js'
+import { rehydrateSimulationConfig } from '../../../src/services/import/simulation.js'
 
 async function readArchive(blob) {
   return JSZip.loadAsync(await blob.arrayBuffer())
 }
 
 describe('generateOmexArchive', () => {
+  it('rehydrates simulation.json back into the plot and parameter scan config shapes', () => {
+    const groups = [{ id: 'plot-1', name: 'Plot 1' }]
+    const plotConfig = {
+      groups,
+      selections: [
+        {
+          key: 'membrane__Vm',
+          nodeId: 'membrane',
+          nodeName: 'membrane',
+          variableName: 'Vm',
+          units: 'mV',
+          type: 'variable',
+          plot: 'line',
+          groupId: 'plot-1',
+        },
+      ],
+    }
+    const parameterScanConfig = {
+      selections: [
+        {
+          key: 'membrane__gNa',
+          nodeId: 'membrane',
+          nodeName: 'membrane',
+          parameterName: 'gNa',
+          units: 'nS',
+          type: 'parameter',
+          min: 0.1,
+          default: 1,
+          max: 10,
+        },
+      ],
+    }
+
+    const simulationJson = buildSimulationJson(plotConfig, parameterScanConfig, {
+      voi: { name: 'time', componentName: 'environment', units: 'seconds' },
+      mappedParameters: { 'membrane/gNa': { name: 'gNa', componentName: 'parameters' } },
+    })
+
+    const rehydrated = rehydrateSimulationConfig(simulationJson, { groups })
+
+    expect(rehydrated.plotConfig.groups).toEqual(groups)
+    expect(rehydrated.plotConfig.selections).toEqual([
+      {
+        key: 'plot-1__membrane__Vm',
+        nodeId: 'membrane',
+        nodeName: 'membrane',
+        variableName: 'Vm',
+        units: '',
+        type: 'variable',
+        plot: 'line',
+        groupId: 'plot-1',
+      },
+    ])
+    expect(rehydrated.parameterScanConfig.selections).toEqual([
+      {
+        key: 'membrane__gNa',
+        nodeId: 'membrane',
+        nodeName: 'membrane',
+        parameterName: 'gNa',
+        units: '',
+        type: 'parameter',
+        min: 0.1,
+        default: 1,
+        max: 10,
+        step: (10 - 0.1) / SIM_STEPS,
+      },
+    ])
+  })
+
   it('builds a Web OpenCOR OMEX archive with the expected core files and contents', async () => {
     const cellmlSource = `<?xml version="1.0" encoding="UTF-8"?>
 <model xmlns="http://www.cellml.org/cellml/2.0#" name="test_model">
@@ -59,7 +129,12 @@ describe('generateOmexArchive', () => {
           ],
         },
       },
-      { extractedData: { voi: { name: 'time', componentName: 'environment', units: 'seconds' }, mappedParameters: { 'membrane/gNa': { name: 'gNa', componentName: 'parameters' } } } }
+      {
+        extractedData: {
+          voi: { name: 'time', componentName: 'environment', units: 'seconds' },
+          mappedParameters: { 'membrane/gNa': { name: 'gNa', componentName: 'parameters' } },
+        },
+      }
     )
 
     expect(archiveBlob).toBeInstanceOf(Blob)
@@ -67,7 +142,13 @@ describe('generateOmexArchive', () => {
     const archive = await readArchive(archiveBlob)
     const entryNames = Object.keys(archive.files).sort()
 
-    expect(entryNames).toEqual(['document.sedml', 'flow-snapshot.json', 'manifest.xml', 'model.cellml', 'simulation.json'])
+    expect(entryNames).toEqual([
+      'document.sedml',
+      'flow-snapshot.json',
+      'manifest.xml',
+      'model.cellml',
+      'simulation.json',
+    ])
 
     const manifestXml = await archive.file('manifest.xml').async('string')
     expect(manifestXml).toContain('<omexManifest')
@@ -109,7 +190,7 @@ describe('generateOmexArchive', () => {
         defaultValue: 1,
         minimumValue: 0.1,
         maximumValue: 10,
-        stepValue: 9.9/SIM_STEPS,
+        stepValue: 9.9 / SIM_STEPS,
       },
     ])
 

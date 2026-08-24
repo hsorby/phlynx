@@ -69,8 +69,8 @@ export function extractPlotSelections(plots = [], groups = []) {
     for (const trace of traces) {
       const scoped = parseScopedValue(trace?.yValue, 'data')
       const nameMatch = parseNameValue(trace?.name)
-      const nodeName = scoped?.nodeName || nameMatch?.nodeName
-      const variableName = scoped?.valueName || nameMatch?.valueName
+      const nodeName = nameMatch?.nodeName || scoped?.nodeName
+      const variableName = nameMatch?.valueName || scoped?.valueName
 
       if (!nodeName || !variableName) {
         continue
@@ -92,17 +92,39 @@ export function extractPlotSelections(plots = [], groups = []) {
   return selections
 }
 
+export function rehydrateSimulationConfig(jsonData, options = {}) {
+  const payload = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData
+  const groups = Array.isArray(options?.groups) ? options.groups : []
+  const plotSelections = extractPlotSelections(payload?.output?.plots || [], groups)
+
+  return {
+    plotConfig: {
+      groups: groups.map((group, index) => ({
+        id: group?.id || `group_${index + 1}`,
+        name: group?.name || `Group ${index + 1}`,
+      })),
+      selections: plotSelections,
+    },
+    parameterScanConfig: {
+      selections: extractInputSelections(payload?.input || []),
+    },
+  }
+}
+
 export function extractSimData(jsonData, filename, options = {}) {
   if (!jsonData) {
     return null
   }
 
   const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData
+  const rehydrated = rehydrateSimulationConfig(data, options)
 
   return {
     input: extractInputSelections(data?.input),
     plots: extractPlotSelections(data?.output?.plots, options?.groups || []),
     parameters: data?.parameters || [],
+    plotConfig: rehydrated.plotConfig,
+    parameterScanConfig: rehydrated.parameterScanConfig,
     raw: data,
     filename,
   }
