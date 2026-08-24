@@ -1846,8 +1846,6 @@ function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shouldNoti
 
     const globalConstants = extractGlobalConstants(node.data.variables)
 
-    console.log(`Assigning ${globalConstants.length} global constants for node "${node.data.name}"`)
-    console.log('Global constants:', globalConstants)
     for (const g of globalConstants) {
       libraryStore.assignGlobalConstant(g.name, g.value, g.units, g.data_reference)
     }
@@ -1919,19 +1917,14 @@ async function processImportedOmexArchive(importPayload, result) {
       for (const p of parameters.globalParameters) {
         libraryStore.assignGlobalConstant(p.name, p.value, p.units, p.data_reference)
       }
-      console.log('Parameters extracted from CellML file:', parameters)
-      console.log('Global constant "T":', libraryStore.getGlobalConstant('T'))
-      console.log('Global constant "N_avo":', libraryStore.getGlobalConstant('N_avo'))
     }
   } else if (result.files?.cellml) {
-    console.log(`Loading CellML file from OMEX archive: ${result.files.cellml}`)
     await loadCellMLData(await cellmlFile.async('string'), result.files.cellml, { notify: false })
   }
 
   if (result.files?.simulationJson) {
     const simJsonFile = archive.file(result.files.simulationJson)
     if (simJsonFile) {
-      console.log(`Loading simulation JSON from OMEX archive: ${result.files.simulationJson}`)
       const simData = await extractSimDataFromSimulationJson(
         await simJsonFile.async('string'),
         result.files.simulationJson,
@@ -1947,7 +1940,6 @@ async function processImportedOmexArchive(importPayload, result) {
       if (simData?.parameterScanConfig) {
         simulationSettingsStore.setParameterScanConfig(simData.parameterScanConfig)
       }
-
       console.log('Extracted simulation data from simulation JSON:', simData)
     }
   }
@@ -1955,7 +1947,6 @@ async function processImportedOmexArchive(importPayload, result) {
   if (result.files?.sedml) {
     const sedmlFile = archive.file(result.files.sedml)
     if (sedmlFile) {
-      console.log(`Loading SED-ML file from OMEX archive: ${result.files.sedml}`)
       const simData = await extractSimDataFromSedml(await sedmlFile.async('string'), result.files.sedml, {
         notify: false,
       })
@@ -1972,10 +1963,6 @@ async function processImportedOmexArchive(importPayload, result) {
 
   const preservedExtras = archiveEntries.filter(({ location }) => !criticalLocations.includes(location))
 
-  console.log(
-    'Preserved extras from OMEX archive:',
-    preservedExtras.map((e) => e.location)
-  )
   sessionMetadataStore.setLastSaveName(stripExtension(result.fileName))
   omexStore.setArchive({
     archiveName: result.fileName,
