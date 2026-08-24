@@ -79,15 +79,16 @@ export const useOmexStore = defineStore('omex', () => {
   const archiveName = ref('')
   const archiveType = ref('omex')
   const manifestXml = ref('')
-  const archiveFiles = ref([])
   const preservedExtras = ref([])
+  // The archiveHash is not a hash of the archive itself but the hash of the workspace state
+  // that the content of the archive represents at the time the archive was imported.
+  // It is used to determine if the workspace has changed since the archive was imported.
   const archiveHash = ref(0)
 
   function resetState() {
     archiveName.value = ''
     archiveType.value = 'omex'
     manifestXml.value = ''
-    archiveFiles.value = []
     preservedExtras.value = []
     archiveHash.value = 0
   }
@@ -100,16 +101,11 @@ export const useOmexStore = defineStore('omex', () => {
     archiveName: nextArchiveName = '',
     archiveType: nextArchiveType = 'omex',
     manifestXml: nextManifestXml = '',
-    files = [],
     extras = [],
   } = {}) {
     archiveName.value = nextArchiveName
     archiveType.value = nextArchiveType
     manifestXml.value = nextManifestXml
-    archiveFiles.value = (Array.isArray(files) ? files : [])
-      .map(normaliseArchiveEntry)
-      .filter(Boolean)
-      .map((entry) => ({ ...entry, payload: decodeEntryPayload(entry.payload) }))
     preservedExtras.value = (Array.isArray(extras) ? extras : [])
       .map(normaliseArchiveEntry)
       .filter(Boolean)
@@ -128,10 +124,6 @@ export const useOmexStore = defineStore('omex', () => {
       archiveName: state.archiveName || '',
       archiveType: state.archiveType || 'omex',
       manifestXml: state.manifestXml || '',
-      files: (state.archiveFiles || []).map((entry) => ({
-        ...entry,
-        payload: entry.payload,
-      })),
       extras: (state.preservedExtras || []).map((entry) => ({
         ...entry,
         payload: entry.payload,
@@ -145,10 +137,6 @@ export const useOmexStore = defineStore('omex', () => {
       archiveName: archiveName.value,
       archiveType: archiveType.value,
       manifestXml: manifestXml.value,
-      archiveFiles: archiveFiles.value.map((entry) => ({
-        ...entry,
-        payload: encodeEntryPayload(entry.payload),
-      })),
       preservedExtras: preservedExtras.value.map((entry) => ({
         ...entry,
         payload: encodeEntryPayload(entry.payload),
@@ -161,9 +149,9 @@ export const useOmexStore = defineStore('omex', () => {
     archiveName,
     archiveType,
     manifestXml,
-    archiveFiles,
     preservedExtras,
     resetState,
+    setArchive,
     setHash,
     loadState,
     getState,
