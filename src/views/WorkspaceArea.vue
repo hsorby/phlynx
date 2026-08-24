@@ -547,6 +547,7 @@ import { useRoute } from 'vue-router'
 
 import Button from 'primevue/button'
 import SplitButton from 'primevue/splitbutton'
+import JSZip from 'jszip'
 import Divider from 'primevue/divider'
 import InputText from 'primevue/inputtext'
 import IconField from 'primevue/iconfield'
@@ -609,6 +610,8 @@ import { useScreenshot } from '../services/useScreenshot'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { migrateWorkspace } from '../services/workspaceMigrator'
 import { relayoutNodes } from '../services/layouts/physics'
+import { extractSimData as extractSimDataFromSedml } from '../services/import/sedml'
+import { extractSimData as extractSimDataFromSimulationJson } from '../services/import/simulation'
 
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
@@ -1783,6 +1786,81 @@ const loadConfigData = async (content, filename, { notify: shouldNotify = true }
   }
 }
 
+async function processImportedOmexArchive(importPayload, result) {
+  const omexEntry = importPayload.get('omex')?.get(result.fileName)
+  if (!(omexEntry?.payload instanceof ArrayBuffer)) {
+    return
+  }
+
+  const archive = await JSZip.loadAsync(omexEntry.payload)
+  const manifestFile = archive.file('manifest.xml')
+  const manifestXml = manifestFile ? await manifestFile.async('string') : ''
+
+  const archiveLocations = new Set([
+    ...Object.values(result.files || {}).filter(Boolean),
+    ...(result.extras || []).map((entry) => entry.location),
+  ])
+
+  const archiveEntries = []
+  for (const location of archiveLocations) {
+    const fileObject = archive.file(location)
+    if (!fileObject) continue
+
+    archiveEntries.push({
+      location,
+      format: 'application/octet-stream',
+      payload: await fileObject.async('arraybuffer'),
+    })
+  }
+
+  const criticalLocations = [
+    result.files?.cellml,
+    result.files?.simulationJson,
+    result.files?.sedml,
+    result.files?.flowSnapshot,
+  ].filter(Boolean)
+
+  if (result.files?.simulationJson) {
+    const simJsonFile = archive.file(result.files.simulationJson)
+    if (simJsonFile) {
+      console.log(`Loading simulation JSON from OMEX archive: ${result.files.simulationJson}`)
+      const simData = await extractSimDataFromSimulationJson(await simJsonFile.async('string'), result.files.simulationJson, {
+        notify: false,
+      })
+      console.log('Extracted simulation data from simulation JSON:', simData)
+      // await loadSimulationJson(await simJsonFile.async('string'), result.files.simulationJson, { notify: false })
+    }
+  }
+
+  if (result.files?.sedml) {
+    const sedmlFile = archive.file(result.files.sedml)
+    if (sedmlFile) {
+      console.log(`Loading SED-ML file from OMEX archive: ${result.files.sedml}`)
+      const simData = await extractSimDataFromSedml(await sedmlFile.async('string'), result.files.sedml, { notify: false })
+      console.log('Extracted simulation data from SED-ML:', simData)
+      // await loadSedmlData(await sedmlFile.async('string'), result.files.sedml, { notify: false })
+    }
+  }
+
+  if (result.files?.cellml) {
+    const cellmlFile = archive.file(result.files.cellml)
+    if (cellmlFile) {
+      console.log(`Loading CellML file from OMEX archive: ${result.files.cellml}`)
+      // await loadCellMLData(await cellmlFile.async('string'), result.files.cellml, { notify: false })
+    }
+  }
+
+  const preservedExtras = archiveEntries.filter(({ location }) => !criticalLocations.includes(location))
+
+  console.log('Preserved extras from OMEX archive:', preservedExtras.map((e) => e.location))
+  omexStore.setArchive({
+    archiveName: result.fileName,
+    archiveType: result.fileType,
+    manifestXml,
+    extras: preservedExtras,
+  })
+}
+
 async function onImportConfirm(importPayload, updateProgress) {
   if (currentImportMode.value.key === IMPORT_KEYS.INSTANCE_ARRAY) {
     const instanceArrayFiles = importPayload.get(IMPORT_KEYS.INSTANCE_ARRAY)
@@ -1856,8 +1934,8 @@ async function onImportConfirm(importPayload, updateProgress) {
         }
       })
 
-      console.log('===========================')
-      console.log('OMEX import result:', result)
+      await processImportedOmexArchive(importPayload, result)
+
       notify.success({
         title: 'OMEX Import Complete',
         message: 'Workflow built successfully!',
