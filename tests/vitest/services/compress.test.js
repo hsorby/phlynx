@@ -146,6 +146,7 @@ describe('generateOmexArchive', () => {
     const entryNames = Object.keys(archive.files).sort()
 
     expect(entryNames).toEqual([
+      'changes.json',
       'document.sedml',
       'flow-snapshot.json',
       'manifest.xml',
