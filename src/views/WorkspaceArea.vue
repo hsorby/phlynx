@@ -1939,7 +1939,6 @@ async function processImportedOmexArchive(importPayload, result) {
         }
       )
 
-      console.log('Extracted simulation data from simulation JSON:', simData)
       if (simData?.plotConfig) {
         simulationSettingsStore.setPlotConfig(simData.plotConfig)
       }

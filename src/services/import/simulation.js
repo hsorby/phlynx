@@ -60,50 +60,57 @@ export function extractInputSelections(input = [], nodeNameToIdMap = new Map()) 
   })
 }
 
-export function extractPlotSelections(plots = [], groups = []) {
-  const selections = []
+function processTrace(trace, groupId, nodeNameToIdMap) {
+  const scoped = parseScopedValue(trace?.yValue, 'data')
+  const nameMatch = parseNameValue(trace?.name)
+  const nodeName = nameMatch?.nodeName || scoped?.nodeName
+  const variableName = nameMatch?.valueName || scoped?.valueName
 
-  for (const [plotIndex, plot] of (Array.isArray(plots) ? plots : []).entries()) {
-    const groupId = plot?.groupId || groups?.[plotIndex]?.id || `plot_${plotIndex + 1}`
-    const traces = [plot, ...(Array.isArray(plot?.additionalTraces) ? plot.additionalTraces : [])]
+  if (!nodeName || !variableName) {
+    return null
+  }
 
+  const nodeId = nodeNameToIdMap.get(nodeName) || 'unknown_node'
+  return {
+    key: `${nodeId}::${variableName}`,
+    nodeId,
+    nodeName,
+    variableName,
+    units: '',
+    // type: 'variable', // Can we get away with not specifying type here? It seems to be inferred from the context of the plotConfig.
+    plot: true,
+    groupId,
+  }
+}
+
+function extractPlots(plots = [], nodeNameToIdMap = new Map()) {
+  const extractedPlots = []
+
+  for (const [plotIndex, plot] of plots.entries()) {
+    const traces = Array.isArray(plot?.additionalTraces) ? plot.additionalTraces : []
+    const groupId = `plot-${plotIndex + 1}`
+    const result = processTrace(plot, `plot-${plotIndex + 1}`, nodeNameToIdMap)
+    if (result) {
+      extractedPlots.push(result)
+    }
     for (const trace of traces) {
-      const scoped = parseScopedValue(trace?.yValue, 'data')
-      const nameMatch = parseNameValue(trace?.name)
-      const nodeName = nameMatch?.nodeName || scoped?.nodeName
-      const variableName = nameMatch?.valueName || scoped?.valueName
-
-      if (!nodeName || !variableName) {
-        continue
+      // Process each trace
+      const result = processTrace(trace, groupId, nodeNameToIdMap)
+      if (result) {
+        extractedPlots.push(result)
       }
-
-      selections.push({
-        key: `${groupId}__${nodeName}__${variableName}`,
-        nodeId: nodeName,
-        nodeName,
-        variableName,
-        units: '',
-        type: 'variable',
-        plot: 'line',
-        groupId,
-      })
     }
   }
 
-  return selections
+  return extractedPlots
 }
 
 export function rehydrateSimulationConfig(jsonData, options = {}) {
   const payload = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData
-  const groups = Array.isArray(options?.groups) ? options.groups : []
-  const plotSelections = extractPlotSelections(payload?.output?.plots || [], groups)
+  const plotSelections = extractPlots(payload?.output?.plots || [], options?.nodeNameToIdMap)
 
   return {
     plotConfig: {
-      groups: groups.map((group, index) => ({
-        id: group?.id || `group_${index + 1}`,
-        name: group?.name || `Group ${index + 1}`,
-      })),
       selections: plotSelections,
     },
     parameterScanConfig: {

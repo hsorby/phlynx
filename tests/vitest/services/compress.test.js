@@ -13,11 +13,11 @@ describe('generateOmexArchive', () => {
   it('rehydrates simulation.json back into the plot and parameter scan config shapes', () => {
     const groups = [{ id: 'plot-1', name: 'Plot 1' }]
     const plotConfig = {
-      groups,
       selections: [
         {
-          key: 'membrane__Vm',
-          nodeId: 'membrane',
+          groupId: 'plot-1::Vm',
+          key: 'dndnode_0::Vm',
+          nodeId: 'dndnode_0',
           nodeName: 'membrane',
           variableName: 'Vm',
           units: 'mV',
@@ -30,8 +30,8 @@ describe('generateOmexArchive', () => {
     const parameterScanConfig = {
       selections: [
         {
-          key: 'membrane__gNa',
-          nodeId: 'membrane',
+          key: 'dndnode_1::gNa',
+          nodeId: 'dndnode_1',
           nodeName: 'membrane',
           parameterName: 'gNa',
           units: 'nS',
@@ -48,29 +48,32 @@ describe('generateOmexArchive', () => {
       mappedParameters: { 'membrane/gNa': { name: 'gNa', componentName: 'parameters' } },
     })
 
-    const rehydrated = rehydrateSimulationConfig(simulationJson, { groups })
+    const rehydrated = rehydrateSimulationConfig(simulationJson, {
+      groups,
+      nodeNameToIdMap: new Map([['membrane', 'dndnode_0']]),
+    })
 
-    expect(rehydrated.plotConfig.groups).toEqual(groups)
     expect(rehydrated.plotConfig.selections).toEqual([
       {
-        key: 'plot-1__membrane__Vm',
-        nodeId: 'membrane',
+        key: 'dndnode_0::Vm',
+        nodeId: 'dndnode_0',
         nodeName: 'membrane',
         variableName: 'Vm',
         units: '',
-        type: 'variable',
-        plot: 'line',
+        // type: 'variable',
+        plot: true,
         groupId: 'plot-1',
       },
     ])
     expect(rehydrated.parameterScanConfig.selections).toEqual([
       {
-        key: 'membrane__gNa',
-        nodeId: 'membrane',
+        key: 'dndnode_0::gNa',
+        nodeId: 'dndnode_0',
         nodeName: 'membrane',
         parameterName: 'gNa',
         units: '',
         type: 'parameter',
+        selected: true,
         min: 0.1,
         default: 1,
         max: 10,
