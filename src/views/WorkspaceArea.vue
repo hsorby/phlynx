@@ -620,7 +620,7 @@ import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../uti
 import { useClearWorkspace } from '../composables/useClearWorkspace'
 import { readFileAsText, cyrb53 } from '../utils/misc'
 import { buildGhostHandles } from '../utils/handles'
-import { initLibCellML, processCellMLData, extractVariablesFromMath } from '../utils/cellml'
+import { initLibCellML, processCellMLData, extractVariablesFromMath, loadParametersFromCellML } from '../utils/cellml'
 import {
   edgeLineOptions,
   CELLML_FILE_TYPES,
@@ -943,6 +943,9 @@ const onDrop = async (event) => {
   }
 }
 
+const libraryStore = useLibraryStore()
+const sessionMetadataStore = useSessionMetadataStore()
+const inspectionModuleStore = useInspectionModuleStore()
 const historyStore = useFlowHistoryStore()
 const simulationSettingsStore = useSimulationSettingsStore()
 const omexStore = useOmexStore()
@@ -950,13 +953,11 @@ const { loadFromInstanceArray } = useLoadFromInstanceArray()
 const { loadFromCellML } = useLoadFromCellML()
 const { capture } = useScreenshot()
 const { trackEvent } = useGtm()
+const { clearWorkspace } = useClearWorkspace()
+
 const helperLineHorizontal = ref(null)
 const helperLineVertical = ref(null)
 const alignment = ref('edge')
-
-const libraryStore = useLibraryStore()
-const sessionMetadataStore = useSessionMetadataStore()
-const inspectionModuleStore = useInspectionModuleStore()
 
 const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
@@ -980,7 +981,6 @@ const edgeDialogTargetNode = ref({})
 const edgeDialogActiveEdge = ref({})
 const edgeDialogSubgraph = ref(new Map())
 const importDialogRef = ref(null)
-// const savedFlowHash = ref('')
 
 const currentEditingNode = ref({
   name: '',
@@ -1294,7 +1294,6 @@ const getNodeClass = (props) => {
 }
 
 function handleClearWorkspace() {
-  const { clearWorkspace } = useClearWorkspace()
   clearWorkspace()
 }
 
@@ -1792,7 +1791,7 @@ const loadConfigData = async (content, filename, { notify: shouldNotify = true }
   }
 }
 
-function loadFlowSnapshot(flowSnapshot) {
+function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shouldNotify = true } = {}) {
   if (!flowSnapshot || !flowSnapshot.nodeData || !flowSnapshot.edges) {
     notify.error({
       title: 'Invalid Flow Snapshot',
@@ -1803,6 +1802,22 @@ function loadFlowSnapshot(flowSnapshot) {
 
   // Convert nodeData to nodes format expected by the workspace.
   const nodes = flowSnapshot.nodeData.map((node) => {
+    // Update variables with parameter data if available.
+    if (parameterData[node.data.name]) {
+      const paramVars = parameterData[node.data.name]
+      node.data.variables = node.data.variables.map((variable) => {
+        const paramVar = paramVars.find((p) => p.name.trimEnd() === variable.name.trim())
+        if (paramVar) {
+          return {
+            ...variable,
+            value: paramVar.value?.trim(),
+            data_reference: paramVar.data_reference?.trim(),
+            type: 'constant',
+          }
+        }
+        return variable
+      })
+    }
     // Check node math is the same as the math in the library store
     const nodeMath = libraryStore.availableMath.get(node.data.mathRef)
     if (nodeMath) {
@@ -1821,13 +1836,16 @@ function loadFlowSnapshot(flowSnapshot) {
   })
 
   // Clear the current workspace before loading the new snapshot
-  handleClearWorkspace()
+  clearWorkspace()
 
-  const newNodes = nodes.map((node) => { 
-    const allHandles = [...node.data.handles, ...buildGhostHandles(NUM_GHOST_HANDLES_TOP_BOT, NUM_GHOST_HANDLES_LEFT_RIGHT)]
+  const newNodes = nodes.map((node) => {
+    const allHandles = [
+      ...node.data.handles,
+      ...buildGhostHandles(NUM_GHOST_HANDLES_TOP_BOT, NUM_GHOST_HANDLES_LEFT_RIGHT),
+    ]
 
     const globalConstants = extractGlobalConstants(node.data.variables)
-    
+
     console.log(`Assigning ${globalConstants.length} global constants for node "${node.data.name}"`)
     console.log('Global constants:', globalConstants)
     for (const g of globalConstants) {
@@ -1880,20 +1898,34 @@ async function processImportedOmexArchive(importPayload, result) {
     result.files?.flowSnapshot,
   ].filter(Boolean)
 
+  const cellmlFile = archive.file(result.files.cellml)
+
+  // A CellML file is required for PhLynx to function properly, this should be validated before this point.
+  // We will not do nothing if the CellML file is missing, but we will log a warning.
+  if (!cellmlFile) {
+    console.warn(
+      `CellML file ${result.files.cellml} is missing from the OMEX archive. PhLynx will not function properly without it.`
+    )
+  }
+
   if (result.files?.flowSnapshot) {
     const flowSnapshotFile = archive.file(result.files.flowSnapshot)
     if (flowSnapshotFile) {
-      console.log(`Loading flow snapshot from OMEX archive: ${result.files.flowSnapshot}`)
       const flowSnapshot = JSON.parse(await flowSnapshotFile.async('string'))
-      console.log('Flow snapshot data:', flowSnapshot)
-      loadFlowSnapshot(flowSnapshot, { notify: false })
+
+      const parameters = loadParametersFromCellML(await cellmlFile.async('string'))
+      loadFlowSnapshot(flowSnapshot, parameters.parameters, { notify: false })
+
+      for (const p of parameters.globalParameters) {
+        libraryStore.assignGlobalConstant(p.name, p.value, p.units, p.data_reference)
+      }
+      console.log('Parameters extracted from CellML file:', parameters)
+      console.log('Global constant "T":', libraryStore.getGlobalConstant('T'))
+      console.log('Global constant "N_avo":', libraryStore.getGlobalConstant('N_avo'))
     }
   } else if (result.files?.cellml) {
-    const cellmlFile = archive.file(result.files.cellml)
-    if (cellmlFile) {
-      console.log(`Loading CellML file from OMEX archive: ${result.files.cellml}`)
-      await loadCellMLData(await cellmlFile.async('string'), result.files.cellml, { notify: false })
-    }
+    console.log(`Loading CellML file from OMEX archive: ${result.files.cellml}`)
+    await loadCellMLData(await cellmlFile.async('string'), result.files.cellml, { notify: false })
   }
 
   if (result.files?.simulationJson) {
@@ -1932,12 +1964,19 @@ async function processImportedOmexArchive(importPayload, result) {
     }
   }
 
+  // Rebuild the edge index so the EdgeConnectionDialog subgraph is correct.
+  rebuildNodeEdgeIndex()
+  recomputeMissingCouplings()
+
+  await nextTick(fitView(fitViewParams.value))
+
   const preservedExtras = archiveEntries.filter(({ location }) => !criticalLocations.includes(location))
 
   console.log(
     'Preserved extras from OMEX archive:',
     preservedExtras.map((e) => e.location)
   )
+  sessionMetadataStore.setLastSaveName(stripExtension(result.fileName))
   omexStore.setArchive({
     archiveName: result.fileName,
     archiveType: result.fileType,
@@ -2650,7 +2689,6 @@ function createSaveBlob() {
     simulation: simulationSettingsStore.getState(),
     inspectionModules: inspectionModuleStore.getState(),
     workspace: omexStore.getState(),
-    // savedFlowHash: savedFlowHash.value,
   }
 
   const jsonString = JSON.stringify(saveState, null, 2)
@@ -2701,10 +2739,6 @@ async function applyWorkspaceState(loadedState, { source = 'json' } = {}) {
     simulationSettingsStore.loadState(migratedState.simulation)
     inspectionModuleStore.loadState(migratedState.inspectionModules)
     omexStore.loadState(migratedState.omex)
-
-    // Update the saved flow hash.
-    // savedFlowHash.value = migratedState.savedFlowHash || ''
-    // savedFlowHash.value = cyrb53(snapshotFlowState())
 
     trackEvent('workflow_load_action', {
       category: 'Workflow',

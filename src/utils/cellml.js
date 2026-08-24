@@ -1599,3 +1599,64 @@ export function extractVoiAndParametersFromModel(modelString, parameterInfo) {
     garbageCollector.forEach((obj) => obj?.delete())
   }
 }
+
+export function loadParametersFromCellML(modelString) {
+  const parameterData = {parameters: {}, globalParameters: []}
+  if (modelString) {
+    const parser = new _libcellml.Parser(false)
+    const model = parser.parseModel(modelString)
+
+    const parameterComponent = model.componentByName(MODEL_PARAMETERS, true)
+    if (parameterComponent) {
+      for (let i = 0; i < parameterComponent.variableCount(); i++) {
+        const variable = parameterComponent.variableByIndex(i)
+        let componentName = ''
+        let variableName = ''
+        if (variable.equivalentVariableCount() === 1) {
+          const eqVar = variable.equivalentVariable(0)
+          const parentComp = eqVar.parent()
+          componentName = parentComp?.name() || ''
+          variableName = eqVar.name() || ''
+          eqVar.delete()
+          parentComp.delete()
+        } else {
+          console.warn(`Parameter variable '${variable.name()}' has ${variable.equivalentVariableCount()} equivalent variables. This may indicate a coupling issue.`)
+        }
+        const units = variable.units()
+
+        if (!parameterData.parameters[componentName]) {
+          parameterData.parameters[componentName] = []
+        }
+        parameterData.parameters[componentName].push({
+          name: variableName,
+          value: variable.initialValue(),
+          units: units.name(),
+        })
+
+        units.delete()
+        variable.delete()
+      }
+      parameterComponent.delete()
+    }
+
+    const globalParameterComponent = model.componentByName(GLOBAL_PARAMETERS, true)
+    if (globalParameterComponent) {
+      for (let i = 0; i < globalParameterComponent.variableCount(); i++) {
+        const variable = globalParameterComponent.variableByIndex(i)
+        const units = variable.units()
+        parameterData.globalParameters.push({
+          name: variable.name(),
+          value: variable.initialValue(),
+          units: units.name(),
+        })
+        units.delete()
+        variable.delete()
+      }
+      globalParameterComponent.delete()
+    }
+    model.delete()
+    parser.delete()
+  }
+
+  return parameterData
+}
