@@ -92,6 +92,7 @@ export function useImportExportSend({
     const rehydratedModel = await readFileAsText(blob)
     const extractedData = extractVoiAndParametersFromModel(rehydratedModel, parameterScanConfig.value)
     const snapshot = snapshotFlowState()
+
     return generateOmexArchive(
       { blob, finalName },
       snapshot,

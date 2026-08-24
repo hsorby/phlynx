@@ -1011,7 +1011,7 @@ const currentMatchIndex = ref(0)
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
 const somethingSelected = computed(() => getSelectedNodes.value.length > 0)
-const hasModelChanged = computed(() => cyrb53(snapshotFlowState()) !== omexStore.archiveHash.value)
+const hasModelChanged = computed(() => (cyrb53(snapshotFlowState()) !== omexStore.archiveHash))
 
 const {
   currentExportMode,
@@ -1977,6 +1977,7 @@ async function processImportedOmexArchive(importPayload, result) {
   const preservedExtras = archiveEntries.filter(({ location }) => !criticalLocations.includes(location))
 
   sessionMetadataStore.setLastSaveName(stripExtension(result.fileName))
+  omexStore.setHash(cyrb53(snapshotFlowState()))
   omexStore.setArchive({
     archiveName: result.fileName,
     archiveType: result.fileType,

@@ -89,13 +89,12 @@ export async function generateOmexArchive(cellmlData, flowSnapshot, simData = {}
     { location: 'document.sedml', format: 'http://identifiers.org/combine.specifications/sed-ml', master: true },
     { location: 'model.cellml', format: 'http://identifiers.org/combine.specifications/cellml' },
     { location: 'flow-snapshot.json', format: 'application/x.vnd.phlynx-flow+json' },
+    { location: 'changes.json', format: 'application/x.vnd.phlynx-changes+json' },
   ]
   if (simulationJson !== null) {
     manifestEntries.push({ location: 'simulation.json', format: 'http://purl.org/NET/mediatypes/application/json' })
   }
-  if (addInfo.modified) {
-    manifestEntries.push({ location: 'changes.json', format: 'application/x.vnd.phlynx-changes+json' })
-  }
+
   const manifestXml = buildManifestXml(manifestEntries)
 
   const zip = new JSZip()
@@ -103,12 +102,10 @@ export async function generateOmexArchive(cellmlData, flowSnapshot, simData = {}
   zip.file('model.cellml', cellmlData.blob)
   zip.file('document.sedml', sedmlText)
   zip.file('flow-snapshot.json', flowSnapshot)
+  zip.file('changes.json', JSON.stringify({ id: 'phlynx-changes', version: '1.0.0', modified: addInfo.modified }))
 
   if (simulationJson !== null) {
     zip.file('simulation.json', simulationJson)
-  }
-  if (addInfo.modified) {
-    zip.file('changes.json', JSON.stringify({ id: 'phlynx-changes', 'version': '1.0.0', modified: addInfo.modified }))
   }
 
   return zip.generateAsync({ type: 'blob' })
@@ -119,7 +116,6 @@ export async function createOmexDataFragment(omexBlob) {
 }
 
 export async function createDataFragment(zipBlob, mimeType) {
-
   const base64String = await blobToBase64(zipBlob)
 
   return `data:${mimeType};base64,${base64String}`
