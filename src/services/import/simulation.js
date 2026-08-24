@@ -37,20 +37,21 @@ function parseNameValue(value) {
   }
 }
 
-export function extractInputSelections(input = []) {
+export function extractInputSelections(input = [], nodeNameToIdMap = new Map()) {
   return (Array.isArray(input) ? input : []).map((entry, index) => {
     const scoped = parseScopedValue(entry?.id, 'id')
-    const fallbackName = typeof entry?.name === 'string' ? entry.name : `scan_${index}`
+    const fallbackName = typeof entry?.name === 'string' ? entry.name : `scan_${index + 1}`
     const nodeName = scoped?.nodeName || fallbackName
     const parameterName = scoped?.valueName || fallbackName
 
     return {
-      key: `${nodeName}__${parameterName}`,
-      nodeId: nodeName,
+      key: `${nodeNameToIdMap.get(nodeName) || 'unknown_node'}::${parameterName}`,
+      nodeId: nodeNameToIdMap.get(nodeName) || 'unknown_node',
       nodeName,
       parameterName,
       units: '',
       type: 'parameter',
+      selected: true,
       min: Number(entry?.minimumValue ?? 0),
       default: Number(entry?.defaultValue ?? 0),
       max: Number(entry?.maximumValue ?? 0),
@@ -106,26 +107,16 @@ export function rehydrateSimulationConfig(jsonData, options = {}) {
       selections: plotSelections,
     },
     parameterScanConfig: {
-      selections: extractInputSelections(payload?.input || []),
+      selections: extractInputSelections(payload?.input || [], options?.nodeNameToIdMap),
     },
   }
 }
 
-export function extractSimData(jsonData, filename, options = {}) {
+export function extractSimData(jsonData, options = {}) {
   if (!jsonData) {
     return null
   }
 
   const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData
-  const rehydrated = rehydrateSimulationConfig(data, options)
-
-  return {
-    input: extractInputSelections(data?.input),
-    plots: extractPlotSelections(data?.output?.plots, options?.groups || []),
-    parameters: data?.parameters || [],
-    plotConfig: rehydrated.plotConfig,
-    parameterScanConfig: rehydrated.parameterScanConfig,
-    raw: data,
-    filename,
-  }
+  return rehydrateSimulationConfig(data, options)
 }

@@ -25,6 +25,7 @@ export function buildSimulationJson(plotConfig, parameterScan, supplementalData)
     return null
   }
 
+  console.log('Building simulation.json with selections:', selections, 'scanSelections:', scanSelections, 'timeVariable:', timeVariable)
   const input = buildInput(scanSelections)
   const data = buildOutputData(selections, timeVariable)
   const plots = buildOutputPlots(plotConfig, selections, timeVariable)

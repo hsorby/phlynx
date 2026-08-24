@@ -1800,6 +1800,7 @@ function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shouldNoti
     return
   }
 
+  let nodeNameToIdMap = new Map()
   // Convert nodeData to nodes format expected by the workspace.
   const nodes = flowSnapshot.nodeData.map((node) => {
     // Update variables with parameter data if available.
@@ -1839,6 +1840,7 @@ function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shouldNoti
   clearWorkspace()
 
   const newNodes = nodes.map((node) => {
+    nodeNameToIdMap.set(node.data.name, node.id)
     const allHandles = [
       ...node.data.handles,
       ...buildGhostHandles(NUM_GHOST_HANDLES_TOP_BOT, NUM_GHOST_HANDLES_LEFT_RIGHT),
@@ -1860,6 +1862,8 @@ function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shouldNoti
     title: 'Flow Snapshot Loaded',
     message: 'The flow snapshot has been successfully loaded into the workspace.',
   })
+
+  return nodeNameToIdMap
 }
 
 async function processImportedOmexArchive(importPayload, result) {
@@ -1906,13 +1910,15 @@ async function processImportedOmexArchive(importPayload, result) {
     )
   }
 
+  const cellmlContent = cellmlFile ? await cellmlFile.async('string') : null
+  let nodeNameToIdMap = null
   if (result.files?.flowSnapshot) {
     const flowSnapshotFile = archive.file(result.files.flowSnapshot)
     if (flowSnapshotFile) {
       const flowSnapshot = JSON.parse(await flowSnapshotFile.async('string'))
 
-      const parameters = loadParametersFromCellML(await cellmlFile.async('string'))
-      loadFlowSnapshot(flowSnapshot, parameters.parameters, { notify: false })
+      const parameters = loadParametersFromCellML(cellmlContent)
+      nodeNameToIdMap = loadFlowSnapshot(flowSnapshot, parameters.parameters, { notify: false })
 
       for (const p of parameters.globalParameters) {
         libraryStore.assignGlobalConstant(p.name, p.value, p.units, p.data_reference)
@@ -1927,31 +1933,39 @@ async function processImportedOmexArchive(importPayload, result) {
     if (simJsonFile) {
       const simData = await extractSimDataFromSimulationJson(
         await simJsonFile.async('string'),
-        result.files.simulationJson,
         {
           notify: false,
+          nodeNameToIdMap,
         }
       )
 
+      console.log('Extracted simulation data from simulation JSON:', simData)
       if (simData?.plotConfig) {
         simulationSettingsStore.setPlotConfig(simData.plotConfig)
       }
 
       if (simData?.parameterScanConfig) {
-        simulationSettingsStore.setParameterScanConfig(simData.parameterScanConfig)
+        // Map parameter scan config nodeId and key to use the nodeId from the instance of the node in the workspace.
+        const currentParameterScanConfig = simulationSettingsStore.parameterScanConfig
+        simulationSettingsStore.setParameterScanConfig({
+          ...currentParameterScanConfig,
+          ...simData.parameterScanConfig,
+        })
       }
-      console.log('Extracted simulation data from simulation JSON:', simData)
     }
   }
 
   if (result.files?.sedml) {
     const sedmlFile = archive.file(result.files.sedml)
     if (sedmlFile) {
-      const simData = await extractSimDataFromSedml(await sedmlFile.async('string'), result.files.sedml, {
+      const simulationSettings = await extractSimDataFromSedml(await sedmlFile.async('string'), result.files.sedml, {
         notify: false,
       })
-      console.log('Extracted simulation data from SED-ML:', simData)
-      // await loadSedmlData(await sedmlFile.async('string'), result.files.sedml, { notify: false })
+      const currentSimulationSettings = simulationSettingsStore.simulationSettings
+      simulationSettingsStore.setSimulationSettings({
+        ...currentSimulationSettings,
+        ...simulationSettings,
+      })
     }
   }
 
