@@ -22,7 +22,7 @@ export function validateCellmlEntries(cellmlEntries) {
   return masters[0].location
 }
 
-export const importOmexFile = async (importPayload, updateProgress) => {
+export const extractArchiveFile = async (importPayload, updateProgress) => {
   const omexFiles = importPayload instanceof Map ? importPayload.get('omex') : null
 
   if (!(omexFiles instanceof Map) || omexFiles.size === 0) {
@@ -36,13 +36,28 @@ export const importOmexFile = async (importPayload, updateProgress) => {
     throw new Error('Invalid OMEX file: is not a valid ArrayBuffer')
   }
 
-  let archive
+  if (typeof updateProgress === 'function') {
+    updateProgress('Importing OMEX file... (10/100)')
+  }
+
+  return {archive: omexFile.payload, name: firstEntry?.[0] || 'unknown.omex'}
+}
+
+export const importOmexFile = async (payload, updateProgress) => {
+
+  let archive = null
   try {
-    archive = await JSZip.loadAsync(omexFile.payload)
+    archive = await JSZip.loadAsync(payload.archive)
   } catch {
+    console.log('Failed to load OMEX archive as ZIP. Payload size:', payload.archive?.byteLength)
     throw new Error('Invalid OMEX file: is not a valid ZIP archive')
   }
 
+  if (typeof updateProgress === 'function') {
+    updateProgress('Importing OMEX file... (30/100)')
+  }
+
+  console.log('000000000')
   const manifestFile = archive.file('manifest.xml')
   if (!manifestFile) {
     throw new Error('Invalid OMEX file: missing manifest.xml')
@@ -56,6 +71,7 @@ export const importOmexFile = async (importPayload, updateProgress) => {
     throw new Error('Invalid OMEX file: manifest.xml is not valid XML')
   }
 
+  console.log('000000000')
   const rootElement = manifestDocument.documentElement
   const expectedNamespace = 'http://identifiers.org/combine.specifications/omex-manifest'
 
@@ -71,6 +87,7 @@ export const importOmexFile = async (importPayload, updateProgress) => {
     flowSnapshot: null,
   }
 
+  console.log('000000000')
   for (const contentElement of rootElement.getElementsByTagNameNS(expectedNamespace, 'content')) {
     let location = contentElement.getAttribute('location')
     const format = contentElement.getAttribute('format')
@@ -116,15 +133,33 @@ export const importOmexFile = async (importPayload, updateProgress) => {
 
     foundFiles.extras.push({ location, format })
   }
+  console.log('000000000')
+
+  if (typeof updateProgress === 'function') {
+    updateProgress('Importing OMEX file... (70/100)')
+  }
 
   const cellmlLocation = validateCellmlEntries(foundFiles.cellmls)
 
+  console.log('000000000')
   if (typeof updateProgress === 'function') {
-    updateProgress(100)
+    updateProgress('Importing OMEX file... (100/100)')
   }
-
+  console.log('000010000')
+  console.log('OMEX import result:', {
+    fileName: payload.name,
+    files: {
+      cellml: cellmlLocation,
+      simulationJson: foundFiles.simulationJson,
+      sedml: foundFiles.sedml,
+      flowSnapshot: foundFiles.flowSnapshot,
+    },
+    extras: foundFiles.extras,
+    fileType: 'omex',
+  })
+  console.log('000020000')
   return {
-    fileName: firstEntry?.[0] || 'unknown.omex',
+    fileName: payload.name,
     files: {
       cellml: cellmlLocation,
       simulationJson: foundFiles.simulationJson,

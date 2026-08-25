@@ -567,7 +567,7 @@ import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore.js'
 import { useOmexStore } from '../stores/omexStore'
 
-import { importOmexFile } from '../services/import/omex'
+import { importOmexFile, extractArchiveFile } from '../services/import/omex'
 
 import useDragAndDrop from '../composables/useDnD'
 import { useHandleManagement } from '../composables/useHandleManagement'
@@ -1866,21 +1866,20 @@ function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shouldNoti
   return nodeNameToIdMap
 }
 
-async function processImportedOmexArchive(importPayload, result) {
-  const omexEntry = importPayload.get('omex')?.get(result.fileName)
-  if (!(omexEntry?.payload instanceof ArrayBuffer)) {
-    return
-  }
+async function processImportedOmexArchive(archivePayload, result) {
 
-  const archive = await JSZip.loadAsync(omexEntry.payload)
+  const archive = await JSZip.loadAsync(archivePayload)
+  console.log('111111111')
   const manifestFile = archive.file('manifest.xml')
   const manifestXml = manifestFile ? await manifestFile.async('string') : ''
 
+  console.log('111111111')
   const archiveLocations = new Set([
     ...Object.values(result.files || {}).filter(Boolean),
     ...(result.extras || []).map((entry) => entry.location),
   ])
 
+  console.log('111111111')
   const archiveEntries = []
   for (const location of archiveLocations) {
     const fileObject = archive.file(location)
@@ -1893,6 +1892,7 @@ async function processImportedOmexArchive(importPayload, result) {
     })
   }
 
+  console.log('111111111')
   const criticalLocations = [
     result.files?.cellml,
     result.files?.simulationJson,
@@ -1902,6 +1902,7 @@ async function processImportedOmexArchive(importPayload, result) {
 
   const cellmlFile = archive.file(result.files.cellml)
 
+  console.log('111111111')
   // A CellML file is required for PhLynx to function properly, this should be validated before this point.
   // We will not do nothing if the CellML file is missing, but we will log a warning.
   if (!cellmlFile) {
@@ -1910,6 +1911,7 @@ async function processImportedOmexArchive(importPayload, result) {
     )
   }
 
+  console.log('111111111')
   const cellmlContent = cellmlFile ? await cellmlFile.async('string') : null
   let nodeNameToIdMap = null
   if (result.files?.flowSnapshot) {
@@ -1927,6 +1929,7 @@ async function processImportedOmexArchive(importPayload, result) {
   } else if (result.files?.cellml) {
     await loadCellMLData(await cellmlFile.async('string'), result.files.cellml, { notify: false })
   }
+  console.log('111111111')
 
   if (result.files?.simulationJson) {
     const simJsonFile = archive.file(result.files.simulationJson)
@@ -1953,6 +1956,7 @@ async function processImportedOmexArchive(importPayload, result) {
       }
     }
   }
+  console.log('111111111')
 
   if (result.files?.sedml) {
     const sedmlFile = archive.file(result.files.sedml)
@@ -1967,12 +1971,14 @@ async function processImportedOmexArchive(importPayload, result) {
       })
     }
   }
+  console.log('111111111')
 
   // Rebuild the edge index so the EdgeConnectionDialog subgraph is correct.
   rebuildNodeEdgeIndex()
   recomputeMissingCouplings()
 
   await nextTick(fitView(fitViewParams.value))
+  console.log('111111111')
 
   const preservedExtras = archiveEntries.filter(({ location }) => !criticalLocations.includes(location))
 
@@ -1984,6 +1990,7 @@ async function processImportedOmexArchive(importPayload, result) {
     manifestXml,
     extras: preservedExtras,
   })
+  console.log('111112111')
 }
 
 async function onImportConfirm(importPayload, updateProgress) {
@@ -2053,13 +2060,10 @@ async function onImportConfirm(importPayload, updateProgress) {
     }
   } else if (currentImportMode.value.key === IMPORT_KEYS.OMEX) {
     try {
-      const result = await importOmexFile(importPayload, (current, total, statusMessage) => {
-        if (updateProgress) {
-          updateProgress(`${statusMessage || 'Importing OMEX file...'} (${current}/${total})`)
-        }
-      })
+      const archivePayload = await extractOmexPayload(importPayload, updateProgress)
+      const result = await importOmexFile(archivePayload, updateProgress)
 
-      await processImportedOmexArchive(importPayload, result)
+      await processImportedOmexArchive(archivePayload, result)
 
       notify.success({
         title: 'OMEX Import Complete',
@@ -2783,7 +2787,7 @@ function handleLoadWorkspace(event) {
   reader.readAsText(file)
 }
 
-const urlLoaders = createUrlLoaders({ applyWorkspaceState, loadCellMLFiles })
+const urlLoaders = createUrlLoaders({ applyWorkspaceState, importOmexFile, processImportedOmexArchive })
 
 const { load: loadFromUrl, isLoading: isUrlLoading } = useLoadFromUrl()
 

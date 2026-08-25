@@ -2,6 +2,7 @@
 
 import argparse
 import ast
+import os
 from pathlib import Path
 
 
@@ -154,6 +155,8 @@ def add_method_to_existing_class(
 
     lines[insert_line:insert_line] = [""] + method_lines
 
+    lines += [""]
+
     return "\n".join(lines)
 
 
@@ -186,6 +189,12 @@ def main():
         dest="test_name",
         required=True,
         help="Test method name"
+    )
+
+    parser.add_argument(
+        "--keep-input",
+        action="store_true",
+        help="Keep input file after conversion"
     )
 
     args = parser.parse_args()
@@ -229,6 +238,9 @@ def main():
         output_file.write_text(module_text + "\n")
 
         print(f"Created {output_file}")
+
+    if os.path.exists(input_file) and not args.keep_input:
+        os.remove(input_file)
 
 
 if __name__ == "__main__":
