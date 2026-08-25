@@ -30,4 +30,4 @@ jobs:
       # Wait for app to be ready
       - run: npx wait-on http://localhost:5173
 
-      - run: python tests/run_all_tests.py
+      - run: python tests/run_playwright_tests.py
