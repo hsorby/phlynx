@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import JSZip from 'jszip'
 
-import { importOmexFile } from '../../../../src/services/import/omex.js'
+import { importOmexFile, extractArchiveFile } from '../../../../src/services/import/omex.js'
 import { isSimulationJsonFile, isPhlynxFlowSnapshotFile } from '../../../../src/services/import/omexClassifiers.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -38,7 +38,9 @@ describe('Import OMEX', () => {
     const importPayload = new Map()
     importPayload.set('omex', new Map([[uploadedFile.name, uploadedFile]]))
 
-    await expect(importOmexFile(importPayload)).rejects.toThrow('Invalid OMEX file: is not a valid ZIP archive')
+    const payload = await extractArchiveFile(importPayload)
+
+    await expect(importOmexFile(payload)).rejects.toThrow('Invalid OMEX file: is not a valid ZIP archive')
   })
 
   it('loads a valid OMEX upload successfully', async () => {
@@ -51,7 +53,8 @@ describe('Import OMEX', () => {
 
     const updateProgress = vi.fn()
 
-    await expect(importOmexFile(importPayload, updateProgress)).resolves.toEqual({
+    const payload = await extractArchiveFile(importPayload)
+    await expect(importOmexFile(payload, updateProgress)).resolves.toEqual({
       fileName: '3compartment.omex',
       files: {
         cellml: '3compartment_flat.cellml',
@@ -67,7 +70,7 @@ describe('Import OMEX', () => {
       fileType: 'omex',
     })
 
-    expect(updateProgress).toHaveBeenCalledWith(100)
+    expect(updateProgress).toHaveBeenCalledWith('Importing OMEX file... (100/100)')
   })
 
   it('rejects multiple CellML files without exactly one master file', async () => {
@@ -86,7 +89,8 @@ describe('Import OMEX', () => {
     const payload = await zip.generateAsync({ type: 'arraybuffer' })
     const importPayload = new Map([['omex', new Map([['bad-master.omex', { isValid: true, payload }]])]])
 
-    await expect(importOmexFile(importPayload)).rejects.toThrow(
+    const archivePayload = await extractArchiveFile(importPayload)
+    await expect(importOmexFile(archivePayload)).rejects.toThrow(
       'multiple CellML files require exactly one master CellML file'
     )
   })
