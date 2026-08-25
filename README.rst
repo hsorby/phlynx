@@ -173,3 +173,4 @@ This script will create a new test class called `TestDocumentationNavigation` in
 The script will create this file if it does not already exist.
 Also, if the specified class already exists in the output file, the script will add the new test method to that class.
 If the specified test method already exists in the class, the script will throw an error to avoid overwriting existing code.
+If the specified class does not exist in the output file, the script will create a new class with the specified name and add the test method to it.
