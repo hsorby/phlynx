@@ -49,7 +49,6 @@ export const importOmexFile = async (payload, updateProgress) => {
   try {
     archive = await JSZip.loadAsync(payload.archive)
   } catch {
-    console.log('Failed to load OMEX archive as ZIP. Payload size:', payload.archive?.byteLength)
     throw new Error('Invalid OMEX file: is not a valid ZIP archive')
   }
 
@@ -57,7 +56,6 @@ export const importOmexFile = async (payload, updateProgress) => {
     updateProgress('Importing OMEX file... (30/100)')
   }
 
-  console.log('000000000')
   const manifestFile = archive.file('manifest.xml')
   if (!manifestFile) {
     throw new Error('Invalid OMEX file: missing manifest.xml')
@@ -71,7 +69,6 @@ export const importOmexFile = async (payload, updateProgress) => {
     throw new Error('Invalid OMEX file: manifest.xml is not valid XML')
   }
 
-  console.log('000000000')
   const rootElement = manifestDocument.documentElement
   const expectedNamespace = 'http://identifiers.org/combine.specifications/omex-manifest'
 
@@ -87,7 +84,6 @@ export const importOmexFile = async (payload, updateProgress) => {
     flowSnapshot: null,
   }
 
-  console.log('000000000')
   for (const contentElement of rootElement.getElementsByTagNameNS(expectedNamespace, 'content')) {
     let location = contentElement.getAttribute('location')
     const format = contentElement.getAttribute('format')
@@ -133,7 +129,6 @@ export const importOmexFile = async (payload, updateProgress) => {
 
     foundFiles.extras.push({ location, format })
   }
-  console.log('000000000')
 
   if (typeof updateProgress === 'function') {
     updateProgress('Importing OMEX file... (70/100)')
@@ -141,23 +136,10 @@ export const importOmexFile = async (payload, updateProgress) => {
 
   const cellmlLocation = validateCellmlEntries(foundFiles.cellmls)
 
-  console.log('000000000')
   if (typeof updateProgress === 'function') {
     updateProgress('Importing OMEX file... (100/100)')
   }
-  console.log('000010000')
-  console.log('OMEX import result:', {
-    fileName: payload.name,
-    files: {
-      cellml: cellmlLocation,
-      simulationJson: foundFiles.simulationJson,
-      sedml: foundFiles.sedml,
-      flowSnapshot: foundFiles.flowSnapshot,
-    },
-    extras: foundFiles.extras,
-    fileType: 'omex',
-  })
-  console.log('000020000')
+
   return {
     fileName: payload.name,
     files: {
