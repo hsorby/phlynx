@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import JSZip from 'jszip'
 
-import { importOmexFile, extractArchiveFile } from '../../../../src/services/import/omex.js'
+import { extractOmexArchive, extractOmexArchive } from '../../../../src/services/import/omex.js'
 import { isSimulationJsonFile, isPhlynxFlowSnapshotFile } from '../../../../src/services/import/omexClassifiers.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -38,7 +38,7 @@ describe('Import OMEX', () => {
     const importPayload = new Map()
     importPayload.set('omex', new Map([[uploadedFile.name, uploadedFile]]))
 
-    const payload = await extractArchiveFile(importPayload)
+    const payload = await extractOmexArchive(importPayload)
 
     await expect(importOmexFile(payload)).rejects.toThrow('Invalid OMEX file: is not a valid ZIP archive')
   })
@@ -53,9 +53,8 @@ describe('Import OMEX', () => {
 
     const updateProgress = vi.fn()
 
-    const payload = await extractArchiveFile(importPayload)
-    await expect(importOmexFile(payload, updateProgress)).resolves.toEqual({
-      fileName: '3compartment.omex',
+    const payload = await extractOmexArchive(importPayload)
+    await expect(importOmexFile(payload.omex, updateProgress)).resolves.toEqual({
       files: {
         cellml: '3compartment_flat.cellml',
         simulationJson: null,
@@ -89,8 +88,8 @@ describe('Import OMEX', () => {
     const payload = await zip.generateAsync({ type: 'arraybuffer' })
     const importPayload = new Map([['omex', new Map([['bad-master.omex', { isValid: true, payload }]])]])
 
-    const archivePayload = await extractArchiveFile(importPayload)
-    await expect(importOmexFile(archivePayload)).rejects.toThrow(
+    const archivePayload = await extractOmexArchive(importPayload)
+    await expect(importOmexFile(archivePayload.omex)).rejects.toThrow(
       'multiple CellML files require exactly one master CellML file'
     )
   })

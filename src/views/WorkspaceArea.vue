@@ -567,7 +567,7 @@ import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore.js'
 import { useOmexStore } from '../stores/omexStore'
 
-import { importOmexFile, extractArchiveFile } from '../services/import/omex'
+import { importOmexFile, extractOmexArchive } from '../services/import/omex'
 
 import useDragAndDrop from '../composables/useDnD'
 import { useHandleManagement } from '../composables/useHandleManagement'
@@ -2054,7 +2054,7 @@ async function onImportConfirm(importPayload, updateProgress) {
     }
   } else if (currentImportMode.value.key === IMPORT_KEYS.OMEX) {
     try {
-      const archivePayload = await extractArchiveFile(importPayload, updateProgress)
+      const archivePayload = await extractOmexArchive(importPayload, updateProgress)
       const result = await importOmexFile(archivePayload.omex, updateProgress)
 
       await processImportedOmexArchive(archivePayload.omex, result, archivePayload.name)

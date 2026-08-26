@@ -22,7 +22,7 @@ export function validateCellmlEntries(cellmlEntries) {
   return masters[0].location
 }
 
-export const extractArchiveFile = async (importPayload, updateProgress) => {
+export const extractOmexArchive = async (importPayload, updateProgress) => {
   const omexFiles = importPayload instanceof Map ? importPayload.get('omex') : null
 
   if (!(omexFiles instanceof Map) || omexFiles.size === 0) {
