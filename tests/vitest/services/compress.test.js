@@ -82,6 +82,55 @@ describe('generateOmexArchive', () => {
     ])
   })
 
+  it('uses the imported CellML filename when one is supplied in addInfo', async () => {
+    const cellmlSource = `<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://www.cellml.org/cellml/2.0#" name="imported_model">
+  <component name="main" />
+</model>`
+
+    const archiveBlob = await generateOmexArchive(
+      {
+        finalName: 'imported-model.cellml',
+        blob: new Blob([cellmlSource], { type: 'application/xml' }),
+      },
+      JSON.stringify({}),
+      {
+        simulationSettings: {
+          startingPoint: 10,
+          endingPoint: 20,
+          initialPoint: 5,
+          timeStep: 1,
+          pointInterval: 1,
+          solver: 'CVODE',
+          tolerance: 1e-7,
+          maxSteps: 500,
+        },
+      },
+      {
+        extractedData: {
+          voi: { name: 'time', componentName: 'environment', units: 'seconds' },
+        },
+        cellmlFileName: 'imported-model.cellml',
+      }
+    )
+
+    const archive = await readArchive(archiveBlob)
+    const manifestXml = await archive.file('manifest.xml').async('string')
+
+    expect(archive.files['imported-model.cellml']).toBeDefined()
+    expect(manifestXml).toContain(
+      '<content location="imported-model.cellml" format="http://identifiers.org/combine.specifications/cellml"/>'
+    )
+
+    const modelCellml = await archive.file('imported-model.cellml').async('string')
+    expect(modelCellml).toBe(cellmlSource)
+
+    const sedmlDocument = await archive.file('document.sedml').async('string')
+    expect(sedmlDocument).toContain(
+      '<model id="model1" language="urn:sedml:language:cellml" source="imported-model.cellml">'
+    )
+  })
+
   it('builds a Web OpenCOR OMEX archive with the expected core files and contents', async () => {
     const cellmlSource = `<?xml version="1.0" encoding="UTF-8"?>
 <model xmlns="http://www.cellml.org/cellml/2.0#" name="test_model">
@@ -90,7 +139,6 @@ describe('generateOmexArchive', () => {
 
     const archiveBlob = await generateOmexArchive(
       {
-        finalName: 'test-model.cellml',
         blob: new Blob([cellmlSource], { type: 'application/xml' }),
       },
       JSON.stringify({}),
@@ -137,6 +185,7 @@ describe('generateOmexArchive', () => {
           voi: { name: 'time', componentName: 'environment', units: 'seconds' },
           mappedParameters: { 'membrane/gNa': { name: 'gNa', componentName: 'parameters' } },
         },
+        cellmlFileName: 'test-model.cellml',
       }
     )
 
@@ -150,8 +199,8 @@ describe('generateOmexArchive', () => {
       'document.sedml',
       'flow-snapshot.json',
       'manifest.xml',
-      'model.cellml',
       'simulation.json',
+      'test-model.cellml',
     ])
 
     const manifestXml = await archive.file('manifest.xml').async('string')
@@ -161,13 +210,13 @@ describe('generateOmexArchive', () => {
       '<content location="document.sedml" format="http://identifiers.org/combine.specifications/sed-ml" master="true"/>'
     )
     expect(manifestXml).toContain(
-      '<content location="model.cellml" format="http://identifiers.org/combine.specifications/cellml"/>'
+      '<content location="test-model.cellml" format="http://identifiers.org/combine.specifications/cellml"/>'
     )
     expect(manifestXml).toContain(
       '<content location="simulation.json" format="http://purl.org/NET/mediatypes/application/json"/>'
     )
 
-    const modelCellml = await archive.file('model.cellml').async('string')
+    const modelCellml = await archive.file('test-model.cellml').async('string')
     expect(modelCellml).toBe(cellmlSource)
 
     const flowSnapshot = await archive.file('flow-snapshot.json').async('string')
@@ -175,7 +224,9 @@ describe('generateOmexArchive', () => {
 
     const sedmlDocument = await archive.file('document.sedml').async('string')
     expect(sedmlDocument).toContain('<sedML xmlns="http://sed-ml.org/sed-ml/level1/version4" level="1" version="4">')
-    expect(sedmlDocument).toContain('<model id="model1" language="urn:sedml:language:cellml" source="model.cellml">')
+    expect(sedmlDocument).toContain(
+      '<model id="model1" language="urn:sedml:language:cellml" source="test-model.cellml">'
+    )
     expect(sedmlDocument).toContain('<task id="task1" modelReference="model1" simulationReference="simulation1"/>')
     expect(sedmlDocument).toContain(
       '<uniformTimeCourse id="simulation1" initialTime="5" outputStartTime="10" outputEndTime="20" numberOfSteps="10">'

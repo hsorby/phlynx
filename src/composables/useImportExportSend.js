@@ -19,6 +19,7 @@ import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
 import { useSessionMetadataStore } from '../stores/sessionMetadataStore'
+import { useOmexStore } from '../stores/omexStore'
 
 import { createCellMLDataFragment, generateOmexArchive, createOmexDataFragment } from '../services/compress'
 import { generateExportZip } from '../services/export/ca'
@@ -42,6 +43,7 @@ export function useImportExportSend({
   const libraryStore = useLibraryStore()
   const inspectionModuleStore = useInspectionModuleStore()
   const sessionMetadataStore = useSessionMetadataStore()
+  const omexStore = useOmexStore()
 
   const currentImportKey = ref(IMPORT_KEYS.INSTANCE_ARRAY)
   const currentExportKey = ref(EXPORT_KEYS.CELLML)
@@ -87,21 +89,21 @@ export function useImportExportSend({
   )
 
   const generateOmexArchiveAction = async (finalName) => {
-
     const blob = await generateFlattenedModel(nodes.value, edges.value, libraryStore, inspectionModuleStore.modules)
     const rehydratedModel = await readFileAsText(blob)
     const extractedData = extractVoiAndParametersFromModel(rehydratedModel, parameterScanConfig.value)
     const snapshot = snapshotFlowState()
+    const cellmlFileName = omexStore.cellmlFileName
 
     return generateOmexArchive(
-      { blob, finalName },
+      { blob },
       snapshot,
       {
         simulationSettings: simulationSettings.value,
         plotConfig: plotConfig.value,
         parameterScanConfig: parameterScanConfig.value,
       },
-      { extractedData, modified: hasModelChanged.value }
+      { extractedData, modified: hasModelChanged.value, cellmlFileName }
     )
   }
 

@@ -1822,7 +1822,8 @@ function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shouldNoti
       })
     }
     // Resolve math from the snapshot math library.
-    const nodeMathFromSnapshot = node.data?.mathHash in snapshotMathLibrary ? snapshotMathLibrary[node.data.mathHash] : undefined
+    const nodeMathFromSnapshot =
+      node.data?.mathHash in snapshotMathLibrary ? snapshotMathLibrary[node.data.mathHash] : undefined
 
     // Check node math is the same as the math in the library store
     const nodeMath = libraryStore.availableMath.get(node.data.mathRef)
@@ -1982,6 +1983,7 @@ async function processImportedOmexArchive(archivePayload, result, fileName) {
   omexStore.setArchive({
     archiveName: fileName,
     archiveType: result.fileType,
+    cellmlFileName: result.files?.cellml || DEFAULT_CELLML_FILE_NAME,
     manifestXml,
     extras: preservedExtras,
   })

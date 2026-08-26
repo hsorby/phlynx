@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
+import { DEFAULT_CELLML_FILE_NAME } from '../utils/constants'
+
 function arrayBufferToBase64(value) {
   if (value == null) return ''
 
@@ -78,6 +80,7 @@ function decodeEntryPayload(payload) {
 export const useOmexStore = defineStore('omex', () => {
   const archiveName = ref('')
   const archiveType = ref('omex')
+  const cellmlFileName = ref(DEFAULT_CELLML_FILE_NAME) // Default to 'model.cellml' if not set
   const manifestXml = ref('')
   const preservedExtras = ref([])
   // The archiveHash is not a hash of the archive itself but the hash of the workspace state
@@ -88,6 +91,7 @@ export const useOmexStore = defineStore('omex', () => {
   function resetState() {
     archiveName.value = ''
     archiveType.value = 'omex'
+    cellmlFileName.value = DEFAULT_CELLML_FILE_NAME
     manifestXml.value = ''
     preservedExtras.value = []
     archiveHash.value = 0
@@ -100,11 +104,13 @@ export const useOmexStore = defineStore('omex', () => {
   function setArchive({
     archiveName: nextArchiveName = '',
     archiveType: nextArchiveType = 'omex',
+    cellmlFileName: nextCellmlFileName = DEFAULT_CELLML_FILE_NAME,
     manifestXml: nextManifestXml = '',
     extras = [],
   } = {}) {
     archiveName.value = nextArchiveName
     archiveType.value = nextArchiveType
+    cellmlFileName.value = nextCellmlFileName
     manifestXml.value = nextManifestXml
     preservedExtras.value = (Array.isArray(extras) ? extras : [])
       .map(normaliseArchiveEntry)
@@ -123,6 +129,7 @@ export const useOmexStore = defineStore('omex', () => {
       archiveHash: state.archiveHash || 0,
       archiveName: state.archiveName || '',
       archiveType: state.archiveType || 'omex',
+      cellmlFileName: state.cellmlFileName || DEFAULT_CELLML_FILE_NAME,
       manifestXml: state.manifestXml || '',
       extras: (state.preservedExtras || []).map((entry) => ({
         ...entry,
@@ -136,6 +143,7 @@ export const useOmexStore = defineStore('omex', () => {
       archiveHash: archiveHash.value,
       archiveName: archiveName.value,
       archiveType: archiveType.value,
+      cellmlFileName: cellmlFileName.value,
       manifestXml: manifestXml.value,
       preservedExtras: preservedExtras.value.map((entry) => ({
         ...entry,
@@ -148,6 +156,7 @@ export const useOmexStore = defineStore('omex', () => {
     archiveHash,
     archiveName,
     archiveType,
+    cellmlFileName,
     manifestXml,
     preservedExtras,
     resetState,

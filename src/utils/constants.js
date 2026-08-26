@@ -12,6 +12,7 @@ export const HANDLE_SPACING = 25
 
 export const USER_MODULES_FILE = 'User_Modules.cellml'
 export const NEW_INSTANCE_MODULE_REF = 'new_module:phlynx'
+export const DEFAULT_CELLML_FILE_NAME = 'model.cellml'
 
 export const TOOLTIP_AUTO_CLOSE = 1200
 export const RESCALE_ASPECT_RATIO = 3

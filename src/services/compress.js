@@ -82,12 +82,13 @@ export async function createCellMLDataFragment(cellmlBlob, fileName) {
  * @returns {Promise<Blob>} The .omex archive as a zip Blob.
  */
 export async function generateOmexArchive(cellmlData, flowSnapshot, simData = {}, addInfo = {}) {
-  const sedmlText = generateSedmlData(simData.simulationSettings)
+  const cellmlFileName = addInfo.cellmlFileName
+  const sedmlText = generateSedmlData(simData.simulationSettings, cellmlFileName)
   const simulationJson = buildSimulationJson(simData.plotConfig, simData.parameterScanConfig, addInfo.extractedData)
 
   const manifestEntries = [
     { location: 'document.sedml', format: 'http://identifiers.org/combine.specifications/sed-ml', master: true },
-    { location: 'model.cellml', format: 'http://identifiers.org/combine.specifications/cellml' },
+    { location: cellmlFileName, format: 'http://identifiers.org/combine.specifications/cellml' },
     { location: 'flow-snapshot.json', format: 'application/x.vnd.phlynx-flow+json' },
     { location: 'changes.json', format: 'application/x.vnd.phlynx-changes+json' },
   ]
@@ -99,7 +100,7 @@ export async function generateOmexArchive(cellmlData, flowSnapshot, simData = {}
 
   const zip = new JSZip()
   zip.file('manifest.xml', manifestXml)
-  zip.file('model.cellml', cellmlData.blob)
+  zip.file(cellmlFileName, cellmlData.blob)
   zip.file('document.sedml', sedmlText)
   zip.file('flow-snapshot.json', flowSnapshot)
   zip.file('changes.json', JSON.stringify({ id: 'phlynx-changes', version: '1.0.0', modified: addInfo.modified }))
