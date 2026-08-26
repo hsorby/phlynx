@@ -619,7 +619,7 @@ import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../composables/useClearWorkspace'
 import { readFileAsText, cyrb53 } from '../utils/misc'
-import { buildGhostHandles } from '../utils/handles'
+import { buildGhostHandles, normaliseHandleSlots } from '../utils/handles'
 import { initLibCellML, processCellMLData, extractVariablesFromMath, loadParametersFromCellML } from '../utils/cellml'
 import {
   edgeLineOptions,
@@ -1851,10 +1851,10 @@ function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shouldNoti
 
   const newNodes = nodes.map((node) => {
     nodeNameToIdMap.set(node.data.name, node.id)
-    const allHandles = [
+    const allHandles = normaliseHandleSlots([
       ...node.data.handles,
       ...buildGhostHandles(NUM_GHOST_HANDLES_TOP_BOT, NUM_GHOST_HANDLES_LEFT_RIGHT),
-    ]
+    ])
 
     const globalConstants = extractGlobalConstants(node.data.variables)
 
