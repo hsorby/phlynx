@@ -1010,7 +1010,7 @@ const currentMatchIndex = ref(0)
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
 const somethingSelected = computed(() => getSelectedNodes.value.length > 0)
-const hasModelChanged = computed(() => (cyrb53(snapshotFlowState()) !== omexStore.archiveHash))
+const hasModelChanged = computed(() => cyrb53(snapshotFlowState()) !== omexStore.archiveHash)
 
 const {
   currentExportMode,
@@ -1799,6 +1799,9 @@ function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shouldNoti
     return
   }
 
+  const snapshotMathLibrary =
+    flowSnapshot.mathLibrary && typeof flowSnapshot.mathLibrary === 'object' ? flowSnapshot.mathLibrary : {}
+
   let nodeNameToIdMap = new Map()
   // Convert nodeData to nodes format expected by the workspace.
   const nodes = flowSnapshot.nodeData.map((node) => {
@@ -1818,19 +1821,26 @@ function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shouldNoti
         return variable
       })
     }
+    // Resolve math from the snapshot math library.
+    const nodeMathFromSnapshot = node.data?.mathHash in snapshotMathLibrary ? snapshotMathLibrary[node.data.mathHash] : undefined
+
     // Check node math is the same as the math in the library store
     const nodeMath = libraryStore.availableMath.get(node.data.mathRef)
     if (nodeMath) {
-      if (nodeMath !== node.data.math) {
+      if (nodeMathFromSnapshot && nodeMath !== nodeMathFromSnapshot) {
         notify.warning({
           title: 'Math Mismatch',
           message: `The math for node "${node.data.name}" does not match the math in the library store. The library version will be used.`,
         })
       }
-      delete node.data.math // Remove math from the node if it already exists in the library store.
+      // Remove imported math payloads from runtime node data once the store value is authoritative.
+      delete node.data.mathHash
     } else {
-      // Put math from the node into the library store.
-      libraryStore.addMath(node.data.mathRef, node.data.math)
+      // Put math from the snapshot into the library store.
+      if (nodeMathFromSnapshot) {
+        libraryStore.addMath(node.data.mathRef, nodeMathFromSnapshot)
+      }
+      delete node.data.mathHash
     }
     return node
   })
@@ -1865,8 +1875,7 @@ function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shouldNoti
   return nodeNameToIdMap
 }
 
-async function processImportedOmexArchive(archivePayload, result) {
-
+async function processImportedOmexArchive(archivePayload, result, fileName) {
   const archive = await JSZip.loadAsync(archivePayload)
   const manifestFile = archive.file('manifest.xml')
   const manifestXml = manifestFile ? await manifestFile.async('string') : ''
@@ -1926,13 +1935,10 @@ async function processImportedOmexArchive(archivePayload, result) {
   if (result.files?.simulationJson) {
     const simJsonFile = archive.file(result.files.simulationJson)
     if (simJsonFile) {
-      const simData = await extractSimDataFromSimulationJson(
-        await simJsonFile.async('string'),
-        {
-          notify: false,
-          nodeNameToIdMap,
-        }
-      )
+      const simData = await extractSimDataFromSimulationJson(await simJsonFile.async('string'), {
+        notify: false,
+        nodeNameToIdMap,
+      })
 
       if (simData?.plotConfig) {
         simulationSettingsStore.setPlotConfig(simData.plotConfig)
@@ -1971,10 +1977,10 @@ async function processImportedOmexArchive(archivePayload, result) {
 
   const preservedExtras = archiveEntries.filter(({ location }) => !criticalLocations.includes(location))
 
-  sessionMetadataStore.setLastSaveName(stripExtension(result.fileName))
+  sessionMetadataStore.setLastSaveName(stripExtension(fileName))
   omexStore.setHash(cyrb53(snapshotFlowState()))
   omexStore.setArchive({
-    archiveName: result.fileName,
+    archiveName: fileName,
     archiveType: result.fileType,
     manifestXml,
     extras: preservedExtras,
@@ -2048,10 +2054,10 @@ async function onImportConfirm(importPayload, updateProgress) {
     }
   } else if (currentImportMode.value.key === IMPORT_KEYS.OMEX) {
     try {
-      const archivePayload = await extractOmexPayload(importPayload, updateProgress)
-      const result = await importOmexFile(archivePayload, updateProgress)
+      const archivePayload = await extractArchiveFile(importPayload, updateProgress)
+      const result = await importOmexFile(archivePayload.omex, updateProgress)
 
-      await processImportedOmexArchive(archivePayload, result)
+      await processImportedOmexArchive(archivePayload.omex, result, archivePayload.name)
 
       notify.success({
         title: 'OMEX Import Complete',
@@ -2646,28 +2652,50 @@ function recomputeMissingCouplings() {
  */
 function snapshotFlowState() {
   const flowState = toObject()
-  const nodeData = flowState.nodes.map((node) => ({
-    id: node.id,
-    data: {
-      ...node.data,
-      handles: node.data?.handles?.filter((handle) => handle.variant !== 'ghost') ?? [],
-    },
-    position: node.position,
-    dimensions: node.dimensions,
-    type: node.type,
-  }))
+  const mathLibrary = new Map()
 
-  for (const index in nodeData) {
-    if (nodeData[index].data?.mathRef) {
-      const mathRef = nodeData[index].data.mathRef
-      const math = libraryStore.availableMath.get(mathRef)
-      if (math) {
-        nodeData[index].data.math = math
+  const nodeData = flowState.nodes.map((node) => {
+    const { handles, ...restData } = node.data ?? {}
+    const slimNode = {
+      id: node.id,
+      data: {
+        ...restData,
+        handles: handles?.filter((handle) => handle.variant !== 'ghost') ?? [],
+      },
+      position: node.position,
+      dimensions: node.dimensions,
+      type: node.type,
+    }
+
+    if (slimNode.data?.mathRef) {
+      const mathRef = slimNode.data.mathRef
+      const mathText = libraryStore.availableMath.get(mathRef)
+      if (mathText) {
+        const baseHash = libraryStore.getMathHashByRef(mathRef) ?? libraryStore.createMathHash(mathText)
+        let mathHash = baseHash
+        let collisionIndex = 1
+
+        while (mathLibrary.has(mathHash) && mathLibrary.get(mathHash) !== mathText) {
+          mathHash = `${baseHash}_${collisionIndex++}`
+        }
+
+        mathLibrary.set(mathHash, mathText)
+        slimNode.data.mathHash = mathHash
       }
     }
-  }
 
-  return JSON.stringify({ id: 'phlynx-flow-snapshot', version: '1.0.0', nodeData, edges: flowState.edges })
+    return slimNode
+  })
+
+  const mathLibraryObject = Object.fromEntries([...mathLibrary.entries()].sort(([a], [b]) => a.localeCompare(b)))
+
+  return JSON.stringify({
+    id: 'phlynx-flow-snapshot',
+    version: '1.0.0',
+    nodeData,
+    edges: flowState.edges,
+    mathLibrary: mathLibraryObject,
+  })
 }
 
 /**

@@ -26,7 +26,7 @@ export const extractArchiveFile = async (importPayload, updateProgress) => {
   const omexFiles = importPayload instanceof Map ? importPayload.get('omex') : null
 
   if (!(omexFiles instanceof Map) || omexFiles.size === 0) {
-    throw new Error('Invalid OMEX file: does not contain any files')
+    throw new Error('Uploaded content does not contain any files')
   }
 
   const firstEntry = omexFiles.entries().next().value
@@ -40,14 +40,13 @@ export const extractArchiveFile = async (importPayload, updateProgress) => {
     updateProgress('Importing OMEX file... (10/100)')
   }
 
-  return {archive: omexFile.payload, name: firstEntry?.[0] || 'unknown.omex'}
+  return { omex: omexFile.payload, name: firstEntry?.[0] }
 }
 
 export const importOmexFile = async (payload, updateProgress) => {
-
   let archive = null
   try {
-    archive = await JSZip.loadAsync(payload.archive)
+    archive = await JSZip.loadAsync(payload)
   } catch {
     throw new Error('Invalid OMEX file: is not a valid ZIP archive')
   }
@@ -141,7 +140,6 @@ export const importOmexFile = async (payload, updateProgress) => {
   }
 
   return {
-    fileName: payload.name,
     files: {
       cellml: cellmlLocation,
       simulationJson: foundFiles.simulationJson,

@@ -10,8 +10,8 @@ export function createUrlLoaders({ applyWorkspaceState, importOmexFile, processI
 
     omex: async (base64) => {
       const zipBlob = await base64ToBlob(base64, 'application/zip')
-      const result = await importOmexFile({archive: zipBlob, name: 'url_imported.omex'})
-      await processImportedOmexArchive(zipBlob, result)
+      const result = await importOmexFile(zipBlob)
+      await processImportedOmexArchive(zipBlob, result, 'url_imported.omex')
     },
   }
 }
