@@ -7,6 +7,8 @@ import {
   SOURCE_HANDLE_TYPE,
   HANDLE_VARIANT,
   HANDLE_SPACING,
+  NUM_GHOST_HANDLES_TOP_BOT,
+  NUM_GHOST_HANDLES_LEFT_RIGHT,
 } from './constants'
 
 export function randomHandleSide() {
@@ -37,12 +39,7 @@ export function handlePosition(side) {
 }
 
 export function normaliseHandleSlots(handles = []) {
-  const sideHandles = {
-    left: [],
-    right: [],
-    top: [],
-    bottom: [],
-  }
+  const sideHandles = Object.fromEntries(HANDLE_SIDES.map((side) => [side, []]))
 
   handles.forEach((handle) => {
     if (!handle || !handle.side || !sideHandles[handle.side]) return
@@ -52,13 +49,27 @@ export function normaliseHandleSlots(handles = []) {
   const ordered = []
 
   Object.entries(sideHandles).forEach(([side, handlesOnSide]) => {
-    const sorted = [...handlesOnSide].sort((a, b) => {
-      const aSlot = Number.isInteger(a.slotIndex) ? a.slotIndex : 0
-      const bSlot = Number.isInteger(b.slotIndex) ? b.slotIndex : 0
-      return aSlot - bSlot || (a.uid || '').localeCompare(b.uid || '')
-    })
+    const active = [...handlesOnSide]
+      .filter((handle) => handle.variant !== HANDLE_VARIANT.GHOST)
+      .sort((a, b) => {
+        const aSlot = Number.isInteger(a.slotIndex) ? a.slotIndex : 0
+        const bSlot = Number.isInteger(b.slotIndex) ? b.slotIndex : 0
+        return aSlot - bSlot || (a.uid || '').localeCompare(b.uid || '')
+      })
 
-    sorted.forEach((handle, index) => {
+    const ghosts = [...handlesOnSide]
+      .filter((handle) => handle.variant === HANDLE_VARIANT.GHOST)
+      .sort((a, b) => {
+        const aSlot = Number.isInteger(a.slotIndex) ? a.slotIndex : 0
+        const bSlot = Number.isInteger(b.slotIndex) ? b.slotIndex : 0
+        return aSlot - bSlot || (a.uid || '').localeCompare(b.uid || '')
+      })
+
+    const totalSlots = handlesOnSide.length
+    const startIdx = Math.max(0, Math.floor((totalSlots - active.length) / 2))
+    const canonical = [...ghosts.slice(0, startIdx), ...active, ...ghosts.slice(startIdx)]
+
+    canonical.forEach((handle, index) => {
       handle.slotIndex = index
       ordered.push(handle)
     })
@@ -146,16 +157,30 @@ export function buildHandles(instanceRef, ghostHandles) {
   return handles
 }
 
-export function buildGhostHandles(countTopBot = 7, countLeftRight = 5) {
+export function buildGhostHandles(
+  countTopBot = NUM_GHOST_HANDLES_TOP_BOT,
+  countLeftRight = NUM_GHOST_HANDLES_LEFT_RIGHT,
+  activeHandles = []
+) {
   const handles = []
+  const realHandleCounts = Object.fromEntries(HANDLE_SIDES.map((side) => [side, 0]))
+
+  activeHandles.forEach((handle) => {
+    if (!handle || !handle.side || handle.variant === HANDLE_VARIANT.GHOST) return
+    if (realHandleCounts[handle.side] !== undefined) {
+      realHandleCounts[handle.side] += 1
+    }
+  })
 
   HANDLE_SIDES.forEach((side) => {
-    let n = countTopBot
+    let totalSlots = countTopBot
     if (side === 'left' || side === 'right') {
-      n = countLeftRight
+      totalSlots = countLeftRight
     }
 
-    for (let i = 0; i < n; i++) {
+    const ghostCount = Math.max(0, totalSlots - realHandleCounts[side])
+
+    for (let i = 0; i < ghostCount; i++) {
       handles.push({
         uid: crypto.randomUUID(),
         side,
@@ -238,7 +263,7 @@ export function reorganiseHandles(nodes, edges) {
           return isVertical ? ca.y - cb.y : ca.x - cb.x
         })
 
-      const ghosts = handlesOnSide.filter((h) => h.variant !== HANDLE_VARIANT.DEFAULT)
+      const ghosts = handlesOnSide.filter((h) => h.variant === HANDLE_VARIANT.GHOST)
 
       const n = handlesOnSide.length
       const k = active.length

@@ -1853,7 +1853,7 @@ function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shouldNoti
     nodeNameToIdMap.set(node.data.name, node.id)
     const allHandles = normaliseHandleSlots([
       ...node.data.handles,
-      ...buildGhostHandles(NUM_GHOST_HANDLES_TOP_BOT, NUM_GHOST_HANDLES_LEFT_RIGHT),
+      ...buildGhostHandles(NUM_GHOST_HANDLES_TOP_BOT, NUM_GHOST_HANDLES_LEFT_RIGHT, node.data.handles),
     ])
 
     const globalConstants = extractGlobalConstants(node.data.variables)
