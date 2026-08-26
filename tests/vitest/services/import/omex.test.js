@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import JSZip from 'jszip'
 
-import { extractOmexArchive, extractOmexArchive } from '../../../../src/services/import/omex.js'
+import { extractOmexArchive, importOmexFile } from '../../../../src/services/import/omex.js'
 import { isSimulationJsonFile, isPhlynxFlowSnapshotFile } from '../../../../src/services/import/omexClassifiers.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
