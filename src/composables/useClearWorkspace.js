@@ -20,8 +20,7 @@ export function useClearWorkspace(flowId = FLOW_IDS.MAIN) {
   const omexStore = useOmexStore()
   const sessionMetadataStore = useSessionMetadataStore()
 
-  const clearWorkspace = async () => {
-
+  const clearWorkspace = async ({ recordHistory = true } = {}) => {
     const oldNodes = nodes.value
     const oldEdges = edges.value
     const oldInspectStore = inspectionStore.getState()
@@ -31,39 +30,44 @@ export function useClearWorkspace(flowId = FLOW_IDS.MAIN) {
     const oldOmexState = omexStore.getState()
     const oldSessionMetadata = sessionMetadataStore.getState()
 
+    const undoState = () => {
+      nodes.value = oldNodes
+      edges.value = oldEdges
+      if (flowId === FLOW_IDS.MAIN) {
+        omexStore.loadState(oldOmexState)
+        inspectionStore.loadState(oldInspectStore)
+        sessionMetadataStore.loadState(oldSessionMetadata)
+        simStore.loadState(oldSimStore)
+        for (const [name, data] of oldGlobalConstants) {
+          libraryStore.assignGlobalConstant(name, data.value, data.units, data.data_reference)
+        }
+        setViewport(oldViewport)
+      }
+    }
+
+    const resetState = () => {
+      nodes.value = []
+      edges.value = []
+      if (flowId === FLOW_IDS.MAIN) {
+        simStore.resetState()
+        inspectionStore.resetState()
+        omexStore.resetState()
+        sessionMetadataStore.resetState()
+        libraryStore.resetGlobalConstants()
+      }
+      setViewport({ x: 0, y: 0, zoom: 1 })
+    }
+
+    if (!recordHistory) {
+      resetState()
+      await nextTick()
+      return
+    }
+
     history.executeAndAddCommand({
       type: 'clear-workspace',
-      undo: async () => {
-        nodes.value = oldNodes
-        edges.value = oldEdges
-        if (flowId === FLOW_IDS.MAIN) {
-          omexStore.loadState(oldOmexState)
-          inspectionStore.loadState(oldInspectStore)
-          sessionMetadataStore.loadState(oldSessionMetadata)
-          simStore.loadState(oldSimStore)
-          for (const [name, data] of oldGlobalConstants) {
-            libraryStore.assignGlobalConstant(
-              name, 
-              data.value, 
-              data.units, 
-              data.data_reference
-            )
-          }
-          setViewport(oldViewport)
-        }
-      },
-      redo: async () => {
-        nodes.value = []
-        edges.value = []
-        if (flowId === FLOW_IDS.MAIN) {
-          simStore.resetState()
-          libraryStore.resetGlobalConstants()
-          inspectionStore.resetState()
-          omexStore.resetState()
-          sessionMetadataStore.resetState()
-        }
-        setViewport({ x: 0, y: 0, zoom: 1 })
-      },
+      undo: undoState,
+      redo: resetState,
     })
 
     await nextTick()

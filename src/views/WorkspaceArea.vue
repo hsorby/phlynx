@@ -1846,21 +1846,28 @@ async function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shou
     return node
   })
 
-  // Clear the current workspace before loading the new snapshot.
-  await clearWorkspace()
+  // Clear the current workspace before loading the new snapshot without creating
+  // an extra history step for the reset itself; the imported graph is then added
+  // as one batched history action.
+  await clearWorkspace({ recordHistory: false })
 
-  const newNodes = nodes.map((node) => {
-    nodeNameToIdMap.set(node.data.name, node.id)
-    const allHandles = normaliseHandleSlots([
-      ...node.data.handles,
-      ...buildGhostHandles(NUM_GHOST_HANDLES_TOP_BOT, NUM_GHOST_HANDLES_LEFT_RIGHT, node.data.handles),
-    ])
+  historyStore.startBatch()
+  try {
+    const newNodes = nodes.map((node) => {
+      nodeNameToIdMap.set(node.data.name, node.id)
+      const allHandles = normaliseHandleSlots([
+        ...node.data.handles,
+        ...buildGhostHandles(NUM_GHOST_HANDLES_TOP_BOT, NUM_GHOST_HANDLES_LEFT_RIGHT, node.data.handles),
+      ])
 
-    return buildInstance(node.id, node.data.name, node.type, node.data, allHandles, node.position)
-  })
+      return buildInstance(node.id, node.data.name, node.type, node.data, allHandles, node.position)
+    })
 
-  addNodes(newNodes)
-  addEdges(flowSnapshot.edges)
+    addNodes(newNodes)
+    addEdges(flowSnapshot.edges)
+  } finally {
+    historyStore.endBatch()
+  }
 
   notify.success({
     title: 'Flow Snapshot Loaded',
@@ -2741,8 +2748,8 @@ async function applyWorkspaceState(loadedState, { source = 'json' } = {}) {
     // Handles legacy formats if needed
     const migratedState = migrateWorkspace(loadedState)
 
-    // Clear the current Vue Flow state.
-    await clearWorkspace()
+    // Clear the current Vue Flow state without creating a history step for this load action.
+    await clearWorkspace({ recordHistory: false })
 
     setViewport(migratedState.flow.viewport)
     fromObject(migratedState.flow)

@@ -1,8 +1,9 @@
 import { useVueFlow } from '@vue-flow/core'
 import { useLibraryStore } from '../stores/libraryStore'
+import { useFlowHistoryStore } from '../stores/historyStore'
 import { notify } from '../utils/notify'
 import { useGtm } from './useGtm'
-import { useClearWorkspace } from '../composables/useClearWorkspace' 
+import { useClearWorkspace } from '../composables/useClearWorkspace'
 import { buildWorkflowGraph } from '../services/import/buildWorkflow'
 import { useWorkflowLayout } from './useWorkflowLayout'
 import { parseModuleRef } from '../utils/config'
@@ -16,7 +17,7 @@ export function useLoadFromCellML() {
 
   const loadFromCellML = async (cellmlPayload, componentFile, progressCallback = null) => {
     try {
-      await clearWorkspace()
+      await clearWorkspace({ recordHistory: false })
 
       if (progressCallback) progressCallback(0, 100, 'Building CellML graph...')
 
@@ -31,7 +32,7 @@ export function useLoadFromCellML() {
       }
 
       modules.forEach((mod) => {
-        store.addModule(mod) 
+        store.addModule(mod)
       })
 
       const instanceRefs = components.map((compName) => {
@@ -45,26 +46,26 @@ export function useLoadFromCellML() {
           .map((e) => e.source)
           .join(' ')
 
-        
         return {
           name: compName,
-          module_type: `${compName}`, 
+          module_type: `${compName}`,
           module_subtype: cellmlModuleSubtype,
           out_instances: outInstances,
           inp_instances: inInstances,
         }
       })
 
-      const result = buildWorkflowGraph(
-        instanceRefs, 
-        store.availableModules, 
-        currentNodes.value, 
-        progressCallback
-      )
+      const result = buildWorkflowGraph(instanceRefs, store.availableModules, currentNodes.value, progressCallback)
 
       const layoutPromise = prepareLayout(result.pendingEdges, progressCallback)
-      addNodes(result.pendingInstances)
-      
+      const history = useFlowHistoryStore()
+      history.startBatch()
+      try {
+        addNodes(result.pendingInstances)
+      } finally {
+        history.endBatch()
+      }
+
       await layoutPromise
 
       trackEvent('cellml_connection_load', {
