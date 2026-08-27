@@ -67,14 +67,14 @@ class TestLoadViaUrl(unittest.TestCase):
             expect(page.get_by_label("Plot 1")).to_contain_text("Plot 1")
             page.get_by_role("tab", name="Parameter Scan Setup").click()
             page.get_by_role("cell", name="C", exact=True).click()
-            expect(page.locator("#pv_id_5466")).to_have_value("9");
-            expect(page.locator("#pv_id_5468")).to_have_value("10");
-            expect(page.locator("#pv_id_5470")).to_have_value("11");
+            expect(page.get_by_test_id("param-min-C")).to_have_value("9");
+            expect(page.get_by_test_id("param-default-C")).to_have_value("10");
+            expect(page.get_by_test_id("param-max-C")).to_have_value("11");
             page.get_by_role("tab", name="Simulation Parameters").click()
-            expect(page.locator("#pv_id_4924")).to_have_value("20");
-            expect(page.locator("#pv_id_4928")).to_have_value("0.001");
-            expect(page.locator("#pv_id_4922")).to_have_value("0");
-            expect(page.locator("#pv_id_4926")).to_have_value("0");
+            expect(page.get_by_test_id("sim-initial-point")).to_have_value("0");
+            expect(page.get_by_test_id("sim-starting-point")).to_have_value("0");
+            expect(page.get_by_test_id("sim-ending-point")).to_have_value("20");
+            expect(page.get_by_test_id("sim-point-interval")).to_have_value("0.001");
             page.get_by_role("button", name="Save").click()
             page.locator(".vue-flow__pane").click()
             # ----------- END ------------

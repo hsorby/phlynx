@@ -370,6 +370,7 @@
                       <div class="param-cell-wrapper">
                         <InputNumber
                           v-if="data.selected"
+                          :pt:pcInputText:root="{ 'data-testid': `param-min-${data.parameterName}` }"
                           v-model="data.min"
                           :minFractionDigits="0"
                           :maxFractionDigits="8"
@@ -385,6 +386,7 @@
                       <div class="param-cell-wrapper">
                         <InputNumber
                           v-if="data.selected"
+                          :pt:pcInputText:root="{ 'data-testid': `param-default-${data.parameterName}` }"
                           v-model="data.default"
                           :minFractionDigits="0"
                           :maxFractionDigits="8"
@@ -400,6 +402,7 @@
                       <div class="param-cell-wrapper">
                         <InputNumber
                           v-if="data.selected"
+                          :pt:pcInputText:root="{ 'data-testid': `param-max-${data.parameterName}` }"
                           v-model="data.max"
                           :minFractionDigits="0"
                           :maxFractionDigits="8"
@@ -427,6 +430,7 @@
                 <label>Starting Point</label>
                 <InputNumber
                   v-model="localSimulationSettings.startingPoint"
+                  :pt:pcInputText:root="{ 'data-testid': 'sim-starting-point' }"
                   :minFractionDigits="0"
                   :maxFractionDigits="8"
                   fluid
@@ -436,6 +440,7 @@
                 <label>Ending Point</label>
                 <InputNumber
                   v-model="localSimulationSettings.endingPoint"
+                  :pt:pcInputText:root="{ 'data-testid': 'sim-ending-point' }"
                   :minFractionDigits="0"
                   :maxFractionDigits="8"
                   fluid
@@ -445,6 +450,7 @@
                 <label>Initial Point</label>
                 <InputNumber
                   v-model="localSimulationSettings.initialPoint"
+                  :pt:pcInputText:root="{ 'data-testid': 'sim-initial-point' }"
                   :minFractionDigits="0"
                   :maxFractionDigits="8"
                   fluid
@@ -454,6 +460,7 @@
                 <label>Point Interval</label>
                 <InputNumber
                   v-model="localSimulationSettings.pointInterval"
+                  :pt:pcInputText:root="{ 'data-testid': 'sim-point-interval' }"
                   :min="0"
                   :minFractionDigits="0"
                   :maxFractionDigits="8"
@@ -504,7 +511,7 @@
               </div>
               <div class="field">
                 <label>Max Steps</label>
-                <InputNumber v-model="localSimulationSettings.maxSteps" :min="1" :useGrouping="false" fluid disabled/>
+                <InputNumber v-model="localSimulationSettings.maxSteps" :min="1" :useGrouping="false" fluid disabled />
               </div>
             </div>
           </section>
@@ -785,7 +792,7 @@ watch(selectedNode, () => {
 })
 
 function cloneSettings(input) {
-  return {...input}
+  return { ...input }
 }
 
 function makeGroupId(index) {
