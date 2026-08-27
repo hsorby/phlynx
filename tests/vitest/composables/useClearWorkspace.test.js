@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useClearWorkspace } from '../../../src/composables/useClearWorkspace.js'
 import { useFlowHistoryStore } from '../../../src/stores/historyStore.js'
 import { useLibraryStore } from '../../../src/stores/libraryStore.js'
+import { useSessionMetadataStore } from '../../../src/stores/sessionMetadataStore.js'
 
 vi.mock('@vue-flow/core', async (importOriginal) => {
   const actual = await importOriginal()
@@ -25,9 +26,10 @@ describe('useClearWorkspace', () => {
     setActivePinia(createPinia())
   })
 
-  it('fully clears the library state, not just the global constants', async () => {
+  it('clears only the workspace-scoped global constants and keeps session metadata intact', async () => {
     const libraryStore = useLibraryStore()
     const historyStore = useFlowHistoryStore()
+    const sessionMetadataStore = useSessionMetadataStore()
     libraryStore.addMath('math:1', 'x = 1')
     libraryStore.addModule({
       moduleRef: 'module-1',
@@ -36,14 +38,18 @@ describe('useClearWorkspace', () => {
       name: 'Demo model',
     })
     libraryStore.assignGlobalConstant('gNa', 1, 'nS', 'data-ref-1')
+    sessionMetadataStore.setLastSaveName('imported-archive')
 
     const { clearWorkspace } = useClearWorkspace()
     await clearWorkspace({ recordHistory: false })
 
     const state = libraryStore.getState()
     expect(state.availableMath).toEqual([['math:1', 'x = 1']])
-    expect(state.availableModules).toEqual([['module-1', {mathRef: 'math:1', componentFile: 'component-1', name: 'Demo model', moduleRef: 'module-1'}]])
+    expect(state.availableModules).toEqual([
+      ['module-1', { mathRef: 'math:1', componentFile: 'component-1', name: 'Demo model', moduleRef: 'module-1' }],
+    ])
     expect(state.globalConstants).toEqual([])
+    expect(sessionMetadataStore.lastSaveName).toBe('imported-archive')
     expect(historyStore.canUndo).toBe(false)
     expect(historyStore.canRedo).toBe(false)
   })

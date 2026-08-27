@@ -1790,7 +1790,7 @@ const loadConfigData = async (content, filename, { notify: shouldNotify = true }
   }
 }
 
-async function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shouldNotify = true } = {}) {
+async function loadFlowSnapshot(fileName, flowSnapshot, parameterData = {}, { notify: shouldNotify = true } = {}) {
   if (!flowSnapshot || !flowSnapshot.nodeData || !flowSnapshot.edges) {
     notify.error({
       title: 'Invalid Flow Snapshot',
@@ -1865,6 +1865,17 @@ async function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shou
 
     addNodes(newNodes)
     addEdges(flowSnapshot.edges)
+    const currentLastSaveName = sessionMetadataStore.lastSaveName
+    sessionMetadataStore.setLastSaveName(stripExtension(fileName))
+    historyStore.addCommand({
+      type: 'update-name',
+      undo: () => {
+        sessionMetadataStore.setLastSaveName(currentLastSaveName)
+      },
+      redo: () => {
+        sessionMetadataStore.setLastSaveName(stripExtension(fileName))
+      },
+    })
   } finally {
     historyStore.endBatch()
   }
@@ -1924,7 +1935,7 @@ async function processImportedOmexArchive(archivePayload, result, fileName) {
       const flowSnapshot = JSON.parse(await flowSnapshotFile.async('string'))
 
       const parameters = loadParametersFromCellML(cellmlContent)
-      nodeNameToIdMap = await loadFlowSnapshot(flowSnapshot, parameters.parameters, { notify: false })
+      nodeNameToIdMap = await loadFlowSnapshot(fileName, flowSnapshot, parameters.parameters, { notify: false })
 
       for (const p of parameters.globalParameters) {
         libraryStore.assignGlobalConstant(p.name, p.value, p.units, p.data_reference)
@@ -1979,7 +1990,6 @@ async function processImportedOmexArchive(archivePayload, result, fileName) {
 
   const preservedExtras = archiveEntries.filter(({ location }) => !criticalLocations.includes(location))
 
-  sessionMetadataStore.setLastSaveName(stripExtension(fileName))
   omexStore.setHash(cyrb53(snapshotFlowState()))
   omexStore.setArchive({
     archiveName: fileName,
