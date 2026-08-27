@@ -2708,6 +2708,7 @@ function snapshotFlowState() {
     nodeData,
     edges: flowState.edges,
     mathLibrary: mathLibraryObject,
+    globalParameters:  Array.from(libraryStore.globalVariables.entries()),
   })
 }
 

@@ -377,7 +377,7 @@ watch(
 )
 
 function handleGlobalConstantChange(row) {
-  libraryStore.assignGlobalConstant(row.name, row.value, row.units, row.data_reference)
+  libraryStore.assignGlobalConstant(row.name, row.value, row.units, row.data_reference, { override: true })
 }
 
 onUnmounted(() => {

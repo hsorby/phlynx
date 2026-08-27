@@ -4,6 +4,8 @@ import { generateSedmlData } from './export/sedml'
 import { buildManifestXml } from './export/omex'
 import { buildSimulationJson } from './export/simulation'
 
+import { useOmexStore } from '../stores/omexStore.js'
+
 // Helper: Converts a Blob to a pure Base64 string (strips the "data:..." prefix)
 const blobToBase64 = (blob) => {
   return new Promise((resolve, reject) => {
@@ -82,9 +84,13 @@ export async function createCellMLDataFragment(cellmlBlob, fileName) {
  * @returns {Promise<Blob>} The .omex archive as a zip Blob.
  */
 export async function generateOmexArchive(cellmlData, flowSnapshot, simData = {}, addInfo = {}) {
+  const omexStore = useOmexStore()
+
   const cellmlFileName = addInfo.cellmlFileName
   const sedmlText = generateSedmlData(simData.simulationSettings, cellmlFileName)
   const simulationJson = buildSimulationJson(simData.plotConfig, simData.parameterScanConfig, addInfo.extractedData)
+
+  const reservedLocations = new Set(['manifest.xml', 'document.sedml', cellmlFileName, 'flow-snapshot.json', 'changes.json'])
 
   const manifestEntries = [
     { location: 'document.sedml', format: 'http://identifiers.org/combine.specifications/sed-ml', master: true },
@@ -95,6 +101,12 @@ export async function generateOmexArchive(cellmlData, flowSnapshot, simData = {}
   if (simulationJson !== null) {
     manifestEntries.push({ location: 'simulation.json', format: 'http://purl.org/NET/mediatypes/application/json' })
   }
+
+  omexStore.preservedExtras.forEach((extra) => {
+    if (!reservedLocations.has(extra.location)) {
+      manifestEntries.push({ location: extra.location, format: extra.format })
+    }
+  })
 
   const manifestXml = buildManifestXml(manifestEntries)
 
@@ -107,6 +119,12 @@ export async function generateOmexArchive(cellmlData, flowSnapshot, simData = {}
 
   if (simulationJson !== null) {
     zip.file('simulation.json', simulationJson)
+  }
+
+  for (const extra of omexStore.preservedExtras) {
+    if (!reservedLocations.has(extra.location)) {
+      zip.file(extra.location, extra.payload)
+    }
   }
 
   return zip.generateAsync({ type: 'blob' })
