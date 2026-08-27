@@ -1942,7 +1942,8 @@ async function processImportedOmexArchive(archivePayload, result, fileName) {
       }
     }
   } else if (result.files?.cellml) {
-    await loadCellMLData(await cellmlFile.async('string'), result.files.cellml, { notify: false })
+    const cellmlPayload = parseCellMLConnections(await cellmlFile.async('string'), result.files.cellml)
+    await loadFromCellML(cellmlPayload, result.files.cellml)
   }
 
   if (result.files?.simulationJson) {
