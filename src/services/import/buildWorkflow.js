@@ -1,8 +1,6 @@
 import { getHandleId, buildHandles, buildGhostHandles } from '../../utils/handles'
 import { MAIN_NODE_TYPE, SOURCE_HANDLE_TYPE, TARGET_HANDLE_TYPE } from '../../utils/constants'
-import { extractVariablesFromMath } from '../../utils/cellml'
-import { resolvePortCouplings, checkAndClaimCouplings, buildUsedPortKeys } from '../../utils/edges'
-import { detachReactivity } from '../../utils/reactivity'
+import { resolvePortCouplings, checkAndClaimCouplings } from '../../utils/edges'
 import { getId as getNextNodeId } from '../../utils/nodes'
 
 export function buildInstance(nodeId, name, nodeType, moduleData, handles, position = null) {
@@ -33,8 +31,6 @@ function buildInstances(instanceRefs, availableModules, currentNodes, progressCa
     if (progressCallback) {
       progressCallback(index, instanceRefs.length, instanceRef.name)
     }
-
-    const existingNames = new Set(currentNodes.map((n) => n.data.name))
 
     const module = availableModules.get(`${instanceRef.module_type}:${instanceRef.module_subtype}`)
     if (!module) {

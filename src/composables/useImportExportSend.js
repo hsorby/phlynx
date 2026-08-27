@@ -290,7 +290,6 @@ export function useImportExportSend({
 
   const performSend = async (mode) => {
     const baseName = sessionMetadataStore.lastSaveName
-    const fileTypes = mode.fileTypes || ZIP_FILE_TYPES
 
     const blob = await mode.action(baseName)
     const dataUri = await createOmexDataFragment(blob)

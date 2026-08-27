@@ -1,4 +1,3 @@
-import JSZip from 'jszip'
 import { base64ToUtf8, base64ToBlob } from './compress'
 
 export function createUrlLoaders({ applyWorkspaceState, importOmexFile, processImportedOmexArchive }) {

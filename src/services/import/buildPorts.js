@@ -1,5 +1,3 @@
-import { SOURCE_HANDLE_TYPE, TARGET_HANDLE_TYPE } from "../../utils/constants"
-
 function buildPorts(moduleData) {
   return Object.entries(moduleData)
     .filter(

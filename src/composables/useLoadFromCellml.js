@@ -6,7 +6,6 @@ import { useGtm } from './useGtm'
 import { useClearWorkspace } from '../composables/useClearWorkspace'
 import { buildWorkflowGraph } from '../services/import/buildWorkflow'
 import { useWorkflowLayout } from './useWorkflowLayout'
-import { parseModuleRef } from '../utils/config'
 
 export function useLoadFromCellML() {
   const { nodes: currentNodes, addNodes } = useVueFlow()
@@ -31,6 +30,8 @@ export function useLoadFromCellML() {
         return
       }
 
+
+      // TODO - check this isn't doing double work for loadCellMLData
       modules.forEach((mod) => {
         store.addModule(mod)
       })
