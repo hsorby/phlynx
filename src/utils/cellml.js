@@ -5,7 +5,7 @@ import {
   CELLML_NS,
   MATHML_NS,
   GLOBAL_PARAMETERS,
-  MODEL_PARAMETERS,
+  INSTANCE_PARAMETERS_COMPONENT_NAME,
 } from './constants.js'
 import { CellMLTextParser } from 'cellml-text-editor'
 
@@ -967,7 +967,7 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
     globalParameterComponent.setName(GLOBAL_PARAMETERS)
     model.addComponent(globalParameterComponent)
 
-    parameterComponent.setName(MODEL_PARAMETERS)
+    parameterComponent.setName(INSTANCE_PARAMETERS_COMPONENT_NAME)
     model.addComponent(parameterComponent)
 
     // Count how many nodes use each constant variable name
@@ -1212,7 +1212,7 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
     }
 
     if (parameterComponent.variableCount() === 0) {
-      model.removeComponentByName(MODEL_PARAMETERS, true)
+      model.removeComponentByName(INSTANCE_PARAMETERS_COMPONENT_NAME, true)
     }
 
     // ------------------
@@ -1562,7 +1562,7 @@ export function extractVoiAndParametersFromModel(modelString, parameterInfo) {
                 componentName: mappedParentName,
               }
               break
-            } else if (param.type === 'constant' && mappedParentName === MODEL_PARAMETERS) {
+            } else if (param.type === 'constant' && mappedParentName === INSTANCE_PARAMETERS_COMPONENT_NAME) {
               mappedParameters[`${param.nodeName}/${param.parameterName}`] = {
                 name: eqVar.name(),
                 componentName: mappedParentName,
@@ -1606,7 +1606,7 @@ export function loadParametersFromCellML(modelString) {
     const parser = new _libcellml.Parser(false)
     const model = parser.parseModel(modelString)
 
-    const parameterComponent = model.componentByName(MODEL_PARAMETERS, true)
+    const parameterComponent = model.componentByName(INSTANCE_PARAMETERS_COMPONENT_NAME, true)
     if (parameterComponent) {
       for (let i = 0; i < parameterComponent.variableCount(); i++) {
         const variable = parameterComponent.variableByIndex(i)
