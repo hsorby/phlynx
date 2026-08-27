@@ -77,7 +77,6 @@ function processTrace(trace, groupId, nodeNameToIdMap) {
     nodeName,
     variableName,
     units: '',
-    // type: 'variable', // Can we get away with not specifying type here? It seems to be inferred from the context of the plotConfig.
     plot: true,
     groupId,
   }
