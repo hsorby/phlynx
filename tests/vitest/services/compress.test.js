@@ -1,13 +1,24 @@
 import JSZip from 'jszip'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
 
 import { generateOmexArchive } from '../../../src/services/compress.js'
 import { buildSimulationJson, SIM_STEPS } from '../../../src/services/export/simulation.js'
 import { rehydrateSimulationConfig } from '../../../src/services/import/simulation.js'
 
+vi.mock('../../../src/stores/omexStore.js', () => ({
+  useOmexStore: () => ({
+    preservedExtras: [],
+  }),
+}))
+
 async function readArchive(blob) {
   return JSZip.loadAsync(await blob.arrayBuffer())
 }
+
+beforeEach(() => {
+  setActivePinia(createPinia())
+})
 
 describe('generateOmexArchive', () => {
   it('rehydrates simulation.json back into the plot and parameter scan config shapes', () => {
