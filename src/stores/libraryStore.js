@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
-import { isEditableVariableType } from '../utils/variables'
 import { normaliseConfig } from '../utils/config'
 import { GHOST_MATH_REF } from '../utils/constants'
 import { cyrb53 } from '../utils/misc'
@@ -40,21 +39,12 @@ export const useLibraryStore = defineStore('library', () => {
   const globalConstants = ref(new Map())
 
   // --- ACTIONS ---
-  function normaliseValue(val) {
-    if (!val || val === '-') return val
-
-    const num = parseFloat(val)
-
-    if (isNaN(num)) return val
-
-    return String(num)
-  }
-
   function resetGlobalConstants() {
     globalConstants.value.clear()
   }
 
-  function assignGlobalConstant(variableName, value, units, data_reference) {
+  function assignGlobalConstant(variableName, value, units, data_reference, overwrite = false) {
+    if (globalConstants.value.has(variableName) && overwrite === false) return
     globalConstants.value.set(variableName, { value, units, data_reference })
   }
 
