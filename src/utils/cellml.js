@@ -4,7 +4,7 @@ import {
   AFFINE_UNIT_CONVERSIONS,
   CELLML_NS,
   MATHML_NS,
-  GLOBAL_PARAMETERS,
+  GLOBAL_PARAMETERS_COMPONENT_NAME,
   INSTANCE_PARAMETERS_COMPONENT_NAME,
 } from './constants.js'
 import { CellMLTextParser } from 'cellml-text-editor'
@@ -964,7 +964,7 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
   }
 
   try {
-    globalParameterComponent.setName(GLOBAL_PARAMETERS)
+    globalParameterComponent.setName(GLOBAL_PARAMETERS_COMPONENT_NAME)
     model.addComponent(globalParameterComponent)
 
     parameterComponent.setName(INSTANCE_PARAMETERS_COMPONENT_NAME)
@@ -1208,7 +1208,7 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
     addEnvironmentComponent(model)
 
     if (globalParameterComponent.variableCount() === 0) {
-      model.removeComponentByName(GLOBAL_PARAMETERS, true)
+      model.removeComponentByName(GLOBAL_PARAMETERS_COMPONENT_NAME, true)
     }
 
     if (parameterComponent.variableCount() === 0) {
@@ -1556,7 +1556,7 @@ export function extractVoiAndParametersFromModel(modelString, parameterInfo) {
             const mappedParent = eqVar.parent()
             garbageCollector.add(mappedParent)
             const mappedParentName = mappedParent?.name()
-            if (param.type === 'global_constant' && mappedParentName === GLOBAL_PARAMETERS) {
+            if (param.type === 'global_constant' && mappedParentName === GLOBAL_PARAMETERS_COMPONENT_NAME) {
               mappedParameters[`${param.nodeName}/${param.parameterName}`] = {
                 name: eqVar.name(),
                 componentName: mappedParentName,
@@ -1639,7 +1639,7 @@ export function loadParametersFromCellML(modelString) {
       parameterComponent.delete()
     }
 
-    const globalParameterComponent = model.componentByName(GLOBAL_PARAMETERS, true)
+    const globalParameterComponent = model.componentByName(GLOBAL_PARAMETERS_COMPONENT_NAME, true)
     if (globalParameterComponent) {
       for (let i = 0; i < globalParameterComponent.variableCount(); i++) {
         const variable = globalParameterComponent.variableByIndex(i)
