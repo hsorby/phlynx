@@ -6,6 +6,7 @@ import { useClearWorkspace } from '../../../src/composables/useClearWorkspace.js
 import { useFlowHistoryStore } from '../../../src/stores/historyStore.js'
 import { useLibraryStore } from '../../../src/stores/libraryStore.js'
 import { useSessionMetadataStore } from '../../../src/stores/sessionMetadataStore.js'
+import { DEFAULT_PROJECT_NAME } from '../../../src/utils/constants.js'
 
 vi.mock('@vue-flow/core', async (importOriginal) => {
   const actual = await importOriginal()
@@ -49,7 +50,7 @@ describe('useClearWorkspace', () => {
       ['module-1', { mathRef: 'math:1', componentFile: 'component-1', name: 'Demo model', moduleRef: 'module-1' }],
     ])
     expect(state.globalConstants).toEqual([])
-    expect(sessionMetadataStore.lastSaveName).toBe('imported-archive')
+    expect(sessionMetadataStore.lastSaveName).toBe(DEFAULT_PROJECT_NAME)
     expect(historyStore.canUndo).toBe(false)
     expect(historyStore.canRedo).toBe(false)
   })

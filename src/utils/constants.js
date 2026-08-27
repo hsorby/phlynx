@@ -1,5 +1,9 @@
 import { MarkerType } from '@vue-flow/core'
 
+export const DEFAULT_PROJECT_NAME = 'phlynx-project'
+export const PHLYNX_PROJECT_IDENTIFIER = 'phlynx-project'
+export const PHLYNX_PROJECT_VERSION = '1.0.0'
+
 export const SOURCE_HANDLE_TYPE = 'source'
 export const TARGET_HANDLE_TYPE = 'target'
 export const HANDLE_VARIANT = {
@@ -141,12 +145,6 @@ export const MULTIPORT_OPTIONS = [
   { value: 'Sum',   label: 'Sum'   },
   { value: 'None',  label: 'None'  },
 ]
-
-export const DEFAULT_PROJECT_NAME = 'phlynx-project'
-
-export const PHLYNX_PROJECT_IDENTIFIER = 'phlynx-project'
-
-export const PHLYNX_PROJECT_VERSION = '1.0.0'
 
 /*--- Folder and File Handling ---*/
 export const IMPORT_KEYS = {
