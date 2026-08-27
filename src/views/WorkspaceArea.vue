@@ -1790,7 +1790,7 @@ const loadConfigData = async (content, filename, { notify: shouldNotify = true }
   }
 }
 
-function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shouldNotify = true } = {}) {
+async function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shouldNotify = true } = {}) {
   if (!flowSnapshot || !flowSnapshot.nodeData || !flowSnapshot.edges) {
     notify.error({
       title: 'Invalid Flow Snapshot',
@@ -1846,8 +1846,8 @@ function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shouldNoti
     return node
   })
 
-  // Clear the current workspace before loading the new snapshot
-  clearWorkspace()
+  // Clear the current workspace before loading the new snapshot.
+  await clearWorkspace()
 
   const newNodes = nodes.map((node) => {
     nodeNameToIdMap.set(node.data.name, node.id)
@@ -1855,12 +1855,6 @@ function loadFlowSnapshot(flowSnapshot, parameterData = {}, { notify: shouldNoti
       ...node.data.handles,
       ...buildGhostHandles(NUM_GHOST_HANDLES_TOP_BOT, NUM_GHOST_HANDLES_LEFT_RIGHT, node.data.handles),
     ])
-
-    const globalConstants = extractGlobalConstants(node.data.variables)
-
-    for (const g of globalConstants) {
-      libraryStore.assignGlobalConstant(g.name, g.value, g.units, g.data_reference)
-    }
 
     return buildInstance(node.id, node.data.name, node.type, node.data, allHandles, node.position)
   })
@@ -1923,7 +1917,7 @@ async function processImportedOmexArchive(archivePayload, result, fileName) {
       const flowSnapshot = JSON.parse(await flowSnapshotFile.async('string'))
 
       const parameters = loadParametersFromCellML(cellmlContent)
-      nodeNameToIdMap = loadFlowSnapshot(flowSnapshot, parameters.parameters, { notify: false })
+      nodeNameToIdMap = await loadFlowSnapshot(flowSnapshot, parameters.parameters, { notify: false })
 
       for (const p of parameters.globalParameters) {
         libraryStore.assignGlobalConstant(p.name, p.value, p.units, p.data_reference)
