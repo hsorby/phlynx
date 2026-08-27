@@ -1184,12 +1184,11 @@ defineExpose({
   inset: 0;
   z-index: 30;
   display: flex;
-  border: 20px solid var(--vf-node-bg, --p-dialog-color);
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
-  background: var(--vf-node-bg, --p-dialog-color);
+  background: var(--p-content-background);
   border-radius: 8px;
 }
 
