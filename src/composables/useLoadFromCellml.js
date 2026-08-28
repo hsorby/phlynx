@@ -14,15 +14,16 @@ export function useLoadFromCellML() {
   const { clearWorkspace } = useClearWorkspace()
   const { prepareLayout } = useWorkflowLayout()
 
-  const loadFromCellML = async (cellmlPayload, componentFile, progressCallback = null) => {
+  const loadFromCellML = async (parsedCellmlPayload, componentFile, progressCallback = null) => {
     try {
       await clearWorkspace({ recordHistory: false })
 
       if (progressCallback) progressCallback(0, 100, 'Building CellML graph...')
 
-      const { components = [], modules = [], edges = [], cellmlModuleSubtype } = cellmlPayload || {}
+      
+      const { components = [], modules = [], edges = [], cellmlModuleSubtype } = parsedCellmlPayload
 
-      if (components.length === 0) {
+      if (edges.length === 0) {
         notify.info({
           title: 'No Connections Found',
           message: `${componentFile} contains no inter-component connections.`,
@@ -30,8 +31,6 @@ export function useLoadFromCellML() {
         return
       }
 
-
-      // TODO - check this isn't doing double work for loadCellMLData
       modules.forEach((mod) => {
         store.addModule(mod)
       })
