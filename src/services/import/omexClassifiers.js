@@ -22,7 +22,7 @@ export const isSimulationJsonFile = async (fileObject) => {
 }
 
 // May not need this function, but leaving it here for now in case we want to check for Phlynx Flow Snapshot files in the future.
-export const isModuleConfigJson = async (fileObject, location = '') => {
+export const isModuleConfigFile = async (fileObject, location = '') => {
   if (!fileObject || typeof fileObject.async !== 'function') {
     return false
   }
@@ -51,14 +51,6 @@ export const isModuleConfigJson = async (fileObject, location = '') => {
         'component_type' in firstEntry
       )
     }
-
-    return (
-      parsed &&
-      typeof parsed === 'object' &&
-      Array.isArray(parsed.modules) &&
-      typeof parsed.model === 'string' &&
-      typeof parsed.source === 'string'
-    )
   } catch {
     return false
   }

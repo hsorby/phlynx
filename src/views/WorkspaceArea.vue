@@ -1917,19 +1917,22 @@ async function processImportedOmexArchive(archivePayload, result, fileName) {
     result.files?.flowSnapshot,
   ].filter(Boolean)
 
-  const cellmlFile = archive.file(result.files.cellml)
+  const cellmlFile = archive.file(result.files?.cellml)
 
   // A CellML file is required for PhLynx to function properly, this should be validated before this point.
-  // We will not do nothing if the CellML file is missing, but we will log a warning.
+  // We will not do nothing if the CellML file is missing, but we will notify the user.
   if (!cellmlFile) {
-    console.warn(
-      `CellML file ${result.files.cellml} is missing from the OMEX archive. PhLynx will not function properly without it.`
-    )
+    notify.error({
+      title: 'Missing CellML File',
+      message: `The CellML file ${result.files?.cellml} is missing from the OMEX archive. PhLynx will not be able to load this OMEX archive.`,
+    })
+    return
   }
 
-  const cellmlContent = cellmlFile ? await cellmlFile.async('string') : null
+  const cellmlContent = await cellmlFile.async('string')
   let nodeNameToIdMap = null
   if (result.files?.flowSnapshot) {
+    // Best case scenario: we have a flow snapshot, which is the most complete representation of the workspace state.
     const flowSnapshotFile = archive.file(result.files.flowSnapshot)
     if (flowSnapshotFile) {
       const flowSnapshot = JSON.parse(await flowSnapshotFile.async('string'))
@@ -1941,7 +1944,13 @@ async function processImportedOmexArchive(archivePayload, result, fileName) {
         libraryStore.assignGlobalConstant(p.name, p.value, p.units, p.data_reference)
       }
     }
-  } else if (result.files?.cellml) {
+  } else if (result.files?.moduleConfig) {
+    // Second best scenario: if we don't have a flow snapshot, we can still load the CellML file and module configuration to build the workspace.
+    const moduleConfigFile = archive.file(result.files.moduleConfig)
+    const cellmlPayload = parseCellMLConnections(await cellmlFile.async('string'), result.files.cellml)
+    await loadFromCellML(cellmlPayload, result.files.cellml)
+  } else {
+    // Last, and not great, scenario: if we don't have a flow snapshot or module configuration, we can still load the CellML file to build the workspace.
     const cellmlPayload = parseCellMLConnections(await cellmlFile.async('string'), result.files.cellml)
     await loadFromCellML(cellmlPayload, result.files.cellml)
   }

@@ -1,5 +1,5 @@
 import JSZip from 'jszip'
-import { isPhlynxFlowSnapshotFile, isSimulationJsonFile } from './omexClassifiers'
+import { isModuleConfigFile, isPhlynxFlowSnapshotFile, isSimulationJsonFile } from './omexClassifiers'
 
 const jsonMimeTypeRegex = /^application\/(?:json|.+\+json)$/i
 const CELLML_FORMAT = 'http://identifiers.org/combine.specifications/cellml'
@@ -81,6 +81,7 @@ export const importOmexFile = async (payload, updateProgress) => {
     sedml: null,
     simulationJson: null,
     flowSnapshot: null,
+    moduleConfig: null,
   }
 
   for (const contentElement of rootElement.getElementsByTagNameNS(expectedNamespace, 'content')) {
@@ -124,6 +125,14 @@ export const importOmexFile = async (payload, updateProgress) => {
         foundFiles.simulationJson = location
         continue
       }
+
+      if (isModuleConfigFile(fileObject)) {
+        if (foundFiles.moduleConfig) {
+          throw new Error('Invalid OMEX file: multiple module configuration files found in the archive')
+        }
+        foundFiles.moduleConfig = location
+        continue
+      }
     }
 
     foundFiles.extras.push({ location, format })
@@ -145,6 +154,7 @@ export const importOmexFile = async (payload, updateProgress) => {
       simulationJson: foundFiles.simulationJson,
       sedml: foundFiles.sedml,
       flowSnapshot: foundFiles.flowSnapshot,
+      moduleConfig: foundFiles.moduleConfig,
     },
     extras: foundFiles.extras,
     fileType: 'omex',
