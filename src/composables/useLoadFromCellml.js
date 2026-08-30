@@ -6,6 +6,37 @@ import { useGtm } from './useGtm'
 import { useClearWorkspace } from '../composables/useClearWorkspace'
 import { buildWorkflowGraph } from '../services/import/buildWorkflow'
 import { useWorkflowLayout } from './useWorkflowLayout'
+import { PARAMETER_COMPONENT_NAMES } from '../utils/constants'
+
+function applyParameterTypes(mod, parameterData) {
+  const localParams = parameterData.parameters?.[mod.name] ?? []
+  const globalParamNames = new Set((parameterData.globalParameters ?? []).map((p) => p.name?.trim()).filter(Boolean))
+
+  mod.variables = mod.variables.map((variable) => {
+    const trimmedName = variable.name.trim()
+
+    const localParam = localParams.find((p) => p.name?.trim() === trimmedName)
+    if (localParam) {
+      return {
+        ...variable,
+        value: localParam.value?.trim() ?? variable.value,
+        data_reference: localParam.data_reference?.trim() ?? variable.data_reference,
+        type: 'constant',
+      }
+    }
+
+    if (globalParamNames.has(trimmedName)) {
+      return {
+        ...variable,
+        type: 'global_constant',
+      }
+    }
+
+    return variable
+  })
+
+  return mod
+}
 
 export function useLoadFromCellML() {
   const { nodes: currentNodes, addNodes } = useVueFlow()
@@ -14,13 +45,10 @@ export function useLoadFromCellML() {
   const { clearWorkspace } = useClearWorkspace()
   const { prepareLayout } = useWorkflowLayout()
 
-  const loadFromCellML = async (parsedCellmlPayload, componentFile, progressCallback = null) => {
+  const loadFromCellML = async (parsedCellmlPayload, componentFile, parameterData = null) => {
     try {
       await clearWorkspace({ recordHistory: false })
 
-      if (progressCallback) progressCallback(0, 100, 'Building CellML graph...')
-
-      
       const { components = [], modules = [], edges = [], cellmlModuleSubtype } = parsedCellmlPayload
 
       if (edges.length === 0) {
@@ -31,17 +59,31 @@ export function useLoadFromCellML() {
         return
       }
 
-      modules.forEach((mod) => {
+      const prunedComponents = components.filter((name) => !PARAMETER_COMPONENT_NAMES.has(name))
+      const prunedModules = modules.filter((mod) => !PARAMETER_COMPONENT_NAMES.has(mod.name))
+      const prunedEdges = edges.filter(
+        (e) => !PARAMETER_COMPONENT_NAMES.has(e.source) && !PARAMETER_COMPONENT_NAMES.has(e.target)
+      )
+
+      if (parameterData) {
+        prunedModules.forEach((mod) => applyParameterTypes(mod, parameterData))
+
+        for (const p of parameterData.globalParameters ?? []) {
+          store.assignGlobalConstant(p.name, p.value, p.units, p.data_reference)
+        }
+      }
+
+      prunedModules.forEach((mod) => {
         store.addModule(mod)
       })
 
-      const instanceRefs = components.map((compName) => {
-        const outInstances = edges
+      const instanceRefs = prunedComponents.map((compName) => {
+        const outInstances = prunedEdges
           .filter((e) => e.source === compName)
           .map((e) => e.target)
           .join(' ')
 
-        const inInstances = edges
+        const inInstances = prunedEdges
           .filter((e) => e.target === compName)
           .map((e) => e.source)
           .join(' ')
@@ -55,9 +97,9 @@ export function useLoadFromCellML() {
         }
       })
 
-      const result = buildWorkflowGraph(instanceRefs, store.availableModules, currentNodes.value, progressCallback)
+      const result = buildWorkflowGraph(instanceRefs, store.availableModules, currentNodes.value)
 
-      const layoutPromise = prepareLayout(result.pendingEdges, progressCallback)
+      const layoutPromise = prepareLayout(result.pendingEdges)
       const history = useFlowHistoryStore()
       history.startBatch()
       try {
@@ -71,7 +113,7 @@ export function useLoadFromCellML() {
       trackEvent('cellml_connection_load', {
         category: 'CellML',
         action: 'load_from_cellml_connections',
-        label: `Components: ${components.length}, Edges: ${edges.length}`,
+        label: `Components: ${prunedComponents.length}, Edges: ${prunedEdges.length}`,
         file_type: 'cellml',
       })
     } catch (error) {
