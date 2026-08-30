@@ -785,9 +785,9 @@ const loadCellMLFiles = async (entries) => {
   if (entries.length === 1) {
     const entry = entries[0]
     const content = entry instanceof File ? await readFileAsText(entry) : entry.content
-    const cellmlPayload = parseCellMLConnections(content, entry.name)
+    const parsedCellmlPayload = parseCellMLConnections(content, entry.name)
 
-    if (cellmlPayload.edges.length > 0) {
+    if (parsedCellmlPayload.edges.length > 0) {
       if (nodes.value.length > 0) {
         const overwrite = await confirm({
           header: 'Workspace Not Empty',
@@ -803,7 +803,8 @@ const loadCellMLFiles = async (entries) => {
 
           // Load new graph into clean workspace using the normal path
           const result = await loadCellMLData(content, entry.name, { notify: false })
-          await loadFromCellML(cellmlPayload, entry.name)
+          const parameters = loadParametersFromCellML(content)
+          await loadFromCellML(parsedCellmlPayload, entry.name, parameters)
 
           // Remap snapshotted node IDs to avoid clashes with newly loaded nodes
           const existingIds = new Set(nodes.value.map((n) => n.id))
@@ -822,7 +823,7 @@ const loadCellMLFiles = async (entries) => {
               ...n,
               id: newId,
               position: { x: n.position.x + 1500, y: n.position.y },
-              data: { ...n.data, name: newId },
+              data: { ...n.data },
             }
           })
 
@@ -843,7 +844,9 @@ const loadCellMLFiles = async (entries) => {
 
       // Register modules/units in the store first, then build the graph.
       const result = await loadCellMLData(content, entry.name, { notify: false })
-      await loadFromCellML(cellmlPayload, entry.name)
+      const parameters = loadParametersFromCellML(content)
+      await loadFromCellML(parsedCellmlPayload, entry.name, parameters)
+
       rebuildNodeEdgeIndex()
 
       return [result]
@@ -1952,7 +1955,8 @@ async function processImportedOmexArchive(archivePayload, result, fileName) {
   } else {
     // Last, and not great, scenario: if we don't have a flow snapshot or module configuration, we can still load the CellML file to build the workspace.
     const cellmlPayload = parseCellMLConnections(await cellmlFile.async('string'), result.files.cellml)
-    await loadFromCellML(cellmlPayload, result.files.cellml)
+    const parameters = loadParametersFromCellML(cellmlContent)
+    await loadFromCellML(cellmlPayload, result.files.cellml, parameters)
   }
 
   if (result.files?.simulationJson) {

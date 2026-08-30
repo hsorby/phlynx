@@ -43,6 +43,13 @@ export const PARAMETER_TYPE_OPTIONS = [
   { value: 'boundary_condition', label: 'boundary' },
 ]
 
+export const INSTANCE_PARAMETER_COMPONENT_NAMES = new Set(['model_parameters', 'parameters'])
+export const GLOBAL_PARAMETER_COMPONENT_NAMES = new Set(['parameters_global'])
+export const PARAMETER_COMPONENT_NAMES = new Set([
+  ...INSTANCE_PARAMETER_COMPONENT_NAMES,
+  ...GLOBAL_PARAMETER_COMPONENT_NAMES,
+])
+
 export const AFFINE_UNIT_CONVERSIONS = {
   celsius:    { baseUnit: 'kelvin',  scale: 1,        offset: 273.15  },
   fahrenheit: { baseUnit: 'kelvin',  scale: 5 / 9,    offset: 255.372 },
