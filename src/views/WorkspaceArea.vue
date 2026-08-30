@@ -1942,6 +1942,7 @@ async function processImportedOmexArchive(archivePayload, result, fileName) {
       }
     }
   } else if (result.files?.cellml) {
+    // TODO - loadFromCellML should add the math to store and possibly parseConnections (in addition to existing responsibilities)
     const cellmlPayload = parseCellMLConnections(await cellmlFile.async('string'), result.files.cellml)
     await loadCellMLData(await cellmlFile.async('string'), result.files.cellml, { notify: false })
     await loadFromCellML(cellmlPayload, result.files.cellml)
