@@ -803,7 +803,8 @@ const loadCellMLFiles = async (entries) => {
 
           // Load new graph into clean workspace using the normal path
           const result = await loadCellMLData(content, entry.name, { notify: false })
-          await loadFromCellML(parsedCellmlPayload, entry.name)
+          const parameters = loadParametersFromCellML(content)
+          await loadFromCellML(parsedCellmlPayload, entry.name, parameters)
 
           // Remap snapshotted node IDs to avoid clashes with newly loaded nodes
           const existingIds = new Set(nodes.value.map((n) => n.id))
@@ -843,7 +844,9 @@ const loadCellMLFiles = async (entries) => {
 
       // Register modules/units in the store first, then build the graph.
       const result = await loadCellMLData(content, entry.name, { notify: false })
-      await loadFromCellML(parsedCellmlPayload, entry.name)
+      const parameters = loadParametersFromCellML(content)
+      await loadFromCellML(parsedCellmlPayload, entry.name, parameters)
+
       rebuildNodeEdgeIndex()
 
       return [result]

@@ -59,11 +59,17 @@ export function useLoadFromCellML() {
         return
       }
 
-      const prunedComponents = components.filter((name) => !PARAMETER_COMPONENT_NAMES.has(name))
-      const prunedModules = modules.filter((mod) => !PARAMETER_COMPONENT_NAMES.has(mod.name))
-      const prunedEdges = edges.filter(
+      let liveComponents = new Set(components.filter((name) => !PARAMETER_COMPONENT_NAMES.has(name)))
+      const liveEdges = edges.filter(
         (e) => !PARAMETER_COMPONENT_NAMES.has(e.source) && !PARAMETER_COMPONENT_NAMES.has(e.target)
       )
+
+      const namesWithEdges = new Set(liveEdges.flatMap((e) => [e.source, e.target]))
+      liveComponents = new Set([...liveComponents].filter((name) => namesWithEdges.has(name)))
+
+      const prunedComponents = components.filter((name) => liveComponents.has(name))
+      const prunedModules = modules.filter((mod) => liveComponents.has(mod.name))
+      const prunedEdges = liveEdges
 
       if (parameterData) {
         prunedModules.forEach((mod) => applyParameterTypes(mod, parameterData))

@@ -6,8 +6,9 @@ import {
   MATHML_NS,
   GLOBAL_PARAMETERS_COMPONENT_NAME,
   INSTANCE_PARAMETERS_COMPONENT_NAME,
+  INSTANCE_PARAMETER_COMPONENT_NAMES,
+  GLOBAL_PARAMETER_COMPONENT_NAMES,
 } from './constants.js'
-import { CellMLTextParser } from 'cellml-text-editor'
 
 let _libcellml = null
 
@@ -1600,46 +1601,76 @@ export function extractVoiAndParametersFromModel(modelString, parameterInfo) {
   }
 }
 
+function findComponentByAnyName(model, names) {
+  for (const name of names) {
+    const comp = model.componentByName(name, true)
+    if (comp) return comp
+  }
+  return null
+}
+
+function collectComponentParameters(sourceComponent) {
+  const byComponent = {}
+ 
+  for (let i = 0; i < sourceComponent.variableCount(); i++) {
+    const variable = sourceComponent.variableByIndex(i)
+    const units = variable.units()
+    const value = variable.initialValue()
+    const equivalentCount = variable.equivalentVariableCount()
+ 
+    if (equivalentCount === 0) {
+      console.warn(
+        `Parameter variable '${variable.name()}' has no equivalent variables. It is not connected to any component and will be ignored.`
+      )
+    }
+ 
+    for (let j = 0; j < equivalentCount; j++) {
+      const eqVar = variable.equivalentVariable(j)
+      const parentComp = eqVar.parent()
+      const componentName = parentComp?.name() || ''
+      const variableName = eqVar.name() || ''
+ 
+      if (componentName) {
+        if (!byComponent[componentName]) {
+          byComponent[componentName] = []
+        }
+        byComponent[componentName].push({
+          name: variableName,
+          value,
+          units: units.name(),
+        })
+      }
+ 
+      eqVar.delete()
+      parentComp.delete()
+    }
+ 
+    units.delete()
+    variable.delete()
+  }
+ 
+  return byComponent
+}
+
 export function loadParametersFromCellML(modelString) {
-  const parameterData = {parameters: {}, globalParameters: []}
+  const parameterData = { parameters: {}, globalParameters: [] }
   if (modelString) {
     const parser = new _libcellml.Parser(false)
     const model = parser.parseModel(modelString)
 
-    const parameterComponent = model.componentByName(INSTANCE_PARAMETERS_COMPONENT_NAME, true)
+    const parameterComponent = findComponentByAnyName(model, INSTANCE_PARAMETER_COMPONENT_NAMES)
     if (parameterComponent) {
-      for (let i = 0; i < parameterComponent.variableCount(); i++) {
-        const variable = parameterComponent.variableByIndex(i)
-        let componentName = ''
-        let variableName = ''
-        if (variable.equivalentVariableCount() === 1) {
-          const eqVar = variable.equivalentVariable(0)
-          const parentComp = eqVar.parent()
-          componentName = parentComp?.name() || ''
-          variableName = eqVar.name() || ''
-          eqVar.delete()
-          parentComp.delete()
-        } else {
-          console.warn(`Parameter variable '${variable.name()}' has ${variable.equivalentVariableCount()} equivalent variables. This may indicate a coupling issue.`)
-        }
-        const units = variable.units()
-
+      const byComponent = collectComponentParameters(parameterComponent)
+      for (const [componentName, params] of Object.entries(byComponent)) {
         if (!parameterData.parameters[componentName]) {
           parameterData.parameters[componentName] = []
         }
-        parameterData.parameters[componentName].push({
-          name: variableName,
-          value: variable.initialValue(),
-          units: units.name(),
-        })
-
-        units.delete()
-        variable.delete()
+        parameterData.parameters[componentName].push(...params)
       }
       parameterComponent.delete()
     }
 
-    const globalParameterComponent = model.componentByName(GLOBAL_PARAMETERS_COMPONENT_NAME, true)
+    const globalParameterComponent = findComponentByAnyName(model, GLOBAL_PARAMETER_COMPONENT_NAMES)
     if (globalParameterComponent) {
       for (let i = 0; i < globalParameterComponent.variableCount(); i++) {
         const variable = globalParameterComponent.variableByIndex(i)
