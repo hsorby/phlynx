@@ -126,7 +126,7 @@ export const importOmexFile = async (payload, updateProgress) => {
         continue
       }
 
-      if (isModuleConfigFile(fileObject)) {
+      if (await isModuleConfigFile(fileObject)) {
         if (foundFiles.moduleConfig) {
           throw new Error('Invalid OMEX file: multiple module configuration files found in the archive')
         }

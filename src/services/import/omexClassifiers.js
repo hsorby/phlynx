@@ -27,11 +27,6 @@ export const isModuleConfigFile = async (fileObject, location = '') => {
     return false
   }
 
-  const normalisedLocation = (location || '').toLowerCase()
-  if (normalisedLocation.endsWith('module_config.json') || normalisedLocation.includes('module_config.json')) {
-    return true
-  }
-
   try {
     const fileText = await fileObject.async('string')
     const parsed = JSON.parse(fileText)
@@ -54,6 +49,8 @@ export const isModuleConfigFile = async (fileObject, location = '') => {
   } catch {
     return false
   }
+
+  return false
 }
 
 export const isPhlynxFlowSnapshotFile = async (fileObject) => {

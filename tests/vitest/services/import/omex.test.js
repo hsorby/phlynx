@@ -59,6 +59,7 @@ describe('Import OMEX', () => {
         cellml: '3compartment_flat.cellml',
         simulationJson: null,
         sedml: null,
+        moduleConfig: null,
         flowSnapshot: null,
       },
       extras: [

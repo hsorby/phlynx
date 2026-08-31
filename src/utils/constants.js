@@ -43,8 +43,12 @@ export const PARAMETER_TYPE_OPTIONS = [
   { value: 'boundary_condition', label: 'boundary' },
 ]
 
-export const INSTANCE_PARAMETER_COMPONENT_NAMES = new Set(['model_parameters', 'parameters'])
-export const GLOBAL_PARAMETER_COMPONENT_NAMES = new Set(['parameters_global'])
+
+export const PHLYNX_GLOBAL_PARAMETERS_COMPONENT_NAME = 'parameters_global'
+export const PHLYNX_INSTANCE_PARAMETERS_COMPONENT_NAME = 'parameters'
+
+export const INSTANCE_PARAMETER_COMPONENT_NAMES = new Set(['model_parameters', PHLYNX_INSTANCE_PARAMETERS_COMPONENT_NAME])
+export const GLOBAL_PARAMETER_COMPONENT_NAMES = new Set([PHLYNX_GLOBAL_PARAMETERS_COMPONENT_NAME])
 export const PARAMETER_COMPONENT_NAMES = new Set([
   ...INSTANCE_PARAMETER_COMPONENT_NAMES,
   ...GLOBAL_PARAMETER_COMPONENT_NAMES,
@@ -72,8 +76,6 @@ export const TARGET_COMPATIBLE = {
 export const CELLML_NS = 'http://www.cellml.org/cellml/2.0#'
 export const MATHML_NS = 'http://www.w3.org/1998/Math/MathML'
 export const BQBIOL_NS = 'http://biomodels.net/biology-qualifiers/'
-export const GLOBAL_PARAMETERS_COMPONENT_NAME = 'parameters_global'
-export const INSTANCE_PARAMETERS_COMPONENT_NAME = 'parameters'
 
 export const STANDARD_UNITS = [
     'ampere',

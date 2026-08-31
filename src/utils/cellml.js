@@ -4,8 +4,8 @@ import {
   AFFINE_UNIT_CONVERSIONS,
   CELLML_NS,
   MATHML_NS,
-  GLOBAL_PARAMETERS_COMPONENT_NAME,
-  INSTANCE_PARAMETERS_COMPONENT_NAME,
+  PHLYNX_GLOBAL_PARAMETERS_COMPONENT_NAME,
+  PHLYNX_INSTANCE_PARAMETERS_COMPONENT_NAME,
   INSTANCE_PARAMETER_COMPONENT_NAMES,
   GLOBAL_PARAMETER_COMPONENT_NAMES,
 } from './constants.js'
@@ -965,10 +965,10 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
   }
 
   try {
-    globalParameterComponent.setName(GLOBAL_PARAMETERS_COMPONENT_NAME)
+    globalParameterComponent.setName(PHLYNX_GLOBAL_PARAMETERS_COMPONENT_NAME)
     model.addComponent(globalParameterComponent)
 
-    parameterComponent.setName(INSTANCE_PARAMETERS_COMPONENT_NAME)
+    parameterComponent.setName(PHLYNX_INSTANCE_PARAMETERS_COMPONENT_NAME)
     model.addComponent(parameterComponent)
 
     // Count how many nodes use each constant variable name
@@ -1209,11 +1209,11 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
     addEnvironmentComponent(model)
 
     if (globalParameterComponent.variableCount() === 0) {
-      model.removeComponentByName(GLOBAL_PARAMETERS_COMPONENT_NAME, true)
+      model.removeComponentByName(PHLYNX_GLOBAL_PARAMETERS_COMPONENT_NAME, true)
     }
 
     if (parameterComponent.variableCount() === 0) {
-      model.removeComponentByName(INSTANCE_PARAMETERS_COMPONENT_NAME, true)
+      model.removeComponentByName(PHLYNX_INSTANCE_PARAMETERS_COMPONENT_NAME, true)
     }
 
     // ------------------
@@ -1557,13 +1557,13 @@ export function extractVoiAndParametersFromModel(modelString, parameterInfo) {
             const mappedParent = eqVar.parent()
             garbageCollector.add(mappedParent)
             const mappedParentName = mappedParent?.name()
-            if (param.type === 'global_constant' && mappedParentName === GLOBAL_PARAMETERS_COMPONENT_NAME) {
+            if (param.type === 'global_constant' && mappedParentName === PHLYNX_GLOBAL_PARAMETERS_COMPONENT_NAME) {
               mappedParameters[`${param.nodeName}/${param.parameterName}`] = {
                 name: eqVar.name(),
                 componentName: mappedParentName,
               }
               break
-            } else if (param.type === 'constant' && mappedParentName === INSTANCE_PARAMETERS_COMPONENT_NAME) {
+            } else if (param.type === 'constant' && mappedParentName === PHLYNX_INSTANCE_PARAMETERS_COMPONENT_NAME) {
               mappedParameters[`${param.nodeName}/${param.parameterName}`] = {
                 name: eqVar.name(),
                 componentName: mappedParentName,
