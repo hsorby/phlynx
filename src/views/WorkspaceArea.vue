@@ -1933,7 +1933,7 @@ async function processImportedOmexArchive(archivePayload, result, fileName) {
   }
 
   const cellmlContent = await cellmlFile.async('string')
-  let nodeNameToIdMap = null
+  let nodeNameToIdMap = new Map()
   if (result.files?.flowSnapshot) {
     // Best case scenario: we have a flow snapshot, which is the most complete representation of the workspace state.
     const flowSnapshotFile = archive.file(result.files.flowSnapshot)
@@ -2722,7 +2722,7 @@ function snapshotFlowState() {
     nodeData,
     edges: flowState.edges,
     mathLibrary: mathLibraryObject,
-    globalParameters:  Array.from(libraryStore.globalVariables.entries()),
+    globalParameters: Array.from(libraryStore.globalVariables.entries()),
   })
 }
 
