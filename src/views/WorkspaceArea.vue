@@ -1950,7 +1950,9 @@ async function processImportedOmexArchive(archivePayload, result, fileName) {
   } else if (result.files?.moduleConfig) {
     // Second best scenario: if we don't have a flow snapshot, we can still load the CellML file and module configuration to build the workspace.
     const moduleConfigFile = archive.file(result.files.moduleConfig)
-    console.log('moduleConfigFile', moduleConfigFile)
+    console.warn('------------------------------------------')
+    console.warn('This case is not fully implemented yet, but we will load the CellML file but the module configuration is not currently used to build the workspace.')
+    console.warn('moduleConfigFile', moduleConfigFile)
     const cellmlPayload = parseCellMLConnections(cellmlContent, result.files.cellml)
     await loadCellMLData(cellmlContent, result.files.cellml, { notify: false })
     const parameters = loadParametersFromCellML(cellmlContent)
