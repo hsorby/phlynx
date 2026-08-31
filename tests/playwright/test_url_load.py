@@ -20,9 +20,9 @@ class TestLoadViaUrl(unittest.TestCase):
             page = context.new_page()
 
             with open(os.path.join(RESOURCE_PATH, "workspace-json.base64")) as f:
-                workspace_json = f.read()
+                workspace_json = f.read().strip()
 
-            page.goto(BASE_URL + f"?open=workspace_json/#{workspace_json}")
+            page.goto(BASE_URL + f"?open=workspace_json#{workspace_json}")
 
             # ---------- START -----------
             page.get_by_text("SN_varicositycell_modules.cellmlvar_SN").click()
@@ -48,9 +48,9 @@ class TestLoadViaUrl(unittest.TestCase):
             page = context.new_page()
 
             with open(os.path.join(RESOURCE_PATH, "workspace-omex.base64")) as f:
-                workspace_omex = f.read()
+                workspace_omex = f.read().strip()
 
-            page.goto(BASE_URL + f"?open=omex/#{workspace_omex}")
+            page.goto(BASE_URL + f"?open=omex#{workspace_omex}")
 
             # ---------- START -----------
             page.get_by_text("SN_varicositycell_modules.cellmlvar_SN").click()
