@@ -15,7 +15,7 @@ export function extractSimData(sedmlData, filename, options = {}) {
     }
 
     const sedmlElement = doc.documentElement
-    if (sedmlElement?.localName !== 'sedML' || sedmlElement?.namespaceURI !== 'http://sed-ml.org/sed-ml/level1/version4') {
+    if (sedmlElement?.localName !== 'sedML' || !(sedmlElement?.namespaceURI === 'http://sed-ml.org/sed-ml/level1/version4' || sedmlElement?.namespaceURI === 'http://sed-ml.org/sed-ml/level1/version3')) {
       throw new Error(`Invalid SED-ML file: root element is not <sedML> in the expected namespace ( found namespace: ${sedmlElement?.namespaceURI})`)
     }
 
