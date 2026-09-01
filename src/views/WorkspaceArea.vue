@@ -1062,8 +1062,12 @@ onConnect(async (connection) => {
   if (!sourceNode || !targetNode) return
   if (sourceNode === targetNode) return
 
+  const isExistingConnection = edges.value.find((e) => e.sourceHandle === connection.sourceHandle && e.targetHandle === connection.targetHandle)
+  if (isExistingConnection) return
+
   const duplicate = edges.value.find((e) => e.source === connection.source && e.target === connection.target)
 
+  
   const duplicateSnapshot = duplicate ? detachReactivity(duplicate) : null
 
   const sourceHandleUid = connection.sourceHandle ? getHandleUidFromHandleId(connection.sourceHandle) : null
@@ -1085,7 +1089,6 @@ onConnect(async (connection) => {
       style: { strokeDasharray: '8 8', opacity: 0.4 }, // visually mark "unconfirmed"
     }
 
-    // Prevents addition to history store.
     suppressedEdgeIds.add(pendingEdge.id)
     addEdges(pendingEdge)
 
@@ -1099,18 +1102,19 @@ onConnect(async (connection) => {
       rejectLabel: 'Cancel',
     })
 
-    removeEdges(pendingEdge.id)
-    suppressedEdgeIds.delete(pendingEdge.id)
-
     if (!shouldReplace) {
+      removeEdges(pendingEdge.id)
+      suppressedEdgeIds.delete(pendingEdge.id)
       if (sourceHandleUid) revertHandleIfUnused(connection.source, sourceHandleUid, { trackHistory: false })
       if (targetHandleUid) revertHandleIfUnused(connection.target, targetHandleUid, { trackHistory: false })
       return
     }
 
-    suppressedEdgeIds.add(duplicate.id)
-    removeEdges(duplicate.id)
-    revertHandlesForEdge(duplicateSnapshot)
+    suppressedEdgeIds.add(duplicateSnapshot.id)
+    await revertHandlesForEdge(duplicateSnapshot, [duplicateSnapshot.id], { trackHistory: false })
+    removeEdges(duplicateSnapshot.id)
+    removeEdges(pendingEdge.id)
+    suppressedEdgeIds.delete(pendingEdge.id)
   }
 
   // Derive ordinal indices from the existing edge graph:
@@ -1135,35 +1139,30 @@ onConnect(async (connection) => {
     ...connection,
     ...edgeLineOptions,
     id: `${connection.source}--${connection.target}`,
-    // The resolved port-label couplings for this conduit.
-    // Downstream consumers (CellML export, validation) read from here.
     data: {
       couplings,
     },
   }
 
-  if (duplicateSnapshot) {
+  if (duplicate) {
     suppressedEdgeIds.add(newEdge.id)
     addEdges(newEdge)
     suppressedEdgeIds.delete(duplicateSnapshot.id)
     suppressedEdgeIds.delete(newEdge.id)
 
-    // A single undo step for the whole replace: undo brings the old edge
-    // (and its handle activation) back and removes the new one; redo does
-    // the reverse. No pending edge involved on either side.
     historyStore.addCommand({
       type: 'replace-edge',
-      undo: () => {
+      async undo() {
+        await revertHandlesForEdge(newEdge, [newEdge.id], { trackHistory: false })
         removeEdges(newEdge.id)
-        revertHandlesForEdge(newEdge, [newEdge.id], { trackHistory: false })
         addEdges(duplicateSnapshot)
-        reactivateEdgeHandles(duplicateSnapshot, { trackHistory: false })
+        await reactivateEdgeHandles(duplicateSnapshot, { trackHistory: false })
       },
-      redo: () => {
+      async redo() {
+        await revertHandlesForEdge(duplicateSnapshot, [duplicateSnapshot.id], { trackHistory: false })
         removeEdges(duplicateSnapshot.id)
-        revertHandlesForEdge(duplicateSnapshot, [duplicateSnapshot.id], { trackHistory: false })
         addEdges(newEdge)
-        reactivateEdgeHandles(newEdge, { trackHistory: false })
+        await reactivateEdgeHandles(newEdge, { trackHistory: false })
       },
     })
   } else {
