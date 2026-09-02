@@ -220,3 +220,6 @@ Next, prepare a staging pull request on GitHub using this `GitHub action <https:
 When the staging pull request has been created, check the staged changes, changelog, and any other relevant information, then merge the pull request to the production branch.
 
 Finally, check https://phlynx.com to ensure the new version is live and working as expected.
+
+Following this process will create an official release of PhLynx and update the online version of the application.
+You can also release an unofficial version of PyLynx by following this process but skipping changing the version number in **package.json** and creating a new tag.
