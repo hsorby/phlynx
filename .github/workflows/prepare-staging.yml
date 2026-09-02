@@ -13,19 +13,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: source
-          fetch-depth: 0 # Critical: Must fetch all history to find tags
+          fetch-depth: 0 # Fetching all history to find tags.
 
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: production
           ref: production
 
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
 
@@ -33,7 +33,7 @@ jobs:
         run: corepack enable yarn
 
       - name: Enable yarn cache
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           cache: 'yarn'
           cache-dependency-path: 'source/yarn.lock'
