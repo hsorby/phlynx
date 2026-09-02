@@ -210,6 +210,7 @@ Then tag the commit with the new version number, e.g. v0.2.1.
 Use an annotated tag with a message describing the release, e.g.:
 
 .. code-block:: bash
+    
     git tag -a v0.2.1 -m "Release version 0.2.1"
 
 Then push the commit and tag to the remote repository.
