@@ -74,15 +74,14 @@ jobs:
           echo "last_tag=$LAST_TAG" >> $GITHUB_OUTPUT
           echo "commit_count=$COUNT" >> $GITHUB_OUTPUT
 
-      - name: Mess about with branches
+      - name: Update Production Branch
         run: |
-          rm -rf source/.git/
-          mv production/.git source/
+          rsync -a --delete --exclude='.git' source/ production/
 
       - name: Commit Changes
         id: commit_changes
         run: |
-          cd source
+          cd production
 
           # Configure git identity
           git config user.name "github-actions[bot]"
@@ -101,7 +100,7 @@ jobs:
         if: steps.commit_changes.outputs.changes == 'true'
         id: create_branch
         run: |
-          cd source
+          cd production
 
           SHORT_SHA=$(git rev-parse --short HEAD)
           BRANCH_NAME="staging-${SHORT_SHA}"
@@ -118,7 +117,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PAT_CREATE_PR }}
         run: |
-          cd source
+          cd production
 
           COMMIT_COUNT=${{ steps.gen_changelog.outputs.commit_count }}
           BRANCH_NAME=${{ steps.create_branch.outputs.branch_name }}
