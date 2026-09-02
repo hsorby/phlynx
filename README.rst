@@ -214,7 +214,7 @@ Use an annotated tag with a message describing the release, e.g.:
 
 Then push the commit and tag to the remote repository.
 
-Next, prepare a staging pull request on GitHub using this [GitHub action](https://github.com/physiomelinks/phlynx/actions/workflows/prepare-staging.yml).
+Next, prepare a staging pull request on GitHub using this `GitHub action <https://github.com/physiomelinks/phlynx/actions/workflows/prepare-staging.yml>`_.
 
 When the staging pull request has been created, check the staged changes, changelog, and any other relevant information, then merge the pull request to the production branch.
 
