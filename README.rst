@@ -1,6 +1,32 @@
-.. image:: https://api.netlify.com/api/v1/badges/94c2ffbc-8f11-4759-9094-626a6efd7d82/deploy-status
-  :target: https://app.netlify.com/projects/latest-phlynx/deploys
-  :alt: Netlify Status Badge
+
+<div align="center">
+
+  <!-- Logo Banner or Transparent Icon -->
+  <a href="https://github.com/physiomelinks/PhLynx">
+    <img 
+        src="public/phlynxlogo.svg" 
+        alt="PhLynx Logo" 
+        width="180" 
+        style="filter: drop-shadow(0px 0px 8px rgba(255, 255, 255, 0.49));"
+    >
+    </a>
+
+  <!-- Main Title (Using styled <p> to prevent the bottom border/line) -->
+  <p align="center">
+    <strong style="font-size: 2.25em;">PhLynx</strong>
+  </p>
+
+  <!-- Badges directly below title without any separating line -->
+  <p align="center">
+    <a href="https://github.com/physiomelinks/PhLynx/releases/latest">
+      <img src="https://img.shields.io/github/v/release/physiomelinks/PhLynx?label=download&style=flat-square" alt="Latest Release">
+    </a>
+    <a href="https://github.com/physiomelinks/PhLynx/blob/main/LICENSE">
+      <img src="https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square" alt="License">
+    </a>
+  </p>
+
+</div>
 
 =======================
 Physiome Links (PhLynx)
@@ -174,3 +200,21 @@ The script will create this file if it does not already exist.
 Also, if the specified class already exists in the output file, the script will add the new test method to that class.
 If the specified test method already exists in the class, the script will throw an error to avoid overwriting existing code.
 If the specified class does not exist in the output file, the script will create a new class with the specified name and add the test method to it.
+
+Release Process
+~~~~~~~~~~~~~~~
+
+First update the version number in package.json, commit the change.
+Then tag the commit with the new version number, e.g. v0.2.1.
+Use an annotated tag with a message describing the release, e.g.:
+
+.. code-block:: bash
+    git tag -a v0.2.1 -m "Release version 0.2.1"
+
+Then push the commit and tag to the remote repository.
+
+Next, prepare a staging pull request on GitHub using this [GitHub action](https://github.com/physiomelinks/phlynx/actions/workflows/prepare-staging.yml).
+
+When the staging pull request has been created, check the staged changes, changelog, and any other relevant information, then merge the pull request to the production branch.
+
+Finally, check https://phlynx.com to ensure the new version is live and working as expected.
