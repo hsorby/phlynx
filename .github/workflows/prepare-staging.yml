@@ -126,8 +126,12 @@ jobs:
 
           if [ "$COMMIT_COUNT" -gt 0 ]; then
             # Read the file content into a variable for the PR body
-            BODY_CONTENT=$(cat changelogs/latest.md)
-            TITLE+=" + Unreleased Changes"
+            if [ -f "changelogs/latest.md" ]; then
+              BODY_CONTENT=$(cat changelogs/latest.md)
+            else
+              BODY_CONTENT="No changelog available."
+            fi
+            TITLE+=" + Post Release Changes"
           else
             BODY_CONTENT="Release $LAST_TAG of PhLynx."
           fi
