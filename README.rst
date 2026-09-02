@@ -205,7 +205,7 @@ If the specified class does not exist in the output file, the script will create
 Release Process
 ~~~~~~~~~~~~~~~
 
-First update the version number in package.json, commit the change.
+First update the version number in **package.json** and commit the change.
 Then tag the commit with the new version number, e.g. v0.2.1.
 Use an annotated tag with a message describing the release, e.g.:
 
