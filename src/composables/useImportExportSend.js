@@ -180,22 +180,24 @@ export function useImportExportSend({
       fileTypes: OMEX_FILE_TYPES,
       message: 'Generating OMEX archive for CUFLynx.',
       action: generateOmexArchiveAction,
-      successMessage: async (blob, finalName) => {
-        const dataUri = await createOmexDataFragment(blob)
-        return h('div', null, [
-          'OMEX archive generated for CUFLynx. Open this model directly in ',
-          h(
-            'a',
-            {
-              href: `cuflynx://api?import=omex#${dataUri}`,
-              rel: 'noopener noreferrer',
-              style: { color: 'var(--p-primary-color)', fontWeight: 'bold' },
-              target: '_blank',
-            },
-            'CUFLynx'
-          ),
-        ])
-      },
+      successMessage: () => 'CUFLynx export OMEX generated.',
+      // Temporarily disabled until CUFLynx can register the protocol handler.
+      // successMessage: async (blob, finalName) => {
+      //   const dataUri = await createOmexDataFragment(blob)
+      //   return h('div', null, [
+      //     'OMEX archive generated for CUFLynx. Open this model directly in ',
+      //     h(
+      //       'a',
+      //       {
+      //         href: `cuflynx://api?import=omex#${dataUri}`,
+      //         rel: 'noopener noreferrer',
+      //         style: { color: 'var(--p-primary-color)', fontWeight: 'bold' },
+      //         target: '_blank',
+      //       },
+      //       'CUFLynx'
+      //     ),
+      //   ])
+      // },
     },
   ])
 
