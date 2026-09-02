@@ -20,7 +20,7 @@
         <!-- Badges directly below title without any separating line -->
         <p align="center">
             <a href="https://github.com/physiomelinks/PhLynx/releases/latest">
-            <img src="https://img.shields.io/github/v/release/physiomelinks/PhLynx?label=download&style=flat-square" alt="Latest Release">
+            <img src="https://img.shields.io/github/v/release/physiomelinks/PhLynx?label=release&style=flat-square" alt="Latest Release">
             </a>
             <a href="https://github.com/physiomelinks/PhLynx/blob/main/LICENSE">
             <img src="https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square" alt="License">
