@@ -213,7 +213,7 @@ Use an annotated tag with a message describing the release, e.g.:
 
     git tag -a v0.2.1 -m "Release version 0.2.1"
 
-Then push the commit and tag to the `definitive remote repository <https://github.com/physiomelinks/phlynx>`_.
+Then push the commit and tag to the **main** branch of the `definitive remote repository <https://github.com/physiomelinks/phlynx>`_.
 
 Next, prepare a staging pull request on GitHub using this `GitHub action <https://github.com/physiomelinks/phlynx/actions/workflows/prepare-staging.yml>`_.
 
