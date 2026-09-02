@@ -13,11 +13,11 @@ import { execSync } from 'child_process'
 
 const latestChangelogPath = path.resolve(__dirname, 'changelogs/latest.md')
 
-let hasLatestChangelog = false
+let buildStateMarker = ''
 if (fs.existsSync(latestChangelogPath)) {
   const content = fs.readFileSync(latestChangelogPath, 'utf8')
   if (content.trim().length > 0) {
-    hasLatestChangelog = true
+    buildStateMarker = '*'
   }
 }
 
@@ -26,7 +26,7 @@ export default defineConfig({
   define: {
     // Create a global constant. Strings must be JSON stringified.
     __APP_VERSION__: JSON.stringify(packageJson.version),
-    __BUILD_STATE_MARKER__: JSON.stringify(!!hasLatestChangelog ? '*' : ''),
+    __BUILD_STATE_MARKER__: JSON.stringify(buildStateMarker),
     __COMMIT_HASH__: JSON.stringify(execSync('git rev-parse --short HEAD').toString().trim()),
     __BRANCH__: JSON.stringify(execSync('git rev-parse --abbrev-ref HEAD').toString().trim()),
     __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
