@@ -21,6 +21,10 @@ export function buildSimulationJson(plotConfig, parameterScan, supplementalData)
   const scanSelections = parameterScan?.selections || []
   const timeVariable = { id: formVoiVariableId(voiInformation), name: formVoiVariableName(voiInformation), units: voiInformation.units }
 
+  if (selections.length === 0 && scanSelections.length === 0 ) {
+    return null
+  }
+
   const input = buildInput(scanSelections)
   const data = buildOutputData(selections, timeVariable)
   const plots = buildOutputPlots(plotConfig, selections, timeVariable)
@@ -71,7 +75,6 @@ function buildOutputData(selections, timeVariable) {
     id: formDataVariableId(sel.nodeName, sel.variableName),
     name: `${sel.nodeName}/${sel.variableName}`,
   }))
-
 
   data.push({id: timeVariable.id, name: timeVariable.name})
 

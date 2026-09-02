@@ -350,7 +350,7 @@ const parseOMEX = (file) => {
       try {
         const content = e.target.result
         // Basic validation for OMEX (COMBINE Archive)
-        if (!file.name.endsWith('.omex')) {
+        if (!file.name.endsWith('.omex') && !file.name.endsWith('.zip')) {
           reject(new Error('Invalid OMEX file.'))
           return
         }
@@ -468,7 +468,7 @@ const configs = {
       {
         key: IMPORT_KEYS.OMEX,
         label: IMPORT_LABELS.OMEX,
-        accept: '.omex',
+        accept: '.omex, .zip',
         parser: parseOMEX,
       },
     ],

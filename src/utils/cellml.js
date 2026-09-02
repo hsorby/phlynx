@@ -4,10 +4,11 @@ import {
   AFFINE_UNIT_CONVERSIONS,
   CELLML_NS,
   MATHML_NS,
-  GLOBAL_PARAMETERS,
-  MODEL_PARAMETERS,
+  PHLYNX_GLOBAL_PARAMETERS_COMPONENT_NAME,
+  PHLYNX_INSTANCE_PARAMETERS_COMPONENT_NAME,
+  INSTANCE_PARAMETER_COMPONENT_NAMES,
+  GLOBAL_PARAMETER_COMPONENT_NAMES,
 } from './constants.js'
-import { CellMLTextParser } from 'cellml-text-editor'
 
 let _libcellml = null
 
@@ -964,10 +965,10 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
   }
 
   try {
-    globalParameterComponent.setName(GLOBAL_PARAMETERS)
+    globalParameterComponent.setName(PHLYNX_GLOBAL_PARAMETERS_COMPONENT_NAME)
     model.addComponent(globalParameterComponent)
 
-    parameterComponent.setName(MODEL_PARAMETERS)
+    parameterComponent.setName(PHLYNX_INSTANCE_PARAMETERS_COMPONENT_NAME)
     model.addComponent(parameterComponent)
 
     // Count how many nodes use each constant variable name
@@ -1208,11 +1209,11 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
     addEnvironmentComponent(model)
 
     if (globalParameterComponent.variableCount() === 0) {
-      model.removeComponentByName(GLOBAL_PARAMETERS, true)
+      model.removeComponentByName(PHLYNX_GLOBAL_PARAMETERS_COMPONENT_NAME, true)
     }
 
     if (parameterComponent.variableCount() === 0) {
-      model.removeComponentByName(MODEL_PARAMETERS, true)
+      model.removeComponentByName(PHLYNX_INSTANCE_PARAMETERS_COMPONENT_NAME, true)
     }
 
     // ------------------
@@ -1556,13 +1557,13 @@ export function extractVoiAndParametersFromModel(modelString, parameterInfo) {
             const mappedParent = eqVar.parent()
             garbageCollector.add(mappedParent)
             const mappedParentName = mappedParent?.name()
-            if (param.type === 'global_constant' && mappedParentName === GLOBAL_PARAMETERS) {
+            if (param.type === 'global_constant' && mappedParentName === PHLYNX_GLOBAL_PARAMETERS_COMPONENT_NAME) {
               mappedParameters[`${param.nodeName}/${param.parameterName}`] = {
                 name: eqVar.name(),
                 componentName: mappedParentName,
               }
               break
-            } else if (param.type === 'constant' && mappedParentName === MODEL_PARAMETERS) {
+            } else if (param.type === 'constant' && mappedParentName === PHLYNX_INSTANCE_PARAMETERS_COMPONENT_NAME) {
               mappedParameters[`${param.nodeName}/${param.parameterName}`] = {
                 name: eqVar.name(),
                 componentName: mappedParentName,
@@ -1598,4 +1599,95 @@ export function extractVoiAndParametersFromModel(modelString, parameterInfo) {
   } finally {
     garbageCollector.forEach((obj) => obj?.delete())
   }
+}
+
+function findComponentByAnyName(model, names) {
+  for (const name of names) {
+    const comp = model.componentByName(name, true)
+    if (comp) return comp
+  }
+  return null
+}
+
+function collectComponentParameters(sourceComponent) {
+  const byComponent = {}
+ 
+  for (let i = 0; i < sourceComponent.variableCount(); i++) {
+    const variable = sourceComponent.variableByIndex(i)
+    const units = variable.units()
+    const value = variable.initialValue()
+    const equivalentCount = variable.equivalentVariableCount()
+ 
+    if (equivalentCount === 0) {
+      console.warn(
+        `Parameter variable '${variable.name()}' has no equivalent variables. It is not connected to any component and will be ignored.`
+      )
+    }
+ 
+    for (let j = 0; j < equivalentCount; j++) {
+      const eqVar = variable.equivalentVariable(j)
+      const parentComp = eqVar.parent()
+      const componentName = parentComp?.name() || ''
+      const variableName = eqVar.name() || ''
+ 
+      if (componentName) {
+        if (!byComponent[componentName]) {
+          byComponent[componentName] = []
+        }
+        byComponent[componentName].push({
+          name: variableName,
+          value,
+          units: units.name(),
+        })
+      }
+ 
+      eqVar.delete()
+      parentComp.delete()
+    }
+ 
+    units.delete()
+    variable.delete()
+  }
+ 
+  return byComponent
+}
+
+export function loadParametersFromCellML(modelString) {
+  const parameterData = { parameters: {}, globalParameters: [] }
+  if (modelString) {
+    const parser = new _libcellml.Parser(false)
+    const model = parser.parseModel(modelString)
+
+    const parameterComponent = findComponentByAnyName(model, INSTANCE_PARAMETER_COMPONENT_NAMES)
+    if (parameterComponent) {
+      const byComponent = collectComponentParameters(parameterComponent)
+      for (const [componentName, params] of Object.entries(byComponent)) {
+        if (!parameterData.parameters[componentName]) {
+          parameterData.parameters[componentName] = []
+        }
+        parameterData.parameters[componentName].push(...params)
+      }
+      parameterComponent.delete()
+    }
+
+    const globalParameterComponent = findComponentByAnyName(model, GLOBAL_PARAMETER_COMPONENT_NAMES)
+    if (globalParameterComponent) {
+      for (let i = 0; i < globalParameterComponent.variableCount(); i++) {
+        const variable = globalParameterComponent.variableByIndex(i)
+        const units = variable.units()
+        parameterData.globalParameters.push({
+          name: variable.name(),
+          value: variable.initialValue(),
+          units: units.name(),
+        })
+        units.delete()
+        variable.delete()
+      }
+      globalParameterComponent.delete()
+    }
+    model.delete()
+    parser.delete()
+  }
+
+  return parameterData
 }

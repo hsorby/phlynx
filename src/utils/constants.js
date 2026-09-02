@@ -1,17 +1,22 @@
 import { MarkerType } from '@vue-flow/core'
 
+export const DEFAULT_PROJECT_NAME = 'phlynx-project'
+export const PHLYNX_PROJECT_IDENTIFIER = 'phlynx-project'
+export const PHLYNX_PROJECT_VERSION = '1.0.0'
+
 export const SOURCE_HANDLE_TYPE = 'source'
 export const TARGET_HANDLE_TYPE = 'target'
 export const HANDLE_VARIANT = {
   DEFAULT: 'default', 
   GHOST: 'ghost',      
 }
-export const NUM_GHOST_HANDLES_SIDES = 5
+export const NUM_GHOST_HANDLES_LEFT_RIGHT = 5
 export const NUM_GHOST_HANDLES_TOP_BOT = 7
 export const HANDLE_SPACING = 25
 
 export const USER_MODULES_FILE = 'User_Modules.cellml'
 export const NEW_INSTANCE_MODULE_REF = 'new_module:phlynx'
+export const DEFAULT_CELLML_FILE_NAME = 'model.cellml'
 
 export const TOOLTIP_AUTO_CLOSE = 1200
 export const RESCALE_ASPECT_RATIO = 3
@@ -38,6 +43,17 @@ export const PARAMETER_TYPE_OPTIONS = [
   { value: 'boundary_condition', label: 'boundary' },
 ]
 
+
+export const PHLYNX_GLOBAL_PARAMETERS_COMPONENT_NAME = 'global_parameters'
+export const PHLYNX_INSTANCE_PARAMETERS_COMPONENT_NAME = 'instance_parameters'
+
+export const INSTANCE_PARAMETER_COMPONENT_NAMES = new Set(['model_parameters', PHLYNX_INSTANCE_PARAMETERS_COMPONENT_NAME])
+export const GLOBAL_PARAMETER_COMPONENT_NAMES = new Set([PHLYNX_GLOBAL_PARAMETERS_COMPONENT_NAME])
+export const PARAMETER_COMPONENT_NAMES = new Set([
+  ...INSTANCE_PARAMETER_COMPONENT_NAMES,
+  ...GLOBAL_PARAMETER_COMPONENT_NAMES,
+])
+
 export const AFFINE_UNIT_CONVERSIONS = {
   celsius:    { baseUnit: 'kelvin',  scale: 1,        offset: 273.15  },
   fahrenheit: { baseUnit: 'kelvin',  scale: 5 / 9,    offset: 255.372 },
@@ -60,8 +76,6 @@ export const TARGET_COMPATIBLE = {
 export const CELLML_NS = 'http://www.cellml.org/cellml/2.0#'
 export const MATHML_NS = 'http://www.w3.org/1998/Math/MathML'
 export const BQBIOL_NS = 'http://biomodels.net/biology-qualifiers/'
-export const GLOBAL_PARAMETERS = 'parameters_global'
-export const MODEL_PARAMETERS = 'parameters'
 
 export const STANDARD_UNITS = [
     'ampere',
@@ -140,12 +154,6 @@ export const MULTIPORT_OPTIONS = [
   { value: 'Sum',   label: 'Sum'   },
   { value: 'None',  label: 'None'  },
 ]
-
-export const DEFAULT_FILE_NAME = 'phlynx-export'
-
-export const PHLYNX_PROJECT_IDENTIFIER = 'phlynx-project'
-
-export const PHLYNX_PROJECT_VERSION = '1.0.0'
 
 /*--- Folder and File Handling ---*/
 export const IMPORT_KEYS = {

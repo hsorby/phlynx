@@ -148,7 +148,7 @@
             variant="text"
             severity="info"
             :disabled="!somethingAvailable"
-            v-tooltip.bottom="{ value: 'Configure sim. settings', showDelay: 300 }"
+            v-tooltip.bottom="{ value: 'Configure simulation settings', showDelay: 300 }"
             @click="onOpenSimSettingsDialog"
           />
 
@@ -235,9 +235,10 @@
             @click="triggerCurrentSend"
             :disabled="!somethingAvailable || currentSendDisabled"
             v-tooltip.bottom="{
-              value: !somethingAvailable || currentSendDisabled
-                ? 'The Send option is disabled because CellML library is not ready yet.'
-                : `Send ${currentSendMode.label}`,
+              value:
+                !somethingAvailable || currentSendDisabled
+                  ? 'The Send option is disabled because CellML library is not ready yet.'
+                  : `Send to ${currentSendMode.label}`,
               showDelay: 300,
             }"
           >
@@ -353,14 +354,18 @@
           </div>
         </div>
 
-        <div class="dnd-flow" @drop="onDrop">
+        <div class="dnd-flow" @drop="onDrop" @dragover.prevent @dragenter.prevent>
           <Transition name="fade">
             <div v-if="isUrlLoading" class="flow-loading-overlay">
               <i class="pi pi-spin pi-spinner loading-icon" />
               <span>Populating Workspace...</span>
             </div>
           </Transition>
-          <Toast v-if="!isUrlLoading" position="top-right" :style="{ top: `${toastTop}px`, right: `${contextSidebarWidth + 25}px` }">
+          <Toast
+            v-if="!isUrlLoading"
+            position="top-right"
+            :style="{ top: `${toastTop}px`, right: `${contextSidebarWidth + 25}px` }"
+          >
             <template #message="slotProps">
               <div class="p-toast-message-text" style="flex: 1">
                 <!-- Summary / Title -->
@@ -475,12 +480,12 @@
     @save="handleParameterSave"
   />
 
-  <SaveDialog v-model="saveDialogVisible" :default-name="libraryStore.lastSaveName" @confirm="onSaveConfirm" />
+  <SaveDialog v-model="saveDialogVisible" :default-name="sessionMetadataStore.lastSaveName" @confirm="onSaveConfirm" />
 
   <SaveDialog
     v-model="exportDialogVisible"
     :title="`Export for ${currentExportMode.label}`"
-    :default-name="libraryStore.lastExportName"
+    :default-name="sessionMetadataStore.lastSaveName"
     :suffix="currentExportMode.suffix"
     @confirm="onExportConfirm"
   />
@@ -542,6 +547,7 @@ import { useRoute } from 'vue-router'
 
 import Button from 'primevue/button'
 import SplitButton from 'primevue/splitbutton'
+import JSZip from 'jszip'
 import Divider from 'primevue/divider'
 import InputText from 'primevue/inputtext'
 import IconField from 'primevue/iconfield'
@@ -555,9 +561,13 @@ import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 
 import { useLibraryStore } from '../stores/libraryStore'
+import { useSessionMetadataStore } from '../stores/sessionMetadataStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore.js'
+import { useOmexStore } from '../stores/omexStore'
+
+import { importOmexFile, extractOmexArchive } from '../services/import/omex'
 
 import useDragAndDrop from '../composables/useDnD'
 import { useHandleManagement } from '../composables/useHandleManagement'
@@ -588,7 +598,7 @@ import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
 import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
 import PortEditorDialog from '../components/PortEditorDialog.vue'
 import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
-import CreateInspectionModuleDialog from '../components/dialogs/CreateInspectorModule.vue'
+import CreateInspectionModuleDialog from '../components/dialogs/CreateInspectionModule.vue'
 import ContextSidebar from '../components/ContextSidebar.vue'
 import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
 import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
@@ -600,36 +610,42 @@ import { useScreenshot } from '../services/useScreenshot'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { migrateWorkspace } from '../services/workspaceMigrator'
 import { relayoutNodes } from '../services/layouts/physics'
+import { extractSimData as extractSimDataFromSedml } from '../services/import/sedml'
+import { extractSimData as extractSimDataFromSimulationJson } from '../services/import/simulation'
+import { buildInstance } from '../services/import/buildWorkflow'
 
 import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../composables/useClearWorkspace'
-import { readFileAsText } from '../utils/misc'
-import { initLibCellML, processCellMLData, extractVariablesFromMath } from '../utils/cellml'
+import { readFileAsText, cyrb53 } from '../utils/misc'
+import { buildGhostHandles, normaliseHandleSlots } from '../utils/handles'
+import { initLibCellML, processCellMLData, extractVariablesFromMath, loadParametersFromCellML } from '../utils/cellml'
 import {
   edgeLineOptions,
   CELLML_FILE_TYPES,
   FLOW_IDS,
   IMPORT_KEYS,
   JSON_FILE_TYPES,
-  DEFAULT_FILE_NAME,
   NEW_INSTANCE_MODULE_REF,
   PHLYNX_PROJECT_IDENTIFIER,
   PHLYNX_PROJECT_VERSION,
+  NUM_GHOST_HANDLES_TOP_BOT,
+  NUM_GHOST_HANDLES_LEFT_RIGHT,
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
 import { getHandleId, getHandleUidFromHandleId, findMostCentralGhostHandle } from '../utils/handles'
-import { getImportConfig, parseParametersFile } from '../utils/import'
+import { parseParametersFile } from '../utils/import'
 import { detachReactivity } from '../utils/reactivity'
+import { extractGlobalConstants } from '../utils/variables'
 import {
-  saveFileHandle,
-  saveWithDialog,
-  getFileHandle,
-  writeFileHandle,
   ensureExtension,
   legacyDownload,
+  saveFileHandle,
+  saveWithDialog,
+  stripExtension,
+  writeFileHandle,
 } from '../utils/save'
 
 const workspaceFileInput = ref(null)
@@ -769,9 +785,9 @@ const loadCellMLFiles = async (entries) => {
   if (entries.length === 1) {
     const entry = entries[0]
     const content = entry instanceof File ? await readFileAsText(entry) : entry.content
-    const cellmlPayload = parseCellMLConnections(content, entry.name)
+    const parsedCellmlPayload = parseCellMLConnections(content, entry.name)
 
-    if (cellmlPayload.edges.length > 0) {
+    if (parsedCellmlPayload.edges.length > 0) {
       if (nodes.value.length > 0) {
         const overwrite = await confirm({
           header: 'Workspace Not Empty',
@@ -787,7 +803,8 @@ const loadCellMLFiles = async (entries) => {
 
           // Load new graph into clean workspace using the normal path
           const result = await loadCellMLData(content, entry.name, { notify: false })
-          await loadFromCellML(cellmlPayload, entry.name)
+          const parameters = loadParametersFromCellML(content)
+          await loadFromCellML(parsedCellmlPayload, entry.name, parameters)
 
           // Remap snapshotted node IDs to avoid clashes with newly loaded nodes
           const existingIds = new Set(nodes.value.map((n) => n.id))
@@ -806,7 +823,7 @@ const loadCellMLFiles = async (entries) => {
               ...n,
               id: newId,
               position: { x: n.position.x + 1500, y: n.position.y },
-              data: { ...n.data, name: newId },
+              data: { ...n.data },
             }
           })
 
@@ -827,7 +844,9 @@ const loadCellMLFiles = async (entries) => {
 
       // Register modules/units in the store first, then build the graph.
       const result = await loadCellMLData(content, entry.name, { notify: false })
-      await loadFromCellML(cellmlPayload, entry.name)
+      const parameters = loadParametersFromCellML(content)
+      await loadFromCellML(parsedCellmlPayload, entry.name, parameters)
+
       rebuildNodeEdgeIndex()
 
       return [result]
@@ -926,18 +945,21 @@ const onDrop = async (event) => {
   }
 }
 
+const libraryStore = useLibraryStore()
+const sessionMetadataStore = useSessionMetadataStore()
+const inspectionModuleStore = useInspectionModuleStore()
 const historyStore = useFlowHistoryStore()
 const simulationSettingsStore = useSimulationSettingsStore()
+const omexStore = useOmexStore()
 const { loadFromInstanceArray } = useLoadFromInstanceArray()
 const { loadFromCellML } = useLoadFromCellML()
 const { capture } = useScreenshot()
 const { trackEvent } = useGtm()
+const { clearWorkspace } = useClearWorkspace()
+
 const helperLineHorizontal = ref(null)
 const helperLineVertical = ref(null)
 const alignment = ref('edge')
-
-const libraryStore = useLibraryStore()
-const inspectionModuleStore = useInspectionModuleStore()
 
 const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
@@ -991,6 +1013,7 @@ const currentMatchIndex = ref(0)
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
 const somethingSelected = computed(() => getSelectedNodes.value.length > 0)
+const hasModelChanged = computed(() => cyrb53(snapshotFlowState()) !== omexStore.archiveHash)
 
 const {
   currentExportMode,
@@ -1007,15 +1030,14 @@ const {
   triggerCurrentSend,
 } = useImportExportSend({
   libcellml,
-  somethingAvailable,
   nodes,
   edges,
   importDialogVisible,
   exportDialogVisible,
   currentImportConfig,
-  getImportConfig,
-  getFileHandle,
   onExportConfirm,
+  hasModelChanged,
+  snapshotFlowState,
 })
 
 const cellMlExportTooltip = computed(() => {
@@ -1040,8 +1062,12 @@ onConnect(async (connection) => {
   if (!sourceNode || !targetNode) return
   if (sourceNode === targetNode) return
 
+  const isExistingConnection = edges.value.find((e) => e.sourceHandle === connection.sourceHandle && e.targetHandle === connection.targetHandle)
+  if (isExistingConnection) return
+
   const duplicate = edges.value.find((e) => e.source === connection.source && e.target === connection.target)
 
+  
   const duplicateSnapshot = duplicate ? detachReactivity(duplicate) : null
 
   const sourceHandleUid = connection.sourceHandle ? getHandleUidFromHandleId(connection.sourceHandle) : null
@@ -1063,7 +1089,6 @@ onConnect(async (connection) => {
       style: { strokeDasharray: '8 8', opacity: 0.4 }, // visually mark "unconfirmed"
     }
 
-    // Prevents addition to history store.
     suppressedEdgeIds.add(pendingEdge.id)
     addEdges(pendingEdge)
 
@@ -1077,18 +1102,19 @@ onConnect(async (connection) => {
       rejectLabel: 'Cancel',
     })
 
-    removeEdges(pendingEdge.id)
-    suppressedEdgeIds.delete(pendingEdge.id)
-
     if (!shouldReplace) {
+      removeEdges(pendingEdge.id)
+      suppressedEdgeIds.delete(pendingEdge.id)
       if (sourceHandleUid) revertHandleIfUnused(connection.source, sourceHandleUid, { trackHistory: false })
       if (targetHandleUid) revertHandleIfUnused(connection.target, targetHandleUid, { trackHistory: false })
       return
     }
 
-    suppressedEdgeIds.add(duplicate.id)
-    removeEdges(duplicate.id)
-    revertHandlesForEdge(duplicateSnapshot)
+    suppressedEdgeIds.add(duplicateSnapshot.id)
+    await revertHandlesForEdge(duplicateSnapshot, [duplicateSnapshot.id], { trackHistory: false })
+    removeEdges(duplicateSnapshot.id)
+    removeEdges(pendingEdge.id)
+    suppressedEdgeIds.delete(pendingEdge.id)
   }
 
   // Derive ordinal indices from the existing edge graph:
@@ -1113,35 +1139,30 @@ onConnect(async (connection) => {
     ...connection,
     ...edgeLineOptions,
     id: `${connection.source}--${connection.target}`,
-    // The resolved port-label couplings for this conduit.
-    // Downstream consumers (CellML export, validation) read from here.
     data: {
       couplings,
     },
   }
 
-  if (duplicateSnapshot) {
+  if (duplicate) {
     suppressedEdgeIds.add(newEdge.id)
     addEdges(newEdge)
     suppressedEdgeIds.delete(duplicateSnapshot.id)
     suppressedEdgeIds.delete(newEdge.id)
 
-    // A single undo step for the whole replace: undo brings the old edge
-    // (and its handle activation) back and removes the new one; redo does
-    // the reverse. No pending edge involved on either side.
     historyStore.addCommand({
       type: 'replace-edge',
-      undo: () => {
+      async undo() {
+        await revertHandlesForEdge(newEdge, [newEdge.id], { trackHistory: false })
         removeEdges(newEdge.id)
-        revertHandlesForEdge(newEdge, [newEdge.id], { trackHistory: false })
         addEdges(duplicateSnapshot)
-        reactivateEdgeHandles(duplicateSnapshot, { trackHistory: false })
+        await reactivateEdgeHandles(duplicateSnapshot, { trackHistory: false })
       },
-      redo: () => {
+      async redo() {
+        await revertHandlesForEdge(duplicateSnapshot, [duplicateSnapshot.id], { trackHistory: false })
         removeEdges(duplicateSnapshot.id)
-        revertHandlesForEdge(duplicateSnapshot, [duplicateSnapshot.id], { trackHistory: false })
         addEdges(newEdge)
-        reactivateEdgeHandles(newEdge, { trackHistory: false })
+        await reactivateEdgeHandles(newEdge, { trackHistory: false })
       },
     })
   } else {
@@ -1274,7 +1295,6 @@ const getNodeClass = (props) => {
 }
 
 function handleClearWorkspace() {
-  const { clearWorkspace } = useClearWorkspace()
   clearWorkspace()
 }
 
@@ -1772,6 +1792,233 @@ const loadConfigData = async (content, filename, { notify: shouldNotify = true }
   }
 }
 
+async function loadFlowSnapshot(fileName, flowSnapshot, parameterData = {}, { notify: shouldNotify = true } = {}) {
+  if (!flowSnapshot || !flowSnapshot.nodeData || !flowSnapshot.edges) {
+    notify.error({
+      title: 'Invalid Flow Snapshot',
+      message: 'The provided flow snapshot is missing required nodes or edges data.',
+    })
+    return
+  }
+
+  const snapshotMathLibrary =
+    flowSnapshot.mathLibrary && typeof flowSnapshot.mathLibrary === 'object' ? flowSnapshot.mathLibrary : {}
+
+  let nodeNameToIdMap = new Map()
+  // Convert nodeData to nodes format expected by the workspace.
+  const nodes = flowSnapshot.nodeData.map((node) => {
+    // Update variables with parameter data if available.
+    if (parameterData[node.data.name]) {
+      const paramVars = parameterData[node.data.name]
+      node.data.variables = node.data.variables.map((variable) => {
+        const paramVar = paramVars.find((p) => p.name.trimEnd() === variable.name.trim())
+        if (paramVar) {
+          return {
+            ...variable,
+            value: paramVar.value?.trim(),
+            data_reference: paramVar.data_reference?.trim(),
+            type: 'constant',
+          }
+        }
+        return variable
+      })
+    }
+    // Resolve math from the snapshot math library.
+    const nodeMathFromSnapshot =
+      node.data?.mathHash in snapshotMathLibrary ? snapshotMathLibrary[node.data.mathHash] : undefined
+
+    // Check node math is the same as the math in the library store
+    const nodeMath = libraryStore.availableMath.get(node.data.mathRef)
+    if (nodeMath) {
+      if (nodeMathFromSnapshot && nodeMath !== nodeMathFromSnapshot) {
+        notify.warning({
+          title: 'Math Mismatch',
+          message: `The math for node "${node.data.name}" does not match the math in the library store. The library version will be used.`,
+        })
+      }
+      // Remove imported math payloads from runtime node data once the store value is authoritative.
+      delete node.data.mathHash
+    } else {
+      // Put math from the snapshot into the library store.
+      if (nodeMathFromSnapshot) {
+        libraryStore.addMath(node.data.mathRef, nodeMathFromSnapshot)
+      }
+      delete node.data.mathHash
+    }
+    return node
+  })
+
+  // Clear the current workspace before loading the new snapshot without creating
+  // an extra history step for the reset itself; the imported graph is then added
+  // as one batched history action.
+  await clearWorkspace({ recordHistory: false })
+
+  historyStore.startBatch()
+  try {
+    const newNodes = nodes.map((node) => {
+      nodeNameToIdMap.set(node.data.name, node.id)
+      const allHandles = normaliseHandleSlots([
+        ...node.data.handles,
+        ...buildGhostHandles(NUM_GHOST_HANDLES_TOP_BOT, NUM_GHOST_HANDLES_LEFT_RIGHT, node.data.handles),
+      ])
+
+      return buildInstance(node.id, node.data.name, node.type, node.data, allHandles, node.position)
+    })
+
+    addNodes(newNodes)
+    addEdges(flowSnapshot.edges)
+    const currentLastSaveName = sessionMetadataStore.lastSaveName
+    sessionMetadataStore.setLastSaveName(stripExtension(fileName))
+    historyStore.addCommand({
+      type: 'update-name',
+      undo: () => {
+        sessionMetadataStore.setLastSaveName(currentLastSaveName)
+      },
+      redo: () => {
+        sessionMetadataStore.setLastSaveName(stripExtension(fileName))
+      },
+    })
+  } finally {
+    historyStore.endBatch()
+  }
+
+  notify.success({
+    title: 'Flow Snapshot Loaded',
+    message: 'The flow snapshot has been successfully loaded into the workspace.',
+  })
+
+  return nodeNameToIdMap
+}
+
+async function processImportedOmexArchive(archivePayload, result, fileName) {
+  const archive = await JSZip.loadAsync(archivePayload)
+  const manifestFile = archive.file('manifest.xml')
+  const manifestXml = manifestFile ? await manifestFile.async('string') : ''
+
+  const archiveLocations = new Set([
+    ...Object.values(result.files || {}).filter(Boolean),
+    ...(result.extras || []).map((entry) => entry.location),
+  ])
+
+  const archiveEntries = []
+  for (const location of archiveLocations) {
+    const fileObject = archive.file(location)
+    if (!fileObject) continue
+
+    archiveEntries.push({
+      location,
+      format: 'application/octet-stream',
+      payload: await fileObject.async('arraybuffer'),
+    })
+  }
+
+  const criticalLocations = [
+    result.files?.cellml,
+    result.files?.simulationJson,
+    result.files?.sedml,
+    result.files?.flowSnapshot,
+  ].filter(Boolean)
+
+  const cellmlFile = archive.file(result.files?.cellml)
+
+  // A CellML file is required for PhLynx to function properly, this should be validated before this point.
+  // We will not do nothing if the CellML file is missing, but we will notify the user.
+  if (!cellmlFile) {
+    notify.error({
+      title: 'Missing CellML File',
+      message: `The CellML file ${result.files?.cellml} is missing from the OMEX archive. PhLynx will not be able to load this OMEX archive.`,
+    })
+    return
+  }
+
+  const cellmlContent = await cellmlFile.async('string')
+  let nodeNameToIdMap = new Map()
+  if (result.files?.flowSnapshot) {
+    // Best case scenario: we have a flow snapshot, which is the most complete representation of the workspace state.
+    const flowSnapshotFile = archive.file(result.files.flowSnapshot)
+    if (flowSnapshotFile) {
+      const flowSnapshot = JSON.parse(await flowSnapshotFile.async('string'))
+
+      const parameters = loadParametersFromCellML(cellmlContent)
+      nodeNameToIdMap = await loadFlowSnapshot(fileName, flowSnapshot, parameters.parameters, { notify: false })
+
+      for (const p of parameters.globalParameters) {
+        libraryStore.assignGlobalConstant(p.name, p.value, p.units, p.data_reference)
+      }
+    }
+  } else if (result.files?.moduleConfig) {
+    // Second best scenario: if we don't have a flow snapshot, we can still load the CellML file and module configuration to build the workspace.
+    const moduleConfigFile = archive.file(result.files.moduleConfig)
+    console.warn('------------------------------------------')
+    console.warn('This case is not fully implemented yet, but we will load the CellML file but the module configuration is not currently used to build the workspace.')
+    console.warn('moduleConfigFile', moduleConfigFile)
+    const cellmlPayload = parseCellMLConnections(cellmlContent, result.files.cellml)
+    await loadCellMLData(cellmlContent, result.files.cellml, { notify: false })
+    const parameters = loadParametersFromCellML(cellmlContent)
+    await loadFromCellML(cellmlPayload, result.files.cellml)
+  } else {
+    // Last, and not great, scenario: if we don't have a flow snapshot or module configuration, we can still load the CellML file to build the workspace.
+    const cellmlPayload = parseCellMLConnections(cellmlContent, result.files.cellml)
+    await loadCellMLData(cellmlContent, result.files.cellml, { notify: false })
+    const parameters = loadParametersFromCellML(cellmlContent)
+    await loadFromCellML(cellmlPayload, result.files.cellml, parameters)
+  }
+
+  if (result.files?.simulationJson) {
+    const simJsonFile = archive.file(result.files.simulationJson)
+    if (simJsonFile) {
+      const simData = await extractSimDataFromSimulationJson(await simJsonFile.async('string'), {
+        notify: false,
+        nodeNameToIdMap,
+      })
+
+      if (simData?.plotConfig) {
+        simulationSettingsStore.setPlotConfig(simData.plotConfig)
+      }
+
+      if (simData?.parameterScanConfig) {
+        // Map parameter scan config nodeId and key to use the nodeId from the instance of the node in the workspace.
+        const currentParameterScanConfig = simulationSettingsStore.parameterScanConfig
+        simulationSettingsStore.setParameterScanConfig({
+          ...currentParameterScanConfig,
+          ...simData.parameterScanConfig,
+        })
+      }
+    }
+  }
+
+  if (result.files?.sedml) {
+    const sedmlFile = archive.file(result.files.sedml)
+    if (sedmlFile) {
+      const simulationSettings = await extractSimDataFromSedml(await sedmlFile.async('string'), result.files.sedml, {
+        notify: false,
+      })
+      const currentSimulationSettings = simulationSettingsStore.simulationSettings
+      simulationSettingsStore.setSimulationSettings({
+        ...currentSimulationSettings,
+        ...simulationSettings,
+      })
+    }
+  }
+
+  // Rebuild the edge index so the EdgeConnectionDialog subgraph is correct.
+  rebuildNodeEdgeIndex()
+  recomputeMissingCouplings()
+
+  await nextTick(fitView(fitViewParams.value))
+
+  const preservedExtras = archiveEntries.filter(({ location }) => !criticalLocations.includes(location))
+
+  omexStore.setHash(cyrb53(snapshotFlowState()))
+  omexStore.setArchive({
+    archiveName: fileName,
+    archiveType: result.fileType,
+    cellmlFileName: result.files?.cellml || DEFAULT_CELLML_FILE_NAME,
+    manifestXml,
+    extras: preservedExtras,
+  })
+}
+
 async function onImportConfirm(importPayload, updateProgress) {
   if (currentImportMode.value.key === IMPORT_KEYS.INSTANCE_ARRAY) {
     const instanceArrayFiles = importPayload.get(IMPORT_KEYS.INSTANCE_ARRAY)
@@ -1836,6 +2083,23 @@ async function onImportConfirm(importPayload, updateProgress) {
     )
     if (multiFile) {
       notifyMultiFileResults(results, { successTitle: 'Parameters Loaded' })
+    }
+  } else if (currentImportMode.value.key === IMPORT_KEYS.OMEX) {
+    try {
+      const archivePayload = await extractOmexArchive(importPayload, updateProgress)
+      const result = await importOmexFile(archivePayload.omex, updateProgress)
+
+      await processImportedOmexArchive(archivePayload.omex, result, archivePayload.name)
+
+      notify.success({
+        title: 'OMEX Import Complete',
+        message: 'Workflow built successfully!',
+      })
+    } catch (error) {
+      notify.error({
+        title: 'OMEX Import Failed',
+        message: error.message,
+      })
     }
   }
 
@@ -2273,14 +2537,14 @@ function handleAutoLayout() {
 }
 
 async function handleSaveWorkspace() {
-  const safeName = ensureExtension(libraryStore.lastSaveName, '.json')
+  const safeName = ensureExtension(sessionMetadataStore.lastSaveName, '.json')
   const result = await saveFileHandle(safeName, JSON_FILE_TYPES)
   if (result.status) {
     if (result.handle) {
       const blob = createSaveBlob()
       try {
         writeFileHandle(result.handle, blob)
-        libraryStore.setLastSaveName(result.handle.name)
+        sessionMetadataStore.setLastSaveName(result.handle.name)
         trackEvent('save_action', {
           category: 'Save',
           action: 'save_workflow',
@@ -2324,7 +2588,7 @@ async function onExportConfirm(fileName, handle) {
   })
 
   try {
-    const finalName = fileName || libraryStore.lastExportName || DEFAULT_FILE_NAME
+    const finalName = fileName || sessionMetadataStore.lastSaveName
 
     if (!exportMode.action) {
       throw new Error(`The ${exportMode.label} export isn't implemented yet.`)
@@ -2334,7 +2598,6 @@ async function onExportConfirm(fileName, handle) {
 
     const result = await saveWithDialog(blob, handle, finalName, exportMode.suffix)
 
-    libraryStore.setLastExportName(result.savedName)
     notification.close()
 
     const exportMessage = exportMode.successMessage
@@ -2415,6 +2678,60 @@ function recomputeMissingCouplings() {
 }
 
 /**
+ * Creates a snapshot of the current flow state, including nodes and edges, and returns it as a JSON string.
+ * This is used to determine if the workspace has been modified that would change the Math or Port configurations.
+ * Leading us to set the CUFLynx modified state to true, which will let CUFLynx know that existing analysis is now invalid.
+ */
+function snapshotFlowState() {
+  const flowState = toObject()
+  const mathLibrary = new Map()
+
+  const nodeData = flowState.nodes.map((node) => {
+    const { handles, ...restData } = node.data ?? {}
+    const slimNode = {
+      id: node.id,
+      data: {
+        ...restData,
+        handles: handles?.filter((handle) => handle.variant !== 'ghost') ?? [],
+      },
+      position: node.position,
+      dimensions: node.dimensions,
+      type: node.type,
+    }
+
+    if (slimNode.data?.mathRef) {
+      const mathRef = slimNode.data.mathRef
+      const mathText = libraryStore.availableMath.get(mathRef)
+      if (mathText) {
+        const baseHash = libraryStore.getMathHashByRef(mathRef) ?? libraryStore.createMathHash(mathText)
+        let mathHash = baseHash
+        let collisionIndex = 1
+
+        while (mathLibrary.has(mathHash) && mathLibrary.get(mathHash) !== mathText) {
+          mathHash = `${baseHash}_${collisionIndex++}`
+        }
+
+        mathLibrary.set(mathHash, mathText)
+        slimNode.data.mathHash = mathHash
+      }
+    }
+
+    return slimNode
+  })
+
+  const mathLibraryObject = Object.fromEntries([...mathLibrary.entries()].sort(([a], [b]) => a.localeCompare(b)))
+
+  return JSON.stringify({
+    id: 'phlynx-flow-snapshot',
+    version: '1.0.0',
+    nodeData,
+    edges: flowState.edges,
+    mathLibrary: mathLibraryObject,
+    globalParameters: Array.from(libraryStore.globalVariables.entries()),
+  })
+}
+
+/**
  * Collects all state and creates blob from it.
  */
 function createSaveBlob() {
@@ -2425,6 +2742,7 @@ function createSaveBlob() {
     store: libraryStore.getState(),
     simulation: simulationSettingsStore.getState(),
     inspectionModules: inspectionModuleStore.getState(),
+    workspace: omexStore.getState(),
   }
 
   const jsonString = JSON.stringify(saveState, null, 2)
@@ -2435,13 +2753,13 @@ function createSaveBlob() {
  * Collects all state and downloads it as a JSON file.
  */
 const onSaveConfirm = async (fileName) => {
-  const baseName = fileName || libraryStore.lastSaveName || DEFAULT_FILE_NAME
+  const baseName = fileName || sessionMetadataStore.lastSaveName
   const finalName = ensureExtension(baseName, '.json')
   const blob = createSaveBlob()
 
   legacyDownload(finalName, blob)
 
-  libraryStore.setLastSaveName(fileName)
+  sessionMetadataStore.setLastSaveName(fileName)
   notify.success({ title: 'Workflow saved!' })
 }
 
@@ -2460,8 +2778,8 @@ async function applyWorkspaceState(loadedState, { source = 'json' } = {}) {
     // Handles legacy formats if needed
     const migratedState = migrateWorkspace(loadedState)
 
-    // Clear the current Vue Flow state.
-    await clearWorkspace()
+    // Clear the current Vue Flow state without creating a history step for this load action.
+    await clearWorkspace({ recordHistory: false })
 
     setViewport(migratedState.flow.viewport)
     fromObject(migratedState.flow)
@@ -2474,6 +2792,7 @@ async function applyWorkspaceState(loadedState, { source = 'json' } = {}) {
     libraryStore.loadState(migratedState.store)
     simulationSettingsStore.loadState(migratedState.simulation)
     inspectionModuleStore.loadState(migratedState.inspectionModules)
+    omexStore.loadState(migratedState.omex)
 
     trackEvent('workflow_load_action', {
       category: 'Workflow',
@@ -2508,15 +2827,16 @@ function handleLoadWorkspace(event) {
     try {
       loadedState = JSON.parse(e.target.result)
     } catch (error) {
-      notify.error({ title: 'Failed to load workflow', message: `${error.message}` })
+      notify.error({ title: 'Failed to read workflow', message: `${error.message}` })
       return
     }
     applyWorkspaceState(loadedState, { source: 'json' })
+    sessionMetadataStore.setLastSaveName(stripExtension(file.name))
   }
   reader.readAsText(file)
 }
 
-const urlLoaders = createUrlLoaders({ applyWorkspaceState, loadCellMLFiles })
+const urlLoaders = createUrlLoaders({ applyWorkspaceState, importOmexFile, processImportedOmexArchive })
 
 const { load: loadFromUrl, isLoading: isUrlLoading } = useLoadFromUrl()
 
@@ -2917,7 +3237,7 @@ const hydrateCellmlAndDependents = async () => {
   return manifest
 }
 
-onMounted(async() => {
+onMounted(async () => {
   document.addEventListener('keydown', handleKeyDown)
   document.addEventListener('mousemove', onMouseMove)
 

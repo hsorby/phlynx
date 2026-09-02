@@ -9,10 +9,21 @@
         <strong>PhLynx v{{ appVersion }}</strong>
       </div>
       <div v-show="isWorkspaceActive" class="session-name" @dblclick="startEditing">
-       <strong v-if="!isEditing">
+        <strong
+          v-if="!isEditing"
+          ref="sessionNameEl"
+          v-tooltip.bottom="{ value: hasSessionOverflow ? sessionName : '', showDelay: 300, class: 'nowrap-tooltip' }"
+        >
           {{ sessionName }}
-       </strong> 
-        <InputText v-else ref="inputRef" v-model="editingValue" @blur="saveEdit" @keyup.enter="saveEdit" @keyup.esc="cancelEdit"/>
+        </strong>
+        <InputText
+          v-else
+          ref="inputRef"
+          v-model="editingValue"
+          @blur="saveEdit"
+          @keyup.enter="saveEdit"
+          @keyup.esc="cancelEdit"
+        />
       </div>
       <nav>
         <router-link to="/">Workspace</router-link>
@@ -33,23 +44,36 @@
 </template>
 
 <script setup>
-import { computed, ref, nextTick } from 'vue'
+import { computed, ref, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import InputText from 'primevue/inputtext'
 
-import { useLibraryStore } from './stores/libraryStore'
+import { useSessionMetadataStore } from './stores/sessionMetadataStore'
 
 import ConfirmDialog from './components/ConfirmDialog.vue'
 
 const appVersion = __APP_VERSION__ + __BUILD_STATE_MARKER__
 const route = useRoute()
-const libraryStore = useLibraryStore()
+const sessionMetadataStore = useSessionMetadataStore()
 
-const sessionName = computed(() => libraryStore.lastSaveName)
+const sessionName = computed(() => sessionMetadataStore.lastSaveName)
+const sessionNameEl = ref(null)
+const hasSessionOverflow = ref(false)
 
 const editingValue = ref('')
 const isEditing = ref(false)
 const inputRef = ref(null)
+
+const checkOverflow = () => {
+  const el = sessionNameEl.value
+  if (el) {
+    hasSessionOverflow.value = el.scrollWidth > el.clientWidth
+  }
+}
+
+watch(sessionName, () => {
+  nextTick(checkOverflow)
+})
 
 const isDocsActive = computed(() => {
   return route.path.startsWith('/docs')
@@ -82,7 +106,7 @@ function saveEdit() {
   }
 
   if (name !== sessionName.value) {
-    libraryStore.setLastSaveName(name)
+    sessionMetadataStore.setLastSaveName(name)
   }
 
   isEditing.value = false
@@ -170,5 +194,9 @@ function cancelEdit() {
   width: 100%;
   text-align: center;
   box-sizing: border-box;
+}
+
+.nowrap-tooltip {
+  max-width: none;
 }
 </style>

@@ -2,6 +2,7 @@
 
 import argparse
 import ast
+import os
 from pathlib import Path
 
 
@@ -115,6 +116,59 @@ def create_new_module(class_name: str,
     )
 
 
+def class_already_exists(source_text: str, class_name: str) -> bool:
+    tree = ast.parse(source_text)
+
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name == f"Test{class_name}":
+            return True
+
+    return False
+
+
+def add_new_class(
+        source_text: str,
+        class_name: str,
+        method_text: str) -> str:
+    """
+    Add a new class to the source text, with the given method text.
+    The new class will be added after the last class in the source text,
+    or before the last if statement if there are no classes.
+    We already know that the class does not already exist, so we don't need to check for that."""
+
+    tree = ast.parse(source_text)
+
+    insert_location = None
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef):
+            insert_location = node
+
+    if insert_location is None:
+        previous_node = None
+        for node in tree.body:
+            if isinstance(node, ast.If):
+                insert_location = previous_node
+            else:
+                previous_node = node
+
+    if insert_location is None:
+        raise RuntimeError(
+            "Could not find a suitable location to insert the new class"
+        )
+
+    lines = source_text.splitlines()
+
+    insert_line = insert_location.end_lineno
+
+    method_lines = method_text.splitlines()
+
+    lines[insert_line:insert_line] = ["", "", f"class Test{class_name}(unittest.TestCase):"] + method_lines
+
+    lines += [""]
+
+    return "\n".join(lines)
+
+
 def add_method_to_existing_class(
     source_text: str,
     class_name: str,
@@ -154,10 +208,12 @@ def add_method_to_existing_class(
 
     lines[insert_line:insert_line] = [""] + method_lines
 
+    lines += [""]
+
     return "\n".join(lines)
 
 
-def main():
+def _parse_args():
     parser = argparse.ArgumentParser(
         description="Convert Playwright codegen script into unittest format"
     )
@@ -188,7 +244,18 @@ def main():
         help="Test method name"
     )
 
-    args = parser.parse_args()
+    parser.add_argument(
+        "--keep-input",
+        action="store_true",
+        help="Keep input file after conversion"
+    )
+
+    return parser.parse_args()
+
+
+def main():
+
+    args = _parse_args()
 
     input_file = Path(args.input)
     output_file = Path(args.output)
@@ -205,12 +272,19 @@ def main():
             body
         )
 
-        updated = add_method_to_existing_class(
-            existing,
-            args.class_name,
-            args.test_name,
-            method_text
-        )
+        if class_already_exists(existing, args.class_name):
+            updated = add_method_to_existing_class(
+                existing,
+                args.class_name,
+                args.test_name,
+                method_text
+            )
+        else:
+            updated = add_new_class(
+                existing,
+                args.class_name,
+                method_text
+            )
 
         output_file.write_text(updated)
 
@@ -229,6 +303,9 @@ def main():
         output_file.write_text(module_text + "\n")
 
         print(f"Created {output_file}")
+
+    if os.path.exists(input_file) and not args.keep_input:
+        os.remove(input_file)
 
 
 if __name__ == "__main__":

@@ -8,10 +8,6 @@ import { extractComponentsFromCellmlString } from '../utils/cellml'
 import {
   MAIN_NODE_TYPE,
   HANDLE_VARIANT,
-  NUM_GHOST_HANDLES_SIDES,
-  NUM_GHOST_HANDLES_TOP_BOT,
-  PORT_TYPE_OPTIONS,
-  HANDLE_SIDES,
   BASELINE_SIMULATION_SETTINGS,
   PHLYNX_PROJECT_VERSION,
   PHLYNX_PROJECT_IDENTIFIER,
@@ -305,7 +301,6 @@ function convertStore(oldStore, globalConstantNames) {
     availableMath: Object.entries(newAvailableMath),
     availableUnits: newUnits,
     globalConstants: buildGlobalConstants(availableParameters, globalConstantNames),
-    lastExportName: oldStore.lastExportName,
     lastSaveName: oldStore.lastSaveName,
   }
 }

@@ -55,7 +55,7 @@ export const useInspectionModuleStore = defineStore('inspectionModules', () => {
     if (module) module.name = name
   }
 
-  function clearModules() {
+  function resetState() {
     modules.value = []
   }
 
@@ -64,7 +64,7 @@ export const useInspectionModuleStore = defineStore('inspectionModules', () => {
   }
 
   function loadState(availableModules) {
-    clearModules()
+    resetState()
     for (const module of availableModules || []) {
       addModule(module)
     }
@@ -76,7 +76,7 @@ export const useInspectionModuleStore = defineStore('inspectionModules', () => {
     updateModule,
     removeModule,
     renameModule,
-    clearModules,
+    resetState,
     getState,
     loadState,
   }

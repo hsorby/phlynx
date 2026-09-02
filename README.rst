@@ -143,7 +143,7 @@ Then run the tests using the following command:
 .. code-block:: bash
 
     # Run all tests
-    python tests/run_all_tests.py
+    python tests/run_playwright_tests.py
 
 To generate Playwright test code for a specific URL, use the following command:
 
@@ -157,7 +157,7 @@ We can use the `--output` option to save the generated code to a file and then e
 
     playwright codegen --target python --output tests/playwright/test_generated.py http://localhost:5173
 
-We can then adapt the generated code to create a Python unittest test that can be run from the `run_all_tests.py` script in the `tests` directory.
+We can then adapt the generated code to create a Python unittest test that can be run from the `run_playwright_tests.py` script in the `tests` directory.
 
 An alternative method is to use the `convert_codegen.py` script to convert the generated code to a unittest test. For example:
 
@@ -173,3 +173,4 @@ This script will create a new test class called `TestDocumentationNavigation` in
 The script will create this file if it does not already exist.
 Also, if the specified class already exists in the output file, the script will add the new test method to that class.
 If the specified test method already exists in the class, the script will throw an error to avoid overwriting existing code.
+If the specified class does not exist in the output file, the script will create a new class with the specified name and add the test method to it.

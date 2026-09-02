@@ -4,6 +4,8 @@ import { generateSedmlData } from './export/sedml'
 import { buildManifestXml } from './export/omex'
 import { buildSimulationJson } from './export/simulation'
 
+import { useOmexStore } from '../stores/omexStore.js'
+
 // Helper: Converts a Blob to a pure Base64 string (strips the "data:..." prefix)
 const blobToBase64 = (blob) => {
   return new Promise((resolve, reject) => {
@@ -76,26 +78,54 @@ export async function createCellMLDataFragment(cellmlBlob, fileName) {
  * generateSedmlData is fleshed out — right now it's simply ignored.
  *
  * @param {object} cellmlData - The flattened CellML model data.
+ * @param {object} flowSnapshot - The current workspace flow snapshot (nodes/edges).
  * @param {object} [simData] - Simulation/plot/parameter-scan config for the SED-ML doc. Currently unused by generateSedmlData.
  * @param {object} [addInfo] - Additional information not carried by the other parameters.
  * @returns {Promise<Blob>} The .omex archive as a zip Blob.
  */
-export async function generateOmexArchive(cellmlData, simData = {}, addInfo = {}) {
-  const sedmlText = generateSedmlData(simData.simulationSettings)
+export async function generateOmexArchive(cellmlData, flowSnapshot, simData = {}, addInfo = {}) {
+  const omexStore = useOmexStore()
 
-  const manifestXml = buildManifestXml([
-    { location: 'document.sedml', format: 'http://identifiers.org/combine.specifications/sed-ml', master: true },
-    { location: 'model.cellml', format: 'http://identifiers.org/combine.specifications/cellml' },
-    { location: 'simulation.json', format: 'http://purl.org/NET/mediatypes/application/json' },
-  ])
-
+  const cellmlFileName = addInfo.cellmlFileName
+  const sedmlText = generateSedmlData(simData.simulationSettings, cellmlFileName)
   const simulationJson = buildSimulationJson(simData.plotConfig, simData.parameterScanConfig, addInfo.extractedData)
+
+  const reservedLocations = new Set(['manifest.xml', 'document.sedml', cellmlFileName, 'flow-snapshot.json', 'changes.json'])
+
+  const manifestEntries = [
+    { location: 'document.sedml', format: 'http://identifiers.org/combine.specifications/sed-ml', master: true },
+    { location: cellmlFileName, format: 'http://identifiers.org/combine.specifications/cellml' },
+    { location: 'flow-snapshot.json', format: 'application/x.vnd.phlynx-flow+json' },
+    { location: 'changes.json', format: 'application/x.vnd.phlynx-changes+json' },
+  ]
+  if (simulationJson !== null) {
+    manifestEntries.push({ location: 'simulation.json', format: 'http://purl.org/NET/mediatypes/application/json' })
+  }
+
+  omexStore.preservedExtras.forEach((extra) => {
+    if (!reservedLocations.has(extra.location)) {
+      manifestEntries.push({ location: extra.location, format: extra.format })
+    }
+  })
+
+  const manifestXml = buildManifestXml(manifestEntries)
 
   const zip = new JSZip()
   zip.file('manifest.xml', manifestXml)
-  zip.file('model.cellml', cellmlData.blob)
+  zip.file(cellmlFileName, cellmlData.blob)
   zip.file('document.sedml', sedmlText)
-  zip.file('simulation.json', simulationJson)
+  zip.file('flow-snapshot.json', flowSnapshot)
+  zip.file('changes.json', JSON.stringify({ id: 'phlynx-changes', version: '1.0.0', modified: addInfo.modified }))
+
+  if (simulationJson !== null) {
+    zip.file('simulation.json', simulationJson)
+  }
+
+  for (const extra of omexStore.preservedExtras) {
+    if (!reservedLocations.has(extra.location)) {
+      zip.file(extra.location, extra.payload)
+    }
+  }
 
   return zip.generateAsync({ type: 'blob' })
 }
@@ -105,7 +135,6 @@ export async function createOmexDataFragment(omexBlob) {
 }
 
 export async function createDataFragment(zipBlob, mimeType) {
-
   const base64String = await blobToBase64(zipBlob)
 
   return `data:${mimeType};base64,${base64String}`
