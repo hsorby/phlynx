@@ -52,12 +52,11 @@ describe('CellML integration', () => {
     })
 
     expect(result.mappedParameters).toBeDefined()
-    expect(Object.keys(result.mappedParameters)).toHaveLength(4)
+    expect(Object.keys(result.mappedParameters)).toHaveLength(3)
     expect(result.mappedParameters).toEqual({
-      'axon_SN/C': { name: 'C', componentName: 'parameters' },
-      'axon_SN/R': { name: 'R', componentName: 'parameters' },
-      'soma_SN/Vol': { name: 'soma_SN_Vol', componentName: 'parameters' },
-      'var_SN/Vol': { name: 'var_SN_Vol', componentName: 'parameters' },
+      'axon_SN/C': { name: 'C', componentName: 'model_parameters' },
+      'soma_SN/Vol': { name: 'soma_SN_Vol', componentName: 'model_parameters' },
+      'var_SN/Vol': { name: 'var_SN_Vol', componentName: 'model_parameters' },
     })
   })
 })

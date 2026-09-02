@@ -92,13 +92,13 @@
   <component name="environment">
     <variable name="time" units="second" interface="public"/>
   </component>
-  <component name="parameters_global">
+  <component name="global_parameters">
     <variable name="R" units="J_per_mol_K" initial_value="8.314" interface="public"/>
     <variable name="F" units="C_per_mol" initial_value="96485" interface="public"/>
     <variable name="T" units="kelvin" initial_value="310.15" interface="public"/>
     <variable name="N_avo" units="per_mol" initial_value="6.02e+23" interface="public"/>
   </component>
-  <component name="parameters">
+  <component name="model_parameters">
     <variable name="soma_SN_c_ER_pre" units="dimensionless" initial_value="0.049" interface="public"/>
     <variable name="soma_SN_c_ER" units="dimensionless" initial_value="0.01" interface="public"/>
     <variable name="soma_SN_c_SL" units="dimensionless" initial_value="0.02" interface="public"/>
@@ -5272,18 +5272,18 @@
   <connection component_1="environment" component_2="var_SN">
     <map_variables variable_1="time" variable_2="t"/>
   </connection>
-  <connection component_1="parameters_global" component_2="soma_SN">
+  <connection component_1="global_parameters" component_2="soma_SN">
     <map_variables variable_1="R" variable_2="R"/>
     <map_variables variable_1="F" variable_2="F"/>
     <map_variables variable_1="T" variable_2="T"/>
   </connection>
-  <connection component_1="parameters_global" component_2="var_SN">
+  <connection component_1="global_parameters" component_2="var_SN">
     <map_variables variable_1="R" variable_2="R"/>
     <map_variables variable_1="F" variable_2="F"/>
     <map_variables variable_1="T" variable_2="T"/>
     <map_variables variable_1="N_avo" variable_2="N_avo"/>
   </connection>
-  <connection component_1="parameters" component_2="soma_SN">
+  <connection component_1="model_parameters" component_2="soma_SN">
     <map_variables variable_1="soma_SN_c_ER_pre" variable_2="c_ER_pre"/>
     <map_variables variable_1="soma_SN_c_ER" variable_2="c_ER"/>
     <map_variables variable_1="soma_SN_c_SL" variable_2="c_SL"/>
@@ -5402,13 +5402,13 @@
     <map_variables variable_1="Ki_init" variable_2="Ki_init"/>
     <map_variables variable_1="Ko" variable_2="Ko"/>
   </connection>
-  <connection component_1="parameters" component_2="axon_SN">
+  <connection component_1="model_parameters" component_2="axon_SN">
     <map_variables variable_1="C" variable_2="C"/>
     <map_variables variable_1="R" variable_2="R"/>
     <map_variables variable_1="axon_SN_V_rest_approx" variable_2="V_rest_approx"/>
     <map_variables variable_1="channel_ratio" variable_2="channel_ratio"/>
   </connection>
-  <connection component_1="parameters" component_2="var_SN">
+  <connection component_1="model_parameters" component_2="var_SN">
     <map_variables variable_1="var_SN_Vol" variable_2="Vol"/>
     <map_variables variable_1="var_SN_c_ER_pre" variable_2="c_ER_pre"/>
     <map_variables variable_1="var_SN_c_ER" variable_2="c_ER"/>

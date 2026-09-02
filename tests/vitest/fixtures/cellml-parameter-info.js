@@ -16,7 +16,7 @@ export const cellmlParameterInfoFixture = {
     {
       key: 'dndnode_1::R',
       nodeId: 'dndnode_1',
-      nodeName: 'axon_SN',
+      nodeName: 'soma_SN',
       parameterName: 'R',
       selected: true,
       units: 'megaOhm',
