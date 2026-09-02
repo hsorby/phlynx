@@ -1,32 +1,33 @@
+.. raw:: html
 
-<div align="center">
+    <div align="center">
 
-  <!-- Logo Banner or Transparent Icon -->
-  <a href="https://github.com/physiomelinks/PhLynx">
-    <img 
-        src="public/phlynxlogo.svg" 
-        alt="PhLynx Logo" 
-        width="180" 
-        style="filter: drop-shadow(0px 0px 8px rgba(255, 255, 255, 0.49));"
-    >
-    </a>
+        <!-- Logo Banner or Transparent Icon -->
+        <a href="https://github.com/physiomelinks/PhLynx">
+            <img 
+                src="public/phlynxlogo.svg" 
+                alt="PhLynx Logo" 
+                width="180" 
+                style="filter: drop-shadow(0px 0px 8px rgba(255, 255, 255, 0.49));"
+            >
+            </a>
 
-  <!-- Main Title (Using styled <p> to prevent the bottom border/line) -->
-  <p align="center">
-    <strong style="font-size: 2.25em;">PhLynx</strong>
-  </p>
+        <!-- Main Title (Using styled <p> to prevent the bottom border/line) -->
+        <p align="center">
+            <strong style="font-size: 2.25em;">PhLynx</strong>
+        </p>
 
-  <!-- Badges directly below title without any separating line -->
-  <p align="center">
-    <a href="https://github.com/physiomelinks/PhLynx/releases/latest">
-      <img src="https://img.shields.io/github/v/release/physiomelinks/PhLynx?label=download&style=flat-square" alt="Latest Release">
-    </a>
-    <a href="https://github.com/physiomelinks/PhLynx/blob/main/LICENSE">
-      <img src="https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square" alt="License">
-    </a>
-  </p>
+        <!-- Badges directly below title without any separating line -->
+        <p align="center">
+            <a href="https://github.com/physiomelinks/PhLynx/releases/latest">
+            <img src="https://img.shields.io/github/v/release/physiomelinks/PhLynx?label=download&style=flat-square" alt="Latest Release">
+            </a>
+            <a href="https://github.com/physiomelinks/PhLynx/blob/main/LICENSE">
+            <img src="https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square" alt="License">
+            </a>
+        </p>
 
-</div>
+    </div>
 
 =======================
 Physiome Links (PhLynx)
