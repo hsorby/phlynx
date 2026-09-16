@@ -2593,10 +2593,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"cellml-text-editor@npm:^0.2.1":
-  version: 0.2.1
-  resolution: "cellml-text-editor@npm:0.2.1"
-  checksum: 10c0/154b365311d9e0ebb987c1e9925a0c1f78ddb0b1c775df7b856da1ef9ea5e73d91ddeb827bd26bae5e4add2d4264b58356f09eb22957f48283b7c2b3391ff5db
+"cellml-text-editor@npm:^0.3.0":
+  version: 0.3.0
+  resolution: "cellml-text-editor@npm:0.3.0"
+  checksum: 10c0/6445df2722e8945a526e49c333d8782238c6b4acd727d993fd9056d85acb045b49b5ecd07e2a6c5ea212984806952f79bcb55bd25aae20bd00c2758bce17e2ef
   languageName: node
   linkType: hard
 
@@ -5698,7 +5698,7 @@ __metadata:
     "@vue-flow/minimap": "npm:^1.5.4"
     "@vue-flow/node-resizer": "npm:^1.5.0"
     "@vue/test-utils": "npm:^2.4.6"
-    cellml-text-editor: "npm:^0.2.1"
+    cellml-text-editor: "npm:^0.3.0"
     codemirror: "npm:^6.0.2"
     cytoscape: "npm:^3.33.1"
     cytoscape-fcose: "npm:^2.2.0"

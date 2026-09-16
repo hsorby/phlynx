@@ -59,10 +59,15 @@ import { Prec } from '@codemirror/state'
 import { oneDark } from '@codemirror/theme-one-dark' 
 import 'katex/dist/katex.min.css'
 
-import { CellMLTextGenerator } from 'cellml-text-editor'
-import { CellMLTextParser } from 'cellml-text-editor'
-import { CellMLLatexGenerator } from 'cellml-text-editor'
-import { cellml } from 'cellml-text-editor'
+import {
+  CellMLTextGenerator,
+  CellMLTextParser,
+  CellMLLatexGenerator,
+  buildComponentGroups,
+  resolveManagedVariables,
+  getVariableKey,
+  cellml,
+} from 'cellml-text-editor'
 
 const katexPromise = import('katex')
 
@@ -79,8 +84,8 @@ const emit = defineEmits(['update:code', 'save', 'ready', 'undo', 'redo'])
 // undo/redo replay), not a user keystroke
 let applyingExternalText = false
 
-const generator = new CellMLTextGenerator()
-const parser = new CellMLTextParser()
+const generator = new CellMLTextGenerator({simplified: false})
+const parser = new CellMLTextParser({simplified: false})
 const latexGen = new CellMLLatexGenerator()
 
 const cellmlText = ref(generator.generate(props.modelValue))
