@@ -409,7 +409,8 @@ const props = defineProps({
   variables: { type: Array, default: () => [] },
   initialPorts: { type: Array, default: () => [] },
   existingNames: { type: Array, default: () => [] },
-  defaultTab: { type: String, default: 'parameters' }, // 'parameters' or 'ports'
+  defaultTab: { type: String, default: 'parameters' },  // 'parameters' or 'ports'
+  initialManaged: { type: Boolean, default: true },     // persisted per-instance
 })
 
 const emit = defineEmits(['update:modelValue', 'confirm'])
@@ -922,6 +923,7 @@ async function handleSave() {
     math: currentModel.value,
     variables: parameterRows.value,
     ports: finalPorts,
+    managed: isManaged.value,
     updateAll,
     siblings: updateAll ? siblings.value : undefined,
   })

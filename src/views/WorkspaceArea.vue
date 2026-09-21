@@ -416,9 +416,6 @@
                 :data="props.data"
                 :selected="props.selected"
                 :class="getNodeClass(props)"
-                @open-port-editor-dialog="onOpenPortEditorDialog"
-                @open-cellml-editor-dialog="onOpenCellMLEditorDialog"
-                @open-parameter-editor-dialog="onOpenParameterEditorDialog"
                 @open-instance-editor="onOpenInstanceEditorDialog"
                 @open-context-menu="onNodeContextMenu"
                 :ref="(el) => (nodeRefs[props.id] = el)"
@@ -452,36 +449,15 @@
     :initial-ports="currentEditingNode?.ports"
     :existing-names="allNodeNames"
     :default-tab="instanceEditorDefaultTab"
+    :initial-managed="instanceEditorManaged"
     @confirm="onInstanceEditConfirm"
   />
 
-  <PortEditorDialog
-    v-model="portEditorDialogVisible"
-    :id="currentEditingNode?.id"
-    :initial-name="currentEditingNode?.initialName"
-    :initial-ports="currentEditingNode?.initialPorts"
-    :variables="currentEditingNode?.variables"
-    :existing-names="allNodeNames"
-    @confirm="onPortEditConfirm"
+  <SaveDialog
+    v-model="saveDialogVisible"
+    :default-name="sessionMetadataStore.lastSaveName"
+    @confirm="onSaveConfirm"
   />
-
-  <CellMLEditorDialog
-    v-model="cellMLEditorDialogVisible"
-    :id="currentEditingNode?.id"
-    :name="currentEditingNode?.name"
-    :math-ref="currentEditingNode?.mathRef || ''"
-    :variables="currentEditingNode?.variables"
-    @save="handleCellMLSave"
-  />
-
-  <ParameterEditorDialog
-    v-model="parameterEditorDialogVisible"
-    :id="currentEditingNode?.id"
-    :variables="currentEditingNode?.variables"
-    @save="handleParameterSave"
-  />
-
-  <SaveDialog v-model="saveDialogVisible" :default-name="sessionMetadataStore.lastSaveName" @confirm="onSaveConfirm" />
 
   <SaveDialog
     v-model="exportDialogVisible"
@@ -541,9 +517,8 @@ export default {
 </script>
 
 <script setup>
-import { computed, h, inject, markRaw, nextTick, onMounted, onUnmounted, ref, watch, watchPostEffect } from 'vue'
-import { storeToRefs } from 'pinia'
-import { connectionExists, useVueFlow, VueFlow } from '@vue-flow/core'
+import { computed, inject, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useVueFlow, VueFlow } from '@vue-flow/core'
 import { useRoute } from 'vue-router'
 
 import Button from 'primevue/button'
@@ -624,7 +599,6 @@ import { buildGhostHandles, normaliseHandleSlots } from '../utils/handles'
 import { initLibCellML, processCellMLData, extractVariablesFromMath, loadParametersFromCellML } from '../utils/cellml'
 import {
   edgeLineOptions,
-  CELLML_FILE_TYPES,
   FLOW_IDS,
   IMPORT_KEYS,
   JSON_FILE_TYPES,
@@ -636,10 +610,9 @@ import {
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
-import { getHandleId, getHandleUidFromHandleId, findMostCentralGhostHandle } from '../utils/handles'
+import { getHandleUidFromHandleId } from '../utils/handles'
 import { parseParametersFile } from '../utils/import'
 import { detachReactivity } from '../utils/reactivity'
-import { extractGlobalConstants } from '../utils/variables'
 import {
   ensureExtension,
   legacyDownload,
@@ -744,12 +717,6 @@ const dialogVisible = computed(() => {
   )
 })
 
-/**
- * Shared multi-file notification helper.
- * `results` must be an array of `{ ok, summary }` objects where `summary` is a
- * human-readable description of what was loaded (e.g. "3 modules and 2 units").
- * Titles are customisable so each import type can use its own wording.
- */
 const notifyMultiFileResults = (
   results,
   { successTitle, partialTitle = 'Partial Import', failTitle = 'Import Failed' }
@@ -965,6 +932,7 @@ const alignment = ref('edge')
 const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
 const instanceEditorDefaultTab = ref('parameters')
+const instanceEditorManaged = ref(true)
 const instanceEditorDialogVisible = ref(false)
 const parameterEditorDialogVisible = ref(false)
 const portEditorDialogVisible = ref(false)
@@ -2130,11 +2098,12 @@ function onOpenParameterEditorDialog(eventPayload) {
   parameterEditorDialogVisible.value = true
 }
 
-function onOpenInstanceEditorDialog(eventPayload, tab = 'parameters') {
+function onOpenInstanceEditorDialog(eventPayload, tab = 'parameters', managed = true) {
   currentEditingNode.value = {
     ...eventPayload,
   }
   instanceEditorDefaultTab.value = tab
+  instanceEditorManaged.value = managed
   instanceEditorDialogVisible.value = true
 }
 
