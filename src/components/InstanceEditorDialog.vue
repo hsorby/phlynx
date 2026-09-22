@@ -395,7 +395,7 @@ import { useConfirmDialog } from '../composables/useConfirmDialog'
 
 import { PARAMETER_TYPE_OPTIONS, PORT_TYPE_OPTIONS, MULTIPORT_OPTIONS } from '../utils/constants'
 import { isEditableVariableType, isEmpty } from '../utils/variables'
-import { sanitiseName } from '../utils/nodes'
+import { cleanName, sanitiseName } from '../utils/identifiers'
 import { detachReactivity } from '../utils/reactivity'
 import { notify } from '../utils/notify'
 import { getModelComponentNames, areModelsEquivalent, extractVariablesFromMath } from '../utils/cellml'

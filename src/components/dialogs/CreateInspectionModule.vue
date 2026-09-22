@@ -213,7 +213,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 
-import { sanitiseName } from '../../utils/nodes'
+import { sanitiseName } from '../../utils/identifiers'
 
 import Accordion from 'primevue/accordion'
 import AccordionTab from 'primevue/accordiontab'
