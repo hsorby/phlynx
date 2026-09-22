@@ -2,8 +2,9 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
 import { normaliseConfig } from '../utils/config'
-import { GHOST_MATH_REF } from '../utils/constants'
+import { AFFINE_UNIT_CONVERSIONS, GHOST_MATH_REF, STANDARD_UNITS } from '../utils/constants'
 import { cyrb53 } from '../utils/misc'
+import { extractUnitNames } from '../utils/units'
 
 function mergeIntoStore(newModules, target) {
   const moduleMap = new Map(target.map((mod) => [mod.componentFile, mod]))
@@ -282,6 +283,7 @@ export const useLibraryStore = defineStore('library', () => {
     delete availableCollections.value.get(componentFile)
   }
 
+  // TODO - move to a storage of units - currently store entire units files.
   function addUnitsFile(payload) {
     const existingFile = availableUnits.value.find((f) => f.componentFile === payload.componentFile) // SMELL - units files also called component files
     if (existingFile) {
@@ -308,6 +310,18 @@ export const useLibraryStore = defineStore('library', () => {
 
   const globalVariables = computed(() => globalConstants.value)
 
+  const availableUnitNames = computed(() => {
+    const names = new Set([...STANDARD_UNITS, ...Object.keys(AFFINE_UNIT_CONVERSIONS)])
+    for (const file of availableUnits.value) {
+      extractUnitNames(file.model).forEach((name) => names.add(name))
+    }
+    return names
+  })
+
+  function hasUnits(name) {
+    return availableUnitNames.value.has(name)
+  }
+
   return {
     // State
     availableCollections,
@@ -318,6 +332,7 @@ export const useLibraryStore = defineStore('library', () => {
 
     // Derived State 
     globalVariables,
+    availableUnitNames,
 
     // Actions
     addConfigFile,
@@ -339,6 +354,7 @@ export const useLibraryStore = defineStore('library', () => {
 
     // Query
     getGlobalConstant,
+    hasUnits,
     getState,
   }
 })
