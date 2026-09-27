@@ -540,7 +540,7 @@ import { useLibraryStore } from '../stores/libraryStore'
 import { useSessionMetadataStore } from '../stores/sessionMetadataStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
-import { useInspectionModuleStore } from '../stores/inspectionModuleStore.js'
+import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
 import { useOmexStore } from '../stores/omexStore'
 
 import { importOmexFile, extractOmexArchive } from '../services/import/omex'
@@ -570,12 +570,10 @@ import EdgeConnectionDialog from '../components/EdgeConnectionDialog.vue'
 import SettingsDialog from '../components/SettingsDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
 import PaneContextMenu from '../components/PaneContextMenu.vue'
-import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
-import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
-import PortEditorDialog from '../components/PortEditorDialog.vue'
 import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
 import CreateInspectionModuleDialog from '../components/dialogs/CreateInspectionModule.vue'
 import ContextSidebar from '../components/ContextSidebar.vue'
+
 import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
 import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
 import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
@@ -596,7 +594,7 @@ import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../uti
 import { useClearWorkspace } from '../composables/useClearWorkspace'
 import { readFileAsText, cyrb53 } from '../utils/misc'
 import { buildGhostHandles, normaliseHandleSlots } from '../utils/handles'
-import { initLibCellML, processCellMLData, extractVariablesFromMath, loadParametersFromCellML } from '../utils/cellml'
+import { initLibCellML, processCellMLData, loadParametersFromCellML } from '../utils/cellml'
 import {
   edgeLineOptions,
   FLOW_IDS,
@@ -2084,20 +2082,6 @@ function onOpenPortEditorDialog(eventPayload) {
   portEditorDialogVisible.value = true
 }
 
-function onOpenCellMLEditorDialog(eventPayload) {
-  currentEditingNode.value = {
-    ...eventPayload,
-  }
-  cellMLEditorDialogVisible.value = true
-}
-
-function onOpenParameterEditorDialog(eventPayload) {
-  currentEditingNode.value = {
-    ...eventPayload,
-  }
-  parameterEditorDialogVisible.value = true
-}
-
 function onOpenInstanceEditorDialog(eventPayload, tab = 'parameters', managed = true) {
   currentEditingNode.value = {
     ...eventPayload,
@@ -2119,32 +2103,6 @@ function onOpenSettingsDialog() {
   settingsDialogVisible.value = true
 }
 
-function filterConfig(config, validPortNames, validVariableNames, updatedModule) {
-  const portFields = ['entrance_ports', 'exit_ports', 'general_ports']
-  portFields.forEach((field) => {
-    if (config[field]) {
-      config[field] = config[field].map((port) => ({
-        ...port,
-        variables: (port.variables || []).filter((name) => validPortNames.has(name)),
-      }))
-    }
-  })
-
-  if (config.variables_and_units) {
-    const existingNames = new Set(config.variables_and_units.map((e) => e[0]))
-
-    // Use validVariableNames here, not validPortNames
-    config.variables_and_units = config.variables_and_units.filter((entry) => validVariableNames.has(entry[0]))
-
-    if (updatedModule?.variables) {
-      const newEntries = updatedModule.variables
-        .filter((v) => !existingNames.has(v.name))
-        .map((v) => [v.name, v.units ?? 'dimensionless', 'access', 'variable'])
-
-      config.variables_and_units.push(...newEntries)
-    }
-  }
-}
 
 function updateVariablesFromMath(node, updatedMath) {
   const existingVariables = new Map(node.data.variables.map((v) => [v.name, v]))
@@ -2182,7 +2140,7 @@ function cleanPorts(currentNode) {
  * Handles:
  * 1. Loading the new/updated CellML data.
  * 2. Migrating configs if the name changed.
- * 3. updating graph nodes to match new ports.
+ * 3. Updating graph nodes to match new ports.
  */
 async function handleCellMLSave(saveData) {
   const { id, updateAll, mathRef, math, siblings } = saveData
