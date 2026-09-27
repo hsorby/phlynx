@@ -1287,7 +1287,6 @@ function isPossibleParameter(variable, includeInitialised = false) {
   const varName = variable.name()
   if (varName === 't' || varName === 'time') return false
   if (!includeInitialised && variable.initialValue() !== '') return false
-  if (variable.hasInterfaceType('public') || variable.hasInterfaceType('public_and_private')) return false
   return true
 }
 

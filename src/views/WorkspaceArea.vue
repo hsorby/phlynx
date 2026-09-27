@@ -2103,10 +2103,8 @@ function onOpenSettingsDialog() {
   settingsDialogVisible.value = true
 }
 
-
-function updateVariablesFromMath(node, updatedMath) {
+function updateVariablesFromMath(node) {
   const existingVariables = new Map(node.data.variables.map((v) => [v.name, v]))
-  const updatedVariables = extractVariablesFromMath(updatedMath)
 
   node.data.variables = updatedVariables.map((updated) => {
     const variableExists = existingVariables.get(updated.name)

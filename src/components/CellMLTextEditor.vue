@@ -51,21 +51,21 @@
 </template>
 
 <script setup>
+import ToggleSwitch from 'primevue/toggleswitch'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Codemirror } from 'vue-codemirror'
 import { basicSetup } from 'codemirror'
 import { keymap } from '@codemirror/view'
 import { Prec } from '@codemirror/state'
-import { oneDark } from '@codemirror/theme-one-dark' 
+import { oneDark } from '@codemirror/theme-one-dark'
 import 'katex/dist/katex.min.css'
 
 import {
   CellMLTextGenerator,
   CellMLTextParser,
   CellMLLatexGenerator,
-  buildComponentGroups,
-  resolveManagedVariables,
-  getVariableKey,
+  analyzeModel,
+  applyVariableDefinitions,
   cellml,
 } from 'cellml-text-editor'
 
@@ -74,7 +74,19 @@ const katexPromise = import('katex')
 const props = defineProps({
   modelValue: {
     type: String,
-    default: '',
+    default: ''
+  },
+  isSimpleMode: {
+    type: Boolean,
+    default: true
+  },
+  componentName: {
+    type: String,
+    default: ''
+  },
+  variableDefinitions: {
+    type: Array,
+    default: () => []
   },
 })
 
@@ -84,8 +96,8 @@ const emit = defineEmits(['update:code', 'save', 'ready', 'undo', 'redo'])
 // undo/redo replay), not a user keystroke
 let applyingExternalText = false
 
-const generator = new CellMLTextGenerator({simplified: false})
-const parser = new CellMLTextParser({simplified: false})
+const generator = new CellMLTextGenerator({ simplified: props.isSimpleMode })
+const parser = new CellMLTextParser({ simplified: props.isSimpleMode })
 const latexGen = new CellMLLatexGenerator()
 
 const cellmlText = ref(generator.generate(props.modelValue))

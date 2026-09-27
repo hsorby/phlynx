@@ -117,6 +117,11 @@ export const EXCLUDED_COMPONENTS = new Set(['environment'])
 export const TIME_UNITS = new Set(['second', 'millisecond', 'microsecond', 'minute', 'hour', 'ms', 's'])
 export const TIME_NAMES = new Set(['time', 't'])
 
+export const ACCESS = 'access'
+export const NO_ACCESS = 'no_access'
+
+export const VALUE_REQUIRED_TYPES = new Set(['constant', 'global_constant'])
+
 export const MAX_VISIBLE_TAGS = 1
 
 export const MAIN_NODE_TYPE = 'instanceNode'

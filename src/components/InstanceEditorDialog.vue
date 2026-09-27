@@ -10,25 +10,38 @@
   >
     <template #header>
       <div class="custom-dialog-header">
-        <span class="header-prefix">Editing: </span>
-        <div class="header-input-wrapper">
-          <InputText
+
+        <div class="header-group">
+          <span class="header-label">Instance:</span>
+          <SanitisedInput
             v-model="editableName"
-            placeholder="Enter instance name..."
-            size="small"
-            class="header-input"
-            :class="{ 'header-input--warning': isNameUnsanitary }"
-            @blur="sanitiseNameOnBlur(editableName)"
+            :sanitise="sanitiseName"
+            placeholder="Instance name..."
+            width="260px"
+            font-size="1rem"
           />
-          <Transition name="name-warning-pop">
-            <div v-if="isNameUnsanitary" class="name-warning-popover" role="alert">
-              <div class="name-warning-arrow"></div>
-              <i class="pi pi-exclamation-triangle name-warning-icon"></i>
-              <span>Will be renamed to <strong>{{ sanitiseName(editableName) }}</strong></span>
-            </div>
-          </Transition>
         </div>
-        <span class="header-suffix">({{ componentName }} - {{ componentFile }})</span>
+
+        <div class="header-group header-group--end">
+          <span class="header-label">Component:</span>
+          <span
+            :title="isManaged ? '' : 'While Simple Mode is off, the text sets the component name (def comp ... as).'"
+          >
+            <SanitisedInput
+              v-model="editableComponentName"
+              :sanitise="sanitiseName"
+              :fallback="componentNameForEditor"
+              :disabled="!isManaged"
+              placeholder="Component name..."
+              width="200px"
+              font-size="1rem"
+            />
+          </span>
+          <span class="header-file" :title="`Defined in ${componentFile}`">
+            <i class="pi pi-file"></i>
+            <span class="header-file-name">{{ componentFile }}</span>
+          </span>
+        </div>
       </div>
     </template>
 
@@ -51,8 +64,11 @@
             ref="cellmlEditorRef"
             :key="mathRef"
             :model-value="currentModel"
-            @update:code="handleCodeUpdate"
-            @ready="handleEditorReady"
+            v-model:simple="isManaged"
+            :component-name="componentNameForEditor"
+            :definitions="editorDefinitions"
+            @update:component-name="onEditorComponentName"
+            @change="handleEditorChange"
             @save="handleSave"
             @undo="handleEditorUndo"
             @redo="handleEditorRedo"
@@ -88,13 +104,25 @@
 
       <!-- RIGHT COLUMN: Parameter & Port Tabs -->
       <div class="pane right-pane" :class="{ 'right-pane--collapsed': rightCollapsed }">
-        <!-- Collapsed rail: just a slim strip with a vertical label, click to expand -->
         <button
           v-if="rightCollapsed"
           type="button"
           class="collapsed-rail"
+          :aria-label="railAriaLabel"
           @click="toggleRightPanel"
         >
+          <span v-if="activeTab === 'parameters' && issueChips.length" class="rail-badges">
+            <span
+              v-for="chip in issueChips"
+              :key="chip.key"
+              class="rail-badge"
+              :class="`issue-chip--${chip.kind}`"
+              :title="chip.label"
+            >
+              <i :class="['pi', chip.icon]"></i>
+              {{ chip.count }}
+            </span>
+          </span>
           <span class="collapsed-rail-label">
             {{ activeTab === 'parameters' ? `Parameters (${parameterRows.length})` : `Ports (${editablePorts.length})` }}
           </span>
@@ -117,6 +145,11 @@
             <TabPanel value="parameters" class="tab-panel-flex">
               <div class="parameters-tab-body">
                 <div class="toolbar-container">
+                  <div class="legend-row">
+                    <span class="legend-item"><span class="legend-swatch legend-swatch--state"></span>State variable</span>
+                    <span class="legend-item"><span class="legend-swatch legend-swatch--initialiser"></span>Initial-value variable</span>
+                  </div>
+
                   <div class="search-group">
                     <div class="search-input-wrapper flex-1">
                       <IconField class="w-full">
@@ -163,46 +196,125 @@
                       Apply ({{ selectedRows.length }})
                     </Button>
                   </div>
+
+                  <div v-if="issueChips.length" class="issue-summary">
+                    <span class="issue-summary-label">Show only:</span>
+                    <button
+                      v-for="chip in issueChips"
+                      :key="chip.key"
+                      type="button"
+                      class="issue-chip"
+                      :class="[`issue-chip--${chip.kind}`, { 'issue-chip--active': activeIssueKeys.includes(chip.key) }]"
+                      :aria-pressed="activeIssueKeys.includes(chip.key)"
+                      :title="activeIssueKeys.includes(chip.key) ? 'Showing only these. Click to show all again.' : 'Click to show only these'"
+                      @click="toggleIssueFilter(chip.key)"
+                    >
+                      <i :class="['pi', chip.icon]"></i>
+                      {{ chip.label }}
+                    </button>
+                  </div>
                 </div>
 
                 <div class="table-flex-wrapper">
                   <DataTable
                     ref="parametersTable"
                     v-model:selection="selectedRows"
-                    :value="filteredParameterRows"
+                    :value="visibleParameterRows"
                     dataKey="name"
                     scrollable
                     scrollHeight="flex"
-                    tableStyle="min-width: 520px"
+                    tableStyle="min-width: 560px; table-layout: fixed"
                     :sortField="sortField"
                     :sortOrder="sortOrder"
+                    :customSort="true"
+                    :rowClass="parameterRowClass"
                     class="p-datatable-sm parameters-table"
                     @sort="handleSortChange"
                   >
-                    <Column selectionMode="multiple" headerStyle="width: 2.2rem" />
-                    <Column field="name" bodyClass="small-text-col" header="Name" sortable style="min-width: 120px" />
-                    <Column field="value" header="Value" sortable style="width: 120px">
+                    <Column selectionMode="multiple" headerStyle="width: 2rem" />
+                    <Column field="name" bodyClass="small-text-col" header="Name" sortable style="min-width: 120px">
                       <template #body="slotProps">
-                        <InputText
-                          v-if="isEditableVariableType(slotProps.data.type)"
-                          v-model="slotProps.data.value"
-                          size="small"
-                          placeholder="Enter value..."
-                          class="w-full"
-                        />
-                        <span v-else class="text-muted">-</span>
+                        <span class="name-cell">
+                          <SanitisedInput
+                            v-if="isRenamableInitialiser(slotProps.data)"
+                            :model-value="slotProps.data.name"
+                            :sanitise="cleanName"
+                            :notice="duplicateNameNotice(slotProps.data)"
+                            placeholder="Initialiser name..."
+                            @update:model-value="(val) => renameInitialiser(slotProps.data, val)"
+                          />
+                          <span v-else class="cell-static-text">{{ slotProps.data.name }}</span>
+                          <Tag
+                            v-if="isSharedInitialiserRow(slotProps.data)"
+                            severity="info"
+                            class="shared-initialiser-badge"
+                            :value="`×${initialiserUsage.get(slotProps.data.name)}`"
+                            :title="`Initial value for: ${statesUsingInitialiser(slotProps.data.name).join(', ')}`"
+                          />
+                        </span>
                       </template>
                     </Column>
-                    <Column field="units" bodyClass="small-text-col" header="Units" sortable style="min-width: 110px" />
-                    <Column field="type" header="Type" sortable style="width: 100px">
+                    <Column field="value" header="Value" sortable style="width: 160px">
                       <template #body="slotProps">
+                        <span
+                          v-if="slotProps.data.textInit"
+                          class="cell-static text-muted"
+                          title="Initial value set in the CellML text"
+                        >
+                          <span class="cell-static-text">{{ slotProps.data.textInit }}</span>
+                        </span>
                         <Select
-                          v-model="slotProps.data.type"
-                          :options="PARAMETER_TYPE_OPTIONS"
+                          v-else-if="slotProps.data.stateRole === 'state'"
+                          :model-value="slotProps.data.initialiser || NEW_INITIALISER_VALUE"
+                          :options="initialiserOptionsFor(slotProps.data)"
                           optionLabel="label"
                           optionValue="value"
                           size="small"
                           class="w-full"
+                          title="Which variable supplies this state's initial value"
+                          @update:model-value="(val) => onInitialiserPick(slotProps.data, val)"
+                        />
+                        <InputText
+                          v-else-if="isEditableVariableType(slotProps.data.type)"
+                          v-model="slotProps.data.value"
+                          size="small"
+                          :placeholder="isValueMissing(slotProps.data) ? 'Value required' : 'Enter value...'"
+                          class="w-full"
+                        />
+                        <span v-else class="cell-static text-muted" title="Computed elsewhere in the math">-</span>
+                      </template>
+                    </Column>
+                    <Column field="units" bodyClass="small-text-col" header="Units" sortable style="width: 152px">
+                      <template #body="slotProps">
+                        <SanitisedInput
+                          v-if="isManaged"
+                          v-model="slotProps.data.units"
+                          :sanitise="cleanName"
+                          :notice="unknownUnitsNotice(slotProps.data)"
+                          floating
+                          placeholder="e.g. millivolt"
+                        />
+                        <span v-else class="cell-static text-muted" title="Edit units in the CellML text">
+                          <span class="cell-static-text">{{ slotProps.data.units || '—' }}</span>
+                          <i
+                            v-if="unknownUnitsNotice(slotProps.data)"
+                            class="pi pi-exclamation-triangle units-flag"
+                            :title="unknownUnitsNotice(slotProps.data)"
+                          ></i>
+                        </span>
+                      </template>
+                    </Column>
+                    <Column field="type" header="Type" sortable style="width: 140px">
+                      <template #body="slotProps">
+                        <Select
+                          :model-value="displayType(slotProps.data)"
+                          :options="PARAMETER_TYPE_OPTIONS"
+                          :disabled="slotProps.data.stateRole === 'state' || !!slotProps.data.textInit"
+                          optionLabel="label"
+                          optionValue="value"
+                          size="small"
+                          class="w-full"
+                          @update:model-value="slotProps.data.type = $event"
                         />
                       </template>
                     </Column>
@@ -270,7 +382,26 @@
                           placeholder="Select variables"
                           class="w-full"
                           :maxSelectedLabels="3"
-                        />
+                          filter
+                          autoFilterFocus
+                          resetFilterOnHide
+                          filterPlaceholder="Search variables..."
+                          emptyFilterMessage="No matching variables"
+                          :pt="{ overlay: { class: 'ports-variable-overlay' } }"
+                        >
+                          <template #filtericon>
+                            <span class="ports-variable-filter-icons">
+                              <i class="pi pi-search"></i>
+                              <i
+                                class="search-clear-input pi pi-times-circle"
+                                role="button"
+                                aria-label="Clear search"
+                                @mousedown.prevent
+                                @click.stop="clearPortVariableSearch"
+                              ></i>
+                            </span>
+                          </template>
+                        </MultiSelect>
                       </template>
                     </Column>
 
@@ -367,6 +498,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
+import { analyzeModelXml } from 'cellml-text-editor'
 
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
@@ -388,18 +520,35 @@ import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
 
 import CellMLTextEditor from './CellMLTextEditor.vue'
+import SanitisedInput from './SanitisedInput.vue'
+import { useWebWorkerFn } from '@vueuse/core'
 import { useLibraryStore } from '../stores/libraryStore'
+import { useIssueFilter } from '../composables/useIssueFilter'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { useGtm } from '../composables/useGtm'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
 
-import { PARAMETER_TYPE_OPTIONS, PORT_TYPE_OPTIONS, MULTIPORT_OPTIONS } from '../utils/constants'
-import { isEditableVariableType, isEmpty } from '../utils/variables'
+import {
+  isEditableVariableType,
+  isEmpty,
+  isNumericLiteral,
+  rowsFromAnalysis,
+  rowsFromDeclaredVariables,
+  syncInitialiserUnits,
+  analyzeMathRoles,
+  buildVariableDeclarations,
+} from '../utils/variables'
+import {
+  PARAMETER_TYPE_OPTIONS,
+  PORT_TYPE_OPTIONS,
+  NO_ACCESS,
+  VALUE_REQUIRED_TYPES,
+  MULTIPORT_OPTIONS
+} from '../utils/constants'
 import { cleanName, sanitiseName } from '../utils/identifiers'
 import { detachReactivity } from '../utils/reactivity'
 import { notify } from '../utils/notify'
 import { getModelComponentNames, areModelsEquivalent, extractVariablesFromMath } from '../utils/cellml'
-import { sanitiseNameOnBlur } from '../utils/misc'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -422,21 +571,30 @@ const { trackEvent } = useGtm()
 const { nodes } = useVueFlow()
 const { confirm } = useConfirmDialog()
 
-const isNameUnsanitary = computed(() => editableName.value !== sanitiseName(editableName.value))
+// Sentinel option value meaning "create a brand-new dedicated initialiser", as opposed to picking
+// an existing variable's name from the dropdown.
+const NEW_INITIALISER_VALUE = '__new_initialiser__'
 
 // ── State ────────────────────────────────────────────────────────────────────
 const loading = ref(false)
 const activeTab = ref('parameters')
 
 // CellML State
-const currentModel = ref('')       // parsed XML representation - used for variable extraction, save, etc.
-const currentCellmlText = ref('')  // raw CellML source text - what the editor actually displays
+const currentModel = ref('')       // parsed XML representation
+const currentCellmlText = ref('')  // raw CellML source text
 const originalModel = ref('')
 const applyToAll = ref(false)
 
 // Parameter State
 const parameterRows = ref([])
 const selectedRows = ref([])
+
+// Simple Mode
+const isManaged = ref(false)
+let rowsBuiltAsManaged = false
+const unresolvedVariableNames = ref(new Set())
+
+// Search Query & Sort State
 const searchQuery = ref('')
 const searchColumn = ref('name')
 const searchColumnOptions = [
@@ -451,6 +609,21 @@ const sortOrder = ref(1)
 // Port & Instance State
 const editableName = ref('')
 const editablePorts = ref([])
+
+// Component Name
+const editableComponentName = ref('')
+const componentNameForEditor = ref('')
+
+watch(editableComponentName, (value) => {
+  const cleaned = cleanName(value)
+  if (cleaned) componentNameForEditor.value = cleaned
+})
+
+// Advanced Mode component name
+function onEditorComponentName(name) {
+  editableComponentName.value = name
+  componentNameForEditor.value = name
+}
 
 // Ref to the CellML editor, used to imperatively replay text during undo/redo
 const cellmlEditorRef = ref(null)
@@ -594,6 +767,317 @@ onUnmounted(() => {
   if (widthRafId !== null) cancelAnimationFrame(widthRafId)
 })
 
+// ── Initialiser sharing: usage tracking, picker options, rename/reassign/cleanup ────────────────
+
+/** Map: initialiser name -> how many states currently point at it. */
+const initialiserUsage = computed(() => {
+  const counts = new Map()
+  for (const row of parameterRows.value) {
+    if (row.stateRole === 'state' && row.initialiser) {
+      counts.set(row.initialiser, (counts.get(row.initialiser) ?? 0) + 1)
+    }
+  }
+  return counts
+})
+
+function isInitialiserRow(row) {
+  return (initialiserUsage.value.get(row.name) ?? 0) > 0
+}
+
+function isSharedInitialiserRow(row) {
+  return (initialiserUsage.value.get(row.name) ?? 0) > 1
+}
+
+/**
+ * Only a row that (a) is currently some state's initialiser and (b) isn't itself computed by an
+ * equation elsewhere in the math is safe to rename from the table. A computed row - even though
+ * it's playing the initialiser role, like `c_init` in SN_soma - is still referenced directly by
+ * name in the math (`<ci>c_init</ci>`) exactly like any other math-referenced variable, so
+ * renaming it here would desync the CellML text the same way renaming a state or an ordinary
+ * referenced constant would.
+ */
+function isRenamableInitialiser(row) {
+  if (row.stateRole === 'state') return false
+  if (row.type === 'variable') return false
+  return isInitialiserRow(row)
+}
+
+function statesUsingInitialiser(name) {
+  return parameterRows.value.filter((row) => row.stateRole === 'state' && row.initialiser === name).map((row) => row.name)
+}
+
+/**
+ * The name a brand-new initialiser for `stateRow` would get: "<state>_init", or the same with a
+ * numeric suffix if that name is already taken by some other row in the table. Shared by the
+ * picker's "New" label and createNewInitialiserFor, so what's offered and what actually gets
+ * created can never disagree.
+ */
+function nextAvailableInitialiserName(stateRow) {
+  const defaultName = `${stateRow.name}_init`
+  const existingNames = new Set(parameterRows.value.map((row) => row.name))
+  let name = defaultName
+  let counter = 1
+  while (existingNames.has(name)) {
+    name = `${defaultName}_${counter++}`
+  }
+  return name
+}
+
+/**
+ * Non-state rows grouped by their (cleaned) units, rebuilt once whenever parameterRows changes
+ * rather than re-scanned in full for every state row. A model with many states and many
+ * variables made initialiserOptionsFor an O(states x rows) full-table scan on every render of
+ * every state's Value cell - for a large model this was the single biggest cost in opening (and
+ * then interacting with) this dialog. Looking candidates up by units, O(1), turns that into a
+ * single O(rows) pass overall.
+ */
+const rowsByUnits = computed(() => {
+  const index = new Map() // cleaned units -> rows[]
+  for (const row of parameterRows.value) {
+    if (row.stateRole === 'state') continue
+    const units = cleanName(row.units)
+    if (!units) continue
+    if (!index.has(units)) index.set(units, [])
+    index.get(units).push(row)
+  }
+  return index
+})
+
+/**
+ * Options for a state's initial-value picker: create a brand-new dedicated initialiser (default
+ * name "<state>_init"), or point at any existing unit-compatible variable - including one already
+ * used by another state (that's exactly how a shared initialiser gets created), and including one
+ * that's itself computed elsewhere in the math (e.g. SN_soma's `c_init`) - CellML doesn't care
+ * whether a named initial value is a free-standing constant or a computed quantity, only that the
+ * units match.
+ *
+ * The state's *current* initialiser is always included even if it's missing from the units index
+ * for some reason (e.g. its units field is blank or was hand-edited to something that no longer
+ * matches) - otherwise the dropdown would show as unselected despite the state having a real,
+ * valid assignment.
+ */
+function initialiserOptionsFor(stateRow) {
+  const stateUnits = cleanName(stateRow.units)
+  const candidates = (stateUnits ? rowsByUnits.value.get(stateUnits) : undefined)?.filter((row) => row !== stateRow) ?? []
+
+  if (stateRow.initialiser && !candidates.some((row) => row.name === stateRow.initialiser)) {
+    const currentRow = parameterRows.value.find((row) => row.name === stateRow.initialiser)
+    if (currentRow) candidates.unshift(currentRow)
+  }
+
+  const options = [{ label: `New (${nextAvailableInitialiserName(stateRow)})`, value: NEW_INITIALISER_VALUE }]
+  candidates.forEach((row) => {
+    options.push({ label: row.type === 'variable' ? `${row.name} (computed)` : row.name, value: row.name })
+  })
+  return options
+}
+
+/** Creates a brand-new dedicated initialiser row for `stateRow` and returns its name. */
+function createNewInitialiserFor(stateRow) {
+  const name = nextAvailableInitialiserName(stateRow)
+
+  parameterRows.value.push({
+    name,
+    value: '',
+    units: stateRow.units,
+    type: 'constant',
+    access: NO_ACCESS,
+  })
+  return name
+}
+
+/**
+ * After a state is re-pointed away from `previousInitialiserName`, checks whether that initialiser
+ * is now unused by every state and, if so, asks before removing it from the table entirely.
+ */
+async function maybeCleanupOrphanedInitialiser(previousInitialiserName) {
+  if (!previousInitialiserName) return
+  if ((initialiserUsage.value.get(previousInitialiserName) ?? 0) > 0) return // still in use elsewhere
+
+  const row = parameterRows.value.find((r) => r.name === previousInitialiserName)
+  if (!row) return
+
+  const confirmed = await confirm({
+    header: 'Remove unused initialiser?',
+    message: `"${previousInitialiserName}" is no longer used to set any state's initial value. Remove it from the parameter table?`,
+    severity: 'warning',
+    acceptLabel: 'Remove',
+    rejectLabel: 'Keep',
+  })
+  if (!confirmed) return
+
+  const index = parameterRows.value.indexOf(row)
+  if (index !== -1) parameterRows.value.splice(index, 1)
+}
+
+async function onInitialiserPick(stateRow, selectedValue) {
+  const previousInitialiser = stateRow.initialiser
+
+  let targetName = selectedValue
+  if (selectedValue === NEW_INITIALISER_VALUE) {
+    targetName = createNewInitialiserFor(stateRow)
+  }
+
+  if (targetName === previousInitialiser) return
+
+  stateRow.initialiser = targetName
+
+  await maybeCleanupOrphanedInitialiser(previousInitialiser)
+}
+
+/** Renames an initialiser row and repoints every state that was using it to the new name. */
+function renameInitialiser(row, newName) {
+  const oldName = row.name
+  const cleaned = cleanName(newName)
+  if (!cleaned || cleaned === oldName) return
+
+  const collides = parameterRows.value.some((other) => other !== row && cleanName(other.name) === cleaned)
+  if (collides) return // the live notice already communicates this - just refuse the change
+
+  row.name = cleaned
+  parameterRows.value.forEach((other) => {
+    if (other.stateRole === 'state' && other.initialiser === oldName) other.initialiser = cleaned
+  })
+}
+
+/**
+ * Notice shown next to a renamed initialiser when its (sanitised) name collides with any other
+ * row in the table. Duplicate row names would silently break every name-keyed lookup downstream
+ * (buildVariableDeclarations, the picker options above, port variable selection, ...), so this is
+ * surfaced live as the person types, in addition to the hard block in handleSave.
+ */
+function duplicateNameNotice(row) {
+  const cleaned = cleanName(row.name)
+  if (!cleaned) return ''
+  const isDuplicate = parameterRows.value.some((other) => other !== row && cleanName(other.name) === cleaned)
+  return isDuplicate ? `"${cleaned}" is already used by another variable` : ''
+}
+
+/** Two flat categories, denoted purely by a left-edge colour - green for a state, purple for
+ * anything currently serving as an initialiser (shared or not, computed or not). No nesting,
+ * indentation, or adjacency: a row's position in the table is decided only by the active sort. */
+function parameterRowClass(row) {
+  return {
+    'parameter-row--unresolved': unresolvedVariableNames.value.has(row.name) || isValueMissing(row),
+    'parameter-row--state': row.stateRole === 'state',
+    'parameter-row--initialiser': isInitialiserRow(row),
+  }
+}
+
+/**
+ * Ensures every current state has a `stateRole`/`initialiser` pointing at a real row, creating the
+ * "<state>_init" default only when nothing else already supplies that state's initial value.
+ * Sharing (multiple states pointing at the same initialiser) is left entirely alone here - this
+ * only ever fills in what's missing; it never touches an initialiser a state already has, whether
+ * that came from the model's own CellML or from a previous pick in this dialog.
+ */
+function resolveStateInitialisers(rows, stateNames) {
+  const currentStateNames = new Set(stateNames)
+  const byName = new Map(rows.map((row) => [row.name, row]))
+
+  // A row still marked as a state that no longer is one loses that marking; its initialiser
+  // pointer is dropped too (whether the initialiser row itself survives depends on whether
+  // anything else still references it, same as any other unreferenced variable).
+  for (const row of rows) {
+    if (row.stateRole === 'state' && !currentStateNames.has(row.name)) {
+      delete row.stateRole
+      delete row.initialiser
+    }
+  }
+
+  for (const stateName of currentStateNames) {
+    const stateRow = byName.get(stateName)
+    if (!stateRow) continue
+
+    stateRow.stateRole = 'state'
+    stateRow.type = 'variable'
+
+    if (stateRow.initialiser && byName.has(stateRow.initialiser)) continue // already resolved
+
+    // No known initialiser - fall back to the "<state>_init" convention. This is only ever a
+    // *default* name for a brand-new initialiser; it can be freely renamed or re-pointed at an
+    // existing variable afterwards via the picker in the Value column.
+    const defaultName = `${stateName}_init`
+    let initialiserRow = byName.get(defaultName)
+    if (!initialiserRow) {
+      const seed = String(stateRow.value ?? '').trim()
+      initialiserRow = {
+        name: defaultName,
+        value: isNumericLiteral(seed) ? seed : '',
+        units: stateRow.units,
+        type: 'constant',
+        access: NO_ACCESS,
+      }
+      rows.push(initialiserRow)
+      byName.set(defaultName, initialiserRow)
+    }
+    stateRow.initialiser = defaultName
+  }
+
+  return rows
+}
+
+const editorDefinitions = computed(() => buildVariableDeclarations(parameterRows.value))
+
+// ── Missing / invalid data ───────────────────────────────────────────────────
+const isBlank = (value) => String(value ?? '').trim() === ''
+
+function isValueMissing(row) {
+  return !row.textInit && VALUE_REQUIRED_TYPES.has(row.type) && isBlank(row.value)
+}
+
+const displayType = (row) => (row.textInit ? 'variable' : row.type)
+
+function unknownUnitsNotice(row) {
+  const cleaned = cleanName(row.units)
+  if (!cleaned || store.availableUnitNames.has(cleaned)) return ''
+  return `"${cleaned}" isn't defined in the units library`
+}
+
+const ISSUE_MATCHERS = {
+  units: (row) => unresolvedVariableNames.value.has(row.name),
+  values: (row) => isValueMissing(row),
+  unknown: (row) => !!unknownUnitsNotice(row),
+}
+
+const issueChips = computed(() => {
+  const rows = parameterRows.value
+  const count = (fn) => rows.filter(fn).length
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+  const missingUnits = count(ISSUE_MATCHERS.units)
+  const missingValues = count(ISSUE_MATCHERS.values)
+  const unknownUnits = count(ISSUE_MATCHERS.unknown)
+
+  const chips = []
+  if (missingUnits) {
+    chips.push({ key: 'units', kind: 'units', icon: 'pi-exclamation-circle', count: missingUnits, label: `${plural(missingUnits, 'variable')} missing units` })
+  }
+  if (missingValues) {
+    chips.push({ key: 'values', kind: 'units', icon: 'pi-sliders-h', count: missingValues, label: `${plural(missingValues, 'value')} required` })
+  }
+  if (unknownUnits) {
+    chips.push({ key: 'unknown', kind: 'unknown', icon: 'pi-info-circle', count: unknownUnits, label: `${plural(unknownUnits, 'unit')} not in library` })
+  }
+  return chips
+})
+
+// ── "Show only" filter ───────────────────────────────────────────────────────
+const issueFilter = useIssueFilter({
+  rows: parameterRows,
+  matchers: ISSUE_MATCHERS,
+  availableKeys: computed(() => issueChips.value.map((chip) => chip.key)),
+})
+const activeIssueKeys = issueFilter.activeKeys
+const toggleIssueFilter = issueFilter.toggle
+
+// Screen readers get the same information the badges show.
+const railAriaLabel = computed(() => {
+  const summary = activeTab.value === 'parameters' ? issueChips.value.map((chip) => chip.label).join(', ') : ''
+  const label = activeTab.value === 'parameters' ? `Parameters (${parameterRows.value.length})` : `Ports (${editablePorts.value.length})`
+  return summary ? `Expand panel. ${label}. ${summary}` : `Expand panel. ${label}`
+})
+
 // ── Computed ─────────────────────────────────────────────────────────────────
 const componentFile = computed(() => props.mathRef?.split(':')[0])
 const componentName = computed(() => props.mathRef?.split(':')[1])
@@ -610,11 +1094,17 @@ const isDirty = computed(() =>
 )
 
 const filteredParameterRows = computed(() => {
-  if (!searchQuery.value.trim()) return parameterRows.value
+  let rows = parameterRows.value
+
+  rows = rows.filter(issueFilter.isShown)
+
+  if (!searchQuery.value.trim()) return rows
   const query = searchQuery.value.toLowerCase()
   const columnKey = searchColumn.value
-  return parameterRows.value.filter((row) => String(row[columnKey] || '').toLowerCase().includes(query))
+  return rows.filter((row) => String(row[columnKey] || '').toLowerCase().includes(query))
 })
+
+const visibleParameterRows = computed(() => filteredParameterRows.value)
 
 // ── Watchers & Handlers ──────────────────────────────────────────────────────
 watch(
@@ -624,9 +1114,15 @@ watch(
       loading.value = true
       applyToAll.value = false
       activeTab.value = props.defaultTab || 'parameters'
+      isManaged.value = props.initialManaged
+      rowsBuiltAsManaged = props.initialManaged
+      issueFilter.reset()
+      unresolvedVariableNames.value = new Set()
 
       // Load Instance & Port data
       editableName.value = props.initialName
+      editableComponentName.value = componentName.value
+      componentNameForEditor.value = componentName.value
       editablePorts.value = detachReactivity(props.initialPorts || []).map((port) => ({
         ...port,
         variables: Array.isArray(port.variables)
@@ -634,13 +1130,20 @@ watch(
           : []
       }))
 
-      // Load Parameters
+      // Load Parameters. Carry over stateRole/initialiser from the saved node data (when present)
+      // so a known initialiser assignment - especially a shared one, or one that isn't itself
+      // referenced in the math and so has no other way to be re-detected - has something to be
+      // recognised from and carried forward on the very first analysis pass below. Note `type` is
+      // deliberately carried over too - rowsFromAnalysis/rowsFromDeclaredVariables re-derive it
+      // from the math on that first pass regardless (see resolveType in variables.js), so a stale
+      // persisted 'constant' on a computed initialiser self-heals rather than sticking around.
       parameterRows.value = props.variables.map((row) => ({
         name: row.name,
         value: row.type === 'global_constant' ? store.getGlobalConstant(row.name)?.value : row.value,
         units: row.units,
         type: row.type,
         access: row.access,
+        ...(row.stateRole === 'state' ? { stateRole: 'state', initialiser: row.initialiser } : {}),
       }))
       sortParameterRows('type', 1)
 
@@ -650,6 +1153,7 @@ watch(
           const math = store.availableMath.get(props.mathRef)
           currentModel.value = math
           originalModel.value = math
+          seedRowsFromStoredModel(math)
         }
       } catch (e) {
         console.error('Failed to load CellML source', e)
@@ -661,30 +1165,143 @@ watch(
   }
 )
 
-async function reconcileStagedState(newCode, newRawText) {
-  const extractedVariables = extractVariablesFromMath(newCode)
-  if (!extractedVariables) return
+// ── Text editor events ───────────────────────────────────────────────────────
+let pendingChange = Promise.resolve()
 
+function handleEditorChange(change) {
+  pendingChange = pendingChange
+    .then(() => processEditorChange(change))
+    .catch((error) => console.error('Failed to process CellML editor change', error))
+}
+
+/** Routes a change event from the CellML editor to the handler for its source. */
+async function processEditorChange({ source, text, valid, xml, analysis }) {
+  if (source === 'init') {
+    handleInitialLoad(text, valid, xml, analysis)
+  } else if (!valid) {
+    if (source === 'edit') await handleInvalidEdit(text)
+  } else if (source === 'external') {
+    currentModel.value = xml
+    currentCellmlText.value = text
+    syncUnresolved(analysis)
+
+    // A mode switch refreshes the table.
+    const rows = rowsForCurrentMode(xml, analysis)
+    if (rows && (rowsBuiltAsManaged !== isManaged.value || !sameNames(rows, parameterRows.value))) {
+      parameterRows.value = rows
+      rowsBuiltAsManaged = isManaged.value
+    }
+  } else {
+    await handleValidEdit(xml, text, analysis)
+  }
+}
+
+function syncUnresolved(analysis) {
+  unresolvedVariableNames.value = new Set(isManaged.value ? analysis.unresolved : [])
+}
+
+const MODEL_ANALYSIS_CACHE_LIMIT = 20
+const modelXmlAnalysisCache = new Map() // xml string -> analyzeModelXml() result
+const mathRolesCache = new Map() // xml string -> analyzeMathRoles() result
+
+function memoized(cache, key, compute) {
+  if (!key) return compute()
+  const hit = cache.get(key)
+  if (hit !== undefined) return hit
+
+  const result = compute()
+  cache.set(key, result)
+  if (cache.size > MODEL_ANALYSIS_CACHE_LIMIT) cache.delete(cache.keys().next().value) // evict oldest
+  return result
+}
+
+const analyzeModelXmlCached = (xml) => memoized(modelXmlAnalysisCache, xml, () => analyzeModelXml(xml))
+const analyzeMathRolesCached = (xml) => memoized(mathRolesCache, xml, () => analyzeMathRoles(xml))
+
+/** Builds parameter rows from `xml`/`analysis` for whichever mode (Simple/Advanced) is active. */
+function rowsForCurrentMode(xml, analysis) {
+  const previousRows = parameterRows.value
+
+  if (isManaged.value) {
+    const rows = rowsFromAnalysis(analysis, previousRows, analyzeMathRolesCached(xml))
+    resolveStateInitialisers(rows, analysis.stateVariables)
+    syncInitialiserUnits(rows)
+    return rows
+  }
+
+  let declared
+  try {
+    declared = extractVariablesFromMath(xml)
+  } catch (error) {
+    console.warn('Could not read variables from the CellML text', error)
+    return null
+  }
+  if (!declared) return null
+
+  const rows = rowsFromDeclaredVariables(declared, analysis, previousRows)
+  resolveStateInitialisers(rows, analysis.stateVariables)
+  syncInitialiserUnits(rows)
+  return rows
+}
+
+function sameNames(rows, otherRows) {
+  const names = new Set(otherRows.map((row) => row.name))
+  return rows.length === otherRows.length && rows.every((row) => names.has(row.name))
+}
+
+/** Builds the initial parameter rows from the model when the editor mounts. */
+function handleInitialLoad(text, valid, xml, analysis) {
+  currentCellmlText.value = text
+  if (!valid) return
+
+  currentModel.value = xml
+  originalModel.value = xml
+  syncUnresolved(analysis)
+
+  const rows = rowsForCurrentMode(xml, analysis)
+  if (!rows) return
+  parameterRows.value = rows
+  rowsBuiltAsManaged = isManaged.value
+
+  const names = new Set(rows.map((row) => row.name))
+  for (const port of editablePorts.value) {
+    if (Array.isArray(port.variables)) port.variables = port.variables.filter((name) => names.has(name))
+  }
+}
+
+/** Seeds the table from the stored model before the editor mounts, so units already in the XML aren't lost on first parse. */
+function seedRowsFromStoredModel(xml) {
+  if (!isManaged.value) return
+
+  const analysis = analyzeModelXmlCached(xml)
+  if (!analysis) return
+
+  const rows = rowsFromAnalysis(analysis, parameterRows.value, analyzeMathRolesCached(xml))
+  resolveStateInitialisers(rows, analysis.stateVariables)
+  syncInitialiserUnits(rows)
+  parameterRows.value = rows
+  rowsBuiltAsManaged = true
+}
+
+/**
+ * Records a valid text edit in undo history: the CellML code, the parameter rows it implies,
+ * and any ports left referencing a variable that no longer exists.
+ * @param {string} newCode
+ * @param {string} newRawText
+ * @param {ModelAnalysis} analysis
+ */
+async function handleValidEdit(newCode, newRawText, analysis) {
   const previousCode = currentModel.value
   const previousRawText = currentCellmlText.value
   if (previousCode === newCode) return
 
-  const validVarNames = new Set(extractedVariables.map((v) => v.name))
+  const newParameterRows = rowsForCurrentMode(newCode, analysis)
+  if (!newParameterRows) return
+  rowsBuiltAsManaged = isManaged.value
 
-  const currentMap = new Map(parameterRows.value.map((row) => [row.name, row]))
   const previousParameterRows = parameterRows.value
-
-  const newParameterRows = extractedVariables.map((variable) => {
-    const existing = currentMap.get(variable.name)
-
-    return {
-      name: variable.name,
-      units: variable.units,
-      access: variable.access || 'access',
-      value: existing ? existing.value : (variable.value || ''),
-      type: existing ? existing.type : (variable.type || 'constant'),
-    }
-  })
+  const validVarNames = new Set(newParameterRows.map((v) => v.name))
+  syncUnresolved(analysis)
 
   history.startBatch()
 
@@ -733,15 +1350,8 @@ async function reconcileStagedState(newCode, newRawText) {
   history.endBatch()
 }
 
-function handleCodeUpdate(newCode, rawText, isValid) {
-  if (isValid) {
-    reconcileStagedState(newCode, rawText)
-  } else {
-    trackRawTextOnly(rawText)
-  }
-}
-
-async function trackRawTextOnly(rawText) {
+/** Records an edit that didn't parse, so undo/redo can still replay the raw text. */
+async function handleInvalidEdit(rawText) {
   const previousRawText = currentCellmlText.value
   if (previousRawText === rawText) return
 
@@ -768,17 +1378,13 @@ async function handleEditorRedo() {
   await history.redo()
 }
 
-function handleEditorReady(canonicalMath, rawText) {
-  void isDirty.value
-  currentModel.value = canonicalMath
-  originalModel.value = canonicalMath
-  currentCellmlText.value = rawText ?? currentCellmlText.value
-}
+// Sort by what the table shows (a text-initialised variable displays as 'variable').
+const sortValue = (row, field) => (field === 'type' ? displayType(row) : row?.[field])
 
 function sortParameterRows(field = 'type', order = 1) {
   parameterRows.value.sort((a, b) => {
-    const valA = String(a[field] || '').toLowerCase()
-    const valB = String(b[field] || '').toLowerCase()
+    const valA = String(sortValue(a, field) || '').toLowerCase()
+    const valB = String(sortValue(b, field) || '').toLowerCase()
     const result = valA.localeCompare(valB)
     return result !== 0 ? (order === 1 ? result : -result) : a.name.localeCompare(b.name)
   })
@@ -796,10 +1402,19 @@ function applyBulkType() {
   if (!bulkTypeValue.value || selectedRows.value.length === 0) return
   const targetType = bulkTypeValue.value
   selectedRows.value.forEach((row) => {
+    if (row.stateRole === 'state' || row.textInit) return
     row.type = targetType
   })
   selectedRows.value = []
   bulkTypeValue.value = ''
+}
+
+function clearPortVariableSearch(event) {
+  const input = event.currentTarget.closest('.p-iconfield')?.querySelector('input')
+  if (!input) return
+  input.value = ''
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  input.focus()
 }
 
 function addPort() {
@@ -850,6 +1465,10 @@ async function handleMathOverwrite() {
 
 // ── Save Processing ──────────────────────────────────────────────────────────
 async function handleSave() {
+  // Make sure the editor's latest text (and any rename) has been processed before reading state.
+  cellmlEditorRef.value?.flush()
+  await pendingChange
+
   // 1. Validate Instance Name
   if (!editableName.value || !editableName.value.trim()) {
     notify.error({ message: 'Instance name cannot be empty.' })
@@ -873,6 +1492,11 @@ async function handleSave() {
     return
   }
 
+  if (isManaged.value && !cleanName(editableComponentName.value)) {
+    notify.error({ message: 'Component name is invalid.' })
+    return
+  }
+
   // 2. Validate Ports
   const finalPorts = editablePorts.value.filter((p) => p.variables?.length && p.label?.trim())
   const invalidFactor = finalPorts.find((p) => p.multiportType === 'Multiply' && isEmpty(p.multiplyFactor))
@@ -881,6 +1505,39 @@ async function handleSave() {
     activeTab.value = 'ports'
     return
   }
+
+  // 2b. Validate no two parameter rows share a name. This can only happen via a renamed
+  // initialiser colliding with another row - block it here since a saved duplicate would
+  // silently break every name-keyed lookup downstream (buildVariableDeclarations, the initialiser
+  // picker options, port variable selection, ...).
+  const nameCounts = new Map()
+  parameterRows.value.forEach((row) => {
+    const cleaned = cleanName(row.name)
+    if (!cleaned) return
+    nameCounts.set(cleaned, (nameCounts.get(cleaned) ?? 0) + 1)
+  })
+  const duplicateName = [...nameCounts.entries()].find(([, count]) => count > 1)?.[0]
+  if (duplicateName) {
+    notify.error({ message: `Two variables are both named "${duplicateName}". Rename one before saving.` })
+    activeTab.value = 'parameters'
+    return
+  }
+
+  const textErrors = cellmlEditorRef.value?.getErrors?.() ?? []
+  if (textErrors.length > 0) {
+    const proceed = await confirm({
+      header: 'CellML Text Has Errors',
+      message: 'If you continue, the last valid version of the model will be saved and any edits since then will be lost.',
+      severity: 'warning',
+      acceptLabel: 'Proceed',
+      rejectLabel: 'Cancel',
+    })
+    if (!proceed) return
+  }
+
+  // Sync each state's initialiser to the state's units (only where the initialiser's own units
+  // are still blank - see syncInitialiserUnits).
+  syncInitialiserUnits(parameterRows.value)
 
   // 3. Process Global Constants from Parameters
   parameterRows.value.forEach((row) => {
@@ -898,8 +1555,8 @@ async function handleSave() {
       return
     }
     const newComponentName = componentNames[0].trim()
-    newMathRef = `${componentFile.value}:${newComponentName}`
 
+    newMathRef = `${componentFile.value}:${newComponentName}`
     if (newMathRef === props.mathRef && store.availableMath.has(newMathRef)) {
       const overwrite = await handleMathOverwrite()
       if (!overwrite) return
@@ -941,22 +1598,45 @@ async function handleSave() {
   font-weight: 600;
   width: 100%;
   overflow: visible;
+  flex-wrap: wrap;
 }
 
-.header-prefix {
+.header-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.header-group--end {
+  margin-left: auto;
+}
+
+.header-label {
   color: var(--p-text-color);
 }
 
-.header-input {
-  width: 300px;
-  font-size: 1rem;
-  font-weight: normal;
-}
-
-.header-suffix {
+.header-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  max-width: 16rem;
   color: var(--p-text-muted-color);
   font-size: 0.9rem;
   font-weight: normal;
+}
+
+.header-file .pi {
+  flex: 0 0 auto;
+  font-size: 0.8125rem;
+}
+
+.header-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .module-editor-dialog {
@@ -1121,9 +1801,40 @@ async function handleSave() {
   align-items: center;
 }
 
+.rail-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.rail-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  width: 100%;
+  padding: 3px 0;
+  border-radius: 6px;
+  font-size: var(--dlg-fs-tiny);
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--p-text-color);
+  background-color: color-mix(in srgb, var(--chip-color) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--chip-color) 40%, transparent);
+}
+
+.rail-badge .pi {
+  font-size: 0.7rem;
+  color: var(--chip-color);
+}
+
 .collapsed-rail {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   background: none;
@@ -1225,10 +1936,183 @@ async function handleSave() {
   border-radius: 6px;
 }
 
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--dlg-fs-tiny);
+  color: var(--p-text-muted-color);
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.legend-swatch--state {
+  background-color: var(--p-green-500, #22c55e);
+}
+
+.legend-swatch--initialiser {
+  background-color: var(--p-purple-400, #a78bfa);
+}
+
 .search-group, .bulk-controls {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.managed-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background-color: color-mix(in srgb, var(--p-primary-color, #3b82f6) 10%, transparent);
+  font-size: var(--dlg-fs-tiny);
+  color: var(--p-text-muted-color);
+}
+
+.managed-hint .pi {
+  font-size: 0.85em;
+  color: var(--p-primary-color, #3b82f6);
+}
+
+.right-pane :deep(.parameter-row--unresolved) {
+  background-color: color-mix(in srgb, var(--p-yellow-500, #eab308) 14%, transparent);
+}
+
+/* Flat categories: a left-edge stripe only - no indentation, italics, arrows, or adjacency. A row
+   is either a state (green) or an initialiser (purple, whether shared or exclusive, computed or
+   plain); never both. */
+.right-pane :deep(tr.parameter-row--state) {
+  box-shadow: inset 3px 0 0 0 var(--p-green-500, #22c55e);
+}
+
+.right-pane :deep(tr.parameter-row--initialiser) {
+  box-shadow: inset 3px 0 0 0 var(--p-purple-400, #a78bfa);
+}
+
+/* Unresolved/missing-value urgency always wins over the state/initialiser stripe colour. */
+.right-pane :deep(tr.parameter-row--state.parameter-row--unresolved),
+.right-pane :deep(tr.parameter-row--initialiser.parameter-row--unresolved) {
+  background-color: color-mix(in srgb, var(--p-yellow-500, #eab308) 14%, transparent);
+}
+
+.name-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.shared-initialiser-badge {
+  flex: 0 0 auto;
+  font-size: var(--dlg-fs-tiny);
+  cursor: help;
+}
+
+/* Units cell: input plus a small flag when the name needs fixing or isn't in the library */
+/* Selection checkboxes: the default is sized for forms, which is large in a dense table */
+.right-pane :deep(.parameters-table) {
+  --p-checkbox-width: 1rem;
+  --p-checkbox-height: 1rem;
+  --p-checkbox-icon-size: 0.625rem;
+}
+
+/* Read-only cell content in the same box as an input, so it lines up with the fields above and below it */
+.cell-static {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 var(--p-inputtext-sm-padding-x, 0.625rem);
+  border: 1px solid transparent;
+  font-size: var(--dlg-fs-body);
+}
+
+.cell-static-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.units-flag {
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+  color: var(--p-yellow-600, #ca8a04);
+  cursor: help;
+}
+
+/* Summary of what still needs attention in the table */
+.issue-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--p-content-border-color);
+}
+
+.issue-summary-label {
+  font-size: var(--dlg-fs-tiny);
+  color: var(--p-text-muted-color);
+}
+
+.issue-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: var(--dlg-fs-tiny);
+  color: var(--p-text-color);
+  cursor: pointer;
+  background-color: color-mix(in srgb, var(--chip-color) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--chip-color) 40%, transparent);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.issue-chip:hover {
+  background-color: color-mix(in srgb, var(--chip-color) 26%, transparent);
+}
+
+.issue-chip:focus-visible {
+  outline: 2px solid var(--chip-color);
+  outline-offset: 1px;
+}
+
+/* On: the table is showing only these rows */
+.issue-chip--active {
+  font-weight: 600;
+  background-color: color-mix(in srgb, var(--chip-color) 34%, transparent);
+  border-color: var(--chip-color);
+}
+
+.issue-chip .pi {
+  font-size: 0.75rem;
+  color: var(--chip-color);
+}
+
+.issue-chip--units {
+  --chip-color: var(--p-yellow-500, #eab308);
+}
+
+.issue-chip--unknown {
+  --chip-color: var(--p-primary-color, #3b82f6);
 }
 
 .search-group {
@@ -1488,5 +2372,66 @@ async function handleSave() {
   .right-pane--collapsed {
     display: none;
   }
+}
+</style>
+
+<!-- The variable picker's panel is teleported to <body>, so the scoped styles above can't reach it. -->
+<style>
+.ports-variable-overlay {
+  /* Sized to sit with the ports table (14px text), not the form-sized defaults. */
+  --p-multiselect-option-font-size: 0.875rem;
+  --p-multiselect-option-padding: 0.3125rem 0.625rem;
+  --p-multiselect-option-gap: 0.5rem;
+  --p-multiselect-list-padding: 0.25rem;
+  --p-multiselect-list-gap: 1px;
+  --p-checkbox-width: 1rem;
+  --p-checkbox-height: 1rem;
+  --p-checkbox-icon-size: 0.625rem;
+}
+
+.ports-variable-overlay .p-multiselect-header {
+  gap: 0.5rem;
+  padding: 0.5rem 0.625rem;
+}
+
+.ports-variable-overlay .p-multiselect-header .p-inputtext {
+  font-size: 0.875rem;
+}
+
+/* Search field: search icon left, clear button right (only once there's text), like the other search bars. */
+.ports-variable-overlay .p-multiselect-header .p-iconfield .p-inputtext {
+  padding-inline: 2rem;
+}
+
+.ports-variable-overlay .p-multiselect-header .p-iconfield .p-inputicon {
+  inset-inline: 0.625rem;
+  top: 50%;
+  margin-top: 0;
+  width: auto;
+  height: auto;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.ports-variable-overlay .ports-variable-filter-icons {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+.ports-variable-overlay .search-clear-input {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.ports-variable-overlay .search-clear-input:hover {
+  color: var(--p-text-color);
+}
+
+.ports-variable-overlay .p-multiselect-header .p-inputtext:placeholder-shown + .p-inputicon .search-clear-input {
+  visibility: hidden;
+  pointer-events: none;
 }
 </style>
