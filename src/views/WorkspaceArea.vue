@@ -570,6 +570,7 @@ import EdgeConnectionDialog from '../components/EdgeConnectionDialog.vue'
 import SettingsDialog from '../components/SettingsDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
 import PaneContextMenu from '../components/PaneContextMenu.vue'
+import { reconcileRows } from '../services/math/reconcileRows'
 import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
 import CreateInspectionModuleDialog from '../components/dialogs/CreateInspectionModule.vue'
 import ContextSidebar from '../components/ContextSidebar.vue'
@@ -2103,27 +2104,17 @@ function onOpenSettingsDialog() {
   settingsDialogVisible.value = true
 }
 
-function updateVariablesFromMath(node) {
-  const existingVariables = new Map(node.data.variables.map((v) => [v.name, v]))
-
-  node.data.variables = updatedVariables.map((updated) => {
-    const variableExists = existingVariables.get(updated.name)
-
-    if (variableExists) {
-      return {
-        ...variableExists,
-        units: updated.units,
-      }
-    } else {
-      return {
-        name: updated.name,
-        units: updated.units,
-        access: 'access',
-        value: updated.value ?? null,
-        type: updated.type ?? null,
-      }
-    }
-  })
+/**
+ * Rebuilds a node's parameter rows from its math, keeping every value already set.
+ *
+ * @param {Object} node - A workspace node.
+ * @param {string} mathRef - The math the node now uses.
+ */
+function updateVariablesFromMath(node, mathRef) {
+  if (!node) return
+  const analysis = libraryStore.getMathAnalysis(mathRef)
+  if (!analysis) return
+  node.data.variables = reconcileRows(analysis, node.data.variables ?? [])
 }
 
 function cleanPorts(currentNode) {
@@ -2141,7 +2132,7 @@ function cleanPorts(currentNode) {
  * 3. Updating graph nodes to match new ports.
  */
 async function handleCellMLSave(saveData) {
-  const { id, updateAll, mathRef, math, siblings } = saveData
+  const { id, updateAll, mathRef, siblings } = saveData
 
   // Update math references
   updateNodeData(id, { mathRef })
@@ -2153,14 +2144,14 @@ async function handleCellMLSave(saveData) {
     })
   }
 
-  // Update variables and ports
+  // The edited node's rows are already reconciled by the editor; siblings are rebuilt here.
   const currentNode = findNode(id)
-  updateVariablesFromMath(currentNode, math)
   cleanPorts(currentNode)
   if (updateAll) {
     siblings.forEach((siblingId) => {
       const siblingNode = findNode(siblingId)
-      updateVariablesFromMath(siblingNode, math)
+      if (!siblingNode) return
+      updateVariablesFromMath(siblingNode, mathRef)
       cleanPorts(siblingNode)
     })
   }
