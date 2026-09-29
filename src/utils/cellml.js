@@ -1329,6 +1329,8 @@ export function extractVariablesFromMath(math, includeInitialisedVariables = tru
             units: units.name(),
             value: variable.initialValue(),
             type: variable.initialValue() !== '' ? 'constant' : 'variable',
+            access: 'access',
+            data_reference: 'unknown',
           })
         }
       }

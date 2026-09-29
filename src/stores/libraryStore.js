@@ -1,8 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, markRaw } from 'vue'
-
-import { normaliseConfig } from '../utils/config'
-import { AFFINE_UNIT_CONVERSIONS, GHOST_MATH_REF, STANDARD_UNITS } from '../utils/constants'
+import { normaliseConfig, buildModule, parseMathRef } from '../utils/config'
+import { AFFINE_UNIT_CONVERSIONS, NEW_MODULE_MATH_REF, GHOST_MATH_REF, STANDARD_UNITS } from '../utils/constants'
 import { cyrb53 } from '../utils/misc'
 import { extractUnitNames } from '../utils/units'
 import { analyzeMathXml } from '../services/math/analyzeMath'
@@ -269,6 +268,7 @@ export const useLibraryStore = defineStore('library', () => {
     components.forEach((component) => {
       const mathRef = `${filename}:${component.name}`
       addMath(mathRef, component.math)
+      createModuleForMath(mathRef)
     })
   }
 
@@ -280,6 +280,16 @@ export const useLibraryStore = defineStore('library', () => {
       updateStubStatus(mathRef)
       scheduleMathAnalysis(mathRef, math)
     }
+  }
+
+  function createModuleForMath(mathRef) {
+    if ([GHOST_MATH_REF, NEW_MODULE_MATH_REF].includes(mathRef)) return
+
+    const { componentName } = parseMathRef(mathRef)
+    const moduleRef = `${componentName}:default`
+    const math = availableMath.value.get(mathRef)
+    const module = buildModule(moduleRef, mathRef, math)
+    addModule(module)
   }
 
   // Move one moduleRef from one mathRef's Set to another
