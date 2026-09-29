@@ -1,10 +1,12 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, markRaw } from 'vue'
 
 import { normaliseConfig } from '../utils/config'
 import { AFFINE_UNIT_CONVERSIONS, GHOST_MATH_REF, STANDARD_UNITS } from '../utils/constants'
 import { cyrb53 } from '../utils/misc'
 import { extractUnitNames } from '../utils/units'
+import { analyzeMathXml } from '../services/math/analyzeMath'
+import { analyzeBatchInBackground, analyzeInBackground } from '../services/math/mathWorkerClient'
 
 function mergeIntoStore(newModules, target) {
   const moduleMap = new Map(target.map((mod) => [mod.componentFile, mod]))
@@ -38,6 +40,9 @@ export const useLibraryStore = defineStore('library', () => {
   const mathRefHash = ref(new Map())
   const availableUnits = ref([])
   const globalConstants = ref(new Map())
+
+  // mathRef -> MathAnalysis. Non-reactive, since analyses are large and only read imperatively.
+  const availableMathAnalysis = markRaw(new Map())
 
   // --- ACTIONS ---
   function resetGlobalConstants() {
@@ -88,6 +93,8 @@ export const useLibraryStore = defineStore('library', () => {
     availableCollections.value.clear()
     availableModules.value.clear()
     availableUnits.value = []
+    availableMathAnalysis.clear()
+    pendingAnalysis.clear()
   }
 
   function createMathHash(math) {
@@ -182,6 +189,9 @@ export const useLibraryStore = defineStore('library', () => {
   function updateCollections(tag, moduleRef) {
     ensureSet(tag).add(moduleRef)
   }
+
+  const pendingAnalysis = new Map() // mathRef -> math added since the last background batch
+  let isAnalysisFlushScheduled = false
 
   /**
    * Caches an analysis if its math is still the current math for `mathRef`.
