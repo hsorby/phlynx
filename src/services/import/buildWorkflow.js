@@ -2,8 +2,17 @@ import { getHandleId, buildHandles, buildGhostHandles } from '../../utils/handle
 import { MAIN_NODE_TYPE, SOURCE_HANDLE_TYPE, TARGET_HANDLE_TYPE } from '../../utils/constants'
 import { resolvePortCouplings, checkAndClaimCouplings } from '../../utils/edges'
 import { getId as getNextNodeId } from '../../utils/nodes'
+import { reconcileRows } from '../math/reconcileRows'
 
-export function buildInstance(nodeId, name, nodeType, moduleData, handles, position = null) {
+/**
+ * Builds an instance's variables from its math analysis, keeping the module's configured values.
+ */
+function resolveInstanceVariables(moduleData, mathAnalysis) {
+  if (mathAnalysis) return reconcileRows(mathAnalysis, moduleData.variables ?? [])
+  return (moduleData.variables ?? []).map((variable) => ({ ...variable }))
+}
+
+export function buildInstance(nodeId, name, nodeType, moduleData, handles, position = null, mathAnalysis = null) {
   const conditionalProperties = position 
     ? { position } 
     : { position: { x: 100, y: 100 }, style: { opacity: 0 } }
@@ -16,14 +25,14 @@ export function buildInstance(nodeId, name, nodeType, moduleData, handles, posit
       name,
       mathRef: moduleData.mathRef,
       moduleRef: moduleData.moduleRef,
-      variables: moduleData.variables,
+      variables: resolveInstanceVariables(moduleData, mathAnalysis),
       ports: moduleData.ports,
       handles,
     },
   }
 }
 
-function buildInstances(instanceRefs, availableModules, currentNodes, progressCallback = null) {
+function buildInstances(instanceRefs, availableModules, getMathAnalysis, currentNodes, progressCallback = null) {
   const pendingInstances = []
   let nodeId = getNextNodeId(currentNodes.map((n) => n.id))
 
@@ -52,7 +61,9 @@ function buildInstances(instanceRefs, availableModules, currentNodes, progressCa
     if (instanceRef.x !== undefined && instanceRef.y !== undefined) {
       position = { x: instanceRef.x, y: instanceRef.y }
     }
-    pendingInstances.push(buildInstance(nodeId, instanceRef.name, nodeType, module, handles, position))
+
+    const mathAnalysis = module ? getMathAnalysis?.(module.mathRef) ?? null : null
+    pendingInstances.push(buildInstance(nodeId, instanceRef.name, nodeType, module, handles, position, mathAnalysis))
 
     nodeId = getNextNodeId([nodeId])
   })
@@ -158,8 +169,8 @@ function buildEdges(instanceRefs, pendingInstances) {
   return pendingEdges
 }
 
-export function buildWorkflowGraph(instanceRefs, availableModules, currentNodes, progressCallback = null) {
-  const pendingInstances = buildInstances(instanceRefs, availableModules, currentNodes, progressCallback)
+export function buildWorkflowGraph(instanceRefs, availableModules, getMathAnalysis, currentNodes, progressCallback = null) {
+  const pendingInstances = buildInstances(instanceRefs, availableModules, getMathAnalysis, currentNodes, progressCallback)
   const pendingEdges = buildEdges(instanceRefs, pendingInstances)
   return { pendingInstances, pendingEdges }
 }
