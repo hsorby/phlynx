@@ -6,6 +6,7 @@
     :draggable="false"
     :style="{ width: '95vw', maxWidth: '1680px', height: '90vh', maxHeight: '960px' }"
     class="module-editor-dialog"
+    :pt="DIALOG_PT"
     @update:visible="onDialogVisibleChange"
   >
     <template #header>
@@ -57,7 +58,7 @@
       :class="{ 'is-dragging': dragging, 'is-suppressed': isScreenTooSmall }"
       :inert="isScreenTooSmall"
     >
-      <!-- LEFT COLUMN: CellML Text Editor -->
+      <!-- LEFT COLUMN: CellML Text or Math Editor -->
       <div class="pane left-pane" :style="leftPaneStyle" :class="{ 'left-pane--collapsed': rightCollapsed }">
         <div class="editor-wrapper">
           <div v-if="!isEditorReady" class="editor-pending">
@@ -65,14 +66,26 @@
             <span>Preparing editor...</span>
           </div>
           <CellMLTextEditor
-            v-else
-            ref="cellmlEditorRef"
+            v-else-if="editorKind === 'text'"
+            ref="mathEditorRef"
             :key="mathRef"
             :model-value="currentModel"
             v-model:simple="isManaged"
             :component-name="componentNameForEditor"
             :variable-definitions="editorDefinitions"
             @update:component-name="onEditorComponentName"
+            @change="handleEditorChange"
+            @save="handleSave"
+            @undo="handleEditorUndo"
+            @redo="handleEditorRedo"
+          />
+          <MathWorkbenchEditor
+            v-else
+            ref="mathEditorRef"
+            :key="mathRef"
+            :model-value="currentModel"
+            :component-name="componentNameForEditor"
+            :variable-definitions="editorDefinitions"
             @change="handleEditorChange"
             @save="handleSave"
             @undo="handleEditorUndo"
@@ -310,16 +323,26 @@
     <!-- DIALOG FOOTER -->
     <template #footer>
       <div class="dialog-footer" v-if="!loading && !isScreenTooSmall">
-        <div
-          v-if="siblingCount > 0"
-          class="apply-all-checkbox"
-          :title="`Also update ${siblingCount} other node${
-            siblingCount !== 1 ? 's' : ''
-          } using ${componentName} from ${componentFile}`"
-        >
-          <Checkbox v-model="applyToAll" binary inputId="applyToAll" />
-          <label for="applyToAll">Apply CellML changes to all instances</label>
-          <Tag severity="info" :value="String(siblingCount + 1)" />
+        <div class="footer-start">
+          <Tabs :key="editorTabsKey" :value="editorKind" class="editor-tabs" @update:value="switchEditor">
+            <TabList>
+              <Tab v-for="option in EDITOR_OPTIONS" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </Tab>
+            </TabList>
+          </Tabs>
+
+          <div
+            v-if="siblingCount > 0"
+            class="apply-all-checkbox"
+            :title="`Also update ${siblingCount} other node${
+              siblingCount !== 1 ? 's' : ''
+            } using ${componentName} from ${componentFile}`"
+          >
+            <Checkbox v-model="applyToAll" binary inputId="applyToAll" />
+            <label for="applyToAll">Apply CellML changes to all instances</label>
+            <Tag severity="info" :value="String(siblingCount + 1)" />
+          </div>
         </div>
 
         <div class="footer-buttons">
@@ -353,6 +376,7 @@ import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
 
 import CellMLTextEditor from './CellMLTextEditor.vue'
+import MathWorkbenchEditor from './MathWorkbenchEditor.vue'
 import ParameterTable from './ParameterTable.vue'
 import SanitisedInput from './SanitisedInput.vue'
 import { useLibraryStore } from '../stores/libraryStore'
@@ -398,6 +422,16 @@ const activeTab = ref('parameters')
 const applyToAll = ref(false)
 // The editor mounts after the table paints, so its synchronous parse doesn't delay the table.
 const isEditorReady = ref(false)
+// The dialog focuses its close button once its opening transition ends, so the editor takes focus
+// after that. Dialog has no event for it; its transition options are merged into its <Transition>.
+const isDialogShown = ref(false)
+const DIALOG_PT = {
+  transition: {
+    onAfterEnter: () => {
+      isDialogShown.value = true
+    },
+  },
+}
 
 // Port & Instance State
 const editableName = ref('')
@@ -418,13 +452,66 @@ function onEditorComponentName(name) {
   componentNameForEditor.value = name
 }
 
-// Ref to the CellML editor, used to imperatively replay text during undo/redo
-const cellmlEditorRef = ref(null)
+// Ref to the mounted math editor, used to imperatively replay text during undo/redo
+const mathEditorRef = ref(null)
 const parameterTableRef = ref(null)
 
 // The math, its analysis and the parameter rows.
-const session = useMathSession({ history, editorRef: cellmlEditorRef, ports: editablePorts })
+const session = useMathSession({ history, editorRef: mathEditorRef, ports: editablePorts })
 const { isManaged, currentModel, parameterRows, editorDefinitions, isMissingUnits, handleEditorChange } = session
+
+// ── Editor Choice ───────────────────────────────────────────────────────────
+const EDITOR_STORAGE_KEY = 'instanceEditorDialog.editorKind'
+const EDITOR_OPTIONS = [
+  { value: 'text', label: 'CellML Text' },
+  { value: 'math', label: 'Math Editor' },
+]
+
+function loadStoredEditorKind() {
+  try {
+    const stored = window.localStorage.getItem(EDITOR_STORAGE_KEY)
+    if (EDITOR_OPTIONS.some((option) => option.value === stored)) return stored
+  } catch (e) {
+    // localStorage unavailable (e.g. private browsing) - fall back to default
+  }
+  return 'text'
+}
+
+const editorKind = ref(loadStoredEditorKind())
+// Tabs keeps its own selection, so a cancelled switch remounts it to show the current editor.
+const editorTabsKey = ref(0)
+
+/**
+ * Swaps the math editor, keeping the session. The Math Editor always works in Simple Mode.
+ *
+ * @param {'text'|'math'} kind
+ */
+async function switchEditor(kind) {
+  if (kind === editorKind.value) return
+  await session.flushPendingChanges()
+
+  if ((mathEditorRef.value?.getErrors?.() ?? []).length > 0) {
+    const proceed = await confirm({
+      header: 'Discard Invalid Edits?',
+      message: 'The math has errors. If you switch editors, edits since the last valid version will be lost.',
+      severity: 'warning',
+      acceptLabel: 'Switch',
+      rejectLabel: 'Cancel',
+    })
+    if (!proceed) {
+      editorTabsKey.value++
+      return
+    }
+  }
+
+  if (kind === 'math') isManaged.value = true
+  editorKind.value = kind
+  try {
+    window.localStorage.setItem(EDITOR_STORAGE_KEY, kind)
+  } catch (e) {
+    // ignore storage errors
+  }
+}
 
 // ── Split / Collapse State ──────────────────────────────────────────────────
 const SPLIT_STORAGE_KEY = 'instanceEditorDialog.leftPanePercent'
@@ -625,10 +712,20 @@ const siblingCount = computed(() => siblings.value.length)
 let openRequestId = 0
 
 watch(
+  () => isDialogShown.value && isEditorReady.value,
+  async (canFocus) => {
+    if (!canFocus) return
+    await nextTick()
+    mathEditorRef.value?.focus?.()
+  }
+)
+
+watch(
   () => props.modelValue,
   async (isOpen) => {
     if (!isOpen) {
       isEditorReady.value = false
+      isDialogShown.value = false
       return
     }
 
@@ -660,7 +757,11 @@ watch(
     }))
 
     try {
-      await session.load({ mathRef: props.mathRef, rows: savedRows, managed: props.initialManaged })
+      await session.load({
+        mathRef: props.mathRef,
+        rows: savedRows,
+        managed: props.initialManaged || editorKind.value === 'math',
+      })
     } catch (e) {
       console.error('Failed to load CellML source', e)
     }
@@ -674,12 +775,15 @@ watch(
   }
 )
 
+// Pending editor changes are recorded first, so undo steps back from the latest edit.
 async function handleEditorUndo() {
+  await session.flushPendingChanges()
   if (!history.canUndo) return
   await history.undo()
 }
 
 async function handleEditorRedo() {
+  await session.flushPendingChanges()
   if (!history.canRedo) return
   await history.redo()
 }
@@ -798,10 +902,10 @@ async function handleSave() {
     return
   }
 
-  const textErrors = cellmlEditorRef.value?.getErrors?.() ?? []
+  const textErrors = mathEditorRef.value?.getErrors?.() ?? []
   if (textErrors.length > 0) {
     const proceed = await confirm({
-      header: 'CellML Text Has Errors',
+      header: editorKind.value === 'math' ? 'Math Has Errors' : 'CellML Text Has Errors',
       message: 'If you continue, the last valid version of the model will be saved and any edits since then will be lost.',
       severity: 'warning',
       acceptLabel: 'Proceed',
@@ -1291,11 +1395,23 @@ async function handleSave() {
   width: 100%;
 }
 
+.footer-start {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-right: auto;
+}
+
+/* Compact tabs: the default padding is sized for page sections, not a footer. */
+.editor-tabs :deep(.p-tab) {
+  padding: 6px 14px;
+  font-size: 0.85rem;
+}
+
 .apply-all-checkbox {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-right: auto;
   font-size: 0.85rem;
 }
 

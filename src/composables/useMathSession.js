@@ -26,8 +26,9 @@ function hasSameNames(rows, otherRows) {
 
 /**
  * Creates a math editing session. A plugged-in editor emits `change` with
- * `{ source: 'init'|'edit'|'external', text, valid, xml }` and exposes `setText`, `flush` and
- * `getErrors`.
+ * `{ source: 'init'|'edit'|'external', format, text, valid, xml }` and exposes `format` (what its
+ * text is written in), `setText`, `setModel`, `flush` and `getErrors`. Editors can be swapped
+ * mid-session; a later `init` is the new editor's view of the same math.
  *
  * @param {Object} options
  * @param {Object} options.history - The flow history store.
@@ -40,7 +41,7 @@ export function useMathSession({ history, editorRef, ports }) {
 
   const isManaged = ref(true) // Simple Mode: the table owns the declarations
   const currentModel = ref('') // latest valid XML
-  const currentCellmlText = ref('') // latest text, valid or not
+  const currentText = ref({ format: null, value: '' }) // latest editor text, valid or not
   const originalModel = ref('')
   const parameterRows = ref([])
   const analysis = shallowRef(null)
@@ -48,6 +49,9 @@ export function useMathSession({ history, editorRef, ports }) {
   const mode = computed(() => modeFor(isManaged.value))
   // A mode switch always rebuilds the rows, so remember which mode built them.
   let rowsBuiltAsManaged = null
+  // An editor mounted after a switch also reports 'init', which only moves the baseline if nothing
+  // has changed, since each editor writes the same math its own way (e.g. `0.0` as `0`).
+  let hasInitialised = false
 
   /**
    * Replaces the rows and records the mode that built them.
@@ -99,7 +103,8 @@ export function useMathSession({ history, editorRef, ports }) {
     const math = (mathRef && store.availableMath.get(mathRef)) || ''
     currentModel.value = math
     originalModel.value = math
-    currentCellmlText.value = ''
+    currentText.value = { format: null, value: '' }
+    hasInitialised = false
 
     analysis.value = mathRef ? await store.ensureMathAnalysis(mathRef) : null
     setRows(reconcileRows(analysis.value, rows, { mode: mode.value }))
@@ -147,20 +152,27 @@ export function useMathSession({ history, editorRef, ports }) {
    * @param {Object} change - The editor's `change` payload.
    * @returns {Promise<void>}
    */
-  async function processEditorChange({ source, text, valid, xml }) {
+  async function processEditorChange({ source, format, text, valid, xml }) {
+    const isEditorSwitch = source === 'init' && hasInitialised
+    if (isEditorSwitch) source = 'external'
+    if (source === 'init') hasInitialised = true
+    // A change queued before an editor switch still carries the format it was written in.
+    const textState = { format: format ?? editorRef.value?.format ?? null, value: text }
+
     if (!valid) {
-      if (source === 'edit') await handleInvalidEdit(text)
-      else currentCellmlText.value = text
+      if (source === 'edit') await handleInvalidEdit(textState)
+      else currentText.value = textState
       return
     }
 
     const nextAnalysis = analyzeMathXml(xml)
-    if (source === 'edit') return handleValidEdit(xml, text, nextAnalysis)
+    if (source === 'edit') return handleValidEdit(xml, textState, nextAnalysis)
 
-    // 'init' (editor mounted) or 'external' (mode, definitions or component name changed).
-    currentCellmlText.value = text
+    // 'init' (first editor mounted) or 'external' (mode, definitions, component name or editor changed).
+    const rebaseline = source === 'init' || (isEditorSwitch && !isDirty())
+    currentText.value = textState
     currentModel.value = xml
-    if (source === 'init') originalModel.value = xml
+    if (rebaseline) originalModel.value = xml
     analysis.value = nextAnalysis
 
     const rows = reconcileRows(nextAnalysis, parameterRows.value, { mode: mode.value })
@@ -172,18 +184,33 @@ export function useMathSession({ history, editorRef, ports }) {
   }
 
   /**
+   * Shows a text state in the mounted editor. Text from another editor can't be shown as is, so
+   * that editor gets the model instead.
+   *
+   * @param {{ format: string|null, value: string }} textState
+   * @param {string} xml - The model matching the text.
+   * @returns {Promise<void>|undefined}
+   */
+  function restoreEditor(textState, xml) {
+    const editor = editorRef.value
+    if (!editor) return
+    if (editor.format === textState.format) return editor.setText(textState.value)
+    return editor.setModel?.(xml)
+  }
+
+  /**
    * Restores a text state during undo or redo.
    *
    * @param {string} xml
-   * @param {string} text
+   * @param {{ format: string|null, value: string }} textState
    * @param {import('../services/math/analyzeMath').MathAnalysis} textAnalysis
    * @returns {Promise<void>|undefined}
    */
-  function applyTextState(xml, text, textAnalysis) {
+  function applyTextState(xml, textState, textAnalysis) {
     currentModel.value = xml
-    currentCellmlText.value = text
+    currentText.value = textState
     analysis.value = textAnalysis
-    return editorRef.value?.setText(text)
+    return restoreEditor(textState, xml)
   }
 
   /**
@@ -191,16 +218,16 @@ export function useMathSession({ history, editorRef, ports }) {
    * it removed.
    *
    * @param {string} newXml
-   * @param {string} newText
+   * @param {{ format: string|null, value: string }} newText
    * @param {import('../services/math/analyzeMath').MathAnalysis} newAnalysis
    * @returns {Promise<void>}
    */
   async function handleValidEdit(newXml, newText, newAnalysis) {
     const previousXml = currentModel.value
-    const previousText = currentCellmlText.value
+    const previousText = currentText.value
     const previousAnalysis = analysis.value
     if (previousXml === newXml) {
-      currentCellmlText.value = newText
+      currentText.value = newText
       return
     }
 
@@ -243,24 +270,25 @@ export function useMathSession({ history, editorRef, ports }) {
   }
 
   /**
-   * Records an edit that didn't parse, so undo and redo can still replay the raw text.
+   * Records an edit that didn't parse, so undo and redo can still replay the raw text. The model
+   * is unchanged, so another editor restores to the current model.
    *
-   * @param {string} text
+   * @param {{ format: string|null, value: string }} textState
    * @returns {Promise<void>}
    */
-  async function handleInvalidEdit(text) {
-    const previousText = currentCellmlText.value
-    if (previousText === text) return
+  async function handleInvalidEdit(textState) {
+    const previousText = currentText.value
+    if (previousText.format === textState.format && previousText.value === textState.value) return
 
     await history.executeAndAddCommand({
       type: 'update-cellml-text-only',
       undo: async () => {
-        currentCellmlText.value = previousText
-        await editorRef.value?.setText(previousText)
+        currentText.value = previousText
+        await restoreEditor(previousText, currentModel.value)
       },
       redo: async () => {
-        currentCellmlText.value = text
-        await editorRef.value?.setText(text)
+        currentText.value = textState
+        await restoreEditor(textState, currentModel.value)
       },
     })
   }

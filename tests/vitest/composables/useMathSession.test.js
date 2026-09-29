@@ -1,12 +1,13 @@
 // @vitest-environment happy-dom
 import { ref } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CellMLTextGenerator, CellMLTextParser, applyVariableDefinitions } from 'cellml-text-editor'
 
 import { useMathSession } from '../../../src/composables/useMathSession.js'
 import { useFlowHistoryStore } from '../../../src/stores/historyStore.js'
 import { useLibraryStore } from '../../../src/stores/libraryStore.js'
+import { ensureLibCellmlReady } from '../helpers/libcellml-bootstrap.js'
 
 const MATH_REF = 'file:decay'
 const XML = `<model xmlns="http://www.cellml.org/cellml/2.0#" name="decay">
@@ -29,6 +30,7 @@ const byName = (rows) => Object.fromEntries(rows.map((row) => [row.name, row]))
 /** Stands in for CellMLTextEditor: parses text the way it does and reports `change` events. */
 function fakeEditor(session) {
   const editor = {
+    format: 'cellml-text',
     text: '',
     lastXml: XML,
     report(source, text, simple) {
@@ -40,12 +42,13 @@ function fakeEditor(session) {
       })
       const valid = result.errors.length === 0 && !!result.xml
       if (valid) editor.lastXml = result.xml
-      session.handleEditorChange({ source, text, valid, xml: valid ? result.xml : null })
+      session.handleEditorChange({ source, format: editor.format, text, valid, xml: valid ? result.xml : null })
       return session.flushPendingChanges()
     },
-    setText: async (text) => {
+    setText: vi.fn(async (text) => {
       editor.text = text
-    },
+    }),
+    setModel: vi.fn(async () => {}),
     flush: () => {},
   }
   return editor
@@ -53,6 +56,10 @@ function fakeEditor(session) {
 
 describe('useMathSession', () => {
   let session, editorRef, history
+
+  beforeAll(async () => {
+    await ensureLibCellmlReady() // isDirty compares models with libcellml
+  })
 
   beforeEach(async () => {
     setActivePinia(createPinia())
@@ -125,5 +132,62 @@ describe('useMathSession', () => {
     expect(session.parameterRows.value).toBe(rows)
     expect(session.parameterRows.value.map((row) => row.name)).not.toContain('x0')
     expect(editorRef.value.lastXml).toContain('initial_value="x_start"')
+  })
+
+  describe('when an editor mounted after a switch reports init', () => {
+    // Reported directly, so each "editor" writes the same math in exactly the way the test needs.
+    const report = (source, xml) => {
+      session.handleEditorChange({ source, format: 'mathml', text: xml, valid: true, xml })
+      return session.flushPendingChanges()
+    }
+    const reformatted = XML.replace('initial_value="0.5"', 'initial_value="0.50"')
+
+    it('takes the new editor’s version as the baseline if nothing changed', async () => {
+      await report('init', XML)
+      await report('init', reformatted)
+      expect(session.isDirty()).toBe(false)
+      expect(session.currentModel.value).toBe(reformatted)
+    })
+
+    it('keeps edits made before the switch', async () => {
+      await report('init', XML)
+      await report('edit', XML.replace('initial_value="0.5"', 'initial_value="0.7"'))
+      await report('init', reformatted.replace('initial_value="0.50"', 'initial_value="0.70"'))
+      expect(session.isDirty()).toBe(true)
+    })
+  })
+
+  it('gets square roots from the text editor as <root/>', async () => {
+    const withRoot = XML.replace('<apply><minus/><ci>k</ci></apply>', '<apply><root/><ci>k</ci></apply>')
+    const simpleText = new CellMLTextGenerator({ simplified: true }).generate(withRoot)
+    expect(simpleText).toContain('sqrt(k)')
+    await editorRef.value.report('init', simpleText, true)
+    expect(session.currentModel.value).toContain('<root/>')
+    expect(session.currentModel.value).not.toContain('sqrt')
+  })
+
+  it('restores through setModel when the mounted editor writes another format', async () => {
+    const simpleText = new CellMLTextGenerator({ simplified: true }).generate(XML)
+    await editorRef.value.report('init', simpleText, true)
+    const initialXml = session.currentModel.value
+    await editorRef.value.report('edit', simpleText.replace(/\bk\b/g, 'rate'), true)
+
+    const mathEditor = { ...fakeEditor(session), format: 'mathml' }
+    editorRef.value = mathEditor
+    await history.undo()
+
+    expect(mathEditor.setModel).toHaveBeenCalledWith(initialXml)
+    expect(mathEditor.setText).not.toHaveBeenCalled()
+    expect(session.currentModel.value).toBe(initialXml)
+  })
+
+  it('replays an edit that does not parse in the editor that wrote it', async () => {
+    const simpleText = new CellMLTextGenerator({ simplified: true }).generate(XML)
+    await editorRef.value.report('init', simpleText, true)
+    await editorRef.value.report('edit', simpleText + '\nbroken = ;', true)
+
+    await history.undo()
+    expect(editorRef.value.setText).toHaveBeenLastCalledWith(simpleText)
+    expect(editorRef.value.setModel).not.toHaveBeenCalled()
   })
 })

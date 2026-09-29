@@ -59,7 +59,7 @@
     "@vue-flow/core": "^1.47.0",
     "@vue-flow/minimap": "^1.5.4",
     "@vue-flow/node-resizer": "^1.5.0",
-    "cellml-text-editor": "^0.3.1",
+    "cellml-text-editor": "^0.4.0",
     "codemirror": "^6.0.2",
     "cytoscape": "^3.33.1",
     "cytoscape-fcose": "^2.2.0",
@@ -78,7 +78,8 @@
     "vue": "^3.5.22",
     "vue-codemirror": "^6.1.1",
     "vue-router": "^4.6.4",
-    "vue3-libcellml.js": "^0.5.1"
+    "vue3-libcellml.js": "^0.5.1",
+    "vue3-math-editor": "^0.2.0"
   },
   "devDependencies": {
     "@hsorby/changelog": "^3.0.3",

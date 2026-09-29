@@ -13,14 +13,14 @@
           v-if="previewCollapsed"
           type="button"
           class="preview-collapsed-bar"
-          :class="{ 'preview-collapsed-bar--error': errors.length > 0 }"
+          :class="{ 'preview-collapsed-bar--error': shownErrors.length > 0 }"
           title="Expand equation preview"
           @click="togglePreview"
         >
           <span class="preview-toggle-icon"><i class="pi pi-angle-down"></i></span>
-          <span v-if="errors.length" class="preview-collapsed-text">
-            <strong>Line {{ errors[0].line }}:</strong> {{ errors[0].message }}
-            <template v-if="errors.length > 1"> (+{{ errors.length - 1 }} more)</template>
+          <span v-if="shownErrors.length" class="preview-collapsed-text">
+            <strong v-if="shownErrors[0].line">Line {{ shownErrors[0].line }}:</strong> {{ shownErrors[0].message }}
+            <template v-if="shownErrors.length > 1"> (+{{ shownErrors.length - 1 }} more)</template>
           </span>
           <span v-else class="preview-collapsed-text">Equation preview</span>
         </button>
@@ -35,9 +35,9 @@
           >
             <span class="preview-toggle-icon"><i class="pi pi-angle-up"></i></span>
           </button>
-          <div v-if="errors.length > 0" class="error-banner">
-            <div v-for="(err, index) in errors" :key="index">
-              <strong>Line {{ err.line }}:</strong> {{ err.message }}
+          <div v-if="shownErrors.length > 0" class="error-banner">
+            <div v-for="(err, index) in shownErrors" :key="index">
+              <strong v-if="err.line">Line {{ err.line }}:</strong> {{ err.message }}
             </div>
           </div>
           <div v-else class="preview-pane" ref="latexContainer"></div>
@@ -100,6 +100,8 @@
           :indent-with-tab="true"
           :tab-size="2"
           :extensions="extensions"
+          :disabled="isLocked"
+          @ready="handleReady"
           @update="handleStateUpdate"
         >
         </codemirror>
@@ -147,8 +149,11 @@ const props = defineProps({
   },
 })
 
+/** What this editor's text is written in, so the session can tell its text from another editor's. */
+const FORMAT = 'cellml-text'
+
 /**
- * Emits `change` with `{ source, text, valid, xml }`, the contract useMathSession expects.
+ * Emits `change` with `{ source, format, text, valid, xml }`, the contract useMathSession expects.
  * `source` is 'init' on mount, 'edit' for typing, or 'external' after a prop change.
  */
 const emit = defineEmits(['update:simple', 'update:componentName', 'change', 'save', 'undo', 'redo'])
@@ -166,8 +171,37 @@ const latexGen = new CellMLLatexGenerator()
 
 let lastXml = props.modelValue
 
-const cellmlText = ref(generator.generate(lastXml))
+// Math the text can't hold, found when the text was generated. Editing it would lose that math.
+const generatorErrors = ref([])
+
+/**
+ * Generates this editor's text for a model, noting anything the text can't hold.
+ *
+ * @param {string} xml
+ * @returns {string}
+ */
+function generateText(xml) {
+  const result = generator.generateResult(xml)
+  generatorErrors.value = result.errors
+  return result.text
+}
+
+const cellmlText = ref(generateText(lastXml))
 const errors = ref([])
+
+// The text is locked when it can't hold all the math; its parse errors then only repeat that.
+const isLocked = computed(() => generatorErrors.value.length > 0)
+const shownErrors = computed(() =>
+  isLocked.value
+    ? [
+        {
+          line: null,
+          message: "CellML Text can't show part of this math, so it can't be edited here. Use the Math Editor tab.",
+        },
+        ...generatorErrors.value.map(({ message }) => ({ line: null, message })),
+      ]
+    : errors.value
+)
 const latexContainer = ref(null)
 const rootRef = ref(null)
 const previewSectionRef = ref(null)
@@ -289,6 +323,11 @@ const checkDarkMode = () => {
 }
 
 let cmView = null
+
+// Captured as soon as the view exists, so focus() works before the first update.
+const handleReady = ({ view }) => {
+  cmView = view
+}
 
 const handleStateUpdate = (viewUpdate) => {
   cmView = viewUpdate.view
@@ -463,6 +502,7 @@ function run(source, { text = cellmlText.value, silent = false } = {}) {
   if (!silent) {
     emit('change', {
       source,
+      format: FORMAT,
       text,
       valid,
       xml: valid ? result.xml : null,
@@ -507,7 +547,7 @@ watch(
     if (debouncer) run('edit') 
     generator.simplified = simple
     parser.simplified = simple
-    setText(generator.generate(lastXml), { report: true })
+    setText(generateText(lastXml), { report: true })
   }
 )
 
@@ -555,10 +595,24 @@ async function setText(newText, { report = false } = {}) {
   run('external', { text: newText, silent: !report })
 }
 
+/**
+ * Shows a model written by another editor, as this editor's text.
+ *
+ * @param {string} xml
+ * @returns {Promise<void>}
+ */
+function setModel(xml) {
+  lastXml = xml
+  return setText(generateText(xml))
+}
+
 defineExpose({
+  format: FORMAT,
   setText,
+  setModel,
   flush,
-  getErrors: () => errors.value,
+  focus: () => cmView?.focus(),
+  getErrors: () => shownErrors.value,
 })
 
 onMounted(() => {

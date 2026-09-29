@@ -7,6 +7,7 @@ import { cyrb53 } from '../utils/misc'
 import { extractUnitNames } from '../utils/units'
 import { analyzeMathXml } from '../services/math/analyzeMath'
 import { analyzeBatchInBackground, analyzeInBackground } from '../services/math/mathWorkerClient'
+import { normaliseLegacyMathML } from '../services/math/normaliseMath'
 
 function mergeIntoStore(newModules, target) {
   const moduleMap = new Map(target.map((mod) => [mod.componentFile, mod]))
@@ -271,8 +272,9 @@ export const useLibraryStore = defineStore('library', () => {
     })
   }
 
-  function addMath(mathRef, math, isOverwrite = true) {
+  function addMath(mathRef, rawMath, isOverwrite = true) {
     if (!availableMath.value.has(mathRef) || isOverwrite) {
+      const math = normaliseLegacyMathML(rawMath)
       availableMath.value.set(mathRef, math)
       addMathHashEntry(mathRef, math)
       updateStubStatus(mathRef)
@@ -343,7 +345,9 @@ export const useLibraryStore = defineStore('library', () => {
 
     if (state.availableMath) {
       mergeIn(new Map(state.availableMath), availableMath.value)
-      for (const [mathRef, math] of availableMath.value.entries()) {
+      for (const [mathRef, rawMath] of availableMath.value.entries()) {
+        const math = normaliseLegacyMathML(rawMath)
+        if (math !== rawMath) availableMath.value.set(mathRef, math)
         addMathHashEntry(mathRef, math)
         scheduleMathAnalysis(mathRef, math)
       }
