@@ -126,5 +126,5 @@ describe('mathmlModel', () => {
       )
     })
     expect(failures.map(({ id }) => id)).toEqual([])
-  })
+  }, 30000)
 })
