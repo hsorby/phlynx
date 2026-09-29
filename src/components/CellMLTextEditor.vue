@@ -122,7 +122,6 @@ import {
   CellMLTextGenerator,
   CellMLTextParser,
   CellMLLatexGenerator,
-  analyzeModel,
   applyVariableDefinitions,
   cellml,
 } from 'cellml-text-editor'
@@ -134,7 +133,7 @@ const props = defineProps({
     type: String,
     default: ''
   },
-  isSimpleMode: {
+  simple: {
     type: Boolean,
     default: true
   },
@@ -149,26 +148,20 @@ const props = defineProps({
 })
 
 /**
- * change reports the editor's state:
- *   source:   'init'     the editor just mounted
- *             'edit'     the person changed the text
- *             'external' a prop changed (definitions, component name, mode)
- *   text:     the CellML text
- *   valid:    whether the text parsed
- *   xml:      the resulting CellML XML (null unless valid)
- *   analysis: { componentName, referenced, stateVariables, unresolved } (null unless valid)
+ * Emits `change` with `{ source, text, valid, xml }`, the contract useMathSession expects.
+ * `source` is 'init' on mount, 'edit' for typing, or 'external' after a prop change.
  */
 const emit = defineEmits(['update:simple', 'update:componentName', 'change', 'save', 'undo', 'redo'])
 
 const DEBOUNCE_MS = 500
 
 const isSimple = computed({
-  get: () => props.isSimpleMode,
+  get: () => props.simple,
   set: (v) => emit('update:simple', v),
 })
 
-const generator = new CellMLTextGenerator({ simplified: props.isSimpleMode })
-const parser = new CellMLTextParser({ simplified: props.isSimpleMode })
+const generator = new CellMLTextGenerator({ simplified: props.simple })
+const parser = new CellMLTextParser({ simplified: props.simple })
 const latexGen = new CellMLLatexGenerator()
 
 let lastXml = props.modelValue
@@ -429,7 +422,14 @@ const updatePreview = async () => {
 // ── Parse -> declare variables -> report ──────────────────────────────────────
 const definitionsKey = () => (parser.simplified ? JSON.stringify(props.variableDefinitions) : '')
 
-// Builds the model from the current text and reports the result.
+/**
+ * Parses the text into CellML and reports the result.
+ *
+ * @param {'init'|'edit'|'external'} source - What triggered the parse.
+ * @param {Object} [options]
+ * @param {string} [options.text] - Text to parse; defaults to the editor's text.
+ * @param {boolean} [options.silent=false] - Parse without emitting `change`.
+ */
 function run(source, { text = cellmlText.value, silent = false } = {}) {
   if (debouncer) {
     clearTimeout(debouncer)
@@ -448,21 +448,25 @@ function run(source, { text = cellmlText.value, silent = false } = {}) {
   lastDefinitionsKey = definitionsKey()
 
   const valid = result.errors.length === 0 && !!result.xml && !!result.doc
-  let analysis = null
 
   if (valid) {
     currentDoc = result.doc
     lastXml = result.xml
-    analysis = analyzeModel(result.doc)
 
     // Advanced Mode: the text defines the component name
-    if (!simple && analysis.componentName && analysis.componentName !== props.componentName) {
-      emit('update:componentName', analysis.componentName)
+    const textComponentName = simple ? '' : result.doc.getElementsByTagName('component')[0]?.getAttribute('name')
+    if (textComponentName && textComponentName !== props.componentName) {
+      emit('update:componentName', textComponentName)
     }
   }
 
   if (!silent) {
-    emit('change', { source, text, valid, xml: valid ? result.xml : null, analysis })
+    emit('change', {
+      source,
+      text,
+      valid,
+      xml: valid ? result.xml : null,
+    })
   }
 
   if (valid) nextTick(updatePreview)
@@ -487,8 +491,7 @@ watch(
   () => props.variableDefinitions,
   () => {
     if (parser.simplified && definitionsKey() !== lastDefinitionsKey) schedule('external')
-  },
-  { deep: true }
+  }
 )
 
 watch(
@@ -499,7 +502,7 @@ watch(
 )
 
 watch(
-  () => props.isSimpleMode,
+  () => props.simple,
   (simple) => {
     if (debouncer) run('edit') 
     generator.simplified = simple
