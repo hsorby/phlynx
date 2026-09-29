@@ -3194,14 +3194,17 @@ watch(
   { immediate: true }
 )
 
+// Track only the fields the search reads; a deep watch walked every node on each drag frame and selection change.
 watch(
-  nodes,
+  () =>
+    searchQuery.value.trim()
+      ? nodes.value.map((n) => `${n.id}|${n.data?.name}|${n.data?.moduleRef}|${n.data?.mathRef}`).join('\n')
+      : '',
   () => {
     if (searchQuery.value.trim()) {
       handleSearchInput()
     }
-  },
-  { deep: true }
+  }
 )
 </script>
 

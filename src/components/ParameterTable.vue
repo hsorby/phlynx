@@ -199,7 +199,7 @@ import SanitisedInput from './SanitisedInput.vue'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
 import { isEditableVariableType } from '../utils/variables'
 import { getDisplayType, isValueMissing } from '../utils/parameterRows'
-import { PARAMETER_TYPE_OPTIONS, NO_ACCESS } from '../utils/constants'
+import { PARAMETER_TYPE_OPTIONS, NO_ACCESS, TABLE_VIRTUAL_SCROLL_MIN_ROWS, TABLE_ROW_HEIGHT_PX } from '../utils/constants'
 import { cleanName } from '../utils/identifiers'
 
 const props = defineProps({
@@ -230,11 +230,8 @@ const searchColumnOptions = [
 ]
 const bulkTypeValue = ref('')
 
-// Virtual scrolling mounts only visible rows; mounting a few hundred rows blocked the page on open.
-const VIRTUAL_SCROLL_MIN_ROWS = 40
-const ROW_HEIGHT_PX = 43
 const virtualScrollerOptions = computed(() =>
-  filteredParameterRows.value.length > VIRTUAL_SCROLL_MIN_ROWS ? { itemSize: ROW_HEIGHT_PX } : undefined
+  filteredParameterRows.value.length > TABLE_VIRTUAL_SCROLL_MIN_ROWS ? { itemSize: TABLE_ROW_HEIGHT_PX } : undefined
 )
 
 const activeIssueKeys = computed(() => props.issueFilter.activeKeys.value)

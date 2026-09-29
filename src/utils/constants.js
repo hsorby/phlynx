@@ -59,6 +59,10 @@ export const AFFINE_UNIT_CONVERSIONS = {
   fahrenheit: { baseUnit: 'kelvin',  scale: 5 / 9,    offset: 255.372 },
 }
 
+// Parameter tables mount only visible rows past this size; mounting a few hundred rows blocked the page.
+export const TABLE_VIRTUAL_SCROLL_MIN_ROWS = 40
+export const TABLE_ROW_HEIGHT_PX = 43
+
 // Edge connection dialog parameters
 export const OUTER_MARGIN = 24
 export const ROW_H    = 52          // px per port row
