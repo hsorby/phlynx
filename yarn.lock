@@ -2593,10 +2593,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"cellml-text-editor@npm:^0.4.0":
-  version: 0.4.0
-  resolution: "cellml-text-editor@npm:0.4.0"
-  checksum: 10c0/c82e941b1f636969a91a5f705f8c569452d14abd32f42ca7ebf97f5932cc16d464d26a0085d5d638d64e4b0b5bee22816cc2cc71a28d38dfb1b103d18f831a88
+"cellml-text-editor@npm:0.5.0":
+  version: 0.5.0
+  resolution: "cellml-text-editor@npm:0.5.0"
+  checksum: 10c0/e72706065569d6b80a62baf6985a33e777f1c7f7798e07b249d3ade6feb5a0f55a76ba7aaa4e02858089d24eadf3bbd6d02b4e89524a8fdaab17cc1abf6a1d9c
   languageName: node
   linkType: hard
 
@@ -5755,7 +5755,7 @@ __metadata:
     "@vue-flow/minimap": "npm:^1.5.4"
     "@vue-flow/node-resizer": "npm:^1.5.0"
     "@vue/test-utils": "npm:^2.4.6"
-    cellml-text-editor: "npm:^0.4.0"
+    cellml-text-editor: "npm:0.5.0"
     codemirror: "npm:^6.0.2"
     cytoscape: "npm:^3.33.1"
     cytoscape-fcose: "npm:^2.2.0"
@@ -5789,7 +5789,7 @@ __metadata:
     vue-codemirror: "npm:^6.1.1"
     vue-router: "npm:^4.6.4"
     vue3-libcellml.js: "npm:^0.5.1"
-    vue3-math-editor: "npm:^0.2.0"
+    vue3-math-editor: "npm:^0.2.1"
   languageName: unknown
   linkType: soft
 
@@ -7433,15 +7433,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vue3-math-editor@npm:^0.2.0":
-  version: 0.2.0
-  resolution: "vue3-math-editor@npm:0.2.0"
+"vue3-math-editor@npm:^0.2.1":
+  version: 0.2.1
+  resolution: "vue3-math-editor@npm:0.2.1"
   peerDependencies:
     katex: ^0.16.0 || ^0.17.0
     primeicons: ^7.0.0
     primevue: ^4.5.5
     vue: ^3.5.0
-  checksum: 10c0/2b77b320283f34b36155b626b611a2122600318ccd6002d235870040be4dee9a248fd8f7f292b0bc7c3758048b57ce92ad3175c4496b0d459ddfa29232a2c043
+  checksum: 10c0/fe404f65ddfd2ba00f81917dfe276f278ea41663c1389eefcfd01acb7730825fc29faeb068f771b2cba41728e58da7522d1855a3787a2f6e86d5a304d92bc959
   languageName: node
   linkType: hard
 
