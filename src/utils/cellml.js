@@ -11,9 +11,21 @@ import {
 } from './constants.js'
 
 let _libcellml = null
+let resolveLibCellMLReady
+const libcellmlReady = new Promise((resolve) => {
+  resolveLibCellMLReady = resolve
+})
 
 export function initLibCellML(instance) {
   _libcellml = instance
+  resolveLibCellMLReady(instance)
+}
+
+/**
+ * Resolves once initLibCellML has been called and CellML parsing is available.
+ */
+export function whenLibCellMLReady() {
+  return libcellmlReady
 }
 
 /**

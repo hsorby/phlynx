@@ -3075,8 +3075,8 @@ const moduleConfigs = import.meta.glob('../assets/module_configs/*.json', {
 
 const hydrateCellmlAndDependents = async () => {
   // Load the manifest and the libCellML WebAssembly module.
-  const [manifest, instance] = await Promise.all([loadManifest(), libcellmlReadyPromise])
-  initLibCellML(instance)
+  // Initialise libCellML independently of the manifest fetch so URL loads aren't blocked by the network.
+  const [manifest] = await Promise.all([loadManifest(), libcellmlReadyPromise.then(initLibCellML)])
 
   // const printPurgeUrl = false
   // if (printPurgeUrl) {
