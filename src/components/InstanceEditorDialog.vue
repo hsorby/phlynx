@@ -60,7 +60,7 @@
     >
       <!-- LEFT COLUMN: CellML Text or Math Editor -->
       <div class="pane left-pane" :style="leftPaneStyle" :class="{ 'left-pane--collapsed': rightCollapsed }">
-        <div class="editor-wrapper">
+        <div ref="editorWrapperRef" class="editor-wrapper">
           <div v-if="!isEditorReady" class="editor-pending">
             <ProgressSpinner style="width: 32px; height: 32px" strokeWidth="4" />
             <span>Preparing editor...</span>
@@ -391,6 +391,7 @@ import { getUnknownUnitsNotice, isValueMissing } from '../utils/parameterRows'
 import { PORT_TYPE_OPTIONS, MULTIPORT_OPTIONS } from '../utils/constants'
 import { cleanName, sanitiseName } from '../utils/identifiers'
 import { detachReactivity } from '../utils/reactivity'
+import { waitUntilStable } from '../utils/layout'
 import { notify } from '../utils/notify'
 import { getModelComponentNames } from '../utils/cellml'
 
@@ -422,6 +423,7 @@ const activeTab = ref('parameters')
 const applyToAll = ref(false)
 // The editor mounts after the table paints, so its synchronous parse doesn't delay the table.
 const isEditorReady = ref(false)
+const editorWrapperRef = ref(null)
 // The dialog focuses its close button once its opening transition ends, so the editor takes focus
 // after that. Dialog has no event for it; its transition options are merged into its <Transition>.
 const isDialogShown = ref(false)
@@ -771,6 +773,8 @@ watch(
     await nextTick()
     // rAF runs before the next paint; the timeout lands after it, so the table is on screen first.
     await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
+    // The editor measures its glyphs when it mounts, so it waits out the dialog's opening scale.
+    await waitUntilStable(editorWrapperRef.value, 400)
     if (requestId === openRequestId && props.modelValue) isEditorReady.value = true
   }
 )
