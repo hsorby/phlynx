@@ -183,6 +183,77 @@ export const useLibraryStore = defineStore('library', () => {
     ensureSet(tag).add(moduleRef)
   }
 
+  /**
+   * Caches an analysis if its math is still the current math for `mathRef`.
+   */
+  function cacheAnalysisIfCurrent(mathRef, math, analysis) {
+    if (analysis && availableMath.value.get(mathRef) === math) availableMathAnalysis.set(mathRef, analysis)
+    return analysis
+  }
+
+  function reportAnalysisError(mathRef, err) {
+    console.error(`Failed to analyze CellML math for "${mathRef}":`, err)
+    return null
+  }
+
+  /** Sends the pending math to the worker as one batch and caches results that are still current. */
+  function flushPendingAnalysis() {
+    isAnalysisFlushScheduled = false
+    if (pendingAnalysis.size === 0) return
+
+    const items = Array.from(pendingAnalysis, ([key, xml]) => ({ key, xml }))
+    pendingAnalysis.clear()
+
+    analyzeBatchInBackground(items)
+      .then((results) => results.forEach(({ key, analysis }, index) => cacheAnalysisIfCurrent(key, items[index].xml, analysis)))
+      .catch((err) => console.error('Background math analysis failed', err))
+  }
+
+  /**
+   * Drops a math's cached analysis and schedules a background re-analysis.
+   *
+   * @param {string} mathRef
+   * @param {string} math - The new math XML.
+   */
+  function scheduleMathAnalysis(mathRef, math) {
+    availableMathAnalysis.delete(mathRef)
+    pendingAnalysis.set(mathRef, math)
+    if (!isAnalysisFlushScheduled) {
+      isAnalysisFlushScheduled = true
+      queueMicrotask(flushPendingAnalysis)
+    }
+  }
+
+  /**
+   * Gets a math's analysis, computing and caching it now if the background pass hasn't finished.
+   */
+  function getMathAnalysis(mathRef) {
+    const cached = availableMathAnalysis.get(mathRef)
+    if (cached) return cached
+
+    const math = availableMath.value.get(mathRef)
+    if (!math) return null
+    try {
+      return cacheAnalysisIfCurrent(mathRef, math, analyzeMathXml(math))
+    } catch (err) {
+      return reportAnalysisError(mathRef, err)
+    }
+  }
+
+  /**
+   * Gets a math's analysis like getMathAnalysis, but analyzes a cache miss in the worker.
+   */
+  async function ensureMathAnalysis(mathRef) {
+    const cached = availableMathAnalysis.get(mathRef)
+    if (cached) return cached
+
+    const math = availableMath.value.get(mathRef)
+    if (!math) return null
+    return analyzeInBackground(math)
+      .then((analysis) => cacheAnalysisIfCurrent(mathRef, math, analysis))
+      .catch((err) => reportAnalysisError(mathRef, err))
+  }
+
   function addMathFile(filename, components) {
     components.forEach((component) => {
       const mathRef = `${filename}:${component.name}`
@@ -195,6 +266,7 @@ export const useLibraryStore = defineStore('library', () => {
       availableMath.value.set(mathRef, math)
       addMathHashEntry(mathRef, math)
       updateStubStatus(mathRef)
+      scheduleMathAnalysis(mathRef, math)
     }
   }
 
@@ -263,6 +335,7 @@ export const useLibraryStore = defineStore('library', () => {
       mergeIn(new Map(state.availableMath), availableMath.value)
       for (const [mathRef, math] of availableMath.value.entries()) {
         addMathHashEntry(mathRef, math)
+        scheduleMathAnalysis(mathRef, math)
       }
     }
 
@@ -351,6 +424,8 @@ export const useLibraryStore = defineStore('library', () => {
     findMathRefByMath,
     getMathHashByRef,
     getMathRefsByHash,
+    getMathAnalysis,
+    ensureMathAnalysis,
 
     // Query
     getGlobalConstant,
