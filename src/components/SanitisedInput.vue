@@ -13,6 +13,8 @@
       :style="fontSize ? { fontSize } : undefined"
       @update:model-value="emit('update:modelValue', $event ?? '')"
       @blur="commit"
+      @keydown.enter="commit"
+      @keydown.esc="emit('revert', $event)"
     />
 
     <!-- Non-blocking warning, shown inside the field so it never shifts the layout -->
@@ -64,7 +66,7 @@ const props = defineProps({
   notice: { type: String, default: '' },
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'commit', 'revert'])
 
 const rootRef = ref(null)
 
@@ -78,6 +80,7 @@ function commit() {
   if (props.disabled) return
   const next = cleaned.value || props.fallback
   if (next !== props.modelValue) emit('update:modelValue', next)
+  emit('commit', next)
 }
 
 // ── Floating placement ───────────────────────────────────────────────────────
