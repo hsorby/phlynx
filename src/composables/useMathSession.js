@@ -3,13 +3,14 @@
  * analysis linking them. Math editors report changes, and this is the one place they become rows
  * and undo history.
  */
-import { computed, ref, shallowRef } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 
 import { useLibraryStore } from '../stores/libraryStore'
 import { analyzeMathXml } from '../services/math/analyzeMath'
-import { SIMPLE_MODE, modeFor, reconcileRows } from '../services/math/reconcileRows'
+import { SIMPLE_MODE, applyPortTypes, getPortVariables, modeFor, reconcileRows } from '../services/math/reconcileRows'
 import { carryRenames, followPendingRename } from '../services/math/carryRenames'
 import { classifyRows } from '../services/math/variableKinds'
+import { separateParameters } from '../services/math/separateParameters'
 import { buildVariableDeclarations } from '../utils/variables'
 import { areModelsEquivalent } from '../utils/cellml'
 import { cleanName } from '../utils/identifiers'
@@ -52,6 +53,19 @@ export function useMathSession({ history, editorRef, ports }) {
   const pendingRename = shallowRef(null)
 
   const mode = computed(() => modeFor(isManaged.value))
+  let loadedMathRef = null
+
+  /**
+   * Gets the options every reconcile shares: the mode, the ports and the math's default values.
+   *
+   * @param {Iterable<string>} [portNames] - Port variables, if they differ from the current ports.
+   * @returns {Object} reconcileRows options.
+   */
+  const reconcileOptions = (portNames = portVariables.value) => ({
+    mode: mode.value,
+    portVariables: portNames,
+    defaults: store.getMathDefaults(loadedMathRef),
+  })
   // A mode switch always rebuilds the rows, so remember which mode built them.
   let rowsBuiltAsManaged = null
   // An editor mounted after a switch also reports 'init', which only moves the baseline if nothing
@@ -68,11 +82,19 @@ export function useMathSession({ history, editorRef, ports }) {
     rowsBuiltAsManaged = isManaged.value
   }
 
+  /** Every variable name the ports carry. A row nothing computes and no port supplies is a parameter. */
+  const portVariables = computed(() => getPortVariables(ports.value))
+
+  watch(portVariables, (names) => applyPortTypes(parameterRows.value, analysis.value, names))
+
   /** Declarations Simple Mode writes into the model. */
   const editorDefinitions = computed(() => buildVariableDeclarations(parameterRows.value))
 
   /** Each variable's kind (constant, computed constant, ...), or null before the first analysis. */
   const variableKinds = computed(() => classifyRows(analysis.value, parameterRows.value))
+
+  /** Names the equations use. A state's link to its initialiser doesn't count. */
+  const mathReferences = computed(() => new Set(analysis.value?.referenced ?? []))
 
   // Simple Mode reads units from the table; Advanced Mode asks the analysis of the text.
   const unresolvedInText = computed(() => new Set(isManaged.value ? [] : (analysis.value?.unresolved ?? [])))
@@ -108,6 +130,7 @@ export function useMathSession({ history, editorRef, ports }) {
    */
   async function load({ mathRef, rows, managed }) {
     isManaged.value = managed
+    loadedMathRef = mathRef
     const math = (mathRef && store.availableMath.get(mathRef)) || ''
     currentModel.value = math
     originalModel.value = math
@@ -116,7 +139,7 @@ export function useMathSession({ history, editorRef, ports }) {
     hasInitialised = false
 
     analysis.value = mathRef ? await store.ensureMathAnalysis(mathRef) : null
-    setRows(reconcileRows(analysis.value, rows, { mode: mode.value }))
+    setRows(reconcileRows(analysis.value, rows, reconcileOptions()))
   }
 
   /**
@@ -186,7 +209,7 @@ export function useMathSession({ history, editorRef, ports }) {
     const unchanged = { renames: [], partial: null }
     pendingRename.value = isManaged.value ? followPendingRename(pendingRename.value, unchanged, nextAnalysis) : null
 
-    const rows = reconcileRows(nextAnalysis, parameterRows.value, { mode: mode.value })
+    const rows = reconcileRows(nextAnalysis, parameterRows.value, reconcileOptions())
     // Keep the existing row objects unless the structure changed, so table inputs aren't reset.
     if (source === 'init' || rowsBuiltAsManaged !== isManaged.value || !hasSameNames(rows, parameterRows.value)) {
       setRows(rows)
@@ -248,9 +271,11 @@ export function useMathSession({ history, editorRef, ports }) {
     const carried =
       mode.value === SIMPLE_MODE ? carryRenames(previousAnalysis, newAnalysis, previousRows, { pending }) : null
 
-    const newRows = reconcileRows(newAnalysis, carried?.rows ?? previousRows, { mode: mode.value })
-    const validNames = new Set(newRows.map((row) => row.name))
     const renamedTo = new Map((carried?.portRenames ?? []).map(({ from, to }) => [from, to]))
+    // Typed as the ports will be once the renames below reach them.
+    const renamedPortVariables = [...portVariables.value].map((name) => renamedTo.get(name) ?? name)
+    const newRows = reconcileRows(newAnalysis, carried?.rows ?? previousRows, reconcileOptions(renamedPortVariables))
+    const validNames = new Set(newRows.map((row) => row.name))
 
     history.startBatch()
     try {
@@ -347,6 +372,23 @@ export function useMathSession({ history, editorRef, ports }) {
     pendingRename.value = null
   }
 
+  /**
+   * Moves values typed into the text (Advanced Mode `{init: …}`) into their rows and out of the
+   * model, so only the rows hold values. The text wins, since it is what those rows show.
+   */
+  function separateTypedValues() {
+    const { math, values } = separateParameters(currentModel.value)
+    if (math === currentModel.value) return
+
+    const rows = parameterRows.value.map((row) => (values.has(row.name) ? { ...row, value: values.get(row.name) } : row))
+    const nextAnalysis = analyzeMathXml(math)
+    const options = reconcileOptions()
+    currentModel.value = math
+    analysis.value = nextAnalysis
+    // A value typed on a state now belongs to its new initialiser, which only the values know.
+    setRows(reconcileRows(nextAnalysis, rows, { ...options, defaults: new Map([...options.defaults, ...values]) }))
+  }
+
   return {
     // state
     isManaged,
@@ -354,6 +396,7 @@ export function useMathSession({ history, editorRef, ports }) {
     parameterRows,
     editorDefinitions,
     variableKinds,
+    mathReferences,
     pendingRename,
     // queries
     isMissingUnits,
@@ -362,6 +405,7 @@ export function useMathSession({ history, editorRef, ports }) {
     load,
     handleEditorChange,
     flushPendingChanges,
+    separateTypedValues,
     renameEverywhere,
     dismissRename,
   }

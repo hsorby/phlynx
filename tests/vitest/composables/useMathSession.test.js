@@ -181,6 +181,36 @@ describe('useMathSession', () => {
     expect(rows.x.stateRole).toBe('state')
   })
 
+  it('moves values typed into Advanced Mode text into the rows', async () => {
+    session.isManaged.value = false
+    const typed = new CellMLTextGenerator({ simplified: false }).generate(XML).replace('0.5', '0.25')
+    await editorRef.value.report('edit', typed, false)
+    expect(byName(session.parameterRows.value).k.textInit).toBe('0.25')
+
+    session.separateTypedValues()
+    const rows = byName(session.parameterRows.value)
+    expect(rows.k.value).toBe('0.25')
+    expect(rows.k.textInit).toBeUndefined()
+    expect(rows.x0.value).toBe('1')
+    expect(session.currentModel.value).not.toMatch(/initial_value="[\d.]+"/)
+    expect(session.currentModel.value).toContain('initial_value="x0"')
+  })
+
+  it('keeps the math unchanged when only a value is edited in Simple Mode', async () => {
+    const simpleText = new CellMLTextGenerator({ simplified: true }).generate(XML)
+    await editorRef.value.report('init', simpleText, true)
+    byName(session.parameterRows.value).k.value = '2'
+    // The editor reparses whenever the definitions change.
+    await editorRef.value.report('external', simpleText, true)
+    expect(session.isDirty()).toBe(false)
+  })
+
+  it('opens stored math without values, taking them from the math defaults', () => {
+    const stored = useLibraryStore().availableMath.get(MATH_REF)
+    expect(stored).not.toMatch(/initial_value="[\d.]+"/)
+    expect(stored).toContain('initial_value="x0"')
+  })
+
   it('keeps the row set (and so row order and focus) when an initialiser is renamed in the table', async () => {
     const simpleText = new CellMLTextGenerator({ simplified: true }).generate(XML)
     await editorRef.value.report('init', simpleText, true)
