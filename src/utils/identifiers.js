@@ -13,3 +13,17 @@ export function sanitiseName(name) {
 
   return sanitised
 }
+
+/**
+ * Gets `baseName`, or `baseName_1`, `baseName_2`, ... if it is taken.
+ *
+ * @param {string} baseName
+ * @param {Set<string>} takenNames
+ * @returns {string}
+ */
+export function getUniqueName(baseName, takenNames) {
+  let name = baseName
+  let counter = 1
+  while (takenNames.has(name)) name = `${baseName}_${counter++}`
+  return name
+}

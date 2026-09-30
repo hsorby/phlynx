@@ -1,5 +1,5 @@
 import { cleanName } from './identifiers'
-import { TIME_NAMES, ACCESS, NO_ACCESS, VALUE_REQUIRED_TYPES } from './constants'
+import { TIME_NAMES, ACCESS, NO_ACCESS } from './constants'
 
 export function isEditableVariableType(variableType) {
   return variableType !== 'variable' && variableType !== 'boundary_condition'
@@ -14,7 +14,8 @@ export function extractGlobalConstants(parameterArray) {
 }
 
 // ── Access vs interface ──────────────────────────────────────────────────────
-export const interfaceFromAccess = (access) => (access === ACCESS ? 'public' : 'private')
+/** Every declared variable is public, so a parameter or port can reach it; access is a table setting only. */
+export const VARIABLE_INTERFACE = 'public'
 
 export const accessFromInterface = (cellmlInterface) =>
   cellmlInterface === 'public' || cellmlInterface === 'public_and_private' ? ACCESS : NO_ACCESS
@@ -48,16 +49,9 @@ export const isNumericLiteral = (value) => NUMERIC_LITERAL.test(String(value ?? 
 export const isBlank = (value) => String(value ?? '').trim() === ''
 
 /**
- * Trims a value, returning undefined when nothing is left.
- *
- * @param {*} value
- * @returns {string|undefined}
- */
-const blankToUndefined = (value) => (isBlank(value) ? undefined : String(value).trim())
-
-/**
- * Builds the declarations Simple Mode writes into the model from the table rows. A shared
- * initialiser is declared once, and rows without units are skipped.
+ * Builds the declarations Simple Mode writes into the model from the table rows. They carry no
+ * values, only each state's link to its initialiser. A shared initialiser is declared once, and
+ * rows without units are skipped.
  *
  * @param {Array} rows - Parameter-table rows.
  * @returns {Array<{name: string, units: string, interface: string, initialValue: (string|undefined)}>}
@@ -83,12 +77,9 @@ export function buildVariableDeclarations(rows) {
     declarations.push({
       name: row.name,
       units,
-      interface: interfaceFromAccess(row.access),
-      initialValue: initialiserRow
-        ? initialiserRow.name
-        : VALUE_REQUIRED_TYPES.has(row.type)
-          ? blankToUndefined(row.value)
-          : undefined,
+      interface: VARIABLE_INTERFACE,
+      // Only a state's link to its initialiser; values live in the parameter rows, not the math.
+      initialValue: initialiserRow?.name,
     })
 
     if (initialiserRow && !alreadyEmitted.has(initialiserRow.name)) {
@@ -96,8 +87,7 @@ export function buildVariableDeclarations(rows) {
       declarations.push({
         name: initialiserRow.name,
         units: cleanName(initialiserRow.units) || units,
-        interface: interfaceFromAccess(initialiserRow.access),
-        initialValue: blankToUndefined(initialiserRow.value),
+        interface: VARIABLE_INTERFACE,
       })
     }
   }

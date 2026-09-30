@@ -6,7 +6,7 @@ import { cyrb53 } from '../utils/misc'
 import { extractUnitNames } from '../utils/units'
 import { analyzeMathXml } from '../services/math/analyzeMath'
 import { analyzeBatchInBackground, analyzeInBackground } from '../services/math/mathWorkerClient'
-import { normaliseLegacyMathML } from '../services/math/normaliseMath'
+import { separateParameters } from '../services/math/separateParameters'
 
 function mergeIntoStore(newModules, target) {
   const moduleMap = new Map(target.map((mod) => [mod.componentFile, mod]))
@@ -40,6 +40,8 @@ export const useLibraryStore = defineStore('library', () => {
   const mathRefHash = ref(new Map())
   const availableUnits = ref([])
   const globalConstants = ref(new Map())
+  // mathRef -> Map of the values taken out of that math, so new instances can start with them.
+  const mathDefaults = ref(new Map())
 
   // mathRef -> MathAnalysis. Non-reactive, since analyses are large and only read imperatively.
   const availableMathAnalysis = markRaw(new Map())
@@ -93,6 +95,7 @@ export const useLibraryStore = defineStore('library', () => {
     availableCollections.value.clear()
     availableModules.value.clear()
     availableUnits.value = []
+    mathDefaults.value.clear()
     availableMathAnalysis.clear()
     pendingAnalysis.clear()
   }
@@ -272,10 +275,34 @@ export const useLibraryStore = defineStore('library', () => {
     })
   }
 
+  /**
+   * Keeps math without its values, recording them as the math's defaults. Values already recorded
+   * stay unless the new math gives the same variable another.
+   *
+   * @param {string} mathRef
+   * @param {string} rawMath
+   * @returns {string} The math as stored.
+   */
+  function storeSeparatedMath(mathRef, rawMath) {
+    const { math, values } = separateParameters(rawMath)
+    if (values.size) mathDefaults.value.set(mathRef, new Map([...getMathDefaults(mathRef), ...values]))
+    availableMath.value.set(mathRef, math)
+    return math
+  }
+
+  /**
+   * Gets the values taken out of a math, by variable name.
+   *
+   * @param {string} mathRef
+   * @returns {Map<string, string>}
+   */
+  function getMathDefaults(mathRef) {
+    return mathDefaults.value.get(mathRef) ?? new Map()
+  }
+
   function addMath(mathRef, rawMath, isOverwrite = true) {
     if (!availableMath.value.has(mathRef) || isOverwrite) {
-      const math = normaliseLegacyMathML(rawMath)
-      availableMath.value.set(mathRef, math)
+      const math = storeSeparatedMath(mathRef, rawMath)
       addMathHashEntry(mathRef, math)
       updateStubStatus(mathRef)
       scheduleMathAnalysis(mathRef, math)
@@ -353,11 +380,13 @@ export const useLibraryStore = defineStore('library', () => {
       })
     }
 
+    if (state.mathDefaults) {
+      for (const [mathRef, values] of state.mathDefaults) mathDefaults.value.set(mathRef, new Map(values))
+    }
+
     if (state.availableMath) {
-      mergeIn(new Map(state.availableMath), availableMath.value)
-      for (const [mathRef, rawMath] of availableMath.value.entries()) {
-        const math = normaliseLegacyMathML(rawMath)
-        if (math !== rawMath) availableMath.value.set(mathRef, math)
+      for (const [mathRef, rawMath] of state.availableMath) {
+        const math = storeSeparatedMath(mathRef, rawMath)
         addMathHashEntry(mathRef, math)
         scheduleMathAnalysis(mathRef, math)
       }
@@ -402,6 +431,7 @@ export const useLibraryStore = defineStore('library', () => {
       availableModules: Array.from(availableModules.value.entries()),
       availableUnits: availableUnits.value,
       globalConstants: Array.from(globalConstants.value.entries()),
+      mathDefaults: Array.from(mathDefaults.value.entries(), ([mathRef, values]) => [mathRef, Array.from(values)]),
     }
   }
 
@@ -450,6 +480,7 @@ export const useLibraryStore = defineStore('library', () => {
     getMathRefsByHash,
     getMathAnalysis,
     ensureMathAnalysis,
+    getMathDefaults,
 
     // Query
     getGlobalConstant,
