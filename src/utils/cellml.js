@@ -1,4 +1,5 @@
-import { isEmpty } from './variables.js'
+import { inferType, isEmpty, isNumericLiteral } from './variables.js'
+import { analyzeMathXml } from '../services/math/analyzeMath.js'
 import {
   STANDARD_UNITS,
   AFFINE_UNIT_CONVERSIONS,
@@ -783,6 +784,18 @@ function prioritizeEnvironmentComponent(xmlString) {
   return finalXmlString
 }
 
+/**
+ * Makes a component's variable public so it can connect to a sibling component. Math saved
+ * before variables were always declared public may still have private or missing interfaces.
+ *
+ * @param {Object} variable - A libcellml Variable.
+ */
+function ensurePublicInterface(variable) {
+  const interfaceType = variable.interfaceType()
+  if (interfaceType === 'public' || interfaceType === 'public_and_private') return
+  variable.setInterfaceTypeByString('public')
+}
+
 function addVariableToParameterComponent(model, variable, parameterComponent, parameterData) {
   let sourceVar = parameterComponent.variableByName(parameterData.name)
 
@@ -804,6 +817,7 @@ function addVariableToParameterComponent(model, variable, parameterComponent, pa
   }
 
   // Connect the constant parameter to the module variable.
+  ensurePublicInterface(variable)
   _libcellml.Variable.addEquivalence(sourceVar, variable)
 
   sourceVar.delete()
@@ -993,6 +1007,9 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
       }
     }
 
+    // Values live only in the parameter rows, so one left blank leaves its variable uninitialised.
+    const missingValues = []
+
     // ---------------------------------
     // Process Nodes (Create Components)
     // ---------------------------------
@@ -1036,6 +1053,8 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
                 ...v,
                 name: variable.name(),
               })
+            } else {
+              missingValues.push(`${node.data.name}.${variable.name()}`)
             }
           } else if (nodeVariable.type === 'constant') {
             const v = node.data.variables.find((cv) => cv.name === nodeVariable.name)
@@ -1045,6 +1064,8 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
                 ...v,
                 name: isShared ? `${node.data.name}_${v.name}` : v.name,
               })
+            } else {
+              missingValues.push(`${node.data.name}.${variable.name()}`)
             }
           }
         }
@@ -1055,6 +1076,12 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
         variable.delete()
         units.delete()
       }
+    }
+
+    if (missingValues.length) {
+      const shown = missingValues.slice(0, 10).join(', ')
+      const more = missingValues.length > 10 ? ` and ${missingValues.length - 10} more` : ''
+      throw new Error(`Missing parameter values: ${shown}${more}.`)
     }
 
     // ----------------------------------
@@ -1301,13 +1328,20 @@ function isPossibleParameter(variable, includeInitialised = false) {
 }
 
 /**
- * Extracts unique variable names from a CellML model/component
+ * Extracts unique variable names from a CellML model/component. A variable the math computes is a
+ * `variable`; anything else is a `constant` until someone says otherwise.
  */
 export function extractVariablesFromMath(math, includeInitialisedVariables = true) {
   const garbageCollector = new Set() // To track created objects for cleanup.
   try {
     const variables = []
     if (math) {
+      const analysis = analyzeMathXml(math)
+      const roles = {
+        states: new Set(analysis?.stateVariables),
+        assigned: new Set(analysis?.assigned),
+        voi: new Set(analysis?.voi),
+      }
       const parser = new _libcellml.Parser(false)
       garbageCollector.add(parser)
       const model = parser.parseModel(math)
@@ -1322,11 +1356,12 @@ export function extractVariablesFromMath(math, includeInitialisedVariables = tru
         const units = variable.units()
         garbageCollector.add(units)
         if (isPossibleParameter(variable, includeInitialisedVariables)) {
-          variables.push({ 
+          const initialValue = variable.initialValue()
+          variables.push({
             name: variable.name(),
             units: units.name(),
-            value: variable.initialValue(),
-            type: variable.initialValue() !== '' ? 'constant' : 'variable',
+            value: isNumericLiteral(initialValue) ? initialValue : '',
+            type: inferType(variable.name(), roles),
             access: 'access',
             data_reference: 'unknown',
           })
