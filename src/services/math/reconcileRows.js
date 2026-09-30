@@ -1,6 +1,15 @@
 /**
  * Builds parameter-table rows from a MathAnalysis, keeping whatever the previous rows already hold.
  * Pure (no Vue, no DOM), so it is safe in a worker.
+ *
+ * A row's type says where its value comes from:
+ * - `variable`: this component's math computes it (state, assigned, voi, time). Only computed
+ *   rows are variables, and computed rows always are.
+ * - `boundary_condition`: another module supplies it through a port.
+ * - `constant` / `global_constant`: the parameter pane supplies it. The default for a new row.
+ * A port doesn't settle which of these a row is, since the connected module may compute it or take
+ * it as its own boundary condition, so a stored type is always kept. Ports only re-type a stale
+ * `variable` the math doesn't compute: in a port it becomes a boundary condition, else a constant.
  */
 import { TIME_NAMES, ACCESS, NO_ACCESS } from '../../utils/constants'
 import { accessFromInterface, inferType, isNumericLiteral, syncInitialiserUnits } from '../../utils/variables'
@@ -15,6 +24,63 @@ export const ADVANCED_MODE = 'advanced'
  * @returns {'simple'|'advanced'}
  */
 export const modeFor = (isSimple) => (isSimple ? SIMPLE_MODE : ADVANCED_MODE)
+
+/**
+ * Gets the roles the math gives its variables, as used by inferType.
+ *
+ * @param {import('./analyzeMath').MathAnalysis} analysis
+ * @returns {{states: Set<string>, assigned: Set<string>, voi: Set<string>}}
+ */
+function getRoles(analysis) {
+  return { states: new Set(analysis.stateVariables), assigned: new Set(analysis.assigned), voi: new Set(analysis.voi) }
+}
+
+/**
+ * Resolves a row's type from what the math computes, what the ports carry and the stored type.
+ *
+ * @param {string} name
+ * @param {{states: Set, assigned: Set, voi: Set}} roles
+ * @param {Object|undefined} previousRow
+ * @param {Set<string>|null} portVariables - Names the instance's ports carry; null keeps a stored `variable`.
+ * @returns {string} The row type.
+ */
+function resolveRowType(name, roles, previousRow, portVariables) {
+  if (inferType(name, roles) === 'variable') return 'variable'
+  const storedType = previousRow?.type
+  if (!storedType) return 'constant'
+  if (storedType !== 'variable' || !portVariables) return storedType
+  return portVariables.has(name) ? 'boundary_condition' : 'constant'
+}
+
+/**
+ * Lists the variable names a set of ports carries. Saved ports may hold `{ name }` objects.
+ *
+ * @param {Array} [ports=[]]
+ * @returns {Set<string>}
+ */
+export function getPortVariables(ports = []) {
+  const names = (ports ?? []).flatMap((port) => (Array.isArray(port.variables) ? port.variables : []))
+  return new Set(names.map((variable) => (typeof variable === 'object' && variable !== null ? variable.name : variable)))
+}
+
+/**
+ * Re-types rows after the ports change, without rebuilding them. States keep their type.
+ *
+ * @param {Array} rows - Mutated in place.
+ * @param {import('./analyzeMath').MathAnalysis|null} analysis
+ * @param {Set<string>} portVariables - Names the instance's ports carry.
+ * @returns {Array} The same `rows`.
+ */
+export function applyPortTypes(rows, analysis, portVariables) {
+  if (!analysis) return rows
+  const roles = getRoles(analysis)
+  for (const row of rows) {
+    if (row.stateRole === 'state') continue
+    const type = resolveRowType(row.name, roles, row, portVariables)
+    if (type !== row.type) row.type = type
+  }
+  return rows
+}
 
 /**
  * Pairs each state with the variable supplying its initial value. Declarations win, and previous
@@ -42,24 +108,30 @@ function findInitialiserPairings(analysis, previousRows, stateNames) {
 }
 
 /**
+ * @typedef {Object} RowContext
+ * @property {{states: Set, assigned: Set, voi: Set}} roles
+ * @property {Set<string>|null} portVariables - Names the instance's ports carry; null if unknown.
+ * @property {Map<string, string>} defaults - Values taken out of the math, for rows with none yet.
+ */
+
+/**
  * Builds a Simple Mode row, where the table owns units, value, type and access.
  *
  * @param {string} name
  * @param {import('./analyzeMath').DeclaredVariable|undefined} declaration
  * @param {Object|undefined} previousRow
- * @param {{states: Set, assigned: Set, voi: Set}} roles
+ * @param {RowContext} context
  * @returns {Object} A new row.
  */
-function buildSimpleModeRow(name, declaration, previousRow, roles) {
+function buildSimpleModeRow(name, declaration, previousRow, { roles, portVariables, defaults }) {
   const seededValue = declaration && isNumericLiteral(declaration.initialValue) ? declaration.initialValue.trim() : ''
-  const structuralType = inferType(name, roles)
   return {
     name,
     units: previousRow?.units || declaration?.units || '',
     access: previousRow?.access ?? (declaration ? accessFromInterface(declaration.interface) : ACCESS),
-    value: previousRow?.value ?? seededValue,
-    // Being computed by the math is a fact; otherwise the stored type is the person's choice.
-    type: structuralType === 'variable' ? 'variable' : (previousRow?.type ?? structuralType),
+    value: previousRow?.value ?? defaults.get(name) ?? seededValue,
+    type: resolveRowType(name, roles, previousRow, portVariables),
+    data_reference: previousRow?.data_reference ?? null,
   }
 }
 
@@ -69,17 +141,20 @@ function buildSimpleModeRow(name, declaration, previousRow, roles) {
  * @param {string} name
  * @param {import('./analyzeMath').DeclaredVariable} declaration
  * @param {Object|undefined} previousRow
+ * @param {RowContext} context
  * @returns {Object} A new row, with `textInit` when the text sets an initial value.
  */
-function buildAdvancedModeRow(name, declaration, previousRow) {
+function buildAdvancedModeRow(name, declaration, previousRow, { roles, portVariables, defaults }) {
   const hasInitialValue = !!declaration.initialValue
   const defaultAccess = TIME_NAMES.has(name) ? accessFromInterface(declaration.interface) : ACCESS
   return {
     name,
     units: declaration.units,
     access: previousRow?.access ?? defaultAccess,
-    value: previousRow ? previousRow.value : declaration.initialValue || '',
-    type: hasInitialValue ? (previousRow?.type ?? 'constant') : 'variable',
+    value: previousRow?.value ?? defaults.get(name) ?? (declaration.initialValue || ''),
+    // A missing initial value doesn't make it a variable: the value is set outside the math.
+    type: resolveRowType(name, roles, previousRow, portVariables),
+    data_reference: previousRow?.data_reference ?? null,
     ...(hasInitialValue ? { textInit: declaration.initialValue } : {}),
   }
 }
@@ -121,6 +196,8 @@ function resolveStateInitialisers(rows, stateNames) {
         units: stateRow.units,
         type: 'constant',
         access: NO_ACCESS,
+        // The state's value was its initial value, so its source moves with it.
+        data_reference: stateRow.data_reference ?? null,
       }
       rows.push(initialiserRow)
       rowsByName.set(defaultName, initialiserRow)
@@ -139,16 +216,19 @@ function resolveStateInitialisers(rows, stateNames) {
  * @param {Array} [previousRows=[]] - Existing rows; never mutated.
  * @param {Object} [options]
  * @param {'simple'|'advanced'} [options.mode='simple'] - Whether the table or the text owns declarations.
+ * @param {Iterable<string>|null} [options.portVariables=null] - Names the instance's ports carry; null keeps stored types.
+ * @param {Map<string, string>} [options.defaults] - Values taken out of the math (libraryStore.getMathDefaults),
+ *   used for rows that have no value yet. A value someone cleared stays blank.
  * @returns {Array} New row objects.
  */
-export function reconcileRows(analysis, previousRows = [], { mode = SIMPLE_MODE } = {}) {
+export function reconcileRows(analysis, previousRows = [], { mode = SIMPLE_MODE, portVariables = null, defaults = new Map() } = {}) {
   if (!analysis) return previousRows
 
   const previousByName = new Map(previousRows.map((row) => [row.name, row]))
   const declaredByName = new Map(analysis.declared.map((variable) => [variable.name, variable]))
   const stateNames = new Set(analysis.stateVariables)
   const initialiserOf = findInitialiserPairings(analysis, previousRows, stateNames)
-  const roles = { states: stateNames, assigned: new Set(analysis.assigned), voi: new Set(analysis.voi) }
+  const context = { roles: getRoles(analysis), portVariables: portVariables ? new Set(portVariables) : null, defaults }
 
   const rows = []
   const listedNames = new Set()
@@ -161,12 +241,14 @@ export function reconcileRows(analysis, previousRows = [], { mode = SIMPLE_MODE 
   }
 
   if (mode === SIMPLE_MODE) {
-    for (const name of new Set([...analysis.referenced, ...initialiserOf.values()])) {
-      addRow(buildSimpleModeRow(name, declaredByName.get(name), previousByName.get(name), roles))
+    // A row the math still declares stays even if no equation uses it, so its value and source aren't lost.
+    const keptDeclared = analysis.declared.map((variable) => variable.name).filter((name) => previousByName.has(name))
+    for (const name of new Set([...analysis.referenced, ...initialiserOf.values(), ...keptDeclared])) {
+      addRow(buildSimpleModeRow(name, declaredByName.get(name), previousByName.get(name), context))
     }
   } else {
     for (const declaration of analysis.declared) {
-      addRow(buildAdvancedModeRow(declaration.name, declaration, previousByName.get(declaration.name)))
+      addRow(buildAdvancedModeRow(declaration.name, declaration, previousByName.get(declaration.name), context))
     }
   }
 

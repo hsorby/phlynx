@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { reconcileRows } from '../../../../src/services/math/reconcileRows'
+import { applyPortTypes, getPortVariables, reconcileRows } from '../../../../src/services/math/reconcileRows'
 
 const analysis = (overrides = {}) => ({
   componentName: 'c',
@@ -78,6 +78,30 @@ describe('reconcileRows (simple mode)', () => {
     expect(rows.V.initialiser).toBeUndefined()
   })
 
+  it('keeps a row the math still declares but no equation uses, and drops one it no longer declares', () => {
+    const previous = [
+      { name: 'k', value: '0', type: 'constant', data_reference: 'Smith2001' },
+      { name: 'gone', value: '2', type: 'constant' },
+    ]
+    const rows = byName(
+      reconcileRows(analysis({ referenced: ['t'], declared: [{ name: 'k', units: 'mV', interface: 'public', initialValue: '' }] }), previous)
+    )
+    expect(rows.k).toMatchObject({ value: '0', data_reference: 'Smith2001' })
+    expect(rows.gone).toBeUndefined()
+  })
+
+  it('keeps data references and gives a new initialiser its state\'s', () => {
+    const previous = [
+      { name: 'k', value: '3', type: 'constant', data_reference: 'Smith2001' },
+      { name: 'V', value: '-60', type: 'variable', data_reference: 'Jones1999' },
+    ]
+    const rows = byName(reconcileRows(analysis({ referenced: ['t', 'V', 'k'], stateVariables: ['V'], voi: ['t'] }), previous))
+    expect(rows.k.data_reference).toBe('Smith2001')
+    expect(rows.V.data_reference).toBe('Jones1999')
+    expect(rows.V_init).toMatchObject({ value: '-60', data_reference: 'Jones1999' })
+    expect(rows.t.data_reference).toBeNull()
+  })
+
   it('does not mutate previous rows', () => {
     const previous = [{ name: 'V', units: 'volt', value: '1', type: 'constant', access: 'access' }]
     const snapshot = JSON.parse(JSON.stringify(previous))
@@ -97,7 +121,9 @@ describe('reconcileRows (advanced mode)', () => {
   it('builds rows from declarations, with text-owned units and textInit', () => {
     const previous = [{ name: 'k', units: 'metre', value: '9', type: 'global_constant', access: 'no_access' }]
     const rows = byName(
-      reconcileRows(analysis({ declared, referenced: ['t', 'V', 'k', 'I'], stateVariables: ['V'] }), previous, { mode: 'advanced' })
+      reconcileRows(analysis({ declared, referenced: ['t', 'V', 'k', 'I'], stateVariables: ['V'], assigned: ['I'] }), previous, {
+        mode: 'advanced',
+      })
     )
     expect(Object.keys(rows)).toEqual(expect.arrayContaining(['t', 'V', 'k', 'I', 'V_init']))
     expect(rows.k).toMatchObject({ units: 'per_second', value: '9', type: 'global_constant', textInit: '2' })
@@ -105,5 +131,111 @@ describe('reconcileRows (advanced mode)', () => {
     expect(rows.I.textInit).toBeUndefined()
     expect(rows.t).toMatchObject({ type: 'variable', access: 'access' })
     expect(rows.V).toMatchObject({ stateRole: 'state', type: 'variable', textInit: '-0.08' })
+  })
+})
+
+describe('reconcileRows (row types)', () => {
+  const declared = [
+    { name: 'k', units: 'second', interface: 'public_in', initialValue: '' },
+    { name: 'u_in', units: 'volt', interface: 'public_in', initialValue: '' },
+    { name: 'u_bc', units: 'volt', interface: 'public_in', initialValue: '' },
+    { name: 'c', units: 'second', interface: 'public_in', initialValue: '' },
+    { name: 'g', units: 'second', interface: 'public_in', initialValue: '' },
+    { name: 'I', units: 'amp', interface: '', initialValue: '' },
+  ]
+  const math = analysis({ declared, referenced: ['k', 'u_in', 'u_bc', 'c', 'g', 'I'], assigned: ['I'] })
+  const previous = [
+    { name: 'k', type: 'variable' },
+    { name: 'u_in', type: 'variable' },
+    { name: 'u_bc', type: 'boundary_condition' },
+    { name: 'c', type: 'constant' },
+    { name: 'g', type: 'global_constant' },
+    { name: 'I', type: 'constant' },
+  ]
+
+  it('makes a declared variable with no initial value a constant, not a variable, in advanced mode', () => {
+    const rows = byName(reconcileRows(math, [], { mode: 'advanced' }))
+    expect(rows.k.type).toBe('constant')
+  })
+
+  it('makes only computed rows variables, re-typing a stale variable from the ports', () => {
+    for (const mode of ['simple', 'advanced']) {
+      const rows = byName(reconcileRows(math, previous, { mode, portVariables: ['u_in', 'c'] }))
+      expect(rows.I.type).toBe('variable')
+      expect(rows.k.type).toBe('constant')
+      expect(rows.u_in.type).toBe('boundary_condition')
+    }
+  })
+
+  it('keeps stored boundary conditions and constants, in a port or not', () => {
+    const rows = byName(reconcileRows(math, previous, { portVariables: ['c'] }))
+    expect(rows.u_bc.type).toBe('boundary_condition')
+    expect(rows.c.type).toBe('constant')
+    expect(rows.g.type).toBe('global_constant')
+  })
+
+  it('defaults a new row to constant, even in a port', () => {
+    const rows = byName(reconcileRows(math, [], { portVariables: ['u_in'] }))
+    expect(rows.u_in.type).toBe('constant')
+    expect(rows.k.type).toBe('constant')
+    expect(rows.I.type).toBe('variable')
+  })
+
+  it('keeps a stored variable when the ports are unknown', () => {
+    const rows = byName(reconcileRows(math, previous))
+    expect(rows.k.type).toBe('variable')
+  })
+
+  it('re-types stale variables when the ports change, leaving states and other types alone', () => {
+    const rows = [
+      { name: 'k', type: 'variable' },
+      { name: 'm', type: 'variable' },
+      { name: 'u_bc', type: 'boundary_condition' },
+      { name: 'c', type: 'constant' },
+      { name: 'x', type: 'variable', stateRole: 'state' },
+    ]
+    applyPortTypes(rows, analysis({ stateVariables: ['x'] }), new Set(['k']))
+    expect(byName(rows)).toMatchObject({
+      k: { type: 'boundary_condition' },
+      m: { type: 'constant' },
+      u_bc: { type: 'boundary_condition' },
+      c: { type: 'constant' },
+      x: { type: 'variable' },
+    })
+  })
+
+  it('reads port variables saved as names or as { name } objects', () => {
+    expect(getPortVariables([{ variables: ['a', { name: 'b' }] }, { variables: null }, {}])).toEqual(new Set(['a', 'b']))
+    expect(getPortVariables(undefined)).toEqual(new Set())
+  })
+})
+
+describe('reconcileRows (defaults)', () => {
+  const math = analysis({
+    referenced: ['x', 'x_init', 'k', 'g'],
+    stateVariables: ['x'],
+    declared: [
+      { name: 'x', units: 'metre', interface: '', initialValue: 'x_init' },
+      { name: 'x_init', units: 'metre', interface: '', initialValue: '' },
+    ],
+  })
+  const defaults = new Map([['x_init', '1.5'], ['k', '2'], ['g', '3']])
+
+  it('fills rows that have no value from the defaults, including a state initialiser', () => {
+    const rows = byName(reconcileRows(math, [{ name: 'k', value: null, type: 'constant' }], { defaults }))
+    expect(rows.x).toMatchObject({ stateRole: 'state', initialiser: 'x_init' })
+    expect(rows.x_init.value).toBe('1.5')
+    expect(rows.k.value).toBe('2')
+    expect(rows.g.value).toBe('3')
+  })
+
+  it('keeps a value someone entered or cleared', () => {
+    const previous = [
+      { name: 'k', value: '9', type: 'constant' },
+      { name: 'g', value: '', type: 'constant' },
+    ]
+    const rows = byName(reconcileRows(math, previous, { defaults }))
+    expect(rows.k.value).toBe('9')
+    expect(rows.g.value).toBe('')
   })
 })

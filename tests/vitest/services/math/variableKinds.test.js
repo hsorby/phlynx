@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 import { analyzeMathXml } from '../../../../src/services/math/analyzeMath'
+import { readFileSync, readdirSync } from 'node:fs'
 import { classifyRows, isInitialisable } from '../../../../src/services/math/variableKinds'
+import { getPortVariables, reconcileRows } from '../../../../src/services/math/reconcileRows'
+import { normalisePorts, normaliseVariables } from '../../../../src/utils/config'
 
 /** A component whose math is the given equations, in MathML. */
 const model = (equations) => `<model xmlns="http://www.cellml.org/cellml/2.0#" name="m">
@@ -76,5 +79,72 @@ describe('isInitialisable', () => {
     expect(isInitialisable(byName('V_init'), kinds)).toBe(true)
     expect(isInitialisable(byName('k1'), null)).toBe(true)
     expect(isInitialisable(byName('k_eff'), null)).toBe(false)
+  })
+})
+
+describe('heart_Ca_input', () => {
+  const file = readFileSync('src/assets/modules/heart_modules.cellml', 'utf8')
+  const component = file.match(/<component name="heart_Ca_input">[\s\S]*?<\/component>/)[0]
+  const xml = `<model xmlns="http://www.cellml.org/cellml/2.0#" name="m">${component}</model>`
+  const config = JSON.parse(readFileSync('src/assets/module_configs/heart.json', 'utf8')).find(
+    (module) => module.component_type === 'heart_Ca_input'
+  )
+
+  it.each(['simple', 'advanced'])('treats the q_*_init initialisers as constants in %s mode', (mode) => {
+    const analysis = analyzeMathXml(xml)
+    const rows = reconcileRows(analysis, normaliseVariables(config.variables_and_units), {
+      mode,
+      portVariables: getPortVariables(normalisePorts(config)),
+    })
+    const kinds = classifyRows(analysis, rows)
+    const rowsByName = new Map(rows.map((row) => [row.name, row]))
+
+    for (const name of ['q_ra_init', 'q_rv_init', 'q_la_init', 'q_lv_init']) {
+      expect(rowsByName.get(name).type).toBe('global_constant')
+    }
+    const timeVarying = rows.filter(
+      (row) => row.stateRole === 'state' && row.initialiser && !isInitialisable(rowsByName.get(row.initialiser), kinds)
+    )
+    expect(timeVarying.map((row) => row.name)).toEqual([])
+    expect(rowsByName.get('u_root').type).toBe('boundary_condition')
+    expect(rowsByName.get('u_par').type).toBe('boundary_condition')
+  })
+})
+
+describe('bundled library modules', () => {
+  const componentXml = new Map()
+  for (const file of readdirSync('src/assets/modules').filter((name) => name.endsWith('.cellml'))) {
+    const text = readFileSync(`src/assets/modules/${file}`, 'utf8')
+    for (const match of text.matchAll(/<component name="([^"]+)"[\s\S]*?<\/component>/g)) {
+      componentXml.set(`${file}:${match[1]}`, match[0])
+    }
+  }
+
+  it('keeps every configured type, apart from port variables nothing computes', () => {
+    const changed = []
+    for (const configFile of readdirSync('src/assets/module_configs')) {
+      const modules = JSON.parse(readFileSync(`src/assets/module_configs/${configFile}`, 'utf8'))
+      if (!Array.isArray(modules)) continue
+      for (const module of modules) {
+        const component = componentXml.get(`${module.component_file}:${module.component_type}`)
+        if (!component) continue
+        const configured = normaliseVariables(module.variables_and_units)
+        const rows = reconcileRows(analyzeMathXml(`<model xmlns="http://www.cellml.org/cellml/2.0#" name="m">${component}</model>`), configured, {
+          portVariables: getPortVariables(normalisePorts(module)),
+        })
+        const typeOf = new Map(rows.map((row) => [row.name, row.type]))
+        for (const row of configured) {
+          if (typeOf.has(row.name) && typeOf.get(row.name) !== row.type) {
+            changed.push({ file: configFile, change: `${row.type} -> ${typeOf.get(row.name)}` })
+          }
+        }
+      }
+    }
+    // A few microvasculature modules list port inputs as `variable`; they are boundary conditions.
+    // Two are declared but unused (constant_pressure_BC_type_micro.v), and are kept as rows.
+    expect(changed.length).toBe(14)
+    expect(new Set(changed.map(({ file, change }) => `${file}: ${change}`))).toEqual(
+      new Set(['microvasculature_network.json: variable -> boundary_condition'])
+    )
   })
 })

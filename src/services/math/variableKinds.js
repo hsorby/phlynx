@@ -2,8 +2,9 @@ import { classifyVariables, isInitialisingKind } from 'cellml-text-editor'
 import { VALUE_REQUIRED_TYPES } from '../../utils/constants'
 
 /**
- * Classifies a component's variables for the parameter table. The table's constant rows are the
- * constants; any other row the math doesn't define arrives through a port, so it is `external`.
+ * Classifies a component's variables for the parameter table. The constant and global rows are
+ * the constants. A boundary condition, which a port supplies, is `external`, so it can't
+ * initialise a state (see reconcileRows for how rows get their types).
  *
  * @param {import('cellml-text-editor').ModelAnalysis|null} analysis
  * @param {Array} rows - Parameter rows.
