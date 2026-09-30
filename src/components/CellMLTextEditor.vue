@@ -63,7 +63,6 @@
 
       <div class="editor-section">
         <div class="panel-header">
-          <h3>CellML Text</h3>
           <label class="mode-switch">
             <ToggleSwitch v-model="isSimple" />
             <span>Simple Mode</span>
@@ -809,13 +808,6 @@ onUnmounted(() => {
   display: flex;
 }
 
-.panel h3 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--p-text-color);
-}
-
 .panel-header {
   display: flex;
   align-items: center;
@@ -834,9 +826,6 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   margin-right: auto;
-  margin-left: 4px;
-  padding-left: 12px;
-  border-left: 1px solid var(--p-content-border-color); /* sets it apart from the title */
   font-size: 0.8125rem;
   font-weight: 500;
   line-height: 1;

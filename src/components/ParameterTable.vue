@@ -1,11 +1,6 @@
 <template>
   <div class="parameters-tab-body">
     <div class="toolbar-container">
-      <div class="legend-row">
-        <span class="legend-item"><span class="legend-swatch legend-swatch--state"></span>State variable</span>
-        <span class="legend-item"><span class="legend-swatch legend-swatch--initialiser"></span>Initial-value variable</span>
-      </div>
-
       <div class="search-group">
         <div class="search-input-wrapper flex-1">
           <IconField class="w-full">
@@ -33,8 +28,9 @@
         />
       </div>
 
-      <div class="bulk-controls">
-        <span class="bulk-label">Bulk Type:</span>
+      <!-- Selecting rows swaps the summary row for the bulk actions, so the toolbar keeps its height -->
+      <div v-if="selectedRows.length" class="toolbar-row bulk-controls">
+        <span class="bulk-label">{{ selectedRows.length }} selected. Set type:</span>
         <Select
           v-model="bulkTypeValue"
           size="small"
@@ -44,30 +40,31 @@
           placeholder="Select type..."
           class="bulk-select"
         />
-        <Button
-          size="small"
-          :disabled="selectedRows.length === 0"
-          @click="applyBulkType"
-        >
-          Apply ({{ selectedRows.length }})
-        </Button>
+        <Button size="small" label="Apply" :disabled="!bulkTypeValue" @click="applyBulkType" />
+        <Button size="small" label="Clear" severity="secondary" text @click="clearSelection" />
       </div>
 
-      <div v-if="issueChips.length" class="issue-summary">
-        <span class="issue-summary-label">Show only:</span>
-        <button
-          v-for="chip in issueChips"
-          :key="chip.key"
-          type="button"
-          class="issue-chip"
-          :class="[`issue-chip--${chip.kind}`, { 'issue-chip--active': activeIssueKeys.includes(chip.key) }]"
-          :aria-pressed="activeIssueKeys.includes(chip.key)"
-          :title="activeIssueKeys.includes(chip.key) ? 'Showing only these. Click to show all again.' : 'Click to show only these'"
-          @click="toggleIssueFilter(chip.key)"
-        >
-          <i :class="['pi', chip.icon]"></i>
-          {{ chip.label }}
-        </button>
+      <div v-else class="toolbar-row issue-summary">
+        <template v-if="issueChips.length">
+          <span class="issue-summary-label">Show only:</span>
+          <button
+            v-for="chip in issueChips"
+            :key="chip.key"
+            type="button"
+            class="issue-chip"
+            :class="[`issue-chip--${chip.kind}`, { 'issue-chip--active': activeIssueKeys.includes(chip.key) }]"
+            :aria-pressed="activeIssueKeys.includes(chip.key)"
+            :title="activeIssueKeys.includes(chip.key) ? 'Showing only these. Click to show all again.' : 'Click to show only these'"
+            @click="toggleIssueFilter(chip.key)"
+          >
+            <i :class="['pi', chip.icon]"></i>
+            {{ chip.label }}
+          </button>
+        </template>
+        <span class="legend-row">
+          <span class="legend-item"><span class="legend-swatch legend-swatch--state"></span>State variable</span>
+          <span class="legend-item"><span class="legend-swatch legend-swatch--initialiser"></span>Initial-value variable</span>
+        </span>
       </div>
     </div>
 
@@ -121,6 +118,7 @@
             </span>
             <Select
               v-else-if="slotProps.data.stateRole === 'state'"
+              :key="`${slotProps.data.name}:${initialiserPickerKey}`"
               :model-value="slotProps.data.initialiser || NEW_INITIALISER_VALUE"
               :options="initialiserOptionsFor(slotProps.data)"
               optionLabel="label"
@@ -163,9 +161,9 @@
         <Column field="type" header="Type" sortable style="width: 140px">
           <template #body="slotProps">
             <Select
-              :model-value="getDisplayType(slotProps.data)"
-              :options="PARAMETER_TYPE_OPTIONS"
-              :disabled="slotProps.data.stateRole === 'state' || !!slotProps.data.textInit"
+              :model-value="slotProps.data.type"
+              :options="typeOptionsFor(slotProps.data)"
+              :disabled="isTypeFixed(slotProps.data)"
               optionLabel="label"
               optionValue="value"
               size="small"
@@ -197,10 +195,10 @@ import Tag from 'primevue/tag'
 
 import SanitisedInput from './SanitisedInput.vue'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
-import { isEditableVariableType } from '../utils/variables'
-import { getDisplayType, isValueMissing } from '../utils/parameterRows'
+import { isBlank, isEditableVariableType } from '../utils/variables'
+import { isValueMissing } from '../utils/parameterRows'
 import { PARAMETER_TYPE_OPTIONS, NO_ACCESS, TABLE_VIRTUAL_SCROLL_MIN_ROWS, TABLE_ROW_HEIGHT_PX } from '../utils/constants'
-import { cleanName } from '../utils/identifiers'
+import { cleanName, getUniqueName } from '../utils/identifiers'
 import { isInitialisable } from '../services/math/variableKinds'
 
 const props = defineProps({
@@ -214,12 +212,17 @@ const props = defineProps({
   issueFilter: { type: Object, required: true },
   /** Each variable's kind from useMathSession, or null before the first analysis. */
   variableKinds: { type: Map, default: null },
+  /** Names the equations use. */
+  mathReferences: { type: Set, default: () => new Set() },
 })
 
 const { confirm } = useConfirmDialog()
 
 /** Picker value meaning "create a new initialiser" rather than pick an existing variable. */
 const NEW_INITIALISER_VALUE = '__new_initialiser__'
+
+// The picker keeps its own selection, so a reverted pick remounts it to show the current initialiser.
+const initialiserPickerKey = ref(0)
 
 const selectedRows = ref([])
 
@@ -304,14 +307,7 @@ function statesUsingInitialiser(name) {
  * @returns {string}
  */
 function nextAvailableInitialiserName(stateRow) {
-  const defaultName = `${stateRow.name}_init`
-  const existingNames = new Set(props.rows.map((row) => row.name))
-  let name = defaultName
-  let counter = 1
-  while (existingNames.has(name)) {
-    name = `${defaultName}_${counter++}`
-  }
-  return name
+  return getUniqueName(`${stateRow.name}_init`, new Set(props.rows.map((row) => row.name)))
 }
 
 /** Rows that can initialise a state, by cleaned units, so each state's picker avoids a full-table scan. */
@@ -382,51 +378,51 @@ function createNewInitialiserFor(stateRow) {
 }
 
 /**
- * Offers to remove an initialiser that no state uses any more.
+ * Checks whether switching a state away from an initialiser would leave it unused: no other
+ * state uses it as an initialiser and no equation uses it.
  *
- * @param {string} previousInitialiserName
- * @returns {Promise<void>}
+ * @param {string} name - The state's current initialiser.
+ * @returns {boolean}
  */
-async function maybeCleanupOrphanedInitialiser(previousInitialiserName) {
-  if (!previousInitialiserName) return
-  if ((initialiserUsage.value.get(previousInitialiserName) ?? 0) > 0) return // still in use elsewhere
-
-  const row = props.rows.find((r) => r.name === previousInitialiserName)
-  if (!row) return
-
-  const confirmed = await confirm({
-    header: 'Remove unused initialiser?',
-    message: `"${previousInitialiserName}" is no longer used to set any state's initial value. Remove it from the parameter table?`,
-    severity: 'warning',
-    acceptLabel: 'Remove',
-    rejectLabel: 'Keep',
-  })
-  if (!confirmed) return
-
-  const index = props.rows.indexOf(row)
-  if (index !== -1) props.rows.splice(index, 1)
+function wouldOrphanInitialiser(name) {
+  if (!name || !props.rows.some((row) => row.name === name)) return false
+  return (initialiserUsage.value.get(name) ?? 0) <= 1 && !props.mathReferences.has(name)
 }
 
 /**
- * Points a state at the picked initialiser, creating one when "New" is picked.
+ * Points a state at the picked initialiser, creating one when "New" is picked. An old initialiser
+ * left unused is removed, after asking first if that would lose its value; nothing changes if the
+ * person reverts.
  *
  * @param {Object} stateRow
  * @param {string} selectedValue - A row name, or NEW_INITIALISER_VALUE.
  * @returns {Promise<void>}
  */
 async function onInitialiserPick(stateRow, selectedValue) {
-  const previousInitialiser = stateRow.initialiser
+  const previousName = stateRow.initialiser
+  if (selectedValue === previousName) return
 
-  let targetName = selectedValue
-  if (selectedValue === NEW_INITIALISER_VALUE) {
-    targetName = createNewInitialiserFor(stateRow)
+  const orphanedRow = wouldOrphanInitialiser(previousName) ? props.rows.find((row) => row.name === previousName) : null
+  if (orphanedRow && !isBlank(orphanedRow.value)) {
+    const proceed = await confirm({
+      header: 'Switch initialiser?',
+      message: `"${previousName}" only sets ${stateRow.name}'s initial value. Proceeding removes "${previousName}" and its value (${orphanedRow.value}) from the parameter table.`,
+      severity: 'warning',
+      acceptLabel: 'Proceed',
+      rejectLabel: 'Revert',
+    })
+    if (!proceed) {
+      initialiserPickerKey.value++
+      return
+    }
   }
 
-  if (targetName === previousInitialiser) return
+  stateRow.initialiser = selectedValue === NEW_INITIALISER_VALUE ? createNewInitialiserFor(stateRow) : selectedValue
 
-  stateRow.initialiser = targetName
-
-  await maybeCleanupOrphanedInitialiser(previousInitialiser)
+  if (orphanedRow) {
+    const index = props.rows.indexOf(orphanedRow)
+    if (index !== -1) props.rows.splice(index, 1)
+  }
 }
 
 // Names being typed, by row. A rename commits once, on blur or Enter, because each commit
@@ -541,14 +537,54 @@ const filteredParameterRows = computed(() => {
   return rows.filter((row) => String(row[columnKey] || '').toLowerCase().includes(query))
 })
 
-/** Applies the bulk type to the selected rows, skipping states and text-initialised rows. */
+// ── Row types ────────────────────────────────────────────────────────────────
+
+/** Kinds of variable the math itself computes, whose type is always `variable`. */
+const COMPUTED_KINDS = new Set(['voi', 'state', 'computed_constant', 'algebraic'])
+
+/** Types for a row the math doesn't compute: `variable` means computed, so it isn't one of them. */
+const PARAMETER_ONLY_TYPE_OPTIONS = PARAMETER_TYPE_OPTIONS.filter((option) => option.value !== 'variable')
+
+/**
+ * Checks whether a row's type can't be changed: the math computes it or the text initialises it.
+ * After reconcile, only computed rows are `variable`.
+ *
+ * @param {Object} row
+ * @returns {boolean}
+ */
+function isTypeFixed(row) {
+  return (
+    row.stateRole === 'state' ||
+    !!row.textInit ||
+    row.type === 'variable' ||
+    COMPUTED_KINDS.has(props.variableKinds?.get(row.name))
+  )
+}
+
+/**
+ * Lists the types a row can take.
+ *
+ * @param {Object} row
+ * @returns {Array} Options from PARAMETER_TYPE_OPTIONS.
+ */
+function typeOptionsFor(row) {
+  return isTypeFixed(row) ? PARAMETER_TYPE_OPTIONS : PARAMETER_ONLY_TYPE_OPTIONS
+}
+
+/** Applies the bulk type to the selected rows, skipping any row that can't take it. */
 function applyBulkType() {
   if (!bulkTypeValue.value || selectedRows.value.length === 0) return
   const targetType = bulkTypeValue.value
   selectedRows.value.forEach((row) => {
-    if (row.stateRole === 'state' || row.textInit) return
+    if (isTypeFixed(row)) return
+    if (!typeOptionsFor(row).some((option) => option.value === targetType)) return
     row.type = targetType
   })
+  clearSelection()
+}
+
+/** Deselects every row and resets the bulk type. */
+function clearSelection() {
   selectedRows.value = []
   bulkTypeValue.value = ''
 }
@@ -605,11 +641,22 @@ defineExpose({ flushPendingRenames })
   border-radius: 6px;
 }
 
+.toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-height: 1.75rem;
+  padding-top: 8px;
+  border-top: 1px solid var(--p-content-border-color);
+}
+
 .legend-row {
   display: flex;
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
+  margin-left: auto;
 }
 
 .legend-item {
@@ -635,7 +682,7 @@ defineExpose({ flushPendingRenames })
   background-color: var(--p-purple-400, #a78bfa);
 }
 
-.search-group, .bulk-controls {
+.search-group {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -697,15 +744,6 @@ defineExpose({ flushPendingRenames })
 }
 
 /* Summary of what still needs attention in the table */
-.issue-summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding-top: 8px;
-  border-top: 1px solid var(--p-content-border-color);
-}
-
 .issue-summary-label {
   font-size: var(--dlg-fs-tiny);
   color: var(--p-text-muted-color);
@@ -761,16 +799,6 @@ defineExpose({ flushPendingRenames })
 
 .search-input-wrapper {
   position: relative;
-}
-
-.bulk-controls {
-  padding-top: 8px;
-  border-top: 1px solid var(--p-content-border-color);
-  flex-wrap: wrap;
-}
-
-.bulk-controls .bulk-select {
-  margin-right: auto;
 }
 
 .search-column { width: 130px; flex: 0 0 auto; }

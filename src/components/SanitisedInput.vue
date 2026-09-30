@@ -1,9 +1,11 @@
 <template>
   <div ref="rootRef" class="sanitised-input" :style="{ width }">
     <InputText
+      ref="inputRef"
       :model-value="modelValue"
       :placeholder="placeholder"
       :disabled="disabled"
+      :invalid="invalid"
       size="small"
       class="sanitised-input__field"
       :class="{
@@ -64,11 +66,14 @@ const props = defineProps({
   floating: { type: Boolean, default: false },
   /** A warning that doesn't change the value (e.g. "not in the library"). Shown as an icon in the field. */
   notice: { type: String, default: '' },
+  /** Shows the field as failing validation (e.g. a rejected save). */
+  invalid: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update:modelValue', 'commit', 'revert'])
 
 const rootRef = ref(null)
+const inputRef = ref(null)
 
 const cleaned = computed(() => props.sanitise(props.modelValue ?? ''))
 const unsanitary = computed(() => !props.disabled && (props.modelValue ?? '') !== cleaned.value)
@@ -112,6 +117,13 @@ watch(
 )
 
 onBeforeUnmount(() => trackPosition(false))
+
+/** Moves focus to the field. */
+function focus() {
+  inputRef.value?.$el?.focus()
+}
+
+defineExpose({ focus })
 </script>
 
 <style scoped>

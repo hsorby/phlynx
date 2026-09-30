@@ -11,32 +11,39 @@
   >
     <template #header>
       <div class="custom-dialog-header">
-
         <div class="header-group">
-          <span class="header-label">Instance:</span>
+          <span class="header-label">Instance</span>
           <SanitisedInput
+            ref="instanceNameRef"
             v-model="editableName"
             :sanitise="sanitiseName"
+            :invalid="!!nameError"
+            :notice="nameError"
             placeholder="Instance name..."
             width="260px"
             font-size="1rem"
           />
         </div>
 
-        <div class="header-group header-group--end">
-          <span class="header-label">Component:</span>
+        <span class="header-divider" aria-hidden="true"></span>
+
+        <div class="header-group header-group--secondary">
+          <span class="header-label header-label--secondary">Component</span>
+          <SanitisedInput
+            v-if="isManaged"
+            v-model="editableComponentName"
+            :sanitise="sanitiseName"
+            :fallback="componentNameForEditor"
+            placeholder="Component name..."
+            width="200px"
+          />
           <span
-            :title="isManaged ? '' : 'While Simple Mode is off, the text sets the component name (def comp ... as).'"
+            v-else
+            class="header-static"
+            title="While Simple Mode is off, the text sets the component name (def comp ... as)."
           >
-            <SanitisedInput
-              v-model="editableComponentName"
-              :sanitise="sanitiseName"
-              :fallback="componentNameForEditor"
-              :disabled="!isManaged"
-              placeholder="Component name..."
-              width="200px"
-              font-size="1rem"
-            />
+            {{ componentNameForEditor }}
+            <i class="pi pi-code"></i>
           </span>
           <span class="header-file" :title="`Defined in ${componentFile}`">
             <i class="pi pi-file"></i>
@@ -59,7 +66,15 @@
       :inert="isScreenTooSmall"
     >
       <!-- LEFT COLUMN: CellML Text or Math Editor -->
-      <div class="pane left-pane" :style="leftPaneStyle" :class="{ 'left-pane--collapsed': rightCollapsed }">
+      <div class="pane left-pane" :style="leftPaneStyle">
+        <Tabs :key="editorTabsKey" :value="editorKind" class="editor-tabs" @update:value="switchEditor">
+          <TabList>
+            <Tab v-for="option in EDITOR_OPTIONS" :key="option.value" :value="option.value">
+              <i :class="['pi', option.icon, 'tab-icon']"></i>
+              {{ option.label }}
+            </Tab>
+          </TabList>
+        </Tabs>
         <Message v-if="pendingRename" class="rename-notice" severity="info" size="small" :closable="false">
           <div class="rename-notice-body">
             <span>
@@ -165,7 +180,7 @@
               Parameters ({{ parameterRows.length }})
             </Tab>
             <Tab value="ports">
-              <i class="pi pi-pencil tab-icon"></i>
+              <i class="pi pi-link tab-icon"></i>
               Ports ({{ editablePorts.length }})
             </Tab>
           </TabList>
@@ -182,39 +197,30 @@
                 :issue-chips="issueChips"
                 :issue-filter="issueFilter"
                 :variable-kinds="variableKinds"
+                :math-references="mathReferences"
               />
             </TabPanel>
 
             <!-- TAB 2: PORT EDITOR -->
             <TabPanel value="ports" class="tab-panel-flex">
               <div class="ports-tab-body">
-                <div class="ports-header">
-                  <label class="form-label">Port Definitions</label>
-                  <Button icon="pi pi-plus" label="Add Port" severity="success" size="small" rounded outlined @click="addPort" />
-                </div>
+                <Message v-if="incompletePortCount" class="ports-header" severity="error" size="small" variant="simple">
+                  {{ incompletePortCount }} {{ incompletePortCount === 1 ? 'port needs' : 'ports need' }} a label and at
+                  least one variable.
+                </Message>
 
                 <div v-if="editablePorts.length" class="table-flex-wrapper">
                   <DataTable
+                    ref="portsTableRef"
                     :value="editablePorts"
                     size="small"
                     stripedRows
                     scrollable
                     scrollHeight="flex"
                     tableStyle="min-width: 580px"
+                    :rowClass="portRowClass"
                   >
-                    <Column header="" style="width: 25px">
-                      <template #body="slotProps">
-                        <Button
-                          icon="pi pi-trash"
-                          severity="danger"
-                          rounded
-                          text
-                          size="small"
-                          @click="deletePort(editablePorts.indexOf(slotProps.data))"
-                        />
-                      </template>
-                    </Column>
-                    <Column header="Type" style="width: 3cap">
+                    <Column header="Type" style="width: 140px">
                       <template #body="slotProps">
                         <Select
                           v-model="slotProps.data.portType"
@@ -229,7 +235,13 @@
 
                     <Column header="Label" style="min-width: 140px">
                       <template #body="slotProps">
-                        <InputText v-model="slotProps.data.label" placeholder="Enter label" size="small" class="w-full" />
+                        <InputText
+                          v-model="slotProps.data.label"
+                          :invalid="isPortFlagged(slotProps.data) && !slotProps.data.label?.trim()"
+                          placeholder="Enter label"
+                          size="small"
+                          class="w-full"
+                        />
                       </template>
                     </Column>
 
@@ -237,6 +249,7 @@
                       <template #body="slotProps">
                         <MultiSelect
                           v-model="slotProps.data.variables"
+                          :invalid="isPortFlagged(slotProps.data) && !slotProps.data.variables?.length"
                           :options="parameterRows"
                           optionLabel="name"
                           optionValue="name"
@@ -283,6 +296,7 @@
                             <span class="multiply-prefix">&times;</span>
                             <InputNumber
                               v-model="slotProps.data.multiplyFactor"
+                              :invalid="isPortFlagged(slotProps.data) && isEmpty(slotProps.data.multiplyFactor)"
                               :showButtons="false"
                               size="small"
                               placeholder="1"
@@ -292,9 +306,38 @@
                         </div>
                       </template>
                     </Column>
+
+                    <!-- Frozen, so the delete button stays in view when the table scrolls sideways -->
+                    <Column frozen alignFrozen="right" style="width: 3rem">
+                      <template #body="slotProps">
+                        <Button
+                          icon="pi pi-trash"
+                          severity="danger"
+                          rounded
+                          text
+                          size="small"
+                          aria-label="Delete port"
+                          title="Delete port"
+                          @click="deletePort(editablePorts.indexOf(slotProps.data))"
+                        />
+                      </template>
+                    </Column>
                   </DataTable>
                 </div>
-                <div v-else class="empty-state">No ports defined for this instance.</div>
+                <Button
+                  v-if="editablePorts.length"
+                  class="add-port-row"
+                  icon="pi pi-plus"
+                  label="Add port"
+                  severity="secondary"
+                  size="small"
+                  text
+                  @click="addPort"
+                />
+                <div v-else class="empty-state">
+                  <span>No ports defined for this instance.</span>
+                  <Button icon="pi pi-plus" label="Add Port" severity="success" size="small" rounded outlined @click="addPort" />
+                </div>
               </div>
             </TabPanel>
           </TabPanels>
@@ -336,31 +379,22 @@
     <!-- DIALOG FOOTER -->
     <template #footer>
       <div class="dialog-footer" v-if="!loading && !isScreenTooSmall">
-        <div class="footer-start">
-          <Tabs :key="editorTabsKey" :value="editorKind" class="editor-tabs" @update:value="switchEditor">
-            <TabList>
-              <Tab v-for="option in EDITOR_OPTIONS" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </Tab>
-            </TabList>
-          </Tabs>
-
-          <div
-            v-if="siblingCount > 0"
-            class="apply-all-checkbox"
-            :title="`Also update ${siblingCount} other node${
-              siblingCount !== 1 ? 's' : ''
-            } using ${componentName} from ${componentFile}`"
-          >
-            <Checkbox v-model="applyToAll" binary inputId="applyToAll" />
-            <label for="applyToAll">Apply CellML changes to all instances</label>
-            <Tag severity="info" :value="String(siblingCount + 1)" />
-          </div>
+        <div
+          v-if="siblingCount > 0"
+          class="apply-all-checkbox"
+          :title="`Also switch the ${siblingCount} other instance${
+            siblingCount !== 1 ? 's' : ''
+          } using ${componentName} from ${componentFile} to the new math. Parameters and ports only change here.`"
+        >
+          <Checkbox v-model="applyToAll" binary inputId="applyToAll" />
+          <label for="applyToAll">
+            Apply math changes to all {{ siblingCount + 1 }} instances of <strong>{{ componentName }}</strong>
+          </label>
         </div>
 
         <div class="footer-buttons">
           <Button label="Cancel" severity="secondary" text @click="handleCancel" />
-          <Button label="Save All Changes" severity="primary" @click="handleSave" />
+          <Button label="Save" severity="primary" @click="handleSave" />
         </div>
       </div>
     </template>
@@ -387,7 +421,6 @@ import TabList from 'primevue/tablist'
 import TabPanel from 'primevue/tabpanel'
 import TabPanels from 'primevue/tabpanels'
 import Tabs from 'primevue/tabs'
-import Tag from 'primevue/tag'
 
 import CellMLTextEditor from './CellMLTextEditor.vue'
 import MathWorkbenchEditor from './MathWorkbenchEditor.vue'
@@ -453,6 +486,17 @@ const DIALOG_PT = {
 // Port & Instance State
 const editableName = ref('')
 const editablePorts = ref([])
+const instanceNameRef = ref(null)
+// Why the last save rejected the instance name; cleared once the name changes.
+const nameError = ref('')
+let rejectedName = ''
+// The ports a save rejected. Only these are flagged, so rows added afterwards start clean.
+const flaggedPorts = ref(new Set())
+const portsTableRef = ref(null)
+
+watch(editableName, (name) => {
+  if (name !== rejectedName) nameError.value = ''
+})
 
 // Component Name
 const editableComponentName = ref('')
@@ -481,6 +525,7 @@ const {
   parameterRows,
   editorDefinitions,
   variableKinds,
+  mathReferences,
   pendingRename,
   isMissingUnits,
   handleEditorChange,
@@ -491,8 +536,8 @@ const {
 // ── Editor Choice ───────────────────────────────────────────────────────────
 const EDITOR_STORAGE_KEY = 'instanceEditorDialog.editorKind'
 const EDITOR_OPTIONS = [
-  { value: 'text', label: 'CellML Text' },
-  { value: 'math', label: 'Math Editor' },
+  { value: 'text', label: 'CellML Text', icon: 'pi-code' },
+  { value: 'math', label: 'Math Editor', icon: 'pi-calculator' },
 ]
 
 function loadStoredEditorKind() {
@@ -544,8 +589,8 @@ async function switchEditor(kind) {
 // ── Split / Collapse State ──────────────────────────────────────────────────
 const SPLIT_STORAGE_KEY = 'instanceEditorDialog.leftPanePercent'
 const DEFAULT_LEFT_PERCENT = 55
-const MIN_LEFT_PERCENT = 32
-const MAX_LEFT_PERCENT = 60
+const MIN_LEFT_PERCENT = 38
+const MAX_LEFT_PERCENT = 55
 const MIN_REQUIRED_WIDTH = 1000;
 
 function loadStoredSplit() {
@@ -784,6 +829,9 @@ watch(
     loading.value = true
     isEditorReady.value = false
     applyToAll.value = false
+    nameError.value = ''
+    rejectedName = ''
+    flaggedPorts.value = new Set()
     activeTab.value = props.defaultTab || 'parameters'
     issueFilter.reset()
 
@@ -849,7 +897,46 @@ function clearPortVariableSearch(event) {
   input.focus()
 }
 
-function addPort() {
+/**
+ * Checks whether a port has nothing filled in, so it can be dropped on save without losing work.
+ *
+ * @param {Object} port
+ * @returns {boolean}
+ */
+function isBlankPort(port) {
+  return !port.label?.trim() && !port.variables?.length
+}
+
+/**
+ * Checks whether a port is partly filled in: it has a label or variables, but not both.
+ *
+ * @param {Object} port
+ * @returns {boolean}
+ */
+function isIncompletePort(port) {
+  return !isBlankPort(port) && (!port.label?.trim() || !port.variables?.length)
+}
+
+/**
+ * Checks whether a port has a multiply factor selected but no factor entered.
+ *
+ * @param {Object} port
+ * @returns {boolean}
+ */
+function isMissingFactor(port) {
+  return port.multiportType === 'Multiply' && isEmpty(port.multiplyFactor)
+}
+
+const isPortFlagged = (port) => flaggedPorts.value.has(port)
+
+const incompletePortCount = computed(
+  () => editablePorts.value.filter((port) => isPortFlagged(port) && isIncompletePort(port)).length
+)
+
+const portRowClass = (port) =>
+  isPortFlagged(port) && (isIncompletePort(port) || isMissingFactor(port)) ? 'port-row--invalid' : ''
+
+async function addPort() {
   editablePorts.value.push({
     portType: 'general_ports',
     variables: [],
@@ -857,6 +944,10 @@ function addPort() {
     multiportType: 'None',
     multiplyFactor: 1,
   })
+  // Bring the new row into view; it's added at the bottom of the table.
+  await nextTick()
+  const scroller = portsTableRef.value?.$el?.querySelector('.p-datatable-table-container')
+  if (scroller) scroller.scrollTop = scroller.scrollHeight
 }
 
 function deletePort(index) {
@@ -896,6 +987,28 @@ async function handleMathOverwrite() {
 }
 
 // ── Save Processing ──────────────────────────────────────────────────────────
+/**
+ * Flags the instance name field with a save error and moves focus to it.
+ *
+ * @param {string} message
+ */
+function rejectInstanceName(message) {
+  notify.error({ message })
+  nameError.value = message
+  rejectedName = editableName.value
+  instanceNameRef.value?.focus()
+}
+
+/**
+ * Shows a tab of the right panel, expanding the panel if it was collapsed.
+ *
+ * @param {'parameters'|'ports'} tab
+ */
+function showTab(tab) {
+  activeTab.value = tab
+  rightCollapsed.value = false
+}
+
 async function handleSave() {
   // Commit any rename and editor change still in flight before reading state.
   parameterTableRef.value?.flushPendingRenames()
@@ -903,24 +1016,21 @@ async function handleSave() {
 
   // 1. Validate Instance Name
   if (!editableName.value || !editableName.value.trim()) {
-    notify.error({ message: 'Instance name cannot be empty.' })
-    activeTab.value = 'ports'
+    rejectInstanceName('Instance name cannot be empty.')
     return
   }
 
   const sanitised = sanitiseName(editableName.value)
 
   if (!sanitised) {
-    notify.error({ message: 'Instance name is invalid.' })
-    activeTab.value = 'ports'
+    rejectInstanceName('Instance name is invalid.')
     return
   }
   editableName.value = sanitised
 
   const nameExists = props.existingNames.some((n) => n === editableName.value && n !== props.initialName)
   if (nameExists) {
-    notify.error({ message: 'An instance with this name already exists.' })
-    activeTab.value = 'ports'
+    rejectInstanceName('An instance with this name already exists.')
     return
   }
 
@@ -930,11 +1040,19 @@ async function handleSave() {
   }
 
   // 2. Validate Ports
-  const finalPorts = editablePorts.value.filter((p) => p.variables?.length && p.label?.trim())
-  const invalidFactor = finalPorts.find((p) => p.multiportType === 'Multiply' && isEmpty(p.multiplyFactor))
+  const incompletePorts = editablePorts.value.filter(isIncompletePort)
+  if (incompletePorts.length) {
+    flaggedPorts.value = new Set(incompletePorts)
+    notify.error({ message: 'Every port needs a label and at least one variable.' })
+    showTab('ports')
+    return
+  }
+  const finalPorts = editablePorts.value.filter((p) => !isBlankPort(p))
+  const invalidFactor = finalPorts.find(isMissingFactor)
   if (invalidFactor) {
+    flaggedPorts.value = new Set([invalidFactor])
     notify.error({ message: `Port "${invalidFactor.label}" has Multiply selected but missing scale factor.` })
-    activeTab.value = 'ports'
+    showTab('ports')
     return
   }
 
@@ -951,7 +1069,7 @@ async function handleSave() {
   const duplicateName = [...nameCounts.entries()].find(([, count]) => count > 1)?.[0]
   if (duplicateName) {
     notify.error({ message: `Two variables are both named "${duplicateName}". Rename one before saving.` })
-    activeTab.value = 'parameters'
+    showTab('parameters')
     return
   }
 
@@ -966,6 +1084,9 @@ async function handleSave() {
     })
     if (!proceed) return
   }
+
+  // Values typed into the text belong in the rows, so an edit to values alone leaves the math unchanged.
+  session.separateTypedValues()
 
   // Sync each state's initialiser to the state's units (only where the initialiser's own units
   // are still blank - see syncInitialiserUnits).
@@ -1040,12 +1161,39 @@ async function handleSave() {
   min-width: 0;
 }
 
-.header-group--end {
-  margin-left: auto;
+.header-group--secondary {
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: normal;
 }
 
 .header-label {
   color: var(--p-text-color);
+}
+
+.header-label--secondary {
+  color: var(--p-text-muted-color);
+}
+
+.header-divider {
+  align-self: stretch;
+  width: 1px;
+  margin: 0.25rem 0.25rem;
+  background: var(--p-content-border-color);
+}
+
+/* The component name while the CellML text owns it: read-only, with a hint that it's set in the text */
+.header-static {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--p-text-color);
+  cursor: help;
+}
+
+.header-static .pi {
+  font-size: 0.75rem;
+  color: var(--p-text-muted-color);
 }
 
 .header-file {
@@ -1130,15 +1278,6 @@ async function handleSave() {
   overflow: hidden;
   min-width: 0;
   min-height: 0;
-}
-
-.left-pane {
-  min-width: 38%;
-  max-width: 55%;
-}
-
-.left-pane--collapsed {
-  max-width: 100%;
 }
 
 .editor-wrapper {
@@ -1368,6 +1507,12 @@ async function handleSave() {
   overflow-y: auto !important;
 }
 
+/* Matches the right pane's tab bar, so the two panes' headers line up */
+.editor-tabs {
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+
 .tab-icon {
   margin-right: 6px;
   font-size: var(--dlg-fs-small);
@@ -1405,30 +1550,43 @@ async function handleSave() {
 }
 
 /* Ports Tab Styles */
-.form-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.form-label {
-  font-weight: 600;
-  font-size: var(--dlg-fs-label);
-}
-
 .ports-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   margin-bottom: 8px;
   flex-shrink: 0;
 }
 
+/* Tints mix with the row's own opaque colour: the frozen delete cell inherits it, and a see-through
+   background would show the cells scrolling underneath. */
+.right-pane :deep(tr.port-row--invalid) {
+  background: color-mix(in srgb, var(--p-red-500, #ef4444) 10%, var(--p-datatable-row-background));
+}
+
+.right-pane :deep(tr.p-row-odd.port-row--invalid) {
+  background: color-mix(in srgb, var(--p-red-500, #ef4444) 10%, var(--p-datatable-row-striped-background));
+}
+
+/* Above the inputs in the cells scrolling underneath, which set their own stacking order */
+.right-pane :deep(.p-datatable-frozen-column) {
+  z-index: 2;
+  box-shadow: inset 1px 0 0 var(--p-datatable-body-cell-border-color);
+}
+
+.add-port-row {
+  flex-shrink: 0;
+  justify-content: center;
+  width: 100%;
+  margin-top: 8px;
+  border: 1px dashed var(--p-content-border-color);
+}
+
 .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
   color: var(--p-text-muted-color);
   font-size: var(--dlg-fs-small);
   margin-top: 16px;
-  text-align: center;
 }
 
 .multiply-prefix {
@@ -1463,19 +1621,6 @@ async function handleSave() {
   justify-content: flex-end;
   gap: 16px;
   width: 100%;
-}
-
-.footer-start {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-right: auto;
-}
-
-/* Compact tabs: the default padding is sized for page sections, not a footer. */
-.editor-tabs :deep(.p-tab) {
-  padding: 6px 14px;
-  font-size: 0.85rem;
 }
 
 .apply-all-checkbox {

@@ -3,10 +3,6 @@ import { VALUE_REQUIRED_TYPES } from './constants'
 import { cleanName } from './identifiers'
 import { isBlank } from './variables'
 
-export function getDisplayType(row) {
-  return row.textInit ? 'variable' : row.type
-}
-
 export function isValueMissing(row) {
   return !row.textInit && VALUE_REQUIRED_TYPES.has(row.type) && isBlank(row.value)
 }
