@@ -583,7 +583,8 @@ import DustpanBrush from '../components/icons/DustpanBrush.vue'
 
 import { useScreenshot } from '../services/useScreenshot'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
-import { migrateWorkspace } from '../services/workspaceMigrator'
+import { migrateWorkspace, separateNodeParameters } from '../services/workspaceMigrator'
+import { buildWorkspaceFile } from '../services/workspaceFile'
 import { relayoutNodes } from '../services/layouts/physics'
 import { extractSimData as extractSimDataFromSedml } from '../services/import/sedml'
 import { extractSimData as extractSimDataFromSimulationJson } from '../services/import/simulation'
@@ -602,8 +603,6 @@ import {
   IMPORT_KEYS,
   JSON_FILE_TYPES,
   NEW_INSTANCE_MODULE_REF,
-  PHLYNX_PROJECT_IDENTIFIER,
-  PHLYNX_PROJECT_VERSION,
   NUM_GHOST_HANDLES_TOP_BOT,
   NUM_GHOST_HANDLES_LEFT_RIGHT,
 } from '../utils/constants'
@@ -1774,7 +1773,8 @@ async function loadFlowSnapshot(fileName, flowSnapshot, parameterData = {}, { no
 
   let nodeNameToIdMap = new Map()
   // Convert nodeData to nodes format expected by the workspace.
-  const nodes = flowSnapshot.nodeData.map((node) => {
+  const nodes = flowSnapshot.nodeData.map((snapshotNode) => {
+    let node = snapshotNode
     // Update variables with parameter data if available.
     if (parameterData[node.data.name]) {
       const paramVars = parameterData[node.data.name]
@@ -1791,9 +1791,15 @@ async function loadFlowSnapshot(fileName, flowSnapshot, parameterData = {}, { no
         return variable
       })
     }
-    // Resolve math from the snapshot math library.
-    const nodeMathFromSnapshot =
+    // Resolve math from the snapshot math library. Older snapshots keep values in the math, which
+    // move into the node's rows here.
+    let nodeMathFromSnapshot =
       node.data?.mathHash in snapshotMathLibrary ? snapshotMathLibrary[node.data.mathHash] : undefined
+    if (nodeMathFromSnapshot) {
+      const separated = separateNodeParameters([node], [[node.data.mathRef, nodeMathFromSnapshot]])
+      node = separated.nodes[0]
+      nodeMathFromSnapshot = separated.mathEntries[0][1]
+    }
 
     // Check node math is the same as the math in the library store
     const nodeMath = libraryStore.availableMath.get(node.data.mathRef)
@@ -2655,15 +2661,13 @@ function snapshotFlowState() {
  * Collects all state and creates blob from it.
  */
 function createSaveBlob() {
-  const saveState = {
-    id: PHLYNX_PROJECT_IDENTIFIER,
-    version: PHLYNX_PROJECT_VERSION,
+  const saveState = buildWorkspaceFile({
     flow: toObject(),
-    store: libraryStore.getState(),
-    simulation: simulationSettingsStore.getState(),
-    inspectionModules: inspectionModuleStore.getState(),
-    workspace: omexStore.getState(),
-  }
+    library: libraryStore,
+    simulation: simulationSettingsStore,
+    inspectionModules: inspectionModuleStore,
+    omex: omexStore,
+  })
 
   const jsonString = JSON.stringify(saveState, null, 2)
   return new Blob([jsonString], { type: 'application/json' })
@@ -2857,6 +2861,10 @@ const pasteSelection = async (atMouse = false) => {
 
   if (!sourceClipboard.nodes || sourceClipboard.nodes.length === 0) return
 
+  // Nodes copied from an older version keep values in their math; they move into the rows here.
+  const clipboardMath = Object.values(sourceClipboard.storeSnapshot ?? {}).map((entry) => [entry.mathRef, entry.math])
+  const clipboardNodes = separateNodeParameters(sourceClipboard.nodes, clipboardMath).nodes
+
   if (sourceClipboard.storeSnapshot) {
     for (const entry of Object.values(sourceClipboard.storeSnapshot)) {
       if (!libraryStore.availableModules.has(entry.moduleRef)) {
@@ -2891,7 +2899,7 @@ const pasteSelection = async (atMouse = false) => {
   const namesSet = new Set()
   allNodeNames.value.forEach((name) => namesSet.add(name))
 
-  sourceClipboard.nodes.forEach((node) => {
+  clipboardNodes.forEach((node) => {
     const newId = getNextNodeId(nodeIdSet)
     idMap[node.id] = newId
     nodeIdSet.push(newId)
