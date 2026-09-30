@@ -7,7 +7,9 @@ import { computed, ref, shallowRef } from 'vue'
 
 import { useLibraryStore } from '../stores/libraryStore'
 import { analyzeMathXml } from '../services/math/analyzeMath'
-import { modeFor, reconcileRows } from '../services/math/reconcileRows'
+import { SIMPLE_MODE, modeFor, reconcileRows } from '../services/math/reconcileRows'
+import { carryRenames, followPendingRename } from '../services/math/carryRenames'
+import { classifyRows } from '../services/math/variableKinds'
 import { buildVariableDeclarations } from '../utils/variables'
 import { areModelsEquivalent } from '../utils/cellml'
 import { cleanName } from '../utils/identifiers'
@@ -27,13 +29,14 @@ function hasSameNames(rows, otherRows) {
 /**
  * Creates a math editing session. A plugged-in editor emits `change` with
  * `{ source: 'init'|'edit'|'external', format, text, valid, xml }` and exposes `format` (what its
- * text is written in), `setText`, `setModel`, `flush` and `getErrors`. Editors can be swapped
+ * text is written in), `setText`, `setModel`, `flush`, `getErrors` and `renameVariable` (renames
+ * a variable everywhere in its text and reports that as an edit). Editors can be swapped
  * mid-session; a later `init` is the new editor's view of the same math.
  *
  * @param {Object} options
  * @param {Object} options.history - The flow history store.
  * @param {import('vue').Ref} options.editorRef - The mounted math editor.
- * @param {import('vue').Ref<Array>} options.ports - Editable ports; variables removed from the math are removed from them.
+ * @param {import('vue').Ref<Array>} options.ports - Editable ports; variables removed from the math are removed from them, and renamed ones renamed.
  * @returns {Object} Session state, queries and actions.
  */
 export function useMathSession({ history, editorRef, ports }) {
@@ -45,6 +48,8 @@ export function useMathSession({ history, editorRef, ports }) {
   const originalModel = ref('')
   const parameterRows = ref([])
   const analysis = shallowRef(null)
+  // Simple Mode: a variable renamed in only some places, `{ from, to, uses }`, offered for renaming everywhere.
+  const pendingRename = shallowRef(null)
 
   const mode = computed(() => modeFor(isManaged.value))
   // A mode switch always rebuilds the rows, so remember which mode built them.
@@ -65,6 +70,9 @@ export function useMathSession({ history, editorRef, ports }) {
 
   /** Declarations Simple Mode writes into the model. */
   const editorDefinitions = computed(() => buildVariableDeclarations(parameterRows.value))
+
+  /** Each variable's kind (constant, computed constant, ...), or null before the first analysis. */
+  const variableKinds = computed(() => classifyRows(analysis.value, parameterRows.value))
 
   // Simple Mode reads units from the table; Advanced Mode asks the analysis of the text.
   const unresolvedInText = computed(() => new Set(isManaged.value ? [] : (analysis.value?.unresolved ?? [])))
@@ -104,6 +112,7 @@ export function useMathSession({ history, editorRef, ports }) {
     currentModel.value = math
     originalModel.value = math
     currentText.value = { format: null, value: '' }
+    pendingRename.value = null
     hasInitialised = false
 
     analysis.value = mathRef ? await store.ensureMathAnalysis(mathRef) : null
@@ -174,6 +183,8 @@ export function useMathSession({ history, editorRef, ports }) {
     currentModel.value = xml
     if (rebaseline) originalModel.value = xml
     analysis.value = nextAnalysis
+    const unchanged = { renames: [], partial: null }
+    pendingRename.value = isManaged.value ? followPendingRename(pendingRename.value, unchanged, nextAnalysis) : null
 
     const rows = reconcileRows(nextAnalysis, parameterRows.value, { mode: mode.value })
     // Keep the existing row objects unless the structure changed, so table inputs aren't reset.
@@ -210,12 +221,13 @@ export function useMathSession({ history, editorRef, ports }) {
     currentModel.value = xml
     currentText.value = textState
     analysis.value = textAnalysis
+    pendingRename.value = null
     return restoreEditor(textState, xml)
   }
 
   /**
    * Records a valid edit as one undo step: the code, the rows it implies, and any port variables
-   * it removed.
+   * it renamed or removed. In Simple Mode a renamed variable keeps its row (see carryRenames).
    *
    * @param {string} newXml
    * @param {{ format: string|null, value: string }} newText
@@ -231,9 +243,14 @@ export function useMathSession({ history, editorRef, ports }) {
       return
     }
 
-    const newRows = reconcileRows(newAnalysis, parameterRows.value, { mode: mode.value })
     const previousRows = parameterRows.value
+    const pending = pendingRename.value
+    const carried =
+      mode.value === SIMPLE_MODE ? carryRenames(previousAnalysis, newAnalysis, previousRows, { pending }) : null
+
+    const newRows = reconcileRows(newAnalysis, carried?.rows ?? previousRows, { mode: mode.value })
     const validNames = new Set(newRows.map((row) => row.name))
+    const renamedTo = new Map((carried?.portRenames ?? []).map(({ from, to }) => [from, to]))
 
     history.startBatch()
     try {
@@ -248,6 +265,22 @@ export function useMathSession({ history, editorRef, ports }) {
         undo: async () => setRows(previousRows),
         redo: async () => setRows(newRows),
       })
+
+      for (const port of ports.value) {
+        if (!Array.isArray(port.variables)) continue
+        const portVariables = port.variables
+        if (!portVariables.some((name) => renamedTo.has(name))) continue
+
+        await history.executeAndAddCommand({
+          type: 'rename-variable-in-port',
+          undo: async () => {
+            port.variables = portVariables
+          },
+          redo: async () => {
+            port.variables = [...new Set(port.variables.map((name) => renamedTo.get(name) ?? name))]
+          },
+        })
+      }
 
       for (const port of ports.value) {
         if (!Array.isArray(port.variables)) continue
@@ -267,6 +300,8 @@ export function useMathSession({ history, editorRef, ports }) {
     } finally {
       history.endBatch()
     }
+    // After the batch, since replaying the code (applyTextState) drops the offer.
+    pendingRename.value = carried ? followPendingRename(pending, carried, newAnalysis) : null
   }
 
   /**
@@ -293,12 +328,33 @@ export function useMathSession({ history, editorRef, ports }) {
     })
   }
 
+  /**
+   * Renames the offered partial rename's remaining uses. The editor reports it as an edit, so it
+   * is one undo step and the ports follow.
+   *
+   * @returns {Promise<void>}
+   */
+  async function renameEverywhere() {
+    await flushPendingChanges()
+    const pending = pendingRename.value
+    if (!pending || !editorRef.value?.renameVariable) return
+    await editorRef.value.renameVariable(pending.from, pending.to)
+    await flushPendingChanges()
+  }
+
+  /** Keeps both names, dismissing the offered rename. */
+  function dismissRename() {
+    pendingRename.value = null
+  }
+
   return {
     // state
     isManaged,
     currentModel,
     parameterRows,
     editorDefinitions,
+    variableKinds,
+    pendingRename,
     // queries
     isMissingUnits,
     isDirty,
@@ -306,5 +362,7 @@ export function useMathSession({ history, editorRef, ports }) {
     load,
     handleEditorChange,
     flushPendingChanges,
+    renameEverywhere,
+    dismissRename,
   }
 }

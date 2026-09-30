@@ -126,6 +126,7 @@ import {
   CellMLLatexGenerator,
   applyVariableDefinitions,
   cellml,
+  renameIdentifier,
 } from 'cellml-text-editor'
 
 const katexPromise = import('katex')
@@ -551,7 +552,7 @@ watch(
   }
 )
 
-async function setText(newText, { report = false } = {}) {
+async function setText(newText, { report = false, source = 'external' } = {}) {
   if (debouncer) {
     clearTimeout(debouncer)
     debouncer = null
@@ -592,7 +593,19 @@ async function setText(newText, { report = false } = {}) {
   await nextTick()
   applyingExternalText = false
 
-  run('external', { text: newText, silent: !report })
+  run(source, { text: newText, silent: !report })
+}
+
+/**
+ * Simple Mode: renames every use of a variable, keeping formatting and comments, and reports it as
+ * an edit.
+ *
+ * @param {string} from
+ * @param {string} to
+ * @returns {Promise<void>}
+ */
+function renameVariable(from, to) {
+  return setText(renameIdentifier(cellmlText.value, from, to), { report: true, source: 'edit' })
 }
 
 /**
@@ -610,6 +623,7 @@ defineExpose({
   format: FORMAT,
   setText,
   setModel,
+  renameVariable,
   flush,
   focus: () => cmView?.focus(),
   getErrors: () => shownErrors.value,

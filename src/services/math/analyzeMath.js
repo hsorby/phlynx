@@ -1,30 +1,44 @@
 import { Parser } from 'htmlparser2'
 export function createEmptyAnalysis() {
-  return { componentName: '', declared: [], referenced: [], stateVariables: [], unresolved: [], assigned: [], voi: [] }
+  return {
+    componentName: '',
+    declared: [],
+    referenced: [],
+    references: [],
+    stateVariables: [],
+    unresolved: [],
+    assigned: [],
+    voi: [],
+    dependencies: [],
+  }
 }
 
 const stripNamespacePrefix = (qualifiedName) => qualifiedName.slice(qualifiedName.indexOf(':') + 1)
 
-function buildAnalysis({ componentName, declared, referenced, stateVariables, assigned, voi }) {
+function buildAnalysis({ componentName, declared, referenced, references, stateVariables, assigned, voi, dependencies }) {
   const unitsByName = new Map(declared.map((variable) => [variable.name, variable.units]))
   const referencedNames = Array.from(referenced)
   return {
     componentName,
     declared,
     referenced: referencedNames,
+    references,
     stateVariables: Array.from(stateVariables),
     unresolved: referencedNames.filter((name) => !unitsByName.get(name)),
     assigned: Array.from(assigned),
     voi: Array.from(voi),
+    dependencies,
   }
 }
 
 /**
- * Analyzes CellML XML in one streaming pass, matching cellml-text-editor's analyzeModel plus the
- * assigned/voi roles. The parser is lenient, so malformed XML gives a best-effort result.
+ * Analyzes CellML XML in one streaming pass, giving the same result as cellml-text-editor's
+ * analyzeModel without needing a DOM, so it can run in a worker. The parser is lenient, so
+ * malformed XML gives a best-effort result. It also gives `references`: every `<ci>` name in
+ * document order, repeats included, which is what `detectRenames` compares.
  *
  * @param {string} xml - CellML model XML.
- * @returns {MathAnalysis|null} The analysis, or null for empty input.
+ * @returns {(import('cellml-text-editor').ModelAnalysis & { references: string[] })|null} The analysis, or null for empty input.
  */
 export function analyzeMathXml(xml) {
   if (typeof xml !== 'string' || !xml.trim()) return null
@@ -33,9 +47,11 @@ export function analyzeMathXml(xml) {
     componentName: '',
     declared: [],
     referenced: new Set(),
+    references: [],
     stateVariables: new Set(),
     assigned: new Set(),
     voi: new Set(),
+    dependencies: [],
   }
 
   let hasSeenComponent = false
@@ -56,6 +72,10 @@ export function analyzeMathXml(xml) {
           inMath: (parent?.inMath ?? false) || name === 'math',
           inBvar: (parent?.inBvar ?? false) || name === 'bvar',
           inLhs: parent?.inLhs ?? false,
+          equation: parent?.equation ?? null, // the enclosing top-level apply
+          eqTarget: null, // on a top-level apply: the name its equation defines
+          eqUses: null, // on a top-level apply: the names its equation uses
+          isEqTarget: false,
           isTopLevelApply: false,
           isStateSettled: false,
           isStateCandidate: false,
@@ -71,8 +91,15 @@ export function analyzeMathXml(xml) {
             parent.isStateSettled = true
             frame.isStateCandidate = name === 'ci'
           }
-          if (parent.isTopLevelApply && parent.first === 'eq' && index === 1) frame.inLhs = true
-          if (parent.name === 'math' && name === 'apply') frame.isTopLevelApply = true
+          if (parent.isTopLevelApply && parent.first === 'eq' && index === 1) {
+            frame.inLhs = true
+            frame.isEqTarget = name === 'ci'
+          }
+          if (parent.name === 'math' && name === 'apply') {
+            frame.isTopLevelApply = true
+            frame.equation = frame
+            frame.eqUses = new Set()
+          }
         }
 
         if (name === 'component' && !hasSeenComponent && !isComponentDone) {
@@ -109,10 +136,18 @@ export function analyzeMathXml(xml) {
           ciText = null
           if (ciName) {
             collected.referenced.add(ciName)
+            collected.references.push(ciName)
             if (frame.isStateCandidate) collected.stateVariables.add(ciName)
             if (frame.inBvar) collected.voi.add(ciName)
             else if (frame.inLhs) collected.assigned.add(ciName)
+
+            if (frame.isEqTarget) frame.equation.eqTarget = ciName
+            else frame.equation?.eqUses.add(ciName)
           }
+        }
+
+        if (frame.isTopLevelApply && frame.inComponent && frame.first === 'eq') {
+          collected.dependencies.push({ target: frame.eqTarget, uses: Array.from(frame.eqUses) })
         }
 
         if (frame.isComponent) isComponentDone = true

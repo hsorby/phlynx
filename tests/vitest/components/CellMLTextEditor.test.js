@@ -60,4 +60,16 @@ describe('CellMLTextEditor', () => {
     // The marked text doesn't parse, so nothing is reported as a valid model or as an edit.
     expect(changes().map(({ source, valid }) => ({ source, valid }))).toEqual([{ source: 'init', valid: false }])
   })
+
+  it('renames every use of a variable and reports it as an edit', async () => {
+    await mountEditor(modelWith('<apply><plus/><ci>x</ci><apply><sin/><ci>x</ci></apply></apply>'))
+    const text = changes()[0].text
+    expect(text).toMatch(/\bx\b.*\bx\b/)
+
+    await wrapper.vm.renameVariable('x', 'z')
+    const last = changes().at(-1)
+    expect(last).toMatchObject({ source: 'edit', valid: true })
+    expect(last.text).toBe(text.replace(/\bx\b/g, 'z'))
+    expect(last.text).toContain('sin(') // function names are left alone
+  })
 })

@@ -32,6 +32,7 @@ import 'vue3-math-editor/style.css'
 import 'katex/dist/katex.min.css'
 
 import { buildModelFromEquations, extractEquationsMathML } from '../services/math/mathmlModel'
+import { renameCiInMathML } from '../services/math/carryRenames'
 
 const props = defineProps({
   modelValue: {
@@ -246,10 +247,23 @@ function setModel(xml) {
   return setText(extractEquationsMathML(xml).join('\n'))
 }
 
+/**
+ * Renames every use of a variable and reports it as an edit.
+ *
+ * @param {string} from
+ * @param {string} to
+ * @returns {Promise<void>}
+ */
+async function renameVariable(from, to) {
+  await loadMathML(renameCiInMathML(linesText(), from, to))
+  run('edit')
+}
+
 defineExpose({
   format: FORMAT,
   setText,
   setModel,
+  renameVariable,
   flush,
   focus: () => workbenchRef.value?.focus(),
   getErrors: () => errors.value,

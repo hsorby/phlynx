@@ -27,6 +27,17 @@ function libraryComponents() {
 
 const sorted = (a) => [...a].sort()
 
+const MATHML_NS = 'http://www.w3.org/1998/Math/MathML'
+
+/** Every `<ci>` name in the first component's math, in document order, as cellml-text-editor's referenceSequence gives them. */
+function referenceSequence(doc) {
+  const component = doc.getElementsByTagName('component')[0]
+  if (!component) return []
+  return Array.from(component.getElementsByTagNameNS(MATHML_NS, 'ci'))
+    .map((ci) => ci.textContent.trim())
+    .filter(Boolean)
+}
+
 describe('analyzeMathXml', () => {
   const SAMPLE = `<model xmlns="http://www.cellml.org/cellml/2.0#" name="m">
     <component name="c">
@@ -49,11 +60,41 @@ describe('analyzeMathXml', () => {
     expect(analysis.componentName).toBe('c')
     expect(analysis.declared.map((v) => v.name)).toEqual(['t', 'V', 'V_init', 'k'])
     expect(analysis.referenced).toEqual(['t', 'V', 'k', 'I'])
+    expect(analysis.references).toEqual(['t', 'V', 'k', 'I', 'I', 'V'])
     expect(analysis.stateVariables).toEqual(['V'])
     // A state on the LHS of its derivative counts as assigned, as in the previous roles logic.
     expect(sorted(analysis.assigned)).toEqual(['I', 'V'])
     expect(analysis.voi).toEqual(['t'])
     expect(sorted(analysis.unresolved)).toEqual(['I', 'k'])
+  })
+
+  it('records what each equation defines and uses', () => {
+    // An ODE has no target, and its bvar makes it depend on the VOI.
+    expect(analyzeMathXml(SAMPLE).dependencies).toEqual([
+      { target: null, uses: ['t', 'V', 'k', 'I'] },
+      { target: 'I', uses: ['V'] },
+    ])
+  })
+
+  it('records dependencies of piecewise and implicit equations, and only for the first component', () => {
+    const xml = `<model xmlns="http://www.cellml.org/cellml/2.0#" name="m">
+      <component name="c">
+        <math xmlns="http://www.w3.org/1998/Math/MathML">
+          <apply><eq/><ci>x</ci>
+            <piecewise><piece><ci>a</ci><apply><gt/><ci>b</ci><cn>0</cn></apply></piece><otherwise><ci>x</ci></otherwise></piecewise>
+          </apply>
+          <apply><eq/><apply><plus/><ci>y</ci><ci>z</ci></apply><ci>a</ci></apply>
+        </math>
+      </component>
+      <component name="other">
+        <math xmlns="http://www.w3.org/1998/Math/MathML"><apply><eq/><ci>q</ci><ci>r</ci></apply></math>
+      </component>
+    </model>`
+
+    expect(analyzeMathXml(xml).dependencies).toEqual([
+      { target: 'x', uses: ['a', 'b', 'x'] },
+      { target: null, uses: ['y', 'z', 'a'] },
+    ])
   })
 
   it('returns null for empty input', () => {
@@ -66,8 +107,9 @@ describe('analyzeMathXml', () => {
     expect(components.length).toBeGreaterThan(10)
     for (const { id, xml } of components) {
       const doc = new DOMParser().parseFromString(xml, 'application/xml')
-      const { componentName, declared, referenced, stateVariables, unresolved } = analyzeMathXml(xml)
-      expect({ id, componentName, declared, referenced, stateVariables, unresolved }, id).toEqual({ id, ...analyzeModel(doc) })
+      const { references, ...analysis } = analyzeMathXml(xml)
+      expect({ id, ...analysis }, id).toEqual({ id, ...analyzeModel(doc) })
+      expect({ id, references }, id).toEqual({ id, references: referenceSequence(doc) })
     }
   })
 

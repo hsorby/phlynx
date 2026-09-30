@@ -201,6 +201,7 @@ import { isEditableVariableType } from '../utils/variables'
 import { getDisplayType, isValueMissing } from '../utils/parameterRows'
 import { PARAMETER_TYPE_OPTIONS, NO_ACCESS, TABLE_VIRTUAL_SCROLL_MIN_ROWS, TABLE_ROW_HEIGHT_PX } from '../utils/constants'
 import { cleanName } from '../utils/identifiers'
+import { isInitialisable } from '../services/math/variableKinds'
 
 const props = defineProps({
   rows: { type: Array, required: true },
@@ -211,6 +212,8 @@ const props = defineProps({
   issueChips: { type: Array, default: () => [] },
   /** The dialog's useIssueFilter() result. */
   issueFilter: { type: Object, required: true },
+  /** Each variable's kind from useMathSession, or null before the first analysis. */
+  variableKinds: { type: Map, default: null },
 })
 
 const { confirm } = useConfirmDialog()
@@ -311,11 +314,11 @@ function nextAvailableInitialiserName(stateRow) {
   return name
 }
 
-/** Non-state rows by cleaned units, so each state's picker avoids a full-table scan. */
-const rowsByUnits = computed(() => {
+/** Rows that can initialise a state, by cleaned units, so each state's picker avoids a full-table scan. */
+const initialisersByUnits = computed(() => {
   const index = new Map() // cleaned units -> rows[]
   for (const row of props.rows) {
-    if (row.stateRole === 'state') continue
+    if (row.stateRole === 'state' || !isInitialisable(row, props.variableKinds)) continue
     const units = cleanName(row.units)
     if (!units) continue
     if (!index.has(units)) index.set(units, [])
@@ -325,15 +328,27 @@ const rowsByUnits = computed(() => {
 })
 
 /**
- * Builds a state's initial-value picker options: a new initialiser, or any variable with matching
- * units. The current initialiser is always included, even when its units no longer match.
+ * Labels a picker option, marking variables the math computes.
+ *
+ * @param {Object} row
+ * @returns {string}
+ */
+function initialiserLabel(row) {
+  if (!isInitialisable(row, props.variableKinds)) return `${row.name} (time-varying)`
+  return row.type === 'variable' ? `${row.name} (computed)` : row.name
+}
+
+/**
+ * Builds a state's initial-value picker options: a new initialiser, or any constant or computed
+ * constant with matching units. The current initialiser is always included, even when its units no
+ * longer match or it changes over time.
  *
  * @param {Object} stateRow
  * @returns {Array<{label: string, value: string}>}
  */
 function initialiserOptionsFor(stateRow) {
   const stateUnits = cleanName(stateRow.units)
-  const candidates = (stateUnits ? rowsByUnits.value.get(stateUnits) : undefined)?.filter((row) => row !== stateRow) ?? []
+  const candidates = (stateUnits ? initialisersByUnits.value.get(stateUnits) : undefined)?.filter((row) => row !== stateRow) ?? []
 
   if (stateRow.initialiser && !candidates.some((row) => row.name === stateRow.initialiser)) {
     const currentRow = props.rows.find((row) => row.name === stateRow.initialiser)
@@ -342,7 +357,7 @@ function initialiserOptionsFor(stateRow) {
 
   const options = [{ label: `New (${nextAvailableInitialiserName(stateRow)})`, value: NEW_INITIALISER_VALUE }]
   candidates.forEach((row) => {
-    options.push({ label: row.type === 'variable' ? `${row.name} (computed)` : row.name, value: row.name })
+    options.push({ label: initialiserLabel(row), value: row.name })
   })
   return options
 }

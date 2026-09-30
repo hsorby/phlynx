@@ -1252,10 +1252,8 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
 
     analyser.analyseModel(flattenedModel)
     if (analyser.errorCount()) {
-      // FIXME: There is a bug in libCellML v0.6.3 where the analyser cannot handle
-      // initialisation of a variable that is computed. Fixed in v0.6.4, but we need
-      // a workaround for now to at least export something usable in the case where this is the only error.
-      handleLoggerErrors(analyser, `Analyser error count: ${analyser.errorCount()}`, true)
+      flattenedModel.delete()
+      handleLoggerErrors(analyser, `Analyser error count: ${analyser.errorCount()}`)
     }
 
     let flattenedModelString = printer.printModel(flattenedModel, false)
@@ -1549,9 +1547,10 @@ export function extractVoiAndParametersFromModel(modelString, parameterInfo) {
     garbageCollector.add(analyser)
 
     analyser.analyseModel(model)
-    const analyserModel = analyser.model()
-    // This change is for version 0.7.0 of libCellML, where the analyser.model() method is deprecated and replaced with analyser.analyserModel(). If you are using a version of libCellML prior to 0.7.0, you should use the commented line below instead.
-    // const analyserModel = analyser.analyserModel()
+    if (analyser.errorCount()) {
+      handleLoggerErrors(analyser, `Analyser error count: ${analyser.errorCount()}`)
+    }
+    const analyserModel = analyser.analyserModel()
     garbageCollector.add(analyserModel)
 
     const voi = analyserModel.voi()
@@ -1588,14 +1587,8 @@ export function extractVoiAndParametersFromModel(modelString, parameterInfo) {
       }
     }
 
-    if (!voi) {
-      console.log('Current bug in analysing CellML models using constants for initialising variables.')
-      console.log('VOI variable is null because the model is not valid. This is a known issue in libCellML.')
-      console.log('Returning {name: time, componentName: environment, units: second} for VOI variable.')
-      console.log('But it should return null to indicate an error.')
-      // resolve(null)
-      return { voi: { name: 'time', componentName: 'environment', units: 'second' }, mappedParameters }
-    }
+    // A valid model with no ODEs has no VOI.
+    if (!voi) return { voi: null, mappedParameters }
 
     const voiVariable = voi.variable()
     garbageCollector.add(voiVariable)

@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CellMLTextGenerator, CellMLTextParser, applyVariableDefinitions } from 'cellml-text-editor'
+import { CellMLTextGenerator, CellMLTextParser, applyVariableDefinitions, renameIdentifier } from 'cellml-text-editor'
 
 import { useMathSession } from '../../../src/composables/useMathSession.js'
 import { useFlowHistoryStore } from '../../../src/stores/historyStore.js'
@@ -41,6 +41,7 @@ function fakeEditor(session) {
         finalise: simple ? (doc) => applyVariableDefinitions(doc, session.editorDefinitions.value) : undefined,
       })
       const valid = result.errors.length === 0 && !!result.xml
+      editor.text = text
       if (valid) editor.lastXml = result.xml
       session.handleEditorChange({ source, format: editor.format, text, valid, xml: valid ? result.xml : null })
       return session.flushPendingChanges()
@@ -49,13 +50,14 @@ function fakeEditor(session) {
       editor.text = text
     }),
     setModel: vi.fn(async () => {}),
+    renameVariable: vi.fn((from, to) => editor.report('edit', renameIdentifier(editor.text, from, to), true)),
     flush: () => {},
   }
   return editor
 }
 
 describe('useMathSession', () => {
-  let session, editorRef, history
+  let session, editorRef, history, ports
 
   beforeAll(async () => {
     await ensureLibCellmlReady() // isDirty compares models with libcellml
@@ -66,7 +68,8 @@ describe('useMathSession', () => {
     useLibraryStore().addMath(MATH_REF, XML)
     history = useFlowHistoryStore()
     editorRef = ref(null)
-    session = useMathSession({ history, editorRef, ports: ref([{ label: 'p', variables: ['x', 'k'] }]) })
+    ports = ref([{ label: 'p', variables: ['x', 'k'] }])
+    session = useMathSession({ history, editorRef, ports })
     editorRef.value = fakeEditor(session)
     await session.load({ mathRef: MATH_REF, rows: [], managed: true })
   })
@@ -106,6 +109,66 @@ describe('useMathSession', () => {
 
     await history.undo()
     expect(session.parameterRows.value.map((r) => r.name)).toContain('k')
+  })
+
+  describe('when a variable is renamed in the text', () => {
+    const SIMPLE_TEXT = 'ode(x, t) = -k * x;\n'
+
+    beforeEach(async () => {
+      await editorRef.value.report('init', SIMPLE_TEXT, true)
+    })
+
+    it('keeps its units and initialiser, and renames it in ports', async () => {
+      await editorRef.value.report('edit', 'ode(y, t) = -k * y;\n', true)
+
+      const rows = byName(session.parameterRows.value)
+      expect(rows.y).toMatchObject({ units: 'metre', stateRole: 'state', initialiser: 'x0' })
+      expect(rows.x).toBeUndefined()
+      expect(rows.y_init).toBeUndefined()
+      expect(ports.value[0].variables).toEqual(['y', 'k'])
+      expect(session.pendingRename.value).toBeNull()
+
+      await history.undo()
+      expect(byName(session.parameterRows.value).x).toMatchObject({ units: 'metre', initialiser: 'x0' })
+      expect(ports.value[0].variables).toEqual(['x', 'k'])
+    })
+
+    it('follows a name typed a letter at a time', async () => {
+      await editorRef.value.report('edit', 'ode(y, t) = -k * y;\n', true)
+      await editorRef.value.report('edit', 'ode(ym, t) = -k * ym;\n', true)
+      expect(byName(session.parameterRows.value).ym).toMatchObject({ units: 'metre', initialiser: 'x0' })
+      expect(ports.value[0].variables).toEqual(['ym', 'k'])
+    })
+
+    it('offers to rename the remaining uses, and renames them as one undo step', async () => {
+      await editorRef.value.report('edit', 'ode(x, t) = -k * y;\n', true)
+      expect(session.pendingRename.value).toEqual({ from: 'x', to: 'y', uses: 1 })
+      expect(byName(session.parameterRows.value).y.units).toBe('metre')
+
+      await session.renameEverywhere()
+      expect(editorRef.value.renameVariable).toHaveBeenCalledWith('x', 'y')
+      expect(editorRef.value.text).toBe('ode(y, t) = -k * y;\n')
+      expect(session.pendingRename.value).toBeNull()
+      const rows = byName(session.parameterRows.value)
+      expect(rows.x).toBeUndefined()
+      expect(rows.y).toMatchObject({ units: 'metre', stateRole: 'state', initialiser: 'x0' })
+      expect(rows.y_init).toBeUndefined()
+      expect(ports.value[0].variables).toEqual(['y', 'k'])
+
+      await history.undo()
+      expect(session.parameterRows.value.map((row) => row.name)).toEqual(expect.arrayContaining(['x', 'y']))
+      expect(ports.value[0].variables).toEqual(['x', 'k'])
+    })
+
+    it('keeps both names when the offer is dismissed', async () => {
+      await editorRef.value.report('edit', 'ode(x, t) = -k * y;\n', true)
+      session.dismissRename()
+      expect(session.pendingRename.value).toBeNull()
+
+      await session.renameEverywhere()
+      expect(editorRef.value.renameVariable).not.toHaveBeenCalled()
+      expect(ports.value[0].variables).toEqual(['x', 'k'])
+    })
   })
 
   it('rebuilds rows for Advanced Mode, where the text owns initial values', async () => {

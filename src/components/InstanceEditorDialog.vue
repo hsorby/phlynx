@@ -60,6 +60,18 @@
     >
       <!-- LEFT COLUMN: CellML Text or Math Editor -->
       <div class="pane left-pane" :style="leftPaneStyle" :class="{ 'left-pane--collapsed': rightCollapsed }">
+        <Message v-if="pendingRename" class="rename-notice" severity="info" size="small" :closable="false">
+          <div class="rename-notice-body">
+            <span>
+              <strong>{{ pendingRename.from }}</strong> was renamed to <strong>{{ pendingRename.to }}</strong>, but is
+              still used in {{ pendingRename.uses }} {{ pendingRename.uses === 1 ? 'place' : 'places' }}.
+            </span>
+            <span class="rename-notice-actions">
+              <Button label="Rename all" size="small" text @click="renameEverywhere" />
+              <Button label="Keep both" size="small" text severity="secondary" @click="dismissRename" />
+            </span>
+          </div>
+        </Message>
         <div ref="editorWrapperRef" class="editor-wrapper">
           <div v-if="!isEditorReady" class="editor-pending">
             <ProgressSpinner style="width: 32px; height: 32px" strokeWidth="4" />
@@ -169,6 +181,7 @@
                 :get-units-notice="getUnitsNotice"
                 :issue-chips="issueChips"
                 :issue-filter="issueFilter"
+                :variable-kinds="variableKinds"
               />
             </TabPanel>
 
@@ -365,6 +378,7 @@ import DataTable from 'primevue/datatable'
 import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
+import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
 import Select from 'primevue/select'
 import MultiSelect from 'primevue/multiselect'
@@ -388,6 +402,7 @@ import { useMathSession } from '../composables/useMathSession'
 
 import { isEmpty, syncInitialiserUnits } from '../utils/variables'
 import { getUnknownUnitsNotice, isValueMissing } from '../utils/parameterRows'
+import { isInitialisable } from '../services/math/variableKinds'
 import { PORT_TYPE_OPTIONS, MULTIPORT_OPTIONS } from '../utils/constants'
 import { cleanName, sanitiseName } from '../utils/identifiers'
 import { detachReactivity } from '../utils/reactivity'
@@ -460,7 +475,18 @@ const parameterTableRef = ref(null)
 
 // The math, its analysis and the parameter rows.
 const session = useMathSession({ history, editorRef: mathEditorRef, ports: editablePorts })
-const { isManaged, currentModel, parameterRows, editorDefinitions, isMissingUnits, handleEditorChange } = session
+const {
+  isManaged,
+  currentModel,
+  parameterRows,
+  editorDefinitions,
+  variableKinds,
+  pendingRename,
+  isMissingUnits,
+  handleEditorChange,
+  renameEverywhere,
+  dismissRename,
+} = session
 
 // ── Editor Choice ───────────────────────────────────────────────────────────
 const EDITOR_STORAGE_KEY = 'instanceEditorDialog.editorKind'
@@ -657,10 +683,23 @@ onUnmounted(() => {
 // ── Issues ───────────────────────────────────────────────────────────────────
 const getUnitsNotice = (row) => getUnknownUnitsNotice(row, store.availableUnitNames)
 
+/**
+ * Checks whether a state's initial value is a variable that changes over time.
+ *
+ * @param {Object} row
+ * @returns {boolean}
+ */
+function hasTimeVaryingInitialiser(row) {
+  if (row.stateRole !== 'state' || !row.initialiser) return false
+  const initialiserRow = parameterRows.value.find((candidate) => candidate.name === row.initialiser)
+  return !!initialiserRow && !isInitialisable(initialiserRow, variableKinds.value)
+}
+
 const ISSUE_MATCHERS = {
   units: (row) => isMissingUnits(row),
   values: (row) => isValueMissing(row),
   unknown: (row) => !!getUnitsNotice(row),
+  initialiser: hasTimeVaryingInitialiser,
 }
 
 const issueChips = computed(() => {
@@ -671,6 +710,7 @@ const issueChips = computed(() => {
   const missingUnits = count(ISSUE_MATCHERS.units)
   const missingValues = count(ISSUE_MATCHERS.values)
   const unknownUnits = count(ISSUE_MATCHERS.unknown)
+  const timeVaryingInitialisers = count(ISSUE_MATCHERS.initialiser)
 
   const chips = []
   if (missingUnits) {
@@ -678,6 +718,15 @@ const issueChips = computed(() => {
   }
   if (missingValues) {
     chips.push({ key: 'values', kind: 'units', icon: 'pi-pencil', count: missingValues, label: `${plural(missingValues, 'value')} required` })
+  }
+  if (timeVaryingInitialisers) {
+    chips.push({
+      key: 'initialiser',
+      kind: 'units',
+      icon: 'pi-exclamation-triangle',
+      count: timeVaryingInitialisers,
+      label: `${plural(timeVaryingInitialisers, 'state')} with time-varying initialiser`,
+    })
   }
   if (unknownUnits) {
     chips.push({ key: 'unknown', kind: 'unknown', icon: 'pi-info-circle', count: unknownUnits, label: `${plural(unknownUnits, 'unit')} not in library` })
@@ -1096,6 +1145,23 @@ async function handleSave() {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+
+.rename-notice {
+  margin-bottom: 8px;
+}
+
+.rename-notice-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.rename-notice-actions {
+  display: flex;
+  gap: 4px;
 }
 
 /* ── Resize handle between the two panes; also hosts the collapse/expand button ── */
