@@ -570,7 +570,7 @@ import EdgeConnectionDialog from '../components/EdgeConnectionDialog.vue'
 import SettingsDialog from '../components/SettingsDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
 import PaneContextMenu from '../components/PaneContextMenu.vue'
-import { reconcileRows } from '../services/math/reconcileRows'
+import { getPortVariables, reconcileRows } from '../services/math/reconcileRows'
 import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
 import CreateInspectionModuleDialog from '../components/dialogs/CreateInspectionModule.vue'
 import ContextSidebar from '../components/ContextSidebar.vue'
@@ -2114,7 +2114,10 @@ function updateVariablesFromMath(node, mathRef) {
   if (!node) return
   const analysis = libraryStore.getMathAnalysis(mathRef)
   if (!analysis) return
-  node.data.variables = reconcileRows(analysis, node.data.variables ?? [])
+  node.data.variables = reconcileRows(analysis, node.data.variables ?? [], {
+    portVariables: getPortVariables(node.data.ports),
+    defaults: libraryStore.getMathDefaults(mathRef),
+  })
 }
 
 function cleanPorts(currentNode) {

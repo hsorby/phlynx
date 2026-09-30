@@ -27,7 +27,8 @@ export function useLoadFromInstanceArray() {
         store.availableModules,
         store.getMathAnalysis,
         nodes.value,
-        progressCallback
+        progressCallback,
+        store.getMathDefaults
       )
 
       if (progressCallback) {

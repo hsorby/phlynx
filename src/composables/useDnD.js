@@ -104,7 +104,8 @@ export default function useDragAndDrop(pendingHistoryNodes, flowId = FLOW_IDS.MA
     const nodeType = componentFile === GHOST_MODULE_FILENAME ? GHOST_NODE_TYPE : MAIN_NODE_TYPE
 
     const mathAnalysis = store.getMathAnalysis(moduleData.mathRef)
-    const newNode = buildInstance(nodeId, finalName, nodeType, moduleData, allHandles, position, mathAnalysis)
+    const mathDefaults = store.getMathDefaults(moduleData.mathRef)
+    const newNode = buildInstance(nodeId, finalName, nodeType, moduleData, allHandles, position, mathAnalysis, mathDefaults)
 
     const globalConstants = extractGlobalConstants(newNode.data.variables)
     
