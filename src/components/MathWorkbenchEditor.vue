@@ -8,6 +8,7 @@
           validate="commit"
           autofocus
           :outputs="false"
+          copy
           :history="false"
           :readonly="isBlocked"
           :issues="blockIssues"
@@ -24,7 +25,7 @@
 /**
  * The WYSIWYG math editor, wrapped to the contract useMathSession expects of a math editor. It
  * always works like Simple Mode: it edits the equations, and the parameter table declares the
- * variables.
+ * variables. Its "Copy as" button copies the selected equations as LaTeX, MathJSON or Content MathML.
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { EquationWorkbench } from 'vue3-math-editor'

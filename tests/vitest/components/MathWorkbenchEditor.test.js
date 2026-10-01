@@ -224,4 +224,10 @@ describe('MathWorkbenchEditor', () => {
     expect(init.xml).toContain('<ci>k</ci>')
     expect(init.xml).toContain('<variable name="x" units="metre" initial_value="1"/>')
   })
+
+  it('offers the workbench’s Copy as menu without its output panel', async () => {
+    await mountEditor({ stub: false })
+    expect(wrapper.find('[data-role="copy-as"]').exists()).toBe(true)
+    expect(wrapper.find('[data-role="outputs"]').exists()).toBe(false)
+  })
 })
