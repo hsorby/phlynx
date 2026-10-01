@@ -4,6 +4,7 @@
  * and undo history.
  */
 import { computed, ref, shallowRef, watch } from 'vue'
+import { serializeLayout } from 'cellml-text-editor'
 
 import { useLibraryStore } from '../stores/libraryStore'
 import { analyzeMathXml } from '../services/math/analyzeMath'
@@ -28,8 +29,21 @@ function hasSameNames(rows, otherRows) {
 }
 
 /**
+ * Checks whether two text layouts are the same.
+ *
+ * @param {import('cellml-text-editor').TextLayout | null} layout
+ * @param {import('cellml-text-editor').TextLayout | null} otherLayout
+ * @returns {boolean}
+ */
+function isSameLayout(layout, otherLayout) {
+  if (layout === otherLayout) return true
+  if (!layout || !otherLayout) return false
+  return serializeLayout(layout) === serializeLayout(otherLayout)
+}
+
+/**
  * Creates a math editing session. A plugged-in editor emits `change` with
- * `{ source: 'init'|'edit'|'external', format, text, valid, xml }` and exposes `format` (what its
+ * `{ source: 'init'|'edit'|'external', format, text, valid, xml, layout? }` and exposes `format` (what its
  * text is written in), `setText`, `setModel`, `flush`, `getErrors` and `renameVariable` (renames
  * a variable everywhere in its text and reports that as an edit). Editors can be swapped
  * mid-session; a later `init` is the new editor's view of the same math.
@@ -45,8 +59,13 @@ export function useMathSession({ history, editorRef, ports }) {
 
   const isManaged = ref(true) // Simple Mode: the table owns the declarations
   const currentModel = ref('') // latest valid XML
-  const currentText = ref({ format: null, value: '' }) // latest editor text, valid or not
+  // Latest editor text, valid or not, with the layout of the last valid CellML text at that point.
+  const currentText = ref({ format: null, value: '', layout: null })
   const originalModel = ref('')
+  const loadedLayout = shallowRef(null)
+  const originalLayout = shallowRef(null)
+  /** The text layout to save with the math: comments, blank lines and statements as typed. */
+  const currentLayout = computed(() => currentText.value.layout ?? loadedLayout.value)
   const parameterRows = ref([])
   const analysis = shallowRef(null)
   // Simple Mode: a variable renamed in only some places, `{ from, to, uses }`, offered for renaming everywhere.
@@ -119,6 +138,15 @@ export function useMathSession({ history, editorRef, ports }) {
   }
 
   /**
+   * Checks whether the text layout differs from what was loaded, e.g. after editing only comments.
+   *
+   * @returns {boolean}
+   */
+  function isLayoutDirty() {
+    return !isSameLayout(originalLayout.value, currentLayout.value)
+  }
+
+  /**
    * Loads an instance's math and rows. A cache miss is analyzed in the worker, so the caller can
    * show a loading state meanwhile.
    *
@@ -134,7 +162,9 @@ export function useMathSession({ history, editorRef, ports }) {
     const math = (mathRef && store.availableMath.get(mathRef)) || ''
     currentModel.value = math
     originalModel.value = math
-    currentText.value = { format: null, value: '' }
+    loadedLayout.value = (mathRef && store.getMathLayout(mathRef)) || null
+    originalLayout.value = loadedLayout.value
+    currentText.value = { format: null, value: '', layout: null }
     pendingRename.value = null
     hasInitialised = false
 
@@ -184,15 +214,20 @@ export function useMathSession({ history, editorRef, ports }) {
    * @param {Object} change - The editor's `change` payload.
    * @returns {Promise<void>}
    */
-  async function processEditorChange({ source, format, text, valid, xml }) {
+  async function processEditorChange({ source, format, text, valid, xml, layout }) {
     const isEditorSwitch = source === 'init' && hasInitialised
     if (isEditorSwitch) source = 'external'
     if (source === 'init') hasInitialised = true
-    // A change queued before an editor switch still carries the format it was written in.
-    const textState = { format: format ?? editorRef.value?.format ?? null, value: text }
+    // A change queued before an editor switch still carries the format it was written in. Text
+    // without a layout (invalid, or from an editor that has none) keeps the current one.
+    const textState = {
+      format: format ?? editorRef.value?.format ?? null,
+      value: text,
+      layout: layout ?? currentLayout.value,
+    }
 
     if (!valid) {
-      if (source === 'edit') await handleInvalidEdit(textState)
+      if (source === 'edit') await recordTextEdit(textState)
       else currentText.value = textState
       return
     }
@@ -202,9 +237,11 @@ export function useMathSession({ history, editorRef, ports }) {
 
     // 'init' (first editor mounted) or 'external' (mode, definitions, component name or editor changed).
     const rebaseline = source === 'init' || (isEditorSwitch && !isDirty())
+    const rebaselineLayout = source === 'init' || (isEditorSwitch && !isLayoutDirty())
     currentText.value = textState
     currentModel.value = xml
     if (rebaseline) originalModel.value = xml
+    if (rebaselineLayout) originalLayout.value = textState.layout
     analysis.value = nextAnalysis
     const unchanged = { renames: [], partial: null }
     pendingRename.value = isManaged.value ? followPendingRename(pendingRename.value, unchanged, nextAnalysis) : null
@@ -221,7 +258,7 @@ export function useMathSession({ history, editorRef, ports }) {
    * Shows a text state in the mounted editor. Text from another editor can't be shown as is, so
    * that editor gets the model instead.
    *
-   * @param {{ format: string|null, value: string }} textState
+   * @param {{ format: string|null, value: string, layout: Object|null }} textState
    * @param {string} xml - The model matching the text.
    * @returns {Promise<void>|undefined}
    */
@@ -236,7 +273,7 @@ export function useMathSession({ history, editorRef, ports }) {
    * Restores a text state during undo or redo.
    *
    * @param {string} xml
-   * @param {{ format: string|null, value: string }} textState
+   * @param {{ format: string|null, value: string, layout: Object|null }} textState
    * @param {import('../services/math/analyzeMath').MathAnalysis} textAnalysis
    * @returns {Promise<void>|undefined}
    */
@@ -253,7 +290,7 @@ export function useMathSession({ history, editorRef, ports }) {
    * it renamed or removed. In Simple Mode a renamed variable keeps its row (see carryRenames).
    *
    * @param {string} newXml
-   * @param {{ format: string|null, value: string }} newText
+   * @param {{ format: string|null, value: string, layout: Object|null }} newText
    * @param {import('../services/math/analyzeMath').MathAnalysis} newAnalysis
    * @returns {Promise<void>}
    */
@@ -261,10 +298,8 @@ export function useMathSession({ history, editorRef, ports }) {
     const previousXml = currentModel.value
     const previousText = currentText.value
     const previousAnalysis = analysis.value
-    if (previousXml === newXml) {
-      currentText.value = newText
-      return
-    }
+    // Only comments or formatting changed, which are saved with the layout.
+    if (previousXml === newXml) return recordTextEdit(newText)
 
     const previousRows = parameterRows.value
     const pending = pendingRename.value
@@ -330,13 +365,14 @@ export function useMathSession({ history, editorRef, ports }) {
   }
 
   /**
-   * Records an edit that didn't parse, so undo and redo can still replay the raw text. The model
-   * is unchanged, so another editor restores to the current model.
+   * Records an edit that leaves the model unchanged (it didn't parse, or changed only comments or
+   * formatting), so undo and redo can still replay the text. Another editor restores to the
+   * current model.
    *
-   * @param {{ format: string|null, value: string }} textState
+   * @param {{ format: string|null, value: string, layout: Object|null }} textState
    * @returns {Promise<void>}
    */
-  async function handleInvalidEdit(textState) {
+  async function recordTextEdit(textState) {
     const previousText = currentText.value
     if (previousText.format === textState.format && previousText.value === textState.value) return
 
@@ -393,6 +429,7 @@ export function useMathSession({ history, editorRef, ports }) {
     // state
     isManaged,
     currentModel,
+    currentLayout,
     parameterRows,
     editorDefinitions,
     variableKinds,
@@ -401,6 +438,7 @@ export function useMathSession({ history, editorRef, ports }) {
     // queries
     isMissingUnits,
     isDirty,
+    isLayoutDirty,
     // actions
     load,
     handleEditorChange,

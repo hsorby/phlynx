@@ -110,6 +110,7 @@
     "store.globalConstants[][].units",
     "store.globalConstants[][].value",
     "store.mathDefaults",
+    "store.mathLayouts",
     "version",
     "workspace",
     "workspace.archiveHash",

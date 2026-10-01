@@ -326,6 +326,8 @@ function convertStore(oldStore, globalConstantNames) {
  *   Math keeps its numeric initial values, and a blank row falls back to them.
  * - 1.1.0: math holds no numeric initial values, so the rows alone initialise the model. Each state
  *   names an initialiser variable, and store.mathDefaults holds the values taken out of each math.
+ *   store.mathLayouts holds `[mathRef, TextLayout]` pairs: each math's CellML text comments, blank
+ *   lines and statements as typed (see cellml-text-editor), which the XML can't hold.
  */
 const LEGACY_VERSION = 'legacy'
 
@@ -451,7 +453,8 @@ export function migrateWorkspace(doc) {
 }
 
 /**
- * 1.0.0 -> 1.1.0: moves the math's values into the rows and records them as math defaults.
+ * 1.0.0 -> 1.1.0: moves the math's values into the rows and records them as math defaults. Math
+ * from 1.0.0 has no text layouts.
  *
  * @param {Object} doc - A 1.0.0 workspace.
  * @returns {Object}
@@ -463,7 +466,7 @@ function migrate1_0_0To1_1_0(doc) {
   return {
     ...doc,
     flow: { ...doc.flow, nodes },
-    store: { ...store, availableMath: separatedEntries, mathDefaults },
+    store: { ...store, availableMath: separatedEntries, mathDefaults, mathLayouts: store.mathLayouts ?? [] },
   }
 }
 

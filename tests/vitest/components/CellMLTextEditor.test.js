@@ -3,6 +3,7 @@ import { nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import PrimeVue from 'primevue/config'
 import { afterEach, describe, expect, it } from 'vitest'
+import { CellMLTextParser } from 'cellml-text-editor'
 
 import CellMLTextEditor from '../../../src/components/CellMLTextEditor.vue'
 
@@ -24,10 +25,10 @@ const DEFINITIONS = [
 let wrapper
 afterEach(() => wrapper?.unmount())
 
-/** Mounts the editor in Simple Mode and waits for its `init` report. */
-async function mountEditor(xml) {
+/** Mounts the editor (Simple Mode unless told otherwise) and waits for its `init` report. */
+async function mountEditor(xml, props = {}) {
   wrapper = mount(CellMLTextEditor, {
-    props: { modelValue: xml, simple: true, componentName: 'c', variableDefinitions: DEFINITIONS },
+    props: { modelValue: xml, simple: true, componentName: 'c', variableDefinitions: DEFINITIONS, ...props },
     global: { plugins: [PrimeVue] },
     attachTo: document.body,
   })
@@ -71,5 +72,34 @@ describe('CellMLTextEditor', () => {
     expect(last).toMatchObject({ source: 'edit', valid: true })
     expect(last.text).toBe(text.replace(/\bx\b/g, 'z'))
     expect(last.text).toContain('sin(') // function names are left alone
+  })
+
+  it('shows the comments in the layout it is given, and reports the layout', async () => {
+    const xml = modelWith('<apply><plus/><ci>x</ci><ci>x</ci></apply>')
+    const parser = new CellMLTextParser({ simplified: true })
+    const layout = parser.parse('// Twice x\ny = x + x;\n', { baseXml: xml, componentName: 'c' }).layout
+    await mountEditor(xml, { layout })
+    expect(changes()[0].text).toBe('// Twice x\ny = x + x;\n')
+    expect(JSON.stringify(changes()[0].layout)).toContain('// Twice x')
+  })
+
+  it('keeps Advanced Mode variable comments through a Simple Mode edit', async () => {
+    await mountEditor(modelWith('<ci>x</ci>'), { simple: false })
+    const advanced = changes()[0].text.replace(/(var x: [^\n]*;)/, '$1 // length')
+    await wrapper.vm.setText(advanced, { report: true, source: 'edit' })
+
+    await wrapper.setProps({ simple: true })
+    await nextTick()
+    const simple = changes().at(-1).text
+    expect(simple).not.toContain('var x')
+    await wrapper.vm.setText(`// Copy\n${simple}`, { report: true, source: 'edit' })
+    const layout = JSON.stringify(changes().at(-1).layout)
+    expect(layout).toContain('// Copy')
+    expect(layout).toContain('// length')
+
+    await wrapper.setProps({ simple: false })
+    await nextTick()
+    expect(changes().at(-1).text).toMatch(/var x: [^\n]*; \/\/ length/)
+    expect(changes().at(-1).text).toContain('// Copy')
   })
 })

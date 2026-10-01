@@ -97,6 +97,7 @@
             ref="mathEditorRef"
             :key="mathRef"
             :model-value="currentModel"
+            :layout="currentLayout"
             v-model:simple="isManaged"
             :component-name="componentNameForEditor"
             :variable-definitions="editorDefinitions"
@@ -522,6 +523,7 @@ const session = useMathSession({ history, editorRef: mathEditorRef, ports: edita
 const {
   isManaged,
   currentModel,
+  currentLayout,
   parameterRows,
   editorDefinitions,
   variableKinds,
@@ -963,7 +965,7 @@ const onDialogVisibleChange = (visible) => {
 }
 
 async function handleCancel() {
-  if (session.isDirty()) {
+  if (session.isDirty() || session.isLayoutDirty()) {
     const confirmed = await confirm({
       header: 'Unsaved Changes',
       message: 'Are you sure you want to discard changes?',
@@ -1114,7 +1116,10 @@ async function handleSave() {
       const overwrite = await handleMathOverwrite()
       if (!overwrite) return
     }
-    store.addMath(newMathRef, currentModel.value)
+    store.addMath(newMathRef, currentModel.value, true, currentLayout.value)
+  } else if (newMathRef && session.isLayoutDirty()) {
+    // Only comments or formatting changed: the math, and so every instance using it, is unchanged.
+    store.setMathLayout(newMathRef, currentLayout.value)
   }
 
   const updateAll = (siblingCount.value > 0 && applyToAll.value) || siblingCount.value === 0

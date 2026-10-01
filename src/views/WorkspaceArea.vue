@@ -524,6 +524,7 @@ import { useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import SplitButton from 'primevue/splitbutton'
 import JSZip from 'jszip'
+import { parseLayout } from 'cellml-text-editor'
 import Divider from 'primevue/divider'
 import InputText from 'primevue/inputtext'
 import IconField from 'primevue/iconfield'
@@ -2825,6 +2826,7 @@ const copySelection = async () => {
     storeSnapshot[key] = {
       mathRef,
       math,
+      layout: libraryStore.getMathLayout(mathRef),
       moduleRef,
       module,
     }
@@ -2871,7 +2873,9 @@ const pasteSelection = async (atMouse = false) => {
         libraryStore.addModule(entry.module)
       }
       if (!libraryStore.availableMath.has(entry.mathRef)) {
-        libraryStore.addMath(entry.mathRef, entry.math)
+        // Clipboard text can come from anywhere, so the layout is checked like a saved one.
+        const layout = entry.layout ? parseLayout(JSON.stringify(entry.layout)) : null
+        libraryStore.addMath(entry.mathRef, entry.math, true, layout)
       }
     }
   }

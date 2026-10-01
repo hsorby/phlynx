@@ -2,7 +2,13 @@
 import { ref } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CellMLTextGenerator, CellMLTextParser, applyVariableDefinitions, renameIdentifier } from 'cellml-text-editor'
+import {
+  CellMLTextGenerator,
+  CellMLTextParser,
+  applyVariableDefinitions,
+  mergeSimpleLayout,
+  renameIdentifier,
+} from 'cellml-text-editor'
 
 import { useMathSession } from '../../../src/composables/useMathSession.js'
 import { useFlowHistoryStore } from '../../../src/stores/historyStore.js'
@@ -33,6 +39,7 @@ function fakeEditor(session) {
     format: 'cellml-text',
     text: '',
     lastXml: XML,
+    lastLayout: null,
     report(source, text, simple) {
       const parser = new CellMLTextParser({ simplified: simple })
       const result = parser.parse(text, {
@@ -42,8 +49,18 @@ function fakeEditor(session) {
       })
       const valid = result.errors.length === 0 && !!result.xml
       editor.text = text
-      if (valid) editor.lastXml = result.xml
-      session.handleEditorChange({ source, format: editor.format, text, valid, xml: valid ? result.xml : null })
+      if (valid) {
+        editor.lastXml = result.xml
+        editor.lastLayout = simple ? mergeSimpleLayout(editor.lastLayout, result.layout) : result.layout
+      }
+      session.handleEditorChange({
+        source,
+        format: editor.format,
+        text,
+        valid,
+        xml: valid ? result.xml : null,
+        layout: valid ? editor.lastLayout : null,
+      })
       return session.flushPendingChanges()
     },
     setText: vi.fn(async (text) => {
@@ -282,5 +299,48 @@ describe('useMathSession', () => {
     await history.undo()
     expect(editorRef.value.setText).toHaveBeenLastCalledWith(simpleText)
     expect(editorRef.value.setModel).not.toHaveBeenCalled()
+  })
+
+  describe('text layout', () => {
+    const generateSimple = () => new CellMLTextGenerator({ simplified: true }).generate(XML)
+
+    it('opens with the layout saved with the math', async () => {
+      const layout = new CellMLTextParser().parse('// decay\node(x, t) = -k * x;\n', { componentName: 'decay' }).layout
+      useLibraryStore().setMathLayout(MATH_REF, layout)
+      await session.load({ mathRef: MATH_REF, rows: [], managed: true })
+      expect(session.currentLayout.value).toEqual(layout)
+      expect(session.isLayoutDirty()).toBe(false)
+    })
+
+    it('records an edit to comments alone as a layout change that undoes', async () => {
+      const simpleText = generateSimple()
+      await editorRef.value.report('init', simpleText, true)
+      expect(session.isLayoutDirty()).toBe(false)
+
+      await editorRef.value.report('edit', `// Exponential decay\n${simpleText}`, true)
+      expect(session.isDirty()).toBe(false)
+      expect(session.isLayoutDirty()).toBe(true)
+      expect(JSON.stringify(session.currentLayout.value)).toContain('// Exponential decay')
+
+      await history.undo()
+      expect(editorRef.value.setText).toHaveBeenLastCalledWith(simpleText)
+      expect(session.isLayoutDirty()).toBe(false)
+    })
+
+    it('keeps a comment on a variable whose typed value moves into the rows', async () => {
+      session.isManaged.value = false
+      const advancedText = new CellMLTextGenerator({ simplified: false }).generate(XML)
+      const commented = advancedText.replace(/(var k: [^\n]*;)/, '$1 // decay rate')
+      expect(commented).not.toBe(advancedText)
+      await editorRef.value.report('edit', commented, false)
+
+      session.separateTypedValues()
+      const result = new CellMLTextGenerator({ simplified: false }).generateResult(session.currentModel.value, {
+        layout: session.currentLayout.value,
+      })
+      expect(result.layoutRejected).toBeUndefined()
+      expect(result.text).toMatch(/var k: [^\n]*; \/\/ decay rate/)
+      expect(result.text).not.toContain('init: 0.5')
+    })
   })
 })

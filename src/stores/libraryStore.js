@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { parseLayout } from 'cellml-text-editor'
 import { ref, computed, markRaw } from 'vue'
 import { normaliseConfig, buildModule, parseMathRef } from '../utils/config'
 import { AFFINE_UNIT_CONVERSIONS, NEW_MODULE_MATH_REF, GHOST_MATH_REF, STANDARD_UNITS } from '../utils/constants'
@@ -42,6 +43,8 @@ export const useLibraryStore = defineStore('library', () => {
   const globalConstants = ref(new Map())
   // mathRef -> Map of the values taken out of that math, so new instances can start with them.
   const mathDefaults = ref(new Map())
+  // mathRef -> TextLayout: the comments, blank lines and typed statements the math XML can't hold.
+  const mathLayouts = ref(new Map())
 
   // mathRef -> MathAnalysis. Non-reactive, since analyses are large and only read imperatively.
   const availableMathAnalysis = markRaw(new Map())
@@ -96,6 +99,7 @@ export const useLibraryStore = defineStore('library', () => {
     availableModules.value.clear()
     availableUnits.value = []
     mathDefaults.value.clear()
+    mathLayouts.value.clear()
     availableMathAnalysis.clear()
     pendingAnalysis.clear()
   }
@@ -270,7 +274,7 @@ export const useLibraryStore = defineStore('library', () => {
   function addMathFile(filename, components) {
     components.forEach((component) => {
       const mathRef = `${filename}:${component.name}`
-      addMath(mathRef, component.math)
+      addMath(mathRef, component.math, true, component.layout)
       createModuleForMath(mathRef)
     })
   }
@@ -300,9 +304,40 @@ export const useLibraryStore = defineStore('library', () => {
     return mathDefaults.value.get(mathRef) ?? new Map()
   }
 
-  function addMath(mathRef, rawMath, isOverwrite = true) {
+  /**
+   * Gets the text layout saved with a math.
+   *
+   * @param {string} mathRef
+   * @returns {import('cellml-text-editor').TextLayout | null}
+   */
+  function getMathLayout(mathRef) {
+    return mathLayouts.value.get(mathRef) ?? null
+  }
+
+  /**
+   * Saves a math's text layout, or removes it when the layout is null.
+   *
+   * @param {string} mathRef
+   * @param {import('cellml-text-editor').TextLayout | null} layout
+   */
+  function setMathLayout(mathRef, layout) {
+    if (layout) mathLayouts.value.set(mathRef, layout)
+    else mathLayouts.value.delete(mathRef)
+  }
+
+  /**
+   * Adds math, keeping its layout when given one. Without a layout, any saved layout stays: the
+   * text generator rewrites only the statements whose math no longer matches it.
+   *
+   * @param {string} mathRef
+   * @param {string} rawMath
+   * @param {boolean} [isOverwrite=true]
+   * @param {import('cellml-text-editor').TextLayout | null} [layout]
+   */
+  function addMath(mathRef, rawMath, isOverwrite = true, layout = null) {
     if (!availableMath.value.has(mathRef) || isOverwrite) {
       const math = storeSeparatedMath(mathRef, rawMath)
+      if (layout) setMathLayout(mathRef, layout)
       addMathHashEntry(mathRef, math)
       updateStubStatus(mathRef)
       scheduleMathAnalysis(mathRef, math)
@@ -392,6 +427,14 @@ export const useLibraryStore = defineStore('library', () => {
       }
     }
 
+    if (state.mathLayouts) {
+      // A layout only formats the math text, so one that fails validation is skipped.
+      for (const [mathRef, layout] of state.mathLayouts) {
+        const checked = parseLayout(JSON.stringify(layout))
+        if (checked) mathLayouts.value.set(mathRef, checked)
+      }
+    }
+
     if (state.availableModules) {
       mergeIn(new Map(state.availableModules), availableModules.value)
     }
@@ -432,6 +475,7 @@ export const useLibraryStore = defineStore('library', () => {
       availableUnits: availableUnits.value,
       globalConstants: Array.from(globalConstants.value.entries()),
       mathDefaults: Array.from(mathDefaults.value.entries(), ([mathRef, values]) => [mathRef, Array.from(values)]),
+      mathLayouts: Array.from(mathLayouts.value.entries()),
     }
   }
 
@@ -481,6 +525,8 @@ export const useLibraryStore = defineStore('library', () => {
     getMathAnalysis,
     ensureMathAnalysis,
     getMathDefaults,
+    getMathLayout,
+    setMathLayout,
 
     // Query
     getGlobalConstant,

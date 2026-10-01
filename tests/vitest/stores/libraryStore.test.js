@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { CellMLTextParser } from 'cellml-text-editor'
 import { useLibraryStore } from '../../../src/stores/libraryStore.js'
 
 const MATH_REF = 'file:decay'
@@ -55,5 +56,44 @@ describe('libraryStore math', () => {
     store.loadState({ availableMath: [[MATH_REF, XML]] })
     expect(store.availableMath.get(MATH_REF)).not.toMatch(/initial_value="[\d.]+"/)
     expect(store.getMathDefaults(MATH_REF).get('k')).toBe('0.5')
+  })
+})
+
+describe('libraryStore math layouts', () => {
+  let store
+  const layout = new CellMLTextParser().parse('// Exponential decay\node(x, t) = -k * x;\n', { componentName: 'decay' }).layout
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    store = useLibraryStore()
+  })
+
+  it('keeps a layout added with its math', () => {
+    store.addMath(MATH_REF, XML, true, layout)
+    expect(store.getMathLayout(MATH_REF)).toEqual(layout)
+  })
+
+  it('keeps the layout when the math is overwritten without one', () => {
+    store.addMath(MATH_REF, XML, true, layout)
+    store.addMath(MATH_REF, XML)
+    expect(store.getMathLayout(MATH_REF)).toEqual(layout)
+  })
+
+  it('removes a layout set to null', () => {
+    store.addMath(MATH_REF, XML, true, layout)
+    store.setMathLayout(MATH_REF, null)
+    expect(store.getMathLayout(MATH_REF)).toBeNull()
+  })
+
+  it('saves and restores layouts with the workspace, skipping invalid ones', () => {
+    store.addMath(MATH_REF, XML, true, layout)
+    const state = JSON.parse(JSON.stringify(store.getState()))
+    state.mathLayouts.push(['file:other', { format: 'something-else', components: [] }])
+
+    setActivePinia(createPinia())
+    const restored = useLibraryStore()
+    restored.loadState(state)
+    expect(restored.getMathLayout(MATH_REF)).toEqual(layout)
+    expect(restored.getMathLayout('file:other')).toBeNull()
   })
 })

@@ -96,6 +96,15 @@ describe('migrateWorkspace', () => {
     expect(rows.x_init.data_reference).toBe('Jones1999')
   })
 
+  it('gives 1.0.0 math no text layouts, and keeps any already there', () => {
+    const doc = { version: '1.0.0', flow: { nodes: [node([])], edges: [] }, store: { availableMath: [[MATH_REF, XML]] } }
+    const migrated = migrateWorkspace(doc)
+    expect(migrated.store.mathLayouts).toEqual([])
+
+    const layouts = [[MATH_REF, { format: 'cellml-text-layout', version: 1, components: [] }]]
+    expect(migrateWorkspace({ ...doc, store: { ...doc.store, mathLayouts: layouts } }).store.mathLayouts).toBe(layouts)
+  })
+
   it('leaves a workspace at the current version as it is', () => {
     const doc = {
       id: 'phlynx-project',

@@ -125,6 +125,7 @@ import {
   CellMLLatexGenerator,
   applyVariableDefinitions,
   cellml,
+  mergeSimpleLayout,
   renameIdentifier,
 } from 'cellml-text-editor'
 
@@ -147,13 +148,18 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+  // The text layout saved with the math (comments, blank lines, statements as typed). Read on mount.
+  layout: {
+    type: Object,
+    default: null
+  },
 })
 
 /** What this editor's text is written in, so the session can tell its text from another editor's. */
 const FORMAT = 'cellml-text'
 
 /**
- * Emits `change` with `{ source, format, text, valid, xml }`, the contract useMathSession expects.
+ * Emits `change` with `{ source, format, text, valid, xml, layout }`, the contract useMathSession expects.
  * `source` is 'init' on mount, 'edit' for typing, or 'external' after a prop change.
  */
 const emit = defineEmits(['update:simple', 'update:componentName', 'change', 'save', 'undo', 'redo'])
@@ -170,6 +176,8 @@ const parser = new CellMLTextParser({ simplified: props.simple })
 const latexGen = new CellMLLatexGenerator()
 
 let lastXml = props.modelValue
+// The Advanced Mode layout of the last valid text. Simple Mode edits are merged into it.
+let lastLayout = props.layout
 
 // Math the text can't hold, found when the text was generated. Editing it would lose that math.
 const generatorErrors = ref([])
@@ -181,7 +189,8 @@ const generatorErrors = ref([])
  * @returns {string}
  */
 function generateText(xml) {
-  const result = generator.generateResult(xml)
+  const result = generator.generateResult(xml, { layout: lastLayout })
+  if (result.layoutRejected) console.warn('CellML text layout ignored: it would have changed the math.')
   generatorErrors.value = result.errors
   return result.text
 }
@@ -491,6 +500,7 @@ function run(source, { text = cellmlText.value, silent = false } = {}) {
   if (valid) {
     currentDoc = result.doc
     lastXml = result.xml
+    if (result.layout) lastLayout = simple ? mergeSimpleLayout(lastLayout, result.layout) : result.layout
 
     // Advanced Mode: the text defines the component name
     const textComponentName = simple ? '' : result.doc.getElementsByTagName('component')[0]?.getAttribute('name')
@@ -506,6 +516,7 @@ function run(source, { text = cellmlText.value, silent = false } = {}) {
       text,
       valid,
       xml: valid ? result.xml : null,
+      layout: valid ? lastLayout : null,
     })
   }
 
