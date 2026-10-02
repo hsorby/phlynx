@@ -123,6 +123,7 @@
 
                 <div v-else-if="isParamsVisible" class="table-flex-wrapper">
                   <DataTable
+                    :key="parameterTableKey"
                     :value="filteredParameterRows"
                     dataKey="name"
                     scrollable
@@ -149,7 +150,8 @@
                       <template #body="slotProps">
                         <Select
                           v-model="slotProps.data.type"
-                          :options="PARAMETER_TYPE_OPTIONS"
+                          :options="typeOptionsFor(slotProps.data)"
+                          :disabled="isTypeFixed(slotProps.data)"
                           optionLabel="label"
                           optionValue="value"
                           size="small"
@@ -263,12 +265,14 @@ import TabPanel from 'primevue/tabpanel'
 import InputIcon from 'primevue/inputicon'
 import IconField from 'primevue/iconfield'
 
-import { PARAMETER_TYPE_OPTIONS, FLOW_IDS, TABLE_VIRTUAL_SCROLL_MIN_ROWS, TABLE_ROW_HEIGHT_PX } from '../utils/constants'
-import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
+import { FLOW_IDS } from '../utils/constants'
+import { isTypeFixed, typeOptionsFor } from '../utils/parameterRows'
 import { detachReactivity } from '../utils/reactivity'
 import { isEditableVariableType } from '../utils/variables'
 
 import { useResizableAside } from '../composables/useResizableAside'
+import { useVirtualScrollerOptions } from '../composables/useVirtualScrollerOptions'
+import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
 import { useLibraryStore } from '../stores/libraryStore'
 
 const props = defineProps({
@@ -408,9 +412,8 @@ watch(selectedNode, () => {
   parameterSearch.value = ''
 })
 
-const parameterVirtualScrollerOptions = computed(() =>
-  filteredParameterRows.value.length > TABLE_VIRTUAL_SCROLL_MIN_ROWS ? { itemSize: TABLE_ROW_HEIGHT_PX } : undefined
-)
+const { virtualScrollerOptions: parameterVirtualScrollerOptions, tableKey: parameterTableKey } =
+  useVirtualScrollerOptions(parameterRows)
 
 /**
  * Build detached sidebar rows from a node's variables, showing the shared value for global constants.
@@ -461,7 +464,13 @@ function persistParameterRows() {
     }
   })
 
-  updateNodeData(parameterRowsNode.value.id, { variables: detachReactivity(parameterRows.value) })
+  // Merge only what the sidebar edits, so saved fields it doesn't show (e.g. stateRole, initialiser) survive.
+  const editsByName = new Map(parameterRows.value.map((row) => [row.name, row]))
+  const variables = (parameterRowsNode.value.data?.variables || []).map((variable) => {
+    const edited = editsByName.get(variable.name)
+    return edited ? { ...variable, value: edited.value, type: edited.type } : variable
+  })
+  updateNodeData(parameterRowsNode.value.id, { variables: detachReactivity(variables) })
 }
 
 function handleParameterValueChange() {

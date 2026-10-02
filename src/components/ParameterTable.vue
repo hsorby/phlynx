@@ -70,6 +70,7 @@
 
     <div class="table-flex-wrapper">
       <DataTable
+        :key="tableKey"
         v-model:selection="selectedRows"
         :value="filteredParameterRows"
         dataKey="name"
@@ -196,8 +197,9 @@ import Tag from 'primevue/tag'
 import SanitisedInput from './SanitisedInput.vue'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
 import { isBlank, isEditableVariableType } from '../utils/variables'
-import { isValueMissing } from '../utils/parameterRows'
-import { PARAMETER_TYPE_OPTIONS, NO_ACCESS, TABLE_VIRTUAL_SCROLL_MIN_ROWS, TABLE_ROW_HEIGHT_PX } from '../utils/constants'
+import { useVirtualScrollerOptions } from '../composables/useVirtualScrollerOptions'
+import { isValueMissing, isTypeFixed as isRowTypeFixed, typeOptionsFor as rowTypeOptionsFor } from '../utils/parameterRows'
+import { PARAMETER_TYPE_OPTIONS, NO_ACCESS } from '../utils/constants'
 import { cleanName, getUniqueName } from '../utils/identifiers'
 import { isInitialisable } from '../services/math/variableKinds'
 
@@ -236,9 +238,7 @@ const searchColumnOptions = [
 ]
 const bulkTypeValue = ref('')
 
-const virtualScrollerOptions = computed(() =>
-  filteredParameterRows.value.length > TABLE_VIRTUAL_SCROLL_MIN_ROWS ? { itemSize: TABLE_ROW_HEIGHT_PX } : undefined
-)
+const { virtualScrollerOptions, tableKey } = useVirtualScrollerOptions(computed(() => props.rows))
 
 const activeIssueKeys = computed(() => props.issueFilter.activeKeys.value)
 const toggleIssueFilter = (key) => props.issueFilter.toggle(key)
@@ -539,37 +539,8 @@ const filteredParameterRows = computed(() => {
 
 // ── Row types ────────────────────────────────────────────────────────────────
 
-/** Kinds of variable the math itself computes, whose type is always `variable`. */
-const COMPUTED_KINDS = new Set(['voi', 'state', 'computed_constant', 'algebraic'])
-
-/** Types for a row the math doesn't compute: `variable` means computed, so it isn't one of them. */
-const PARAMETER_ONLY_TYPE_OPTIONS = PARAMETER_TYPE_OPTIONS.filter((option) => option.value !== 'variable')
-
-/**
- * Checks whether a row's type can't be changed: the math computes it or the text initialises it.
- * After reconcile, only computed rows are `variable`.
- *
- * @param {Object} row
- * @returns {boolean}
- */
-function isTypeFixed(row) {
-  return (
-    row.stateRole === 'state' ||
-    !!row.textInit ||
-    row.type === 'variable' ||
-    COMPUTED_KINDS.has(props.variableKinds?.get(row.name))
-  )
-}
-
-/**
- * Lists the types a row can take.
- *
- * @param {Object} row
- * @returns {Array} Options from PARAMETER_TYPE_OPTIONS.
- */
-function typeOptionsFor(row) {
-  return isTypeFixed(row) ? PARAMETER_TYPE_OPTIONS : PARAMETER_ONLY_TYPE_OPTIONS
-}
+const isTypeFixed = (row) => isRowTypeFixed(row, props.variableKinds)
+const typeOptionsFor = (row) => rowTypeOptionsFor(row, props.variableKinds)
 
 /** Applies the bulk type to the selected rows, skipping any row that can't take it. */
 function applyBulkType() {
