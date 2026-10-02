@@ -201,6 +201,7 @@
                 :variable-kinds="variableKinds"
                 :connection-supplied="connectionSupplied"
                 :math-references="mathReferences"
+                :unit-names="store.availableUnitNames"
               />
             </TabPanel>
 
