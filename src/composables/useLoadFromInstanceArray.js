@@ -22,7 +22,14 @@ export function useLoadFromInstanceArray() {
         progressCallback(0, instanceArray.instances.length, 'Building graph...')
       }
 
-      const result = buildWorkflowGraph(instanceArray.instances, store.availableModules, nodes.value, progressCallback)
+      const result = buildWorkflowGraph(
+        instanceArray.instances,
+        store.availableModules,
+        store.getMathAnalysis,
+        nodes.value,
+        progressCallback,
+        store.getMathDefaults
+      )
 
       if (progressCallback) {
         progressCallback(

@@ -14,6 +14,10 @@ import {
 } from '../utils/constants'
 import { normalisePorts, normaliseVariables } from '../utils/config'
 import { buildGhostHandles, findMostCentralGhostHandle } from '../utils/handles'
+import { isBlank } from '../utils/variables'
+import { analyzeMathXml } from './math/analyzeMath'
+import { getPortVariables, reconcileRows } from './math/reconcileRows'
+import { separateParameters } from './math/separateParameters'
 
 function mergeVariables(oldData, nodeName, globalConstantNames, paramLookup) {
   const typeLookup = {}
@@ -200,7 +204,7 @@ function buildParamLookup(availableParameters) {
   return lookup
 }
 
-function buildGlobalConstants(availableParameters, globalConstantNames) {
+function buildGlobalConstants(availableParameters, globalConstantNames, legacyGlobalConstants = []) {
   const result = []
   const seen = new Set()
   availableParameters.forEach(([key, entry]) => {
@@ -215,6 +219,13 @@ function buildGlobalConstants(availableParameters, globalConstantNames) {
           data_reference: entry.data_reference,
         },
       ])
+    }
+  })
+  // Constants set in the app are only in the old store's globalConstants, not in its parameters.
+  legacyGlobalConstants.forEach(([vname, entry]) => {
+    if (!seen.has(vname)) {
+      seen.add(vname)
+      result.push([vname, { value: entry.value, units: entry.units, data_reference: entry.data_reference ?? null }])
     }
   })
   return result
@@ -300,21 +311,172 @@ function convertStore(oldStore, globalConstantNames) {
     availableModules: Object.entries(newAvailableModules),
     availableMath: Object.entries(newAvailableMath),
     availableUnits: newUnits,
-    globalConstants: buildGlobalConstants(availableParameters, globalConstantNames),
+    globalConstants: buildGlobalConstants(availableParameters, globalConstantNames, oldStore.globalConstants ?? []),
     lastSaveName: oldStore.lastSaveName,
   }
 }
 
-export function migrateWorkspace(doc) {
-  if (doc && doc.version) {
-    return {
-      ...doc,
-      id: PHLYNX_PROJECT_IDENTIFIER,
-      version: PHLYNX_PROJECT_VERSION,
-      inspectionModules: doc.inspectionModules || []
-    }
-  }
+/*
+ * Workspace file versions. A file is brought up to date by applying each step after its version.
+ *
+ * - legacy: no version. The store holds availableModules and availableParameters, and nodes keep
+ *   portOptions and portLabels.
+ * - 1.0.0: `{ id, version, flow, store, simulation, inspectionModules, workspace }`, as saved by the
+ *   production site. Earlier saves used `{ info: { format_version: '1.0.0' } }` and may lack `simulation`.
+ *   Math keeps its numeric initial values, and a blank row falls back to them.
+ * - 1.1.0: math holds no numeric initial values, so the rows alone initialise the model. Each state
+ *   names an initialiser variable, and store.mathDefaults holds the values taken out of each math.
+ *   store.mathLayouts holds `[mathRef, TextLayout]` pairs: each math's CellML text comments, blank
+ *   lines and statements as typed (see cellml-text-editor), which the XML can't hold.
+ */
+const LEGACY_VERSION = 'legacy'
 
+const MIGRATIONS = [
+  { from: LEGACY_VERSION, to: '1.0.0', migrate: migrateLegacyTo1_0_0 },
+  { from: '1.0.0', to: '1.1.0', migrate: migrate1_0_0To1_1_0 },
+]
+
+/**
+ * Takes values out of older math and puts them in the rows of the nodes using it, so the rows
+ * alone initialise the model. Math already separated, and its nodes, come back unchanged.
+ *
+ * @param {Array} nodes - Workspace nodes.
+ * @param {Array<[string, string]>} mathEntries - mathRef and math pairs.
+ * @returns {{ nodes: Array, mathEntries: Array<[string, string]>, mathDefaults: Array<[string, Array<[string, string]>]> }}
+ *   The nodes and math, and the values taken out of each math, as libraryStore.getState saves them.
+ */
+export function separateNodeParameters(nodes, mathEntries) {
+  const separatedByRef = new Map()
+  const separatedEntries = mathEntries.map(([mathRef, math]) => {
+    const separated = separateParameters(math)
+    if (separated.math !== math) separatedByRef.set(mathRef, separated)
+    return [mathRef, separated.math]
+  })
+
+  const separatedNodes = nodes.map((node) => {
+    const separated = separatedByRef.get(node.data?.mathRef)
+    if (!separated) return node
+
+    // Before, a blank row fell back to the math's value, so a blank row takes that value now.
+    const { values } = separated
+    const rows = (node.data.variables ?? []).map((row) =>
+      isBlank(row.value) && values.has(row.name) ? { ...row, value: values.get(row.name) } : row
+    )
+    const variables = reconcileRows(analyzeMathXml(separated.math), rows, {
+      portVariables: getPortVariables(node.data.ports),
+      defaults: values,
+    })
+    carryStateReferences(variables, rows)
+    return { ...node, data: { ...node.data, variables } }
+  })
+
+  const mathDefaults = Array.from(separatedByRef, ([mathRef, { values }]) => [mathRef, Array.from(values)]).filter(
+    ([, values]) => values.length
+  )
+
+  return { nodes: separatedNodes, mathEntries: separatedEntries, mathDefaults }
+}
+
+/**
+ * Gives each initialiser created by separation its state's data reference, since the state's value
+ * was its initial value.
+ *
+ * @param {Array} rows - Reconciled rows; mutated in place.
+ * @param {Array} previousRows - The rows before separation.
+ */
+function carryStateReferences(rows, previousRows) {
+  const previousByName = new Map(previousRows.map((row) => [row.name, row]))
+  const rowsByName = new Map(rows.map((row) => [row.name, row]))
+  for (const row of rows) {
+    if (row.stateRole !== 'state' || !row.initialiser || previousByName.has(row.initialiser)) continue
+    const reference = previousByName.get(row.name)?.data_reference
+    const initialiserRow = rowsByName.get(row.initialiser)
+    if (reference != null && initialiserRow && initialiserRow.data_reference == null) initialiserRow.data_reference = reference
+  }
+}
+
+/**
+ * Gets the format version of a saved workspace.
+ *
+ * @param {Object} doc - A parsed workspace file.
+ * @returns {string} The version, or 'legacy' for files saved before versioning.
+ */
+export function detectVersion(doc) {
+  return doc?.version ?? doc?.info?.format_version ?? LEGACY_VERSION
+}
+
+/**
+ * Gets the simulation block 1.0.0 requires, for files saved before it was always written.
+ *
+ * @returns {Object}
+ */
+function defaultSimulation() {
+  return { simulationSettings: { ...BASELINE_SIMULATION_SETTINGS }, plotConfig: {}, parameterScanConfig: {} }
+}
+
+/**
+ * Gives a versioned workspace the current envelope, replacing the earlier `info` block.
+ *
+ * @param {Object} doc - A versioned workspace file.
+ * @param {string} version - Its version.
+ * @returns {Object}
+ */
+function normaliseEnvelope(doc, version) {
+  const normalised = {
+    ...doc,
+    id: PHLYNX_PROJECT_IDENTIFIER,
+    version,
+    simulation: doc.simulation ?? defaultSimulation(),
+    inspectionModules: doc.inspectionModules ?? [],
+  }
+  delete normalised.info
+  return normalised
+}
+
+/**
+ * Brings a saved workspace from any version up to the current one.
+ *
+ * @param {Object} doc - A parsed workspace file.
+ * @returns {Object} The workspace at PHLYNX_PROJECT_VERSION.
+ * @throws {Error} If the version is unknown, e.g. saved by a newer PhLynx.
+ */
+export function migrateWorkspace(doc) {
+  const version = detectVersion(doc)
+  const current = version === LEGACY_VERSION ? doc : normaliseEnvelope(doc, version)
+  if (version === PHLYNX_PROJECT_VERSION) return current
+
+  const start = MIGRATIONS.findIndex((step) => step.from === version)
+  if (start === -1) {
+    throw new Error(`Unsupported workspace version '${version}'. It may have been saved by a newer version of PhLynx.`)
+  }
+  return MIGRATIONS.slice(start).reduce((migrated, step) => ({ ...step.migrate(migrated), version: step.to }), current)
+}
+
+/**
+ * 1.0.0 -> 1.1.0: moves the math's values into the rows and records them as math defaults. Math
+ * from 1.0.0 has no text layouts.
+ *
+ * @param {Object} doc - A 1.0.0 workspace.
+ * @returns {Object}
+ */
+function migrate1_0_0To1_1_0(doc) {
+  const store = doc.store ?? {}
+  const mathEntries = Array.isArray(store.availableMath) ? store.availableMath : Object.entries(store.availableMath ?? {})
+  const { nodes, mathEntries: separatedEntries, mathDefaults } = separateNodeParameters(doc.flow?.nodes ?? [], mathEntries)
+  return {
+    ...doc,
+    flow: { ...doc.flow, nodes },
+    store: { ...store, availableMath: separatedEntries, mathDefaults, mathLayouts: store.mathLayouts ?? [] },
+  }
+}
+
+/**
+ * legacy -> 1.0.0: converts a pre-versioning build file.
+ *
+ * @param {Object} doc - A legacy workspace.
+ * @returns {Object}
+ */
+function migrateLegacyTo1_0_0(doc) {
   const oldFlow = doc.flow
   const oldStore = doc.store
   const oldNodes = oldFlow.nodes
@@ -345,7 +507,7 @@ export function migrateWorkspace(doc) {
 
   return {
     id: PHLYNX_PROJECT_IDENTIFIER,
-    version: PHLYNX_PROJECT_VERSION,
+    version: '1.0.0',
     flow: newFlow,
     store: convertStore(oldStore, globalConstantNames),
     simulation: {

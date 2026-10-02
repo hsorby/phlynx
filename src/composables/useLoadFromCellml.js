@@ -103,7 +103,14 @@ export function useLoadFromCellML() {
         }
       })
 
-      const result = buildWorkflowGraph(instanceRefs, store.availableModules, currentNodes.value)
+      const result = buildWorkflowGraph(
+        instanceRefs,
+        store.availableModules,
+        store.getMathAnalysis,
+        currentNodes.value,
+        null,
+        store.getMathDefaults
+      )
 
       const layoutPromise = prepareLayout(result.pendingEdges)
       const history = useFlowHistoryStore()

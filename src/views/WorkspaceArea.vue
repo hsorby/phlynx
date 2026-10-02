@@ -452,7 +452,11 @@
     @confirm="onInstanceEditConfirm"
   />
 
-  <SaveDialog v-model="saveDialogVisible" :default-name="sessionMetadataStore.lastSaveName" @confirm="onSaveConfirm" />
+  <SaveDialog
+    v-model="saveDialogVisible"
+    :default-name="sessionMetadataStore.lastSaveName"
+    @confirm="onSaveConfirm"
+  />
 
   <SaveDialog
     v-model="exportDialogVisible"
@@ -512,14 +516,14 @@ export default {
 </script>
 
 <script setup>
-import { computed, h, inject, markRaw, nextTick, onMounted, onUnmounted, ref, watch, watchPostEffect } from 'vue'
-import { storeToRefs } from 'pinia'
-import { connectionExists, useVueFlow, VueFlow } from '@vue-flow/core'
+import { computed, inject, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useVueFlow, VueFlow } from '@vue-flow/core'
 import { useRoute } from 'vue-router'
 
 import Button from 'primevue/button'
 import SplitButton from 'primevue/splitbutton'
 import JSZip from 'jszip'
+import { parseLayout } from 'cellml-text-editor'
 import Divider from 'primevue/divider'
 import InputText from 'primevue/inputtext'
 import IconField from 'primevue/iconfield'
@@ -536,7 +540,7 @@ import { useLibraryStore } from '../stores/libraryStore'
 import { useSessionMetadataStore } from '../stores/sessionMetadataStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
-import { useInspectionModuleStore } from '../stores/inspectionModuleStore.js'
+import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
 import { useOmexStore } from '../stores/omexStore'
 
 import { importOmexFile, extractOmexArchive } from '../services/import/omex'
@@ -566,12 +570,11 @@ import EdgeConnectionDialog from '../components/EdgeConnectionDialog.vue'
 import SettingsDialog from '../components/SettingsDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
 import PaneContextMenu from '../components/PaneContextMenu.vue'
-import CellMLEditorDialog from '../components/CellMLEditorDialog.vue'
-import ParameterEditorDialog from '../components/ParameterEditorDialog.vue'
-import PortEditorDialog from '../components/PortEditorDialog.vue'
+import { getPortVariables, reconcileRows } from '../services/math/reconcileRows'
 import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
 import CreateInspectionModuleDialog from '../components/dialogs/CreateInspectionModule.vue'
 import ContextSidebar from '../components/ContextSidebar.vue'
+
 import AddHandleBottom from '../components/icons/AddHandles/AddHandleBottom.vue'
 import AddHandleLeft from '../components/icons/AddHandles/AddHandleLeft.vue'
 import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
@@ -580,7 +583,8 @@ import DustpanBrush from '../components/icons/DustpanBrush.vue'
 
 import { useScreenshot } from '../services/useScreenshot'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
-import { migrateWorkspace } from '../services/workspaceMigrator'
+import { migrateWorkspace, separateNodeParameters } from '../services/workspaceMigrator'
+import { buildWorkspaceFile } from '../services/workspaceFile'
 import { relayoutNodes } from '../services/layouts/physics'
 import { extractSimData as extractSimDataFromSedml } from '../services/import/sedml'
 import { extractSimData as extractSimDataFromSimulationJson } from '../services/import/simulation'
@@ -592,25 +596,21 @@ import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../uti
 import { useClearWorkspace } from '../composables/useClearWorkspace'
 import { readFileAsText, cyrb53 } from '../utils/misc'
 import { buildGhostHandles, normaliseHandleSlots } from '../utils/handles'
-import { initLibCellML, processCellMLData, extractVariablesFromMath, loadParametersFromCellML } from '../utils/cellml'
+import { initLibCellML, processCellMLData, loadParametersFromCellML } from '../utils/cellml'
 import {
   edgeLineOptions,
-  CELLML_FILE_TYPES,
   FLOW_IDS,
   IMPORT_KEYS,
   JSON_FILE_TYPES,
   NEW_INSTANCE_MODULE_REF,
-  PHLYNX_PROJECT_IDENTIFIER,
-  PHLYNX_PROJECT_VERSION,
   NUM_GHOST_HANDLES_TOP_BOT,
   NUM_GHOST_HANDLES_LEFT_RIGHT,
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
-import { getHandleId, getHandleUidFromHandleId, findMostCentralGhostHandle } from '../utils/handles'
+import { getHandleUidFromHandleId } from '../utils/handles'
 import { parseParametersFile } from '../utils/import'
 import { detachReactivity } from '../utils/reactivity'
-import { extractGlobalConstants } from '../utils/variables'
 import {
   ensureExtension,
   legacyDownload,
@@ -715,12 +715,6 @@ const dialogVisible = computed(() => {
   )
 })
 
-/**
- * Shared multi-file notification helper.
- * `results` must be an array of `{ ok, summary }` objects where `summary` is a
- * human-readable description of what was loaded (e.g. "3 modules and 2 units").
- * Titles are customisable so each import type can use its own wording.
- */
 const notifyMultiFileResults = (
   results,
   { successTitle, partialTitle = 'Partial Import', failTitle = 'Import Failed' }
@@ -1778,7 +1772,8 @@ async function loadFlowSnapshot(fileName, flowSnapshot, parameterData = {}, { no
 
   let nodeNameToIdMap = new Map()
   // Convert nodeData to nodes format expected by the workspace.
-  const nodes = flowSnapshot.nodeData.map((node) => {
+  const nodes = flowSnapshot.nodeData.map((snapshotNode) => {
+    let node = snapshotNode
     // Update variables with parameter data if available.
     if (parameterData[node.data.name]) {
       const paramVars = parameterData[node.data.name]
@@ -1795,9 +1790,15 @@ async function loadFlowSnapshot(fileName, flowSnapshot, parameterData = {}, { no
         return variable
       })
     }
-    // Resolve math from the snapshot math library.
-    const nodeMathFromSnapshot =
+    // Resolve math from the snapshot math library. Older snapshots keep values in the math, which
+    // move into the node's rows here.
+    let nodeMathFromSnapshot =
       node.data?.mathHash in snapshotMathLibrary ? snapshotMathLibrary[node.data.mathHash] : undefined
+    if (nodeMathFromSnapshot) {
+      const separated = separateNodeParameters([node], [[node.data.mathRef, nodeMathFromSnapshot]])
+      node = separated.nodes[0]
+      nodeMathFromSnapshot = separated.mathEntries[0][1]
+    }
 
     // Check node math is the same as the math in the library store
     const nodeMath = libraryStore.availableMath.get(node.data.mathRef)
@@ -2087,20 +2088,6 @@ function onOpenPortEditorDialog(eventPayload) {
   portEditorDialogVisible.value = true
 }
 
-function onOpenCellMLEditorDialog(eventPayload) {
-  currentEditingNode.value = {
-    ...eventPayload,
-  }
-  cellMLEditorDialogVisible.value = true
-}
-
-function onOpenParameterEditorDialog(eventPayload) {
-  currentEditingNode.value = {
-    ...eventPayload,
-  }
-  parameterEditorDialogVisible.value = true
-}
-
 function onOpenInstanceEditorDialog(eventPayload, tab = 'parameters') {
   currentEditingNode.value = {
     ...eventPayload,
@@ -2121,54 +2108,19 @@ function onOpenSettingsDialog() {
   settingsDialogVisible.value = true
 }
 
-function filterConfig(config, validPortNames, validVariableNames, updatedModule) {
-  const portFields = ['entrance_ports', 'exit_ports', 'general_ports']
-  portFields.forEach((field) => {
-    if (config[field]) {
-      config[field] = config[field].map((port) => ({
-        ...port,
-        variables: (port.variables || []).filter((name) => validPortNames.has(name)),
-      }))
-    }
-  })
-
-  if (config.variables_and_units) {
-    const existingNames = new Set(config.variables_and_units.map((e) => e[0]))
-
-    // Use validVariableNames here, not validPortNames
-    config.variables_and_units = config.variables_and_units.filter((entry) => validVariableNames.has(entry[0]))
-
-    if (updatedModule?.variables) {
-      const newEntries = updatedModule.variables
-        .filter((v) => !existingNames.has(v.name))
-        .map((v) => [v.name, v.units ?? 'dimensionless', 'access', 'variable'])
-
-      config.variables_and_units.push(...newEntries)
-    }
-  }
-}
-
-function updateVariablesFromMath(node, updatedMath) {
-  const existingVariables = new Map(node.data.variables.map((v) => [v.name, v]))
-  const updatedVariables = extractVariablesFromMath(updatedMath)
-
-  node.data.variables = updatedVariables.map((updated) => {
-    const variableExists = existingVariables.get(updated.name)
-
-    if (variableExists) {
-      return {
-        ...variableExists,
-        units: updated.units,
-      }
-    } else {
-      return {
-        name: updated.name,
-        units: updated.units,
-        access: 'access',
-        value: updated.value ?? null,
-        type: updated.type ?? null,
-      }
-    }
+/**
+ * Rebuilds a node's parameter rows from its math, keeping every value already set. A row the math
+ * newly needs starts blank: the math's defaults only seed new instances.
+ *
+ * @param {Object} node - A workspace node.
+ * @param {string} mathRef - The math the node now uses.
+ */
+function updateVariablesFromMath(node, mathRef) {
+  if (!node) return
+  const analysis = libraryStore.getMathAnalysis(mathRef)
+  if (!analysis) return
+  node.data.variables = reconcileRows(analysis, node.data.variables ?? [], {
+    portVariables: getPortVariables(node.data.ports),
   })
 }
 
@@ -2184,10 +2136,10 @@ function cleanPorts(currentNode) {
  * Handles:
  * 1. Loading the new/updated CellML data.
  * 2. Migrating configs if the name changed.
- * 3. updating graph nodes to match new ports.
+ * 3. Updating graph nodes to match new ports.
  */
 async function handleCellMLSave(saveData) {
-  const { id, updateAll, mathRef, math, siblings } = saveData
+  const { id, updateAll, mathRef, siblings } = saveData
 
   // Update math references
   updateNodeData(id, { mathRef })
@@ -2199,20 +2151,19 @@ async function handleCellMLSave(saveData) {
     })
   }
 
-  // Update variables and ports
+  // The edited node's rows are already reconciled by the editor. Every other node on this math is
+  // rebuilt here, ticked or not, since an overwrite in place changes their math too.
   const currentNode = findNode(id)
-  updateVariablesFromMath(currentNode, math)
   cleanPorts(currentNode)
-  if (updateAll) {
-    siblings.forEach((siblingId) => {
-      const siblingNode = findNode(siblingId)
-      updateVariablesFromMath(siblingNode, math)
-      cleanPorts(siblingNode)
-    })
-  }
+  const otherNodes = nodes.value.filter((node) => node.id !== id && node.data?.mathRef === mathRef)
+  otherNodes.forEach((node) => {
+    updateVariablesFromMath(node, mathRef)
+    cleanPorts(node)
+  })
 
   // Update edge couplings
   recomputeEdgeCouplings(id)
+  otherNodes.forEach((node) => recomputeEdgeCouplings(node.id))
 
   notify.success({
     title: 'CellML Updated',
@@ -2707,15 +2658,13 @@ function snapshotFlowState() {
  * Collects all state and creates blob from it.
  */
 function createSaveBlob() {
-  const saveState = {
-    id: PHLYNX_PROJECT_IDENTIFIER,
-    version: PHLYNX_PROJECT_VERSION,
+  const saveState = buildWorkspaceFile({
     flow: toObject(),
-    store: libraryStore.getState(),
-    simulation: simulationSettingsStore.getState(),
-    inspectionModules: inspectionModuleStore.getState(),
-    workspace: omexStore.getState(),
-  }
+    library: libraryStore,
+    simulation: simulationSettingsStore,
+    inspectionModules: inspectionModuleStore,
+    omex: omexStore,
+  })
 
   const jsonString = JSON.stringify(saveState, null, 2)
   return new Blob([jsonString], { type: 'application/json' })
@@ -2764,7 +2713,7 @@ async function applyWorkspaceState(loadedState, { source = 'json' } = {}) {
     libraryStore.loadState(migratedState.store)
     simulationSettingsStore.loadState(migratedState.simulation)
     inspectionModuleStore.loadState(migratedState.inspectionModules)
-    omexStore.loadState(migratedState.omex)
+    omexStore.loadState(migratedState.workspace)
 
     trackEvent('workflow_load_action', {
       category: 'Workflow',
@@ -2873,6 +2822,7 @@ const copySelection = async () => {
     storeSnapshot[key] = {
       mathRef,
       math,
+      layout: libraryStore.getMathLayout(mathRef),
       moduleRef,
       module,
     }
@@ -2909,13 +2859,19 @@ const pasteSelection = async (atMouse = false) => {
 
   if (!sourceClipboard.nodes || sourceClipboard.nodes.length === 0) return
 
+  // Nodes copied from an older version keep values in their math; they move into the rows here.
+  const clipboardMath = Object.values(sourceClipboard.storeSnapshot ?? {}).map((entry) => [entry.mathRef, entry.math])
+  const clipboardNodes = separateNodeParameters(sourceClipboard.nodes, clipboardMath).nodes
+
   if (sourceClipboard.storeSnapshot) {
     for (const entry of Object.values(sourceClipboard.storeSnapshot)) {
       if (!libraryStore.availableModules.has(entry.moduleRef)) {
         libraryStore.addModule(entry.module)
       }
       if (!libraryStore.availableMath.has(entry.mathRef)) {
-        libraryStore.addMath(entry.mathRef, entry.math)
+        // Clipboard text can come from anywhere, so the layout is checked like a saved one.
+        const layout = entry.layout ? parseLayout(JSON.stringify(entry.layout)) : null
+        libraryStore.addMath(entry.mathRef, entry.math, true, layout)
       }
     }
   }
@@ -2943,7 +2899,7 @@ const pasteSelection = async (atMouse = false) => {
   const namesSet = new Set()
   allNodeNames.value.forEach((name) => namesSet.add(name))
 
-  sourceClipboard.nodes.forEach((node) => {
+  clipboardNodes.forEach((node) => {
     const newId = getNextNodeId(nodeIdSet)
     idMap[node.id] = newId
     nodeIdSet.push(newId)
@@ -3015,11 +2971,11 @@ const handleKeyDown = (event) => {
     return
   }
 
-  // Don't intercept shortcuts when the CellML text editor dialog is open.
-  // CodeMirror uses contenteditable divs rather than INPUT/TEXTAREA, so the
-  // check above doesn't catch it. We guard on both the dialog-open state and
-  // on whether focus is inside any CodeMirror editor element.
-  if (cellMLEditorDialogVisible.value) return
+  // Don't intercept shortcuts while any dialog is open: they would act on the workspace behind it.
+  // CodeMirror and the math workbench edit in focusable divs rather than
+  // INPUT/TEXTAREA, so the check above doesn't catch them. We guard on both the
+  // dialog-open state and on whether focus is inside any CodeMirror editor element.
+  if (dialogVisible.value) return
   if (event.target.closest('.cm-editor')) return
 
   const isCtrl = event.ctrlKey || event.metaKey
@@ -3130,8 +3086,8 @@ const moduleConfigs = import.meta.glob('../assets/module_configs/*.json', {
 
 const hydrateCellmlAndDependents = async () => {
   // Load the manifest and the libCellML WebAssembly module.
-  const [manifest, instance] = await Promise.all([loadManifest(), libcellmlReadyPromise])
-  initLibCellML(instance)
+  // Initialise libCellML independently of the manifest fetch so URL loads aren't blocked by the network.
+  const [manifest] = await Promise.all([loadManifest(), libcellmlReadyPromise.then(initLibCellML)])
 
   // const printPurgeUrl = false
   // if (printPurgeUrl) {
@@ -3249,14 +3205,17 @@ watch(
   { immediate: true }
 )
 
+// Track only the fields the search reads; a deep watch walked every node on each drag frame and selection change.
 watch(
-  nodes,
+  () =>
+    searchQuery.value.trim()
+      ? nodes.value.map((n) => `${n.id}|${n.data?.name}|${n.data?.moduleRef}|${n.data?.mathRef}`).join('\n')
+      : '',
   () => {
     if (searchQuery.value.trim()) {
       handleSearchInput()
     }
-  },
-  { deep: true }
+  }
 )
 </script>
 

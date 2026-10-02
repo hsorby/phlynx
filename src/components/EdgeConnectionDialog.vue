@@ -223,6 +223,7 @@ import { FLOW_IDS, ROW_H, NODE_W, PAD } from '../utils/constants'
 import { isSingleConnection } from '../utils/edges'
 import { isCompatible } from '../utils/ports'
 import { detachReactivity } from '../utils/reactivity'
+import { waitUntilStable } from '../utils/layout'
 
 import PortRow from './PortRow.vue'
 import { useEdgeCouplings } from '../composables/useEdgeCouplings'
@@ -281,51 +282,6 @@ async function refreshNodeInternals() {
   if (nodeIds.length > 0) {
     updateNodeInternals(nodeIds)
   }
-}
-
-/**
- * Resolves when an element's DOM bounding rect stops changing
- * (i.e. after CSS transitions/animations fully finish).
- */
-function waitUntilStable(el, maxTimeout = 500) {
-  return new Promise((resolve) => {
-    if (!el) return resolve()
-
-    let lastRect = ''
-    let stableFrames = 0
-    let rafId = null
-    let timerId = null
-
-    const cleanup = () => {
-      if (rafId) cancelAnimationFrame(rafId)
-      if (timerId) clearTimeout(timerId)
-    }
-
-    const check = () => {
-      const rect = el.getBoundingClientRect()
-      const currentRect = `${rect.width},${rect.height},${rect.top},${rect.left}`
-
-      if (rect.width > 0 && rect.height > 0 && currentRect === lastRect) {
-        stableFrames++
-        if (stableFrames >= 3) {
-          cleanup()
-          return resolve()
-        }
-      } else {
-        stableFrames = 0
-        lastRect = currentRect
-      }
-
-      rafId = requestAnimationFrame(check)
-    }
-
-    timerId = setTimeout(() => {
-      cleanup()
-      resolve()
-    }, maxTimeout)
-
-    rafId = requestAnimationFrame(check)
-  })
 }
 
 async function onDialogShow() {

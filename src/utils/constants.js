@@ -2,7 +2,7 @@ import { MarkerType } from '@vue-flow/core'
 
 export const DEFAULT_PROJECT_NAME = 'phlynx-project'
 export const PHLYNX_PROJECT_IDENTIFIER = 'phlynx-project'
-export const PHLYNX_PROJECT_VERSION = '1.0.0'
+export const PHLYNX_PROJECT_VERSION = '1.1.0'
 
 export const SOURCE_HANDLE_TYPE = 'source'
 export const TARGET_HANDLE_TYPE = 'target'
@@ -58,6 +58,10 @@ export const AFFINE_UNIT_CONVERSIONS = {
   celsius:    { baseUnit: 'kelvin',  scale: 1,        offset: 273.15  },
   fahrenheit: { baseUnit: 'kelvin',  scale: 5 / 9,    offset: 255.372 },
 }
+
+// Parameter tables mount only visible rows past this size; mounting a few hundred rows blocked the page.
+export const TABLE_VIRTUAL_SCROLL_MIN_ROWS = 40
+export const TABLE_ROW_HEIGHT_PX = 43
 
 // Edge connection dialog parameters
 export const OUTER_MARGIN = 24
@@ -116,6 +120,11 @@ export const STANDARD_UNITS = [
 export const EXCLUDED_COMPONENTS = new Set(['environment'])
 export const TIME_UNITS = new Set(['second', 'millisecond', 'microsecond', 'minute', 'hour', 'ms', 's'])
 export const TIME_NAMES = new Set(['time', 't'])
+
+export const ACCESS = 'access'
+export const NO_ACCESS = 'no_access'
+
+export const VALUE_REQUIRED_TYPES = new Set(['constant', 'global_constant'])
 
 export const MAX_VISIBLE_TAGS = 1
 

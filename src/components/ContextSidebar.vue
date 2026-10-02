@@ -96,7 +96,7 @@
             <section class="context-section context-section--params">
               <template v-if="selectedNode && !isMultipleSelected">
                 <h4 class="context-section-title">
-                  {{ `${selectedNode.data?.name}` || 'Selected Instance' }}
+                  {{ `${parameterRowsNode?.data?.name ?? selectedNode.data?.name}` || 'Selected Instance' }}
                   <span class="context-count">({{ parameterRows.length }})</span>
                 </h4>
 
@@ -111,7 +111,9 @@
                   <InputIcon v-if="parameterSearch" class="search-clear-input pi pi-times-circle" @click="clearSearch"/>
                 </IconField>
 
-                <div v-if="parameterRows.length === 0" class="empty-hint">
+                <div v-if="!parameterRowsNode" />
+
+                <div v-else-if="parameterRows.length === 0" class="empty-hint">
                   This instance has no parameters.
                 </div>
 
@@ -119,22 +121,24 @@
                   No parameters match your search.
                 </div>
 
-                <div v-else class="table-flex-wrapper">
+                <div v-else-if="isParamsVisible" class="table-flex-wrapper">
                   <DataTable
+                    :key="parameterTableKey"
                     :value="filteredParameterRows"
                     dataKey="name"
                     scrollable
                     scrollHeight="flex"
+                    :virtualScrollerOptions="parameterVirtualScrollerOptions"
                     class="p-datatable-sm parameters-table"
                   >
                     <Column field="name" bodyClass="small-text-col" header="Name" style="min-width: 90px" />
                     <Column field="value" header="Value" style="min-width: 70px">
                       <template #body="slotProps">
                         <InputText
-                          v-if="isEditableVariableType(slotProps.data.type)"
+                          v-if="hasValueCell(slotProps.data.type)"
                           v-model="slotProps.data.value"
                           size="small"
-                          placeholder="Enter value..."
+                          :placeholder="valuePlaceholder(slotProps.data.type)"
                           class="w-full"
                           @change="handleParameterValueChange"
                         />
@@ -146,7 +150,8 @@
                       <template #body="slotProps">
                         <Select
                           v-model="slotProps.data.type"
-                          :options="PARAMETER_TYPE_OPTIONS"
+                          :options="typeOptionsFor(slotProps.data)"
+                          :disabled="isTypeFixed(slotProps.data)"
                           optionLabel="label"
                           optionValue="value"
                           size="small"
@@ -244,7 +249,7 @@
 </template>
 
 <script setup>
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
@@ -260,12 +265,14 @@ import TabPanel from 'primevue/tabpanel'
 import InputIcon from 'primevue/inputicon'
 import IconField from 'primevue/iconfield'
 
-import { PARAMETER_TYPE_OPTIONS, FLOW_IDS } from '../utils/constants'
-import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
+import { FLOW_IDS } from '../utils/constants'
+import { isTypeFixed, typeOptionsFor } from '../utils/parameterRows'
 import { detachReactivity } from '../utils/reactivity'
-import { isEditableVariableType } from '../utils/variables'
+import { hasValueCell, valuePlaceholder } from '../utils/variables'
 
 import { useResizableAside } from '../composables/useResizableAside'
+import { useVirtualScrollerOptions } from '../composables/useVirtualScrollerOptions'
+import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
 import { useLibraryStore } from '../stores/libraryStore'
 
 const props = defineProps({
@@ -312,11 +319,13 @@ const activeTabId = ref('global')
 const libraryStore = useLibraryStore()
 const inspectionModuleStore = useInspectionModuleStore()
 
-const { getSelectedNodes, updateNodeData } = useVueFlow(FLOW_IDS.MAIN)
+const { getSelectedNodes, updateNodeData, userSelectionActive } = useVueFlow(FLOW_IDS.MAIN)
 
 const selectedNode = computed(() => getSelectedNodes.value[0] || null)
 
 const isMultipleSelected = computed(() => getSelectedNodes.value.length > 1)
+
+const isParamsVisible = computed(() => !isCollapsed.value && activeTabId.value === 'params')
 
 // Leaving this for future settings configuration to enable auto-popout / switch to instance parameters
 // watch(selectedNode, (node) => {
@@ -386,7 +395,10 @@ onUnmounted(() => {
 
 // ── Selected node parameters (lower subsection) ─────────────────────────────
 const parameterRows = ref([])
+/** Node the current `parameterRows` were built from; lags `selectedNode` until the deferred rebuild lands. */
+const parameterRowsNode = shallowRef(null)
 const parameterSearch = ref('')
+let pendingRowsRequestId = 0
 
 const filteredParameterRows = computed(() => {
   const term = parameterSearch.value.trim().toLowerCase()
@@ -400,28 +412,51 @@ watch(selectedNode, () => {
   parameterSearch.value = ''
 })
 
+const { virtualScrollerOptions: parameterVirtualScrollerOptions, tableKey: parameterTableKey } =
+  useVirtualScrollerOptions(parameterRows)
+
+/**
+ * Build detached sidebar rows from a node's variables, showing the shared value for global constants.
+ * @param {Object} node - Selected Vue Flow node.
+ * @returns {Array<Object>} Parameter rows.
+ */
+function buildParameterRows(node) {
+  return detachReactivity(node.data?.variables || []).map((row) => ({
+    name: row.name,
+    value: row.type === 'global_constant' ? libraryStore.getGlobalConstant(row.name)?.value : row.value,
+    units: row.units,
+    type: row.type,
+    access: row.access,
+    data_reference: row.data_reference,
+  }))
+}
+
+// Rows are only built while visible, never mid box-select, and after the next paint so a click-then-drag stays smooth.
 watch(
-  selectedNode,
-  (node) => {
+  [selectedNode, isParamsVisible, userSelectionActive],
+  async ([node, isVisible, isSelecting]) => {
+    const requestId = ++pendingRowsRequestId
+    if (!isVisible || isSelecting) return
+
     if (!node) {
       parameterRows.value = []
+      parameterRowsNode.value = null
       return
     }
 
-    parameterRows.value = detachReactivity(node.data?.variables || []).map((row) => ({
-      name: row.name,
-      value: row.type === 'global_constant' ? libraryStore.getGlobalConstant(row.name)?.value : row.value,
-      units: row.units,
-      type: row.type,
-      access: row.access,
-      data_reference: row.data_reference,
-    }))
+    // rAF runs before the next paint; the timeout lands after it.
+    await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
+    if (requestId !== pendingRowsRequestId) return
+
+    parameterRows.value = buildParameterRows(node)
+    parameterRowsNode.value = node
   },
   { immediate: true }
 )
 
 function persistParameterRows() {
-  if (!selectedNode.value) return
+  // Write back to the node the rows came from, which may briefly differ from the current selection.
+  if (!parameterRowsNode.value) return
 
   parameterRows.value.forEach((row) => {
     if (row.type === 'global_constant') {
@@ -429,7 +464,13 @@ function persistParameterRows() {
     }
   })
 
-  updateNodeData(selectedNode.value.id, { variables: detachReactivity(parameterRows.value) })
+  // Merge only what the sidebar edits, so saved fields it doesn't show (e.g. stateRole, initialiser) survive.
+  const editsByName = new Map(parameterRows.value.map((row) => [row.name, row]))
+  const variables = (parameterRowsNode.value.data?.variables || []).map((variable) => {
+    const edited = editsByName.get(variable.name)
+    return edited ? { ...variable, value: edited.value, type: edited.type } : variable
+  })
+  updateNodeData(parameterRowsNode.value.id, { variables: detachReactivity(variables) })
 }
 
 function handleParameterValueChange() {

@@ -1,4 +1,6 @@
-import { isEmpty } from './variables.js'
+import { inferType, isEmpty, isNumericLiteral } from './variables.js'
+import { analyzeMathXml } from '../services/math/analyzeMath.js'
+import { resolveBoundaryValues } from '../services/export/boundaryValues.js'
 import {
   STANDARD_UNITS,
   AFFINE_UNIT_CONVERSIONS,
@@ -11,9 +13,21 @@ import {
 } from './constants.js'
 
 let _libcellml = null
+let resolveLibCellMLReady
+const libcellmlReady = new Promise((resolve) => {
+  resolveLibCellMLReady = resolve
+})
 
 export function initLibCellML(instance) {
   _libcellml = instance
+  resolveLibCellMLReady(instance)
+}
+
+/**
+ * Resolves once initLibCellML has been called and CellML parsing is available.
+ */
+export function whenLibCellMLReady() {
+  return libcellmlReady
 }
 
 /**
@@ -771,6 +785,18 @@ function prioritizeEnvironmentComponent(xmlString) {
   return finalXmlString
 }
 
+/**
+ * Makes a component's variable public so it can connect to a sibling component. Math saved
+ * before variables were always declared public may still have private or missing interfaces.
+ *
+ * @param {Object} variable - A libcellml Variable.
+ */
+function ensurePublicInterface(variable) {
+  const interfaceType = variable.interfaceType()
+  if (interfaceType === 'public' || interfaceType === 'public_and_private') return
+  variable.setInterfaceTypeByString('public')
+}
+
 function addVariableToParameterComponent(model, variable, parameterComponent, parameterData) {
   let sourceVar = parameterComponent.variableByName(parameterData.name)
 
@@ -792,6 +818,7 @@ function addVariableToParameterComponent(model, variable, parameterComponent, pa
   }
 
   // Connect the constant parameter to the module variable.
+  ensurePublicInterface(variable)
   _libcellml.Variable.addEquivalence(sourceVar, variable)
 
   sourceVar.delete()
@@ -971,15 +998,27 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
     parameterComponent.setName(PHLYNX_INSTANCE_PARAMETERS_COMPONENT_NAME)
     model.addComponent(parameterComponent)
 
+    // A boundary condition's value is used only when nothing in its coupled group supplies one.
+    const boundaryValues = resolveBoundaryValues(nodes, edges)
+    if (boundaryValues.conflicts.length) {
+      throw new Error(`Conflicting boundary values: ${boundaryValues.conflicts.join('; ')}.`)
+    }
+    // Such a boundary condition is set like a constant.
+    const isSetAsConstant = (nodeId, v) =>
+      v.type === 'constant' || (v.type === 'boundary_condition' && !!boundaryValues.supplied.get(nodeId)?.has(v.name))
+
     // Count how many nodes use each constant variable name
     const constantNameRefCount = new Map()
     for (const node of nodes) {
       for (const v of node.data.variables ?? []) {
-        if (v.type === 'constant' && !isEmpty(v.value)) {
+        if (isSetAsConstant(node.id, v) && !isEmpty(v.value)) {
           constantNameRefCount.set(v.name, (constantNameRefCount.get(v.name) ?? 0) + 1)
         }
       }
     }
+
+    // Values live only in the parameter rows, so one left blank leaves its variable uninitialised.
+    const missingValues = []
 
     // ---------------------------------
     // Process Nodes (Create Components)
@@ -1024,8 +1063,12 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
                 ...v,
                 name: variable.name(),
               })
+            } else {
+              missingValues.push(`${node.data.name}.${variable.name()}`)
             }
-          } else if (nodeVariable.type === 'constant') {
+          } else if (boundaryValues.missing.get(node.id)?.has(nodeVariable.name)) {
+            missingValues.push(`${node.data.name}.${variable.name()}`)
+          } else if (isSetAsConstant(node.id, nodeVariable)) {
             const v = node.data.variables.find((cv) => cv.name === nodeVariable.name)
             if (!isEmpty(v?.value)) {
               const isShared = (constantNameRefCount.get(v.name) ?? 0) > 1
@@ -1033,6 +1076,8 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
                 ...v,
                 name: isShared ? `${node.data.name}_${v.name}` : v.name,
               })
+            } else {
+              missingValues.push(`${node.data.name}.${variable.name()}`)
             }
           }
         }
@@ -1043,6 +1088,12 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
         variable.delete()
         units.delete()
       }
+    }
+
+    if (missingValues.length) {
+      const shown = missingValues.slice(0, 10).join(', ')
+      const more = missingValues.length > 10 ? ` and ${missingValues.length - 10} more` : ''
+      throw new Error(`Missing parameter values: ${shown}${more}.`)
     }
 
     // ----------------------------------
@@ -1240,10 +1291,8 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
 
     analyser.analyseModel(flattenedModel)
     if (analyser.errorCount()) {
-      // FIXME: There is a bug in libCellML v0.6.3 where the analyser cannot handle
-      // initialisation of a variable that is computed. Fixed in v0.6.4, but we need
-      // a workaround for now to at least export something usable in the case where this is the only error.
-      handleLoggerErrors(analyser, `Analyser error count: ${analyser.errorCount()}`, true)
+      flattenedModel.delete()
+      handleLoggerErrors(analyser, `Analyser error count: ${analyser.errorCount()}`)
     }
 
     let flattenedModelString = printer.printModel(flattenedModel, false)
@@ -1287,18 +1336,24 @@ function isPossibleParameter(variable, includeInitialised = false) {
   const varName = variable.name()
   if (varName === 't' || varName === 'time') return false
   if (!includeInitialised && variable.initialValue() !== '') return false
-  if (variable.hasInterfaceType('public') || variable.hasInterfaceType('public_and_private')) return false
   return true
 }
 
 /**
- * Extracts unique variable names from a CellML model/component
+ * Extracts unique variable names from a CellML model/component. A variable the math computes is a
+ * `variable`; anything else is a `constant` until someone says otherwise.
  */
 export function extractVariablesFromMath(math, includeInitialisedVariables = true) {
   const garbageCollector = new Set() // To track created objects for cleanup.
   try {
     const variables = []
     if (math) {
+      const analysis = analyzeMathXml(math)
+      const roles = {
+        states: new Set(analysis?.stateVariables),
+        assigned: new Set(analysis?.assigned),
+        voi: new Set(analysis?.voi),
+      }
       const parser = new _libcellml.Parser(false)
       garbageCollector.add(parser)
       const model = parser.parseModel(math)
@@ -1313,11 +1368,12 @@ export function extractVariablesFromMath(math, includeInitialisedVariables = tru
         const units = variable.units()
         garbageCollector.add(units)
         if (isPossibleParameter(variable, includeInitialisedVariables)) {
-          variables.push({ 
+          const initialValue = variable.initialValue()
+          variables.push({
             name: variable.name(),
             units: units.name(),
-            value: variable.initialValue(),
-            type: variable.initialValue() !== '' ? 'constant' : 'variable',
+            value: isNumericLiteral(initialValue) ? initialValue : '',
+            type: inferType(variable.name(), roles),
             access: 'access',
             data_reference: 'unknown',
           })
@@ -1538,9 +1594,10 @@ export function extractVoiAndParametersFromModel(modelString, parameterInfo) {
     garbageCollector.add(analyser)
 
     analyser.analyseModel(model)
-    const analyserModel = analyser.model()
-    // This change is for version 0.7.0 of libCellML, where the analyser.model() method is deprecated and replaced with analyser.analyserModel(). If you are using a version of libCellML prior to 0.7.0, you should use the commented line below instead.
-    // const analyserModel = analyser.analyserModel()
+    if (analyser.errorCount()) {
+      handleLoggerErrors(analyser, `Analyser error count: ${analyser.errorCount()}`)
+    }
+    const analyserModel = analyser.analyserModel()
     garbageCollector.add(analyserModel)
 
     const voi = analyserModel.voi()
@@ -1577,14 +1634,8 @@ export function extractVoiAndParametersFromModel(modelString, parameterInfo) {
       }
     }
 
-    if (!voi) {
-      console.log('Current bug in analysing CellML models using constants for initialising variables.')
-      console.log('VOI variable is null because the model is not valid. This is a known issue in libCellML.')
-      console.log('Returning {name: time, componentName: environment, units: second} for VOI variable.')
-      console.log('But it should return null to indicate an error.')
-      // resolve(null)
-      return { voi: { name: 'time', componentName: 'environment', units: 'second' }, mappedParameters }
-    }
+    // A valid model with no ODEs has no VOI.
+    if (!voi) return { voi: null, mappedParameters }
 
     const voiVariable = voi.variable()
     garbageCollector.add(voiVariable)

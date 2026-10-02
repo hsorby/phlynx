@@ -46,32 +46,16 @@
         <span v-if="!isEditing" class="name-text">
           {{ data.name }}
         </span>
-        <div v-else ref="inputWrapperRef" class="header-input-wrapper">
-          <InputText
-            ref="inputRef"
-            v-model="editingName"
-            size="small"
-            @blur="saveEdit"
-            @keydown.enter="saveEdit"
-            class="header-input"
-            :class="{ 'header-input--warning': isNameUnsanitary }"
-          />
-        </div>
+        <SanitisedInput
+          v-else
+          ref="nameInputRef"
+          v-model="editingName"
+          :sanitise="sanitiseName"
+          floating
+          @commit="saveEdit"
+          @revert="cancelEdit"
+        />
       </div>
-      <Teleport to="body">
-        <Transition name="name-warning-pop">
-          <div
-            v-if="isNameUnsanitary && isEditing"
-            class="name-warning-popover"
-            role="alert"
-            :style="popoverStyle"
-          >
-            <div class="name-warning-arrow"></div>
-            <i class="pi pi-exclamation-triangle name-warning-icon"></i>
-            <span>Will be renamed to <strong>{{ sanitiseName(editingName) }}</strong></span>
-          </div>
-        </Transition>
-      </Teleport>
     </div>
 
     <template v-for="handle in data.handles" :key="handle.uid">
@@ -108,16 +92,16 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { Handle, useVueFlow } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
 import Button from 'primevue/button'
-import InputText from 'primevue/inputtext'
 
+import SanitisedInput from './SanitisedInput.vue'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { getHandleId, getHandleStyle, handlePosition, isCornerHandle } from '../utils/handles'
-import { sanitiseName } from '../utils/nodes'
+import { sanitiseName } from '../utils/identifiers'
 import { notify } from '../utils/notify'
 import { isEditableVariableType, isEmpty } from '../utils/variables'
 import { detachReactivity } from '../utils/reactivity'
@@ -162,8 +146,6 @@ function openInstanceEditor(defaultTab = 'parameters') {
     defaultTab,
   })
 }
-
-const isNameUnsanitary = computed(() => editingName.value !== sanitiseName(editingName.value))
 
 const componentName = props.data.mathRef.split(':')[1]
 
@@ -295,33 +277,12 @@ async function removeHandle(handleIdToRemove) {
 
 const isEditing = ref(false)
 const editingName = ref('')
-const inputRef = ref(null)
-const inputWrapperRef = ref(null)
-const popoverStyle = ref({})
+const nameInputRef = ref(null)
 
-function updatePopoverPosition() {
-  const el = inputWrapperRef.value
-  if (!el) return
-  const rect = el.getBoundingClientRect()
-  popoverStyle.value = {
-    position: 'fixed',
-    top: `${rect.bottom + 9}px`,
-    left: `${rect.left}px`,
-  }
-}
-
+// Panning or zooming the canvas moves the field without a scroll or resize event, so re-anchor the popover.
 watch(viewport, () => {
-  if (isEditing.value) updatePopoverPosition()
+  if (isEditing.value) nameInputRef.value?.updatePosition()
 })
-
-function onWindowResize() {
-  if (isEditing.value) updatePopoverPosition()
-}
-
-onMounted(() => {
-  window.addEventListener('resize', onWindowResize)
-})
-onUnmounted(() => window.removeEventListener('resize', onWindowResize))
 
 async function startEditing(event) {
   event.stopPropagation()
@@ -330,8 +291,7 @@ async function startEditing(event) {
   editingName.value = props.data.name
 
   await nextTick()
-  updatePopoverPosition()
-  ;(inputRef.value?.$el ?? inputRef.value)?.focus()
+  nameInputRef.value?.focus()
 }
 
 function StopDrag(event) {
@@ -342,6 +302,8 @@ function StopDrag(event) {
 
 // This is triggered by pressing Enter or clicking away
 function saveEdit() {
+  // Unmounting the field can fire a late blur, so ignore commits once editing has ended.
+  if (!isEditing.value) return
   revertPendingGhostIfUnused()
   if (!editingName.value || editingName.value.trim() === '') {
     isEditing.value = false
@@ -364,6 +326,11 @@ function saveEdit() {
 
   // Update the node's data in the store
   updateNodeData(props.id, { name: sanitisedName })
+  isEditing.value = false
+}
+
+// This is triggered by pressing Escape
+function cancelEdit() {
   isEditing.value = false
 }
 
@@ -428,63 +395,6 @@ function openContextMenu(event) {
   width: 100%;
   padding-top: 0.2rem;
   padding-bottom: 0.2rem;
-}
-
-.header-input--warning {
-  border-color: var(--p-yellow-500, #eab308) !important;
-}
-
-.header-input--warning:enabled:focus {
-  box-shadow: 0 0 0 1px var(--p-yellow-500, #eab308);
-}
-
-/* ── Name warning popover ──*/
-.name-warning-popover {
-  position: fixed;
-  z-index: 1100;
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  width: max-content;
-  max-width: 280px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: var(--p-yellow-500, #eab308);
-  color: #1f1300;
-  font-size: 0.8125rem;
-  font-weight: normal;
-  line-height: 1.4;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  white-space: normal;
-  overflow-wrap: break-word;
-  word-break: break-word;
-}
-
-.name-warning-arrow {
-  position: absolute;
-  top: -5px;
-  left: 16px;
-  width: 10px;
-  height: 10px;
-  background: inherit;
-  transform: rotate(45deg);
-  border-radius: 2px 0 0 0;
-}
-
-.name-warning-icon {
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-
-.name-warning-pop-enter-active,
-.name-warning-pop-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
-}
-
-.name-warning-pop-enter-from,
-.name-warning-pop-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
 }
 
 .name-text {
