@@ -52,8 +52,8 @@
           v-model="editingName"
           :sanitise="sanitiseName"
           floating
-          @blur="saveEdit"
-          @enter="saveEdit"
+          @commit="saveEdit"
+          @revert="cancelEdit"
         />
       </div>
     </div>
@@ -302,6 +302,8 @@ function StopDrag(event) {
 
 // This is triggered by pressing Enter or clicking away
 function saveEdit() {
+  // Unmounting the field can fire a late blur, so ignore commits once editing has ended.
+  if (!isEditing.value) return
   revertPendingGhostIfUnused()
   if (!editingName.value || editingName.value.trim() === '') {
     isEditing.value = false
@@ -324,6 +326,11 @@ function saveEdit() {
 
   // Update the node's data in the store
   updateNodeData(props.id, { name: sanitisedName })
+  isEditing.value = false
+}
+
+// This is triggered by pressing Escape
+function cancelEdit() {
   isEditing.value = false
 }
 

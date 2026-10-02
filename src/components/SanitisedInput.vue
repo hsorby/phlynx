@@ -91,6 +91,7 @@ function commit() {
 // ── Floating placement ───────────────────────────────────────────────────────
 const floatingStyle = ref({})
 
+/** Re-anchors the floating popover to the field. */
 function updatePosition() {
   const rect = rootRef.value?.getBoundingClientRect()
   if (!rect) return
@@ -123,7 +124,7 @@ function focus() {
   inputRef.value?.$el?.focus()
 }
 
-defineExpose({ focus })
+defineExpose({ focus, updatePosition })
 </script>
 
 <style scoped>
