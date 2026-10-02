@@ -48,6 +48,12 @@ export function useIssueFilter({ rows, matchers, availableKeys }) {
     if (next.size !== sticky.value.size) sticky.value = next
   })
 
+  // Drop any selected keys that are no longer available (e.g. if the user fixed all issues of that type).
+  watch(availableKeys, (keys) => {
+    const kept = selected.value.filter((key) => keys.includes(key))
+    if (kept.length !== selected.value.length) selected.value = kept
+  })
+
   const isShown = (row) => activeKeys.value.length === 0 || sticky.value.has(row.name) || matches.value.has(row.name)
 
   return {
