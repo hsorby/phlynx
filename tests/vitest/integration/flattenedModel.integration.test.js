@@ -1,11 +1,17 @@
 // @vitest-environment happy-dom
+import fs from 'node:fs'
+import path from 'node:path'
+
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { analyzeMathXml } from '../../../src/services/math/analyzeMath.js'
 import { reconcileRows } from '../../../src/services/math/reconcileRows.js'
+import { migrateWorkspace } from '../../../src/services/workspaceMigrator.js'
 import { useLibraryStore } from '../../../src/stores/libraryStore.js'
+import { resolvePortCouplings } from '../../../src/utils/edges.js'
 import { generateFlattenedModel } from '../../../src/utils/cellml.js'
+import { resolveBoundaryValues } from '../../../src/services/export/boundaryValues.js'
 import { ensureLibCellmlReady } from '../helpers/libcellml-bootstrap.js'
 
 const MATH_REF = 'file:decay'
@@ -66,5 +72,46 @@ describe('generateFlattenedModel with values only in the rows', () => {
 
   it('names the parameters left without a value', () => {
     expect(() => generateFlattenedModel([buildNode({ k: '' })], [], store)).toThrow(/Missing parameter values: decay_1\.k/)
+  })
+})
+
+describe('boundary values in a migrated workspace', () => {
+  beforeAll(async () => {
+    await ensureLibCellmlReady()
+  }, 120000)
+
+  // The full export of this workspace also fails on main ("The model is not fully defined"), so this
+  // checks the boundary conditions it hands to generateFlattenedModel instead.
+  it('sets each boundary condition group once, from the module that supplies it', () => {
+    setActivePinia(createPinia())
+    const file = path.resolve(process.cwd(), 'tests/resources/migration-versioning/legacy/tran_hund_coupled.json')
+    const migrated = migrateWorkspace(JSON.parse(fs.readFileSync(file, 'utf8')))
+
+    // Legacy edges have no couplings yet; the workspace resolves them on load, in this order.
+    const { nodes, edges } = migrated.flow
+    const nodeById = new Map(nodes.map((node) => [node.id, node]))
+    const outCount = new Map()
+    const inCount = new Map()
+    for (const edge of edges) {
+      const sourceIndex = outCount.get(edge.source) ?? 0
+      const targetIndex = inCount.get(edge.target) ?? 0
+      const couplings = resolvePortCouplings(
+        nodeById.get(edge.source).data.ports ?? [],
+        nodeById.get(edge.target).data.ports ?? [],
+        sourceIndex,
+        targetIndex
+      )
+      edge.data = { ...edge.data, couplings }
+      outCount.set(edge.source, sourceIndex + 1)
+      inCount.set(edge.target, targetIndex + 1)
+    }
+
+    const { supplied, missing, conflicts } = resolveBoundaryValues(nodes, edges)
+    const environment = nodes.find((node) => node.data.name === 'Environment')
+    expect(conflicts).toEqual([])
+    expect(missing.size).toBe(0)
+    expect([...supplied.get(environment.id)]).toEqual(expect.arrayContaining(['Na_o', 'Cl_o']))
+    const suppliedNa = [...supplied.values()].filter((names) => names.has('Na_o'))
+    expect(suppliedNa).toHaveLength(1)
   })
 })

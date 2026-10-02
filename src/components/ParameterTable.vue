@@ -130,10 +130,10 @@
               @update:model-value="(val) => onInitialiserPick(slotProps.data, val)"
             />
             <InputText
-              v-else-if="isEditableVariableType(slotProps.data.type)"
+              v-else-if="hasValueCell(slotProps.data.type)"
               v-model="slotProps.data.value"
               size="small"
-              :placeholder="isValueMissing(slotProps.data) ? 'Value required' : 'Enter value...'"
+              :placeholder="isValueMissing(slotProps.data) ? 'Value required' : valuePlaceholder(slotProps.data.type)"
               class="w-full"
             />
             <span v-else class="cell-static text-muted" title="Computed elsewhere in the math">-</span>
@@ -196,7 +196,7 @@ import Tag from 'primevue/tag'
 
 import SanitisedInput from './SanitisedInput.vue'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
-import { isBlank, isEditableVariableType } from '../utils/variables'
+import { hasValueCell, isBlank, valuePlaceholder } from '../utils/variables'
 import { useVirtualScrollerOptions } from '../composables/useVirtualScrollerOptions'
 import { isValueMissing, isTypeFixed as isRowTypeFixed, typeOptionsFor as rowTypeOptionsFor } from '../utils/parameterRows'
 import { PARAMETER_TYPE_OPTIONS, NO_ACCESS } from '../utils/constants'
@@ -214,6 +214,8 @@ const props = defineProps({
   issueFilter: { type: Object, required: true },
   /** Each variable's kind from useMathSession, or null before the first analysis. */
   variableKinds: { type: Map, default: null },
+  /** Names constant only because a connection supplies them, from useMathSession, or null. */
+  connectionSupplied: { type: Set, default: null },
   /** Names the equations use. */
   mathReferences: { type: Set, default: () => new Set() },
 })
@@ -324,19 +326,20 @@ const initialisersByUnits = computed(() => {
 })
 
 /**
- * Labels a picker option, marking variables the math computes.
+ * Labels a picker option, marking variables a connection supplies and those the math computes.
  *
  * @param {Object} row
  * @returns {string}
  */
 function initialiserLabel(row) {
   if (!isInitialisable(row, props.variableKinds)) return `${row.name} (time-varying)`
+  if (props.connectionSupplied?.has(row.name)) return `${row.name} (set by connection)`
   return row.type === 'variable' ? `${row.name} (computed)` : row.name
 }
 
 /**
- * Builds a state's initial-value picker options: a new initialiser, or any constant or computed
- * constant with matching units. The current initialiser is always included, even when its units no
+ * Builds a state's initial-value picker options: a new initialiser, or any constant, computed
+ * constant or boundary condition with matching units. The current initialiser is always included, even when its units no
  * longer match or it changes over time.
  *
  * @param {Object} stateRow

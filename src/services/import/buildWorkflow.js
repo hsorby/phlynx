@@ -3,6 +3,7 @@ import { MAIN_NODE_TYPE, SOURCE_HANDLE_TYPE, TARGET_HANDLE_TYPE } from '../../ut
 import { resolvePortCouplings, checkAndClaimCouplings } from '../../utils/edges'
 import { getId as getNextNodeId } from '../../utils/nodes'
 import { getPortVariables, reconcileRows } from '../math/reconcileRows'
+import { isBlank } from '../../utils/variables'
 
 /**
  * Builds an instance's variables from its math analysis, keeping the module's configured values
@@ -14,13 +15,17 @@ import { getPortVariables, reconcileRows } from '../math/reconcileRows'
  * @returns {Array} Parameter rows.
  */
 function resolveInstanceVariables(moduleData, mathAnalysis, mathDefaults) {
+  // A module's blank value means none was configured, so the math's default should fill it.
+  const templateRows = (moduleData.variables ?? []).map((variable) =>
+    isBlank(variable.value) ? { ...variable, value: null } : variable
+  )
   if (mathAnalysis) {
-    return reconcileRows(mathAnalysis, moduleData.variables ?? [], {
+    return reconcileRows(mathAnalysis, templateRows, {
       portVariables: getPortVariables(moduleData.ports),
       defaults: mathDefaults,
     })
   }
-  return (moduleData.variables ?? []).map((variable) => ({
+  return templateRows.map((variable) => ({
     ...variable,
     value: variable.value ?? mathDefaults.get(variable.name) ?? null,
   }))

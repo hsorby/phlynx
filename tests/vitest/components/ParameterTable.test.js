@@ -110,3 +110,32 @@ describe('ParameterTable initialiser reassignment', () => {
     expect(names(rows)).not.toContain('k')
   })
 })
+
+describe('ParameterTable initialiser picker', () => {
+  it('offers a boundary condition as set by connection, and leaves out a time-varying row', async () => {
+    const rows = reactive([
+      { name: 'x', units: 'metre', type: 'variable', stateRole: 'state', initialiser: 'k', access: 'access' },
+      { name: 'k', units: 'metre', type: 'constant', value: '1', access: 'access' },
+      { name: 'b', units: 'metre', type: 'boundary_condition', value: '', access: 'access' },
+      { name: 'a', units: 'metre', type: 'variable', access: 'access' },
+    ])
+    wrapper = mount(ParameterTable, {
+      props: {
+        rows,
+        isMissingUnits: () => false,
+        getUnitsNotice: () => '',
+        issueFilter: { activeKeys: { value: [] }, toggle: () => {}, isShown: () => true },
+        mathReferences: new Set(['x', 'b', 'a']),
+        variableKinds: new Map([['x', 'state'], ['k', 'constant'], ['b', 'constant'], ['a', 'algebraic']]),
+        connectionSupplied: new Set(['b']),
+      },
+      global: { plugins: [PrimeVue] },
+    })
+    await flushPromises()
+
+    const labels = wrapper.vm.initialiserOptionsFor(rows[0]).map((option) => option.label)
+    expect(labels).toContain('b (set by connection)')
+    expect(labels).toContain('k')
+    expect(labels.some((label) => label.startsWith('a'))).toBe(false)
+  })
+})

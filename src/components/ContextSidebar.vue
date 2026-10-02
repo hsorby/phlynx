@@ -135,10 +135,10 @@
                     <Column field="value" header="Value" style="min-width: 70px">
                       <template #body="slotProps">
                         <InputText
-                          v-if="isEditableVariableType(slotProps.data.type)"
+                          v-if="hasValueCell(slotProps.data.type)"
                           v-model="slotProps.data.value"
                           size="small"
-                          placeholder="Enter value..."
+                          :placeholder="valuePlaceholder(slotProps.data.type)"
                           class="w-full"
                           @change="handleParameterValueChange"
                         />
@@ -268,7 +268,7 @@ import IconField from 'primevue/iconfield'
 import { FLOW_IDS } from '../utils/constants'
 import { isTypeFixed, typeOptionsFor } from '../utils/parameterRows'
 import { detachReactivity } from '../utils/reactivity'
-import { isEditableVariableType } from '../utils/variables'
+import { hasValueCell, valuePlaceholder } from '../utils/variables'
 
 import { useResizableAside } from '../composables/useResizableAside'
 import { useVirtualScrollerOptions } from '../composables/useVirtualScrollerOptions'

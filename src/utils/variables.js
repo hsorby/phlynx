@@ -5,6 +5,16 @@ export function isEditableVariableType(variableType) {
   return variableType !== 'variable' && variableType !== 'boundary_condition'
 }
 
+/** Whether a row of this type can hold a value. A boundary condition's is a fallback, used only when no connection supplies it. */
+export function hasValueCell(variableType) {
+  return isEditableVariableType(variableType) || variableType === 'boundary_condition'
+}
+
+/** The value input's placeholder for a row. */
+export function valuePlaceholder(variableType) {
+  return variableType === 'boundary_condition' ? 'Used if no connection supplies it' : 'Enter value...'
+}
+
 export function isEmpty(val) {
   return val === undefined || val === null || val === ''
 }

@@ -217,8 +217,9 @@ function resolveStateInitialisers(rows, stateNames) {
  * @param {Object} [options]
  * @param {'simple'|'advanced'} [options.mode='simple'] - Whether the table or the text owns declarations.
  * @param {Iterable<string>|null} [options.portVariables=null] - Names the instance's ports carry; null keeps stored types.
- * @param {Map<string, string>} [options.defaults] - Values taken out of the math (libraryStore.getMathDefaults),
- *   used for rows that have no value yet. A value someone cleared stays blank.
+ * @param {Map<string, string>} [options.defaults] - Values for rows that have none yet: a new instance's
+ *   math defaults (libraryStore.getMathDefaults), or values typed into the text. A value someone cleared
+ *   stays blank.
  * @returns {Array} New row objects.
  */
 export function reconcileRows(analysis, previousRows = [], { mode = SIMPLE_MODE, portVariables = null, defaults = new Map() } = {}) {

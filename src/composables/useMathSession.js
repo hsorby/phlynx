@@ -10,7 +10,7 @@ import { useLibraryStore } from '../stores/libraryStore'
 import { analyzeMathXml } from '../services/math/analyzeMath'
 import { SIMPLE_MODE, applyPortTypes, getPortVariables, modeFor, reconcileRows } from '../services/math/reconcileRows'
 import { carryRenames, followPendingRename } from '../services/math/carryRenames'
-import { classifyRows } from '../services/math/variableKinds'
+import { classifyRows, findConnectionSupplied } from '../services/math/variableKinds'
 import { separateParameters } from '../services/math/separateParameters'
 import { buildVariableDeclarations } from '../utils/variables'
 import { areModelsEquivalent } from '../utils/cellml'
@@ -72,10 +72,10 @@ export function useMathSession({ history, editorRef, ports }) {
   const pendingRename = shallowRef(null)
 
   const mode = computed(() => modeFor(isManaged.value))
-  let loadedMathRef = null
 
   /**
-   * Gets the options every reconcile shares: the mode, the ports and the math's default values.
+   * Gets the options every reconcile shares: the mode and the ports. The math's defaults only seed new
+   * instances, so a row the session adds starts blank.
    *
    * @param {Iterable<string>} [portNames] - Port variables, if they differ from the current ports.
    * @returns {Object} reconcileRows options.
@@ -83,13 +83,14 @@ export function useMathSession({ history, editorRef, ports }) {
   const reconcileOptions = (portNames = portVariables.value) => ({
     mode: mode.value,
     portVariables: portNames,
-    defaults: store.getMathDefaults(loadedMathRef),
   })
   // A mode switch always rebuilds the rows, so remember which mode built them.
   let rowsBuiltAsManaged = null
   // An editor mounted after a switch also reports 'init', which only moves the baseline if nothing
   // has changed, since each editor writes the same math its own way (e.g. `0.0` as `0`).
   let hasInitialised = false
+  // The user's latest edit doesn't parse, so it isn't in currentModel and isDirty can't see it.
+  let hasInvalidEdit = false
 
   /**
    * Replaces the rows and records the mode that built them.
@@ -99,6 +100,30 @@ export function useMathSession({ history, editorRef, ports }) {
   function setRows(rows) {
     parameterRows.value = rows
     rowsBuiltAsManaged = isManaged.value
+  }
+
+  // Rows an edit removed this session, by name. A variable that drops out of the math for a moment
+  // (an equation deleted and retyped, a cut and paste) gets its value and source back. Never saved.
+  const parkedRows = new Map()
+
+  /**
+   * Reconciles like reconcileRows, but parks the rows it drops and offers parked rows back, so a
+   * name that returns keeps what its row held.
+   *
+   * @param {import('../services/math/analyzeMath').MathAnalysis|null} nextAnalysis
+   * @param {Array} rows - The current rows.
+   * @param {Object} options - reconcileRows options.
+   * @returns {Array} New row objects.
+   */
+  function reconcileKeepingRemoved(nextAnalysis, rows, options) {
+    const currentNames = new Set(rows.map((row) => row.name))
+    const parked = [...parkedRows.values()].filter((row) => !currentNames.has(row.name))
+    const result = reconcileRows(nextAnalysis, [...rows, ...parked], options)
+    const keptNames = new Set(result.map((row) => row.name))
+    for (const row of rows) {
+      if (!keptNames.has(row.name)) parkedRows.set(row.name, row)
+    }
+    return result
   }
 
   /** Every variable name the ports carry. A row nothing computes and no port supplies is a parameter. */
@@ -111,6 +136,9 @@ export function useMathSession({ history, editorRef, ports }) {
 
   /** Each variable's kind (constant, computed constant, ...), or null before the first analysis. */
   const variableKinds = computed(() => classifyRows(analysis.value, parameterRows.value))
+
+  /** Names constant only because a connection supplies them, labelled as such in the initialiser picker. */
+  const connectionSupplied = computed(() => findConnectionSupplied(analysis.value, parameterRows.value))
 
   /** Names the equations use. A state's link to its initialiser doesn't count. */
   const mathReferences = computed(() => new Set(analysis.value?.referenced ?? []))
@@ -147,6 +175,15 @@ export function useMathSession({ history, editorRef, ports }) {
   }
 
   /**
+   * Checks whether the user's latest edit left the math invalid, e.g. an incomplete equation.
+   *
+   * @returns {boolean}
+   */
+  function hasUnsavedInvalidEdit() {
+    return hasInvalidEdit
+  }
+
+  /**
    * Loads an instance's math and rows. A cache miss is analyzed in the worker, so the caller can
    * show a loading state meanwhile.
    *
@@ -158,7 +195,6 @@ export function useMathSession({ history, editorRef, ports }) {
    */
   async function load({ mathRef, rows, managed }) {
     isManaged.value = managed
-    loadedMathRef = mathRef
     const math = (mathRef && store.availableMath.get(mathRef)) || ''
     currentModel.value = math
     originalModel.value = math
@@ -167,6 +203,8 @@ export function useMathSession({ history, editorRef, ports }) {
     currentText.value = { format: null, value: '', layout: null }
     pendingRename.value = null
     hasInitialised = false
+    hasInvalidEdit = false
+    parkedRows.clear()
 
     analysis.value = mathRef ? await store.ensureMathAnalysis(mathRef) : null
     setRows(reconcileRows(analysis.value, rows, reconcileOptions()))
@@ -227,10 +265,13 @@ export function useMathSession({ history, editorRef, ports }) {
     }
 
     if (!valid) {
-      if (source === 'edit') await recordTextEdit(textState)
-      else currentText.value = textState
+      if (source === 'edit') {
+        hasInvalidEdit = true
+        await recordTextEdit(textState)
+      } else currentText.value = textState
       return
     }
+    hasInvalidEdit = false
 
     const nextAnalysis = analyzeMathXml(xml)
     if (source === 'edit') return handleValidEdit(xml, textState, nextAnalysis)
@@ -246,7 +287,7 @@ export function useMathSession({ history, editorRef, ports }) {
     const unchanged = { renames: [], partial: null }
     pendingRename.value = isManaged.value ? followPendingRename(pendingRename.value, unchanged, nextAnalysis) : null
 
-    const rows = reconcileRows(nextAnalysis, parameterRows.value, reconcileOptions())
+    const rows = reconcileKeepingRemoved(nextAnalysis, parameterRows.value, reconcileOptions())
     // Keep the existing row objects unless the structure changed, so table inputs aren't reset.
     if (source === 'init' || rowsBuiltAsManaged !== isManaged.value || !hasSameNames(rows, parameterRows.value)) {
       setRows(rows)
@@ -309,7 +350,7 @@ export function useMathSession({ history, editorRef, ports }) {
     const renamedTo = new Map((carried?.portRenames ?? []).map(({ from, to }) => [from, to]))
     // Typed as the ports will be once the renames below reach them.
     const renamedPortVariables = [...portVariables.value].map((name) => renamedTo.get(name) ?? name)
-    const newRows = reconcileRows(newAnalysis, carried?.rows ?? previousRows, reconcileOptions(renamedPortVariables))
+    const newRows = reconcileKeepingRemoved(newAnalysis, carried?.rows ?? previousRows, reconcileOptions(renamedPortVariables))
     const validNames = new Set(newRows.map((row) => row.name))
 
     history.startBatch()
@@ -422,7 +463,7 @@ export function useMathSession({ history, editorRef, ports }) {
     currentModel.value = math
     analysis.value = nextAnalysis
     // A value typed on a state now belongs to its new initialiser, which only the values know.
-    setRows(reconcileRows(nextAnalysis, rows, { ...options, defaults: new Map([...options.defaults, ...values]) }))
+    setRows(reconcileKeepingRemoved(nextAnalysis, rows, { ...options, defaults: values }))
   }
 
   return {
@@ -433,12 +474,14 @@ export function useMathSession({ history, editorRef, ports }) {
     parameterRows,
     editorDefinitions,
     variableKinds,
+    connectionSupplied,
     mathReferences,
     pendingRename,
     // queries
     isMissingUnits,
     isDirty,
     isLayoutDirty,
+    hasUnsavedInvalidEdit,
     // actions
     load,
     handleEditorChange,

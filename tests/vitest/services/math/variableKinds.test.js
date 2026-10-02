@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { analyzeMathXml } from '../../../../src/services/math/analyzeMath'
 import { readFileSync, readdirSync } from 'node:fs'
-import { classifyRows, isInitialisable } from '../../../../src/services/math/variableKinds'
+import { classifyRows, findConnectionSupplied, isInitialisable } from '../../../../src/services/math/variableKinds'
 import { getPortVariables, reconcileRows } from '../../../../src/services/math/reconcileRows'
 import { normalisePorts, normaliseVariables } from '../../../../src/utils/config'
 
@@ -79,6 +79,43 @@ describe('isInitialisable', () => {
     expect(isInitialisable(byName('V_init'), kinds)).toBe(true)
     expect(isInitialisable(byName('k1'), null)).toBe(true)
     expect(isInitialisable(byName('k_eff'), null)).toBe(false)
+  })
+})
+
+describe('boundary conditions', () => {
+  // dV/dt = I, k_b = 2 * b, I = g * V, with b supplied through a port
+  const BC_MATH = model(`
+    <apply><eq/><apply><diff/><bvar><ci>t</ci></bvar><ci>V</ci></apply><ci>I</ci></apply>
+    <apply><eq/><ci>k_b</ci><apply><times/><cn>2</cn><ci>b</ci></apply></apply>
+    <apply><eq/><ci>I</ci><apply><times/><ci>g</ci><ci>V</ci></apply></apply>
+  `)
+  const BC_ROWS = [
+    { name: 't', type: 'variable' },
+    { name: 'V', type: 'variable', stateRole: 'state', initialiser: 'k_b' },
+    { name: 'b', type: 'boundary_condition' },
+    { name: 'k_b', type: 'variable' },
+    { name: 'g', type: 'constant' },
+    { name: 'I', type: 'variable' },
+  ]
+  const row = (name) => BC_ROWS.find((candidate) => candidate.name === name)
+  const analysis = analyzeMathXml(BC_MATH)
+  const kinds = classifyRows(analysis, BC_ROWS)
+
+  it('treats a boundary condition, and what the math computes from it, as constant', () => {
+    expect(kinds.get('b')).toBe('constant')
+    expect(kinds.get('k_b')).toBe('computed_constant')
+    expect(isInitialisable(row('b'), kinds)).toBe(true)
+    expect(isInitialisable(row('k_b'), kinds)).toBe(true)
+  })
+
+  it('still calls what changes over time time-varying', () => {
+    for (const name of ['t', 'V', 'I']) expect(isInitialisable(row(name), kinds), name).toBe(false)
+  })
+
+  it('lists only the names a connection makes constant', () => {
+    expect(findConnectionSupplied(analysis, BC_ROWS)).toEqual(new Set(['b', 'k_b']))
+    expect(findConnectionSupplied(analyzeMathXml(MATH), ROWS)).toEqual(new Set())
+    expect(findConnectionSupplied(null, BC_ROWS)).toBeNull()
   })
 })
 

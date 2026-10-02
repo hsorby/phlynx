@@ -13,6 +13,7 @@ import {
 import { useMathSession } from '../../../src/composables/useMathSession.js'
 import { useFlowHistoryStore } from '../../../src/stores/historyStore.js'
 import { useLibraryStore } from '../../../src/stores/libraryStore.js'
+import { reconcileRows } from '../../../src/services/math/reconcileRows.js'
 import { ensureLibCellmlReady } from '../helpers/libcellml-bootstrap.js'
 
 const MATH_REF = 'file:decay'
@@ -91,7 +92,12 @@ describe('useMathSession', () => {
     await session.load({ mathRef: MATH_REF, rows: [], managed: true })
   })
 
-  it('builds rows from the cached analysis on open, with units applied', () => {
+  it('builds rows from the cached analysis on open, with units applied', async () => {
+    // A new instance's rows are seeded from the math's defaults; the session itself never reads them.
+    const store = useLibraryStore()
+    const seeded = reconcileRows(store.getMathAnalysis(MATH_REF), [], { defaults: store.getMathDefaults(MATH_REF) })
+    await session.load({ mathRef: MATH_REF, rows: seeded, managed: true })
+
     const rows = byName(session.parameterRows.value)
     expect(rows.x).toMatchObject({ stateRole: 'state', initialiser: 'x0', units: 'metre' })
     expect(rows.x0.value).toBe('1')
@@ -126,6 +132,48 @@ describe('useMathSession', () => {
 
     await history.undo()
     expect(session.parameterRows.value.map((r) => r.name)).toContain('k')
+  })
+
+  describe('when a variable drops out of the math for a moment', () => {
+    const SIMPLE_TEXT = 'ode(x, t) = -k * x;\n'
+
+    beforeEach(async () => {
+      const rows = [{ name: 'k', value: '3', units: 'per_second', type: 'constant', data_reference: 'Smith2020' }]
+      await session.load({ mathRef: MATH_REF, rows, managed: true })
+      await editorRef.value.report('init', SIMPLE_TEXT, true)
+    })
+
+    it('gives its row back, value and source, when the name returns', async () => {
+      await editorRef.value.report('edit', 'ode(x, t) = -x;\n', true)
+      expect(byName(session.parameterRows.value).k).toBeUndefined()
+
+      await editorRef.value.report('edit', SIMPLE_TEXT, true)
+      expect(byName(session.parameterRows.value).k).toMatchObject({ value: '3', data_reference: 'Smith2020' })
+    })
+
+    it('forgets removed rows when another instance is loaded', async () => {
+      await editorRef.value.report('edit', 'ode(x, t) = -x;\n', true)
+      await session.load({ mathRef: MATH_REF, rows: [], managed: true })
+      await editorRef.value.report('init', 'ode(x, t) = -x;\n', true)
+      await editorRef.value.report('edit', SIMPLE_TEXT, true)
+      expect(byName(session.parameterRows.value).k.data_reference).toBeNull()
+    })
+  })
+
+  it('starts a row the session adds blank, even when the math has a default for it', async () => {
+    expect(useLibraryStore().getMathDefaults(MATH_REF).get('k')).toBe('0.5')
+    await editorRef.value.report('init', 'ode(x, t) = -x;\n', true)
+    await editorRef.value.report('edit', 'ode(x, t) = -k * x;\n', true)
+    expect(byName(session.parameterRows.value).k.value).toBe('')
+  })
+
+  it('reports an edit that leaves the math invalid as unsaved', async () => {
+    await editorRef.value.report('init', 'ode(x, t) = -k * x;\n', true)
+    expect(session.hasUnsavedInvalidEdit()).toBe(false)
+    await editorRef.value.report('edit', 'ode(x, t) = -k *', true)
+    expect(session.hasUnsavedInvalidEdit()).toBe(true)
+    await editorRef.value.report('edit', 'ode(x, t) = -k * x;\n', true)
+    expect(session.hasUnsavedInvalidEdit()).toBe(false)
   })
 
   describe('when a variable is renamed in the text', () => {

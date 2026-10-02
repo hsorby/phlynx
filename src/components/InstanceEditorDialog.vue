@@ -98,7 +98,8 @@
             :key="mathRef"
             :model-value="currentModel"
             :layout="currentLayout"
-            v-model:simple="isManaged"
+            :simple="isManaged"
+            @update:simple="onSimpleToggle"
             :component-name="componentNameForEditor"
             :variable-definitions="editorDefinitions"
             @update:component-name="onEditorComponentName"
@@ -198,6 +199,7 @@
                 :issue-chips="issueChips"
                 :issue-filter="issueFilter"
                 :variable-kinds="variableKinds"
+                :connection-supplied="connectionSupplied"
                 :math-references="mathReferences"
               />
             </TabPanel>
@@ -453,7 +455,6 @@ const props = defineProps({
   initialPorts: { type: Array, default: () => [] },
   existingNames: { type: Array, default: () => [] },
   defaultTab: { type: String, default: 'parameters' },  // 'parameters' or 'ports'
-  initialManaged: { type: Boolean, default: true },     // persisted per-instance
 })
 
 const emit = defineEmits(['update:modelValue', 'confirm'])
@@ -527,6 +528,7 @@ const {
   parameterRows,
   editorDefinitions,
   variableKinds,
+  connectionSupplied,
   mathReferences,
   pendingRename,
   isMissingUnits,
@@ -583,6 +585,32 @@ async function switchEditor(kind) {
   editorKind.value = kind
   try {
     window.localStorage.setItem(EDITOR_STORAGE_KEY, kind)
+  } catch (e) {
+    // ignore storage errors
+  }
+}
+
+// ── Simple Mode preference ──────────────────────────────────────────────────
+// One app-wide choice, the last one the user made; it is never saved with the workspace.
+const MANAGED_STORAGE_KEY = 'instanceEditorDialog.simpleMode'
+
+function loadStoredManaged() {
+  try {
+    return window.localStorage.getItem(MANAGED_STORAGE_KEY) !== 'false'
+  } catch (e) {
+    return true // localStorage unavailable (e.g. private browsing) - fall back to Simple Mode
+  }
+}
+
+/**
+ * Applies the user's Simple Mode toggle and remembers it for the next open.
+ *
+ * @param {boolean} simple
+ */
+function onSimpleToggle(simple) {
+  isManaged.value = simple
+  try {
+    window.localStorage.setItem(MANAGED_STORAGE_KEY, String(simple))
   } catch (e) {
     // ignore storage errors
   }
@@ -854,6 +882,7 @@ watch(
       units: row.units,
       type: row.type,
       access: row.access,
+      data_reference: row.data_reference ?? null,
       ...(row.stateRole === 'state' ? { stateRole: 'state', initialiser: row.initialiser } : {}),
     }))
 
@@ -861,7 +890,7 @@ watch(
       await session.load({
         mathRef: props.mathRef,
         rows: savedRows,
-        managed: props.initialManaged || editorKind.value === 'math',
+        managed: loadStoredManaged() || editorKind.value === 'math',
       })
     } catch (e) {
       console.error('Failed to load CellML source', e)
@@ -965,7 +994,11 @@ const onDialogVisibleChange = (visible) => {
 }
 
 async function handleCancel() {
-  if (session.isDirty() || session.isLayoutDirty()) {
+  // Commit any rename and editor change still in flight, so an edit typed just before Escape counts.
+  parameterTableRef.value?.flushPendingRenames()
+  await session.flushPendingChanges()
+
+  if (session.hasUnsavedInvalidEdit() || session.isDirty() || session.isLayoutDirty()) {
     const confirmed = await confirm({
       header: 'Unsaved Changes',
       message: 'Are you sure you want to discard changes?',
@@ -1138,7 +1171,6 @@ async function handleSave() {
     math: currentModel.value,
     variables: parameterRows.value,
     ports: finalPorts,
-    managed: isManaged.value,
     updateAll,
     siblings: updateAll ? siblings.value : undefined,
   })

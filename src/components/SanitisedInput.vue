@@ -2,6 +2,8 @@
   <div ref="rootRef" class="sanitised-input" :style="{ width }">
     <InputText
       ref="inputRef"
+      :id="inputId || undefined"
+      :autofocus="autofocus"
       :model-value="modelValue"
       :placeholder="placeholder"
       :disabled="disabled"
@@ -68,6 +70,10 @@ const props = defineProps({
   notice: { type: String, default: '' },
   /** Shows the field as failing validation (e.g. a rejected save). */
   invalid: { type: Boolean, default: false },
+  /** The input's id, so a `<label for>` can point at it. */
+  inputId: { type: String, default: '' },
+  /** Focuses the input when it mounts (e.g. a dialog's first field). */
+  autofocus: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update:modelValue', 'commit', 'revert'])

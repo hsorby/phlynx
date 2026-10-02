@@ -1,5 +1,6 @@
 import { inferType, isEmpty, isNumericLiteral } from './variables.js'
 import { analyzeMathXml } from '../services/math/analyzeMath.js'
+import { resolveBoundaryValues } from '../services/export/boundaryValues.js'
 import {
   STANDARD_UNITS,
   AFFINE_UNIT_CONVERSIONS,
@@ -997,11 +998,20 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
     parameterComponent.setName(PHLYNX_INSTANCE_PARAMETERS_COMPONENT_NAME)
     model.addComponent(parameterComponent)
 
+    // A boundary condition's value is used only when nothing in its coupled group supplies one.
+    const boundaryValues = resolveBoundaryValues(nodes, edges)
+    if (boundaryValues.conflicts.length) {
+      throw new Error(`Conflicting boundary values: ${boundaryValues.conflicts.join('; ')}.`)
+    }
+    // Such a boundary condition is set like a constant.
+    const isSetAsConstant = (nodeId, v) =>
+      v.type === 'constant' || (v.type === 'boundary_condition' && !!boundaryValues.supplied.get(nodeId)?.has(v.name))
+
     // Count how many nodes use each constant variable name
     const constantNameRefCount = new Map()
     for (const node of nodes) {
       for (const v of node.data.variables ?? []) {
-        if (v.type === 'constant' && !isEmpty(v.value)) {
+        if (isSetAsConstant(node.id, v) && !isEmpty(v.value)) {
           constantNameRefCount.set(v.name, (constantNameRefCount.get(v.name) ?? 0) + 1)
         }
       }
@@ -1056,7 +1066,9 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
             } else {
               missingValues.push(`${node.data.name}.${variable.name()}`)
             }
-          } else if (nodeVariable.type === 'constant') {
+          } else if (boundaryValues.missing.get(node.id)?.has(nodeVariable.name)) {
+            missingValues.push(`${node.data.name}.${variable.name()}`)
+          } else if (isSetAsConstant(node.id, nodeVariable)) {
             const v = node.data.variables.find((cv) => cv.name === nodeVariable.name)
             if (!isEmpty(v?.value)) {
               const isShared = (constantNameRefCount.get(v.name) ?? 0) > 1

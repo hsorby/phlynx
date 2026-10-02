@@ -449,7 +449,6 @@
     :initial-ports="currentEditingNode?.ports"
     :existing-names="allNodeNames"
     :default-tab="instanceEditorDefaultTab"
-    :initial-managed="instanceEditorManaged"
     @confirm="onInstanceEditConfirm"
   />
 
@@ -931,7 +930,6 @@ const alignment = ref('edge')
 const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
 const instanceEditorDefaultTab = ref('parameters')
-const instanceEditorManaged = ref(true)
 const instanceEditorDialogVisible = ref(false)
 const parameterEditorDialogVisible = ref(false)
 const portEditorDialogVisible = ref(false)
@@ -2090,12 +2088,11 @@ function onOpenPortEditorDialog(eventPayload) {
   portEditorDialogVisible.value = true
 }
 
-function onOpenInstanceEditorDialog(eventPayload, tab = 'parameters', managed = true) {
+function onOpenInstanceEditorDialog(eventPayload, tab = 'parameters') {
   currentEditingNode.value = {
     ...eventPayload,
   }
   instanceEditorDefaultTab.value = tab
-  instanceEditorManaged.value = managed
   instanceEditorDialogVisible.value = true
 }
 
@@ -2112,7 +2109,8 @@ function onOpenSettingsDialog() {
 }
 
 /**
- * Rebuilds a node's parameter rows from its math, keeping every value already set.
+ * Rebuilds a node's parameter rows from its math, keeping every value already set. A row the math
+ * newly needs starts blank: the math's defaults only seed new instances.
  *
  * @param {Object} node - A workspace node.
  * @param {string} mathRef - The math the node now uses.
@@ -2123,7 +2121,6 @@ function updateVariablesFromMath(node, mathRef) {
   if (!analysis) return
   node.data.variables = reconcileRows(analysis, node.data.variables ?? [], {
     portVariables: getPortVariables(node.data.ports),
-    defaults: libraryStore.getMathDefaults(mathRef),
   })
 }
 
@@ -2154,20 +2151,19 @@ async function handleCellMLSave(saveData) {
     })
   }
 
-  // The edited node's rows are already reconciled by the editor; siblings are rebuilt here.
+  // The edited node's rows are already reconciled by the editor. Every other node on this math is
+  // rebuilt here, ticked or not, since an overwrite in place changes their math too.
   const currentNode = findNode(id)
   cleanPorts(currentNode)
-  if (updateAll) {
-    siblings.forEach((siblingId) => {
-      const siblingNode = findNode(siblingId)
-      if (!siblingNode) return
-      updateVariablesFromMath(siblingNode, mathRef)
-      cleanPorts(siblingNode)
-    })
-  }
+  const otherNodes = nodes.value.filter((node) => node.id !== id && node.data?.mathRef === mathRef)
+  otherNodes.forEach((node) => {
+    updateVariablesFromMath(node, mathRef)
+    cleanPorts(node)
+  })
 
   // Update edge couplings
   recomputeEdgeCouplings(id)
+  otherNodes.forEach((node) => recomputeEdgeCouplings(node.id))
 
   notify.success({
     title: 'CellML Updated',
@@ -2717,7 +2713,7 @@ async function applyWorkspaceState(loadedState, { source = 'json' } = {}) {
     libraryStore.loadState(migratedState.store)
     simulationSettingsStore.loadState(migratedState.simulation)
     inspectionModuleStore.loadState(migratedState.inspectionModules)
-    omexStore.loadState(migratedState.omex)
+    omexStore.loadState(migratedState.workspace)
 
     trackEvent('workflow_load_action', {
       category: 'Workflow',
@@ -2975,11 +2971,11 @@ const handleKeyDown = (event) => {
     return
   }
 
-  // Don't intercept shortcuts when a component editor dialog is open.
+  // Don't intercept shortcuts while any dialog is open: they would act on the workspace behind it.
   // CodeMirror and the math workbench edit in focusable divs rather than
   // INPUT/TEXTAREA, so the check above doesn't catch them. We guard on both the
   // dialog-open state and on whether focus is inside any CodeMirror editor element.
-  if (cellMLEditorDialogVisible.value || instanceEditorDialogVisible.value) return
+  if (dialogVisible.value) return
   if (event.target.closest('.cm-editor')) return
 
   const isCtrl = event.ctrlKey || event.metaKey

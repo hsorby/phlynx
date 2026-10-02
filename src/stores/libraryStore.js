@@ -41,7 +41,8 @@ export const useLibraryStore = defineStore('library', () => {
   const mathRefHash = ref(new Map())
   const availableUnits = ref([])
   const globalConstants = ref(new Map())
-  // mathRef -> Map of the values taken out of that math, so new instances can start with them.
+  // mathRef -> Map of the values that came with that math when it was added. They only seed new
+  // instances: an existing instance's rows never read them, so math and parameters stay separate.
   const mathDefaults = ref(new Map())
   // mathRef -> TextLayout: the comments, blank lines and typed statements the math XML can't hold.
   const mathLayouts = ref(new Map())
@@ -295,7 +296,7 @@ export const useLibraryStore = defineStore('library', () => {
   }
 
   /**
-   * Gets the values taken out of a math, by variable name.
+   * Gets the values that came with a math, by variable name. Use them only to seed a new instance.
    *
    * @param {string} mathRef
    * @returns {Map<string, string>}

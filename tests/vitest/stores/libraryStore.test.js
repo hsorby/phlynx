@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { CellMLTextParser } from 'cellml-text-editor'
 import { useLibraryStore } from '../../../src/stores/libraryStore.js'
+import { buildInstance } from '../../../src/services/import/buildWorkflow.js'
+import { ensureLibCellmlReady } from '../helpers/libcellml-bootstrap.js'
 
 const MATH_REF = 'file:decay'
 const XML = `<model xmlns="http://www.cellml.org/cellml/2.0#" name="decay">
@@ -95,5 +97,25 @@ describe('libraryStore math layouts', () => {
     restored.loadState(state)
     expect(restored.getMathLayout(MATH_REF)).toEqual(layout)
     expect(restored.getMathLayout('file:other')).toBeNull()
+  })
+})
+
+describe('instances of a module built from a CellML file', () => {
+  beforeAll(async () => {
+    await ensureLibCellmlReady() // extractVariablesFromMath parses with libcellml
+  }, 120000)
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('take their values from the math, which the module itself no longer holds', () => {
+    const store = useLibraryStore()
+    store.addMathFile('file', [{ name: 'decay', math: XML }])
+    const module = store.availableModules.get('decay:default')
+
+    const instance = buildInstance('n1', 'decay_1', 'instanceNode', module, [], null, store.getMathAnalysis(MATH_REF), store.getMathDefaults(MATH_REF))
+    const rows = Object.fromEntries(instance.data.variables.map((row) => [row.name, row.value]))
+    expect(rows).toMatchObject({ k: '0.5', x_init: '1.5' })
   })
 })
