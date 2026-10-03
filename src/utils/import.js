@@ -321,7 +321,7 @@ const parseConfigJson = (file) => {
 export const parseParametersFile = (file) => {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
-      header: true, // Converts row 1 to object keys
+      header: true,
       skipEmptyLines: true,
 
       complete: (results) => {
@@ -354,7 +354,8 @@ const parseCellML = (file) => {
       try {
         const content = e.target.result
         if (!isCellML(content)) {
-          reject(new Error('Invalid CellML file.'))
+          // Files without the CellML namespace are some other XML, not broken CellML.
+          reject(Object.assign(new Error('Invalid CellML file.'), { unrelated: !/cellml\.org\/cellml/.test(content) }))
           return
         }
         resolve(content)
