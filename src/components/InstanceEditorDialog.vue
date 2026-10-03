@@ -1144,7 +1144,7 @@ async function handleSave() {
     const newComponentName = componentNames[0].trim()
 
     newMathRef = `${componentFile.value}:${newComponentName}`
-    if (newMathRef === props.mathRef && store.availableMath.has(newMathRef)) {
+    if (store.availableMath.has(newMathRef)) {
       const overwrite = await handleMathOverwrite()
       if (!overwrite) return
     }
