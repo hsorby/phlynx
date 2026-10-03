@@ -64,7 +64,7 @@ describe('formatUnitExpansion', () => {
   })
 
   it('treats rounding error as an exact power of ten', () => {
-    expect(format(10.000000000000002, 0, {})).toBe('10¹')
+    expect(format(10.000000000000002, 0, {})).toBe('10')
     expect(format(9.9999996, 8, {})).toBe('10⁹')
   })
 
@@ -198,6 +198,99 @@ describe('expandUnits', () => {
   })
 })
 
+describe('expandUnits in CellML built-in units', () => {
+  const expandBuiltIn = (...units) => expandUnits(units.map(model), { builtIn: true })
+
+  it('stops at the built-in units a definition names', () => {
+    const expansions = expandBuiltIn(
+      '<units name="mV"><unit prefix="milli" units="volt"/></units>' +
+        '<units name="mS_per_cm2"><unit prefix="milli" units="siemens"/>' +
+        '<unit prefix="centi" units="metre" exponent="-2"/></units>'
+    )
+    expect(expansions.get('mV')).toBe('10⁻³ V')
+    expect(expansions.get('mS_per_cm2')).toBe('10 S·m⁻²')
+    expect(expansions.get('volt')).toBe('V')
+    expect(expansions.get('ohm')).toBe('Ω')
+  })
+
+  it('never infers a built-in units from others', () => {
+    const expansions = expandBuiltIn(
+      '<units name="C"><unit units="ampere"/><unit units="second"/></units>' +
+        '<units name="J_per_C"><unit units="joule"/><unit units="coulomb" exponent="-1"/></units>' +
+        '<units name="g_per_kg"><unit units="gram"/><unit units="kilogram" exponent="-1"/></units>'
+    )
+    expect(expansions.get('C')).toBe('A·s')
+    expect(expansions.get('J_per_C')).toBe('J·C⁻¹')
+    expect(expansions.get('g_per_kg')).toBe('g·kg⁻¹')
+  })
+
+  it('merges spellings of the same built-in units, which can cancel', () => {
+    const expansions = expandBuiltIn(
+      '<units name="l_per_l"><unit units="litre"/><unit units="liter" exponent="-1"/></units>' +
+        '<units name="m2"><unit units="metre"/><unit units="meter"/></units>'
+    )
+    expect(expansions.get('l_per_l')).toBe('dimensionless')
+    expect(expansions.get('m2')).toBe('m²')
+    expect(expansions.get('katal')).toBe('kat')
+  })
+
+  it('writes terms as defined, positive powers first, and drops cancelled ones', () => {
+    const expansions = expandBuiltIn(
+      '<units name="volt_per_sec"><unit units="second" exponent="-1"/><unit units="volt"/></units>' +
+        '<units name="cancelled"><unit units="volt"/><unit units="second"/><unit units="volt" exponent="-1"/></units>'
+    )
+    expect(expansions.get('volt_per_sec')).toBe('V·s⁻¹')
+    expect(expansions.get('cancelled')).toBe('s')
+  })
+
+  it('keeps scales, multipliers and fractional exponents as in SI base units', () => {
+    const expansions = expandBuiltIn(
+      '<units name="mg"><unit prefix="milli" units="gram"/></units>' +
+        '<units name="milli_dim"><unit prefix="milli" units="dimensionless"/></units>' +
+        '<units name="mmHg"><unit multiplier="133.32" units="pascal"/></units>' +
+        '<units name="mmHg2"><unit units="mmHg" exponent="2"/></units>' +
+        '<units name="root_J"><unit units="joule" exponent="0.5"/></units>'
+    )
+    expect(expansions.get('mg')).toBe('10⁻³ g')
+    expect(expansions.get('milli_dim')).toBe('10⁻³')
+    expect(expansions.get('mmHg')).toBe('133.32 Pa')
+    expect(expansions.get('mmHg2')).toBe('17774.2 Pa²')
+    expect(expansions.get('root_J')).toBe('J^0.5')
+  })
+
+  it('keeps radians and writes temperatures by symbol, without marking them affine', () => {
+    const expansions = expandBuiltIn(
+      '<units name="rad_per_s"><unit units="radian"/><unit units="second" exponent="-1"/></units>' +
+        '<units name="per_celsius"><unit units="celsius" exponent="-1"/></units>'
+    )
+    expect(expansions.get('rad_per_s')).toBe('rad·s⁻¹')
+    expect(expansions.get('celsius')).toBe('°C')
+    expect(expansions.get('fahrenheit')).toBe('°F')
+    expect(expansions.get('per_celsius')).toBe('°C⁻¹')
+  })
+
+  it('treats a units with no parts as a base unit of its own', () => {
+    const expansions = expandBuiltIn(
+      '<units name="widget"/><units name="per_widget"><unit units="widget" exponent="-1"/></units>'
+    )
+    expect(expansions.get('widget')).toBe('widget')
+    expect(expansions.get('per_widget')).toBe('widget⁻¹')
+  })
+
+  it('leaves out units that are unknown, cyclic or malformed', () => {
+    const expansions = expandBuiltIn(
+      '<units name="unknown"><unit units="nowhere"/></units>' +
+        '<units name="a"><unit units="b"/></units><units name="b"><unit units="a"/></units>' +
+        '<units name="zero"><unit multiplier="0" units="metre"/></units>'
+    )
+    for (const name of ['unknown', 'a', 'b', 'zero']) expect(expansions.has(name), name).toBe(false)
+  })
+
+  it('expands the same names as SI base units', () => {
+    expect([...expandUnits(['not xml'], { builtIn: true }).keys()]).toEqual([...expandUnits(['not xml']).keys()])
+  })
+})
+
 describe('expandUnits on the bundled units library', () => {
   let models
 
@@ -222,5 +315,25 @@ describe('expandUnits on the bundled units library', () => {
     expect(expansions.get('mmHg')).toBe('133.32 kg·m⁻¹·s⁻²')
     expect(expansions.get('UnitValve')).toBe('kg^-0.5·m^3.5')
     expect(expansions.get('Hz')).toBe(expansions.get('per_s'))
+  })
+
+  it('expands every units name to CellML built-in units', () => {
+    const expansions = expandUnits(models, { builtIn: true })
+    const names = models.flatMap((xml) => [...extractUnitDefinitions(xml).keys()])
+    expect(names.filter((name) => !expansions.has(name))).toEqual([])
+  })
+
+  it('expands representative units to CellML built-in units', () => {
+    const expansions = expandUnits(models, { builtIn: true })
+    expect(expansions.get('mV')).toBe('10⁻³ V')
+    expect(expansions.get('mmHg')).toBe('133.32 Pa')
+    expect(expansions.get('Hz')).toBe('s⁻¹')
+    expect(expansions.get('hertz')).toBe('Hz')
+    expect(expansions.get('C')).toBe('A·s')
+    expect(expansions.get('mM')).toBe('10⁻³ mol·L⁻¹')
+    expect(expansions.get('volt_per_sec')).toBe('V·s⁻¹')
+    expect(expansions.get('J_per_m4_s')).toBe('J·m⁻⁴·s⁻¹')
+    expect(expansions.get('rad_per_s')).toBe('rad·s⁻¹')
+    expect(expansions.get('per_mMms')).toBe('10⁶ L·mol⁻¹·s⁻¹')
   })
 })

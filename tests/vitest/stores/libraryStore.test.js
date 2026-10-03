@@ -130,10 +130,13 @@ describe('libraryStore unit expansions', () => {
     const store = useLibraryStore()
     store.addUnitsFile({ componentFile: 'u.cellml', model: UNITS('<unit prefix="milli" units="second" exponent="-1"/>') })
     expect(store.unitExpansions.get('per_millis')).toBe('10³ s⁻¹')
+    expect(store.builtInUnitExpansions.get('per_millis')).toBe('10³ s⁻¹')
 
     store.addUnitsFile({ componentFile: 'u.cellml', model: UNITS('<unit units="second" exponent="-1"/>') })
     expect(store.unitExpansions.get('per_millis')).toBe('s⁻¹')
+    expect(store.builtInUnitExpansions.get('per_millis')).toBe('s⁻¹')
 
     expect(Object.keys(store.getState())).not.toContain('unitExpansions')
+    expect(Object.keys(store.getState())).not.toContain('builtInUnitExpansions')
   })
 })
