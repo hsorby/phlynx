@@ -1,7 +1,3 @@
-// App preferences chosen in the Settings dialog. They live in the browser (useAppSettings) and are never saved with
-// the workspace, unlike the simulation settings. Remembered UI state changed in place, such as the editor kind or
-// colour scheme, stays with its owner.
-
 /**
  * The settings, by section, in the order the dialog shows them. Each `select` setting offers `options`, each with
  * an optional `hint` shown beneath its label.
