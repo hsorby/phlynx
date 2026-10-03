@@ -2646,7 +2646,7 @@ function snapshotFlowState() {
 
   return JSON.stringify({
     id: 'phlynx-flow-snapshot',
-    version: '1.0.0',
+    version: PHLYNX_PROJECT_VERSION,
     nodeData,
     edges: flowState.edges,
     mathLibrary: mathLibraryObject,

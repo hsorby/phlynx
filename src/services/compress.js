@@ -115,7 +115,7 @@ export async function generateOmexArchive(cellmlData, flowSnapshot, simData = {}
   zip.file(cellmlFileName, cellmlData.blob)
   zip.file('document.sedml', sedmlText)
   zip.file('flow-snapshot.json', flowSnapshot)
-  zip.file('changes.json', JSON.stringify({ id: 'phlynx-changes', version: '1.0.0', modified: addInfo.modified }))
+  zip.file('changes.json', JSON.stringify({ id: 'phlynx-changes', version: PHLYNX_PROJECT_VERSION, modified: addInfo.modified }))
 
   if (simulationJson !== null) {
     zip.file('simulation.json', simulationJson)
