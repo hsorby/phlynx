@@ -154,13 +154,12 @@
 
           <Button
             iconOnly
-            :disabled="true"
             style="margin-left: 10px"
             icon="pi pi-cog"
             size="small"
             variant="text"
             severity="info"
-            v-tooltip.bottom="{ value: 'Settings coming soon', showDelay: 300 }"
+            v-tooltip.bottom="{ value: 'Settings', showDelay: 300 }"
             @click="onOpenSettingsDialog"
           />
 
@@ -488,7 +487,7 @@
 
   <SimSettingsDialog v-model="simSettingsDialogVisible" :nodes="nodes" />
 
-  <SettingsDialog v-model="settingsDialogVisible" @confirm="onSettingsConfirm" />
+  <SettingsDialog v-model="settingsDialogVisible" />
 
   <ImportDialog
     ref="importDialogRef"
@@ -2251,10 +2250,6 @@ const nodeRefs = ref({})
 async function onMacroBuilderGenerate(data) {
   handleMacroGeneration(data)
   macroBuilderDialogVisible.value = false
-}
-
-async function onSettingsConfirm(data) {
-  settingsDialogVisible.value = false
 }
 
 function handleMacroGeneration(macroPayload) {
