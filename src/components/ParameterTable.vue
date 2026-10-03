@@ -222,13 +222,13 @@ const props = defineProps({
   mathReferences: { type: Set, default: () => new Set() },
   /** Units names in the library, offered as the units are typed. */
   unitNames: { type: Set, default: () => new Set() },
-  /** Each units name's SI base-unit expansion, shown beside its suggestion. */
+  /** Each units name's expansion, shown beside its suggestion. */
   unitExpansions: { type: Map, default: () => new Map() },
 })
 
 const { confirm } = useConfirmDialog()
 
-/** Library units names that could complete the typed units, each with its SI base-unit expansion. */
+/** Library units names that could complete the typed units, each with its expansion. */
 const suggestUnits = (typed) =>
   unitSuggestions(typed, props.unitNames).map((value) => ({ value, detail: props.unitExpansions.get(value) ?? '' }))
 

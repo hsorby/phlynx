@@ -493,6 +493,11 @@ export const useLibraryStore = defineStore('library', () => {
   /** Each units name's SI base-unit expansion, for display. Derived, so never saved. */
   const unitExpansions = computed(() => expandUnits(availableUnits.value.map((file) => file.model)))
 
+  /** Each units name expanded only as far as CellML's built-in units, e.g. "10⁻³ V". Derived, so never saved. */
+  const builtInUnitExpansions = computed(() =>
+    expandUnits(availableUnits.value.map((file) => file.model), { builtIn: true })
+  )
+
   function hasUnits(name) {
     return availableUnitNames.value.has(name)
   }
@@ -509,6 +514,7 @@ export const useLibraryStore = defineStore('library', () => {
     globalVariables,
     availableUnitNames,
     unitExpansions,
+    builtInUnitExpansions,
 
     // Actions
     addConfigFile,

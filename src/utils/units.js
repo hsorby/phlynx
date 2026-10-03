@@ -39,7 +39,7 @@ export function unitSuggestions(typed, names, limit = 8) {
   return matches.slice(0, limit).map((match) => match.name)
 }
 
-// ── SI base-unit expansion ───────────────────────────────────────────────────
+// ── Units expansion ───────────────────────────────────────────────────────
 
 const PREFIX_POWERS = new Map(
   Object.entries({
@@ -87,6 +87,50 @@ const SI_UNITS = new Map(
     volt: base({ kg: 1, m: 2, s: -3, A: -1 }),
     watt: base({ kg: 1, m: 2, s: -3 }),
     weber: base({ kg: 1, m: 2, s: -2, A: -1 }),
+  })
+)
+
+const symbol = (unit) => base({ [unit]: 1 })
+
+/** CellML's built-in units as themselves, so an expansion follows what the definitions wrote. */
+const BUILT_IN_UNITS = new Map(
+  Object.entries({
+    ampere: symbol('A'),
+    becquerel: symbol('Bq'),
+    candela: symbol('cd'),
+    celsius: symbol('°C'),
+    coulomb: symbol('C'),
+    dimensionless: base({}),
+    fahrenheit: symbol('°F'),
+    farad: symbol('F'),
+    gram: symbol('g'),
+    gray: symbol('Gy'),
+    henry: symbol('H'),
+    hertz: symbol('Hz'),
+    joule: symbol('J'),
+    kat: symbol('kat'),
+    katal: symbol('kat'),
+    kelvin: symbol('K'),
+    kilogram: symbol('kg'),
+    liter: symbol('L'),
+    litre: symbol('L'),
+    lumen: symbol('lm'),
+    lux: symbol('lx'),
+    meter: symbol('m'),
+    metre: symbol('m'),
+    mole: symbol('mol'),
+    newton: symbol('N'),
+    ohm: symbol('Ω'),
+    pascal: symbol('Pa'),
+    radian: symbol('rad'),
+    second: symbol('s'),
+    siemens: symbol('S'),
+    sievert: symbol('Sv'),
+    steradian: symbol('sr'),
+    tesla: symbol('T'),
+    volt: symbol('V'),
+    watt: symbol('W'),
+    weber: symbol('Wb'),
   })
 )
 
@@ -152,22 +196,23 @@ function splitPowerOfTen(multiplier) {
  * @param {string} name
  * @param {Map<string, Array<Object>>} definitions - From extractUnitDefinitions, across every library file.
  * @param {Map<string, Object|null>} cache - Shared across calls; also guards against cycles.
+ * @param {Map<string, Object>} [leaves] - Where expansion stops: SI base units, or BUILT_IN_UNITS to keep them.
  * @returns {{ coefficient: number, power: number, dimensions: Object<string, number>, affine: boolean }|null}
  *   Null when the name is unknown, cyclic or malformed.
  */
-export function resolveUnits(name, definitions, cache) {
+export function resolveUnits(name, definitions, cache, leaves = SI_UNITS) {
   if (cache.has(name)) return cache.get(name)
   cache.set(name, null)
 
   let result = null
   const affine = AFFINE_UNIT_CONVERSIONS[name]
-  if (SI_UNITS.has(name)) {
-    result = SI_UNITS.get(name)
+  if (leaves.has(name)) {
+    result = leaves.get(name)
   } else if (Object.hasOwn(AFFINE_UNIT_CONVERSIONS, name)) {
-    const kelvin = resolveUnits(affine.baseUnit, definitions, cache)
+    const kelvin = resolveUnits(affine.baseUnit, definitions, cache, leaves)
     if (kelvin) result = { ...kelvin, coefficient: kelvin.coefficient * affine.scale, affine: true }
   } else if (definitions.has(name)) {
-    result = combineParts(name, definitions.get(name), definitions, cache)
+    result = combineParts(name, definitions.get(name), definitions, cache, leaves)
   }
 
   cache.set(name, result)
@@ -175,12 +220,12 @@ export function resolveUnits(name, definitions, cache) {
 }
 
 /** Multiplies a definition's parts: each is multiplier × (10^prefix × units)^exponent. */
-function combineParts(name, parts, definitions, cache) {
+function combineParts(name, parts, definitions, cache, leaves) {
   if (!parts.length) return base({ [USER_DIMENSION + name]: 1 })
 
   const result = { coefficient: 1, power: 0, dimensions: {}, affine: false }
   for (const { units, prefix, exponent, multiplier } of parts) {
-    const child = resolveUnits(units, definitions, cache)
+    const child = resolveUnits(units, definitions, cache, leaves)
     if (!child || !Number.isFinite(prefix) || !Number.isFinite(exponent) || !Number.isFinite(multiplier)) return null
 
     const scaled = splitPowerOfTen(multiplier)
@@ -197,7 +242,7 @@ function combineParts(name, parts, definitions, cache) {
 const superscript = (integer) => [...String(integer)].map((char) => SUPERSCRIPTS[char]).join('')
 const roundTo = (value, places) => Math.round(value * 10 ** places) / 10 ** places
 
-/** Formats the scale as "", "10⁻³", "133.32" or "1.3332×10⁸". */
+/** Formats the scale as "", "10", "10⁻³", "133.32" or "1.3332×10⁸". */
 function formatScale(coefficient, power) {
   const whole = Math.floor(roundTo(power, 9))
   let mantissa = Math.abs(coefficient) * 10 ** (power - whole)
@@ -213,46 +258,56 @@ function formatScale(coefficient, power) {
   }
 
   const sign = coefficient < 0 ? '-' : ''
-  if (mantissa === 1) return exponent === 0 ? sign : `${sign}10${superscript(exponent)}`
+  if (mantissa === 1 && exponent === 0) return sign
+  if (mantissa === 1) return exponent === 1 ? `${sign}10` : `${sign}10${superscript(exponent)}`
   if (exponent >= -3 && exponent <= 5) return sign + String(Number(`${mantissa}e${exponent}`))
   return `${sign}${mantissa}×10${superscript(exponent)}`
 }
 
-/** Formats dimensions as "kg·m²·s⁻³", SI base units first and in SI order. */
-function formatDimensions(dimensions) {
-  const userDimensions = Object.keys(dimensions)
-    .filter((dimension) => dimension.startsWith(USER_DIMENSION))
-    .sort()
-  return [...SI_ORDER, ...userDimensions]
-    .map((dimension) => [dimension.replace(USER_DIMENSION, ''), roundTo(dimensions[dimension] ?? 0, 6)])
-    .filter(([, power]) => power !== 0)
-    .map(([symbol, power]) => {
-      if (power === 1) return symbol
-      return Number.isInteger(power) ? symbol + superscript(power) : `${symbol}^${power}`
-    })
-    .join('·')
+/** Formats one term as "m", "s⁻¹" or "J^0.5". */
+function formatTerm([unit, power]) {
+  if (power === 1) return unit
+  return Number.isInteger(power) ? unit + superscript(power) : `${unit}^${power}`
 }
 
 /**
- * Formats an expansion from resolveUnits, e.g. "10⁻³ kg·m²·s⁻³·A⁻¹" or "K (affine)".
+ * Formats dimensions as "kg·m²·s⁻³": SI base units first and in SI order, or, when `written`, in the order the
+ * definitions wrote them with positive powers first.
+ */
+function formatDimensions(dimensions, written = false) {
+  const userDimensions = Object.keys(dimensions)
+    .filter((dimension) => dimension.startsWith(USER_DIMENSION))
+    .sort()
+  const terms = (written ? Object.keys(dimensions) : [...SI_ORDER, ...userDimensions])
+    .map((dimension) => [dimension.replace(USER_DIMENSION, ''), roundTo(dimensions[dimension] ?? 0, 6)])
+    .filter(([, power]) => power !== 0)
+  if (written) terms.sort((a, b) => (b[1] > 0) - (a[1] > 0))
+  return terms.map(formatTerm).join('·')
+}
+
+/**
+ * Formats an expansion from resolveUnits, e.g. "10⁻³ kg·m²·s⁻³·A⁻¹", "10⁻³ V" or "K (affine)".
  *
  * @param {{ coefficient: number, power: number, dimensions: Object<string, number>, affine: boolean }} expansion
+ * @param {{ builtIn?: boolean }} [options] - builtIn: the expansion keeps CellML's built-in units, in written order.
  * @returns {string}
  */
-export function formatUnitExpansion({ coefficient, power, dimensions, affine }) {
+export function formatUnitExpansion({ coefficient, power, dimensions, affine }, { builtIn = false } = {}) {
   const scale = formatScale(coefficient, power)
-  const units = formatDimensions(dimensions)
+  const units = formatDimensions(dimensions, builtIn)
   const text = units ? [scale, units].filter(Boolean).join(' ') : scale || 'dimensionless'
   return affine ? `${text} (affine)` : text
 }
 
 /**
- * Expands every built-in and library units name to SI base units, for display.
+ * Expands every built-in and library units name, for display: to SI base units, or only as far as CellML's
+ * built-in units so "mV" reads "10⁻³ V". Built-in units are never inferred from base units.
  *
  * @param {string[]} models - Units files' XML, in library order; the first definition of a name wins.
+ * @param {{ builtIn?: boolean }} [options] - builtIn: stop at CellML's built-in units.
  * @returns {Map<string, string>} Each resolvable name's formatted expansion.
  */
-export function expandUnits(models) {
+export function expandUnits(models, { builtIn = false } = {}) {
   const definitions = new Map()
   for (const model of models) {
     for (const [name, parts] of extractUnitDefinitions(model)) {
@@ -260,12 +315,13 @@ export function expandUnits(models) {
     }
   }
 
+  const leaves = builtIn ? BUILT_IN_UNITS : SI_UNITS
   const cache = new Map()
   const expansions = new Map()
   const names = new Set([...SI_UNITS.keys(), ...STANDARD_UNITS, ...Object.keys(AFFINE_UNIT_CONVERSIONS), ...definitions.keys()])
   for (const name of names) {
-    const expansion = resolveUnits(name, definitions, cache)
-    if (expansion) expansions.set(name, formatUnitExpansion(expansion))
+    const expansion = resolveUnits(name, definitions, cache, leaves)
+    if (expansion) expansions.set(name, formatUnitExpansion(expansion, { builtIn }))
   }
   return expansions
 }
