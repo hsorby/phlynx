@@ -5,12 +5,12 @@ import { computed, ref, toValue, watch } from 'vue'
  * suggestion; Enter only does once an arrow key has picked one, so a new name that prefixes a known one is kept as typed.
  *
  * @param typed ref or getter of the input's text
- * @param suggest ref or getter of `(typed) => Array<string | { value: string, detail?: string }>`, or null for none
+ * @param suggest ref or getter of `(typed) => Array<string | { value: string, detail?: string, onPick?: () => void }>`,
+ *   or null for none. An item's own `onPick` runs before its value is taken, e.g. to define a new units.
  * @param {{ onPick: (value: string) => void }} options
  */
 export function useSuggestions(typed, suggest, { onPick }) {
-  const toSuggestion = (item) =>
-    typeof item === 'string' ? { value: item, detail: '' } : { value: item.value, detail: item.detail ?? '' }
+  const toSuggestion = (item) => (typeof item === 'string' ? { value: item, detail: '' } : { ...item, detail: item.detail ?? '' })
 
   const isOpen = ref(false)
   const highlighted = ref(-1)
@@ -47,6 +47,7 @@ export function useSuggestions(typed, suggest, { onPick }) {
     const choice = matches.value[index]
     if (choice === undefined) return
     close()
+    choice.onPick?.()
     onPick(choice.value)
   }
 

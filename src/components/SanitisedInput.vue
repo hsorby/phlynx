@@ -30,7 +30,7 @@
     <Teleport to="body" :disabled="!floating">
       <Transition name="sanitised-pop">
         <div
-          v-if="unsanitary"
+          v-if="unsanitary && !showSuggestions"
           class="sanitised-input__popover"
           :class="{ 'sanitised-input__popover--floating': floating }"
           :style="floating ? floatingStyle : undefined"
@@ -75,6 +75,12 @@
             <span v-if="match.detail" class="sanitised-input__option-detail" :title="match.detail">{{ match.detail }}</span>
           </li>
         </ul>
+        <p v-if="unsanitary" class="sanitised-input__rename">
+          <i class="pi pi-exclamation-triangle sanitised-input__icon"></i>
+          <span v-if="cleaned">Pick one, or it will be renamed to <strong>{{ cleaned }}</strong></span>
+          <span v-else-if="fallback">Pick one, or it will revert to <strong>{{ fallback }}</strong></span>
+          <span v-else>Not a valid name: pick one</span>
+        </p>
         <p class="sanitised-input__hint"><kbd>↑</kbd><kbd>↓</kbd> choose · <kbd>Tab</kbd> insert · <kbd>Esc</kbd> close</p>
       </div>
     </Teleport>
@@ -144,8 +150,9 @@ const { matches, highlighted, open, close, pick, onKeydown: onSuggestionKeydown 
   }
 )
 
-// The rename popover sits in the same place and matters more.
-const showSuggestions = computed(() => matches.value.length > 0 && !unsanitary.value)
+// Suggestions can turn text that isn't a name (e.g. a units expression) into one, so they replace the rename
+// popover, which sits in the same place, and repeat its warning.
+const showSuggestions = computed(() => matches.value.length > 0)
 const hasDetails = computed(() => matches.value.some((match) => match.detail))
 const suggestionsRef = ref(null)
 
@@ -372,6 +379,16 @@ defineExpose({ focus, updatePosition })
 .sanitised-input__option--highlighted,
 .sanitised-input__option--highlighted:hover {
   background: color-mix(in srgb, var(--p-primary-color) 12%, var(--p-content-background));
+}
+
+.sanitised-input__rename {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0.3rem 0.5rem 0;
+  border-top: 1px solid var(--p-content-border-color);
+  font-size: 0.75rem;
 }
 
 .sanitised-input__hint {

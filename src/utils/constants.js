@@ -81,6 +81,9 @@ export const CELLML_NS = 'http://www.cellml.org/cellml/2.0#'
 export const MATHML_NS = 'http://www.w3.org/1998/Math/MathML'
 export const BQBIOL_NS = 'http://biomodels.net/biology-qualifiers/'
 
+/** The reserved units file that holds units made from typed expressions, e.g. `mV/ms`. */
+export const GENERATED_UNITS_FILE = 'generated_units.cellml'
+
 export const STANDARD_UNITS = [
     'ampere',
     'becquerel',

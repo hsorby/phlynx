@@ -201,8 +201,7 @@
                 :variable-kinds="variableKinds"
                 :connection-supplied="connectionSupplied"
                 :math-references="mathReferences"
-                :unit-names="store.availableUnitNames"
-                :unit-expansions="unitExpansions"
+                :suggest-units="suggestUnitsFor"
               />
             </TabPanel>
 
@@ -448,6 +447,7 @@ import { detachReactivity } from '../utils/reactivity'
 import { waitUntilStable } from '../utils/layout'
 import { notify } from '../utils/notify'
 import { getModelComponentNames } from '../utils/cellml'
+import { suggestUnits } from '../utils/unitExpression'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -474,6 +474,15 @@ const { settings: appSettings } = useAppSettings()
 const unitExpansions = computed(() =>
   appSettings.unitDisplay === 'base' ? store.unitExpansions : store.builtInUnitExpansions
 )
+
+/** Library units that could complete the typed units; a units expression (e.g. `mV/ms`) also offers a new units. */
+function suggestUnitsFor(typed) {
+  const library = { names: store.availableUnitNames, definitions: store.unitDefinitions, expansions: store.unitExpansions }
+  const options = { details: unitExpansions.value, builtIn: appSettings.unitDisplay !== 'base' }
+  return suggestUnits(typed, library, options).map(({ create, ...item }) =>
+    create ? { ...item, onPick: () => store.addGeneratedUnits(create) } : item
+  )
+}
 
 // ── State ────────────────────────────────────────────────────────────────────
 const loading = ref(false)
