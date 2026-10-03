@@ -9,22 +9,37 @@
     :closable="true"
     @update:visible="(visible) => !visible && closeDialog()"
   >
-    <section class="settings-section">
-      <h4>Units</h4>
-      <div class="field">
-        <label for="unit-display">Show units suggestions in</label>
-        <Select
-          v-model="draftUnitDisplay"
-          inputId="unit-display"
-          :options="UNIT_DISPLAY_OPTIONS"
-          optionLabel="label"
-          optionValue="value"
-          fluid
-        />
-        <small class="subtle">
-          Shown beside each suggestion. Built-in units follow each definition as written; nothing is worked out from
-          base units.
-        </small>
+    <section v-for="section in SETTING_SECTIONS" :key="section.title" class="settings-section">
+      <h4>{{ section.title }}</h4>
+
+      <div v-for="setting in section.settings" :key="setting.key" class="setting-row">
+        <div class="setting-text">
+          <label :id="`setting-${setting.key}-label`" :for="`setting-${setting.key}`">{{ setting.label }}</label>
+          <p :id="`setting-${setting.key}-desc`" class="subtle">{{ setting.description }}</p>
+        </div>
+
+        <div v-if="setting.type === 'select'" class="setting-control">
+          <Select
+            v-model="draft[setting.key]"
+            :labelId="`setting-${setting.key}`"
+            :ariaLabelledby="`setting-${setting.key}-label`"
+            :options="setting.options"
+            optionLabel="label"
+            optionValue="value"
+            fluid
+            :pt="{ label: { 'aria-describedby': `setting-${setting.key}-desc` } }"
+          >
+            <template #option="{ option }">
+              <div class="setting-option">
+                <span>{{ option.label }}</span>
+                <small v-if="option.hint" class="subtle">{{ option.hint }}</small>
+              </div>
+            </template>
+          </Select>
+          <small v-if="selectedOption(setting)?.hint" class="subtle setting-hint">
+            {{ selectedOption(setting).hint }}
+          </small>
+        </div>
       </div>
     </section>
 
@@ -39,10 +54,11 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { reactive, watch } from 'vue'
 import { Dialog, Button, Select } from 'primevue'
 
-import { useUnitDisplay } from '../composables/useUnitDisplay'
+import { useAppSettings } from '../composables/useAppSettings'
+import { SETTING_SECTIONS } from '../utils/appSettings'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -50,49 +66,79 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-const UNIT_DISPLAY_OPTIONS = [
-  { value: 'builtIn', label: 'CellML built-in units — mV = 10⁻³ V' },
-  { value: 'base', label: 'SI base units — mV = 10⁻³ kg·m²·s⁻³·A⁻¹' },
-]
-
-const { unitDisplay, setUnitDisplay } = useUnitDisplay()
+const { settings, saveAppSettings } = useAppSettings()
 
 // Edits wait for Save; each open starts from the saved settings.
-const draftUnitDisplay = ref(unitDisplay.value)
+const draft = reactive({ ...settings })
 watch(
   () => props.modelValue,
   (open) => {
-    if (open) draftUnitDisplay.value = unitDisplay.value
+    if (open) Object.assign(draft, settings)
   }
 )
+
+/** The option a select setting's draft has chosen. */
+const selectedOption = (setting) => setting.options.find((option) => option.value === draft[setting.key])
 
 const closeDialog = () => {
   emit('update:modelValue', false)
 }
 
 function saveChanges() {
-  setUnitDisplay(draftUnitDisplay.value)
+  saveAppSettings(draft)
   closeDialog()
 }
 </script>
 
 <style scoped>
+.settings-section + .settings-section {
+  margin-top: 20px;
+}
 .settings-section h4 {
-  margin: 0 0 12px;
+  margin: 0 0 4px;
   font-size: 14px;
   font-weight: 700;
 }
-.field {
+
+/* Setting name and description on the left, its control on the right. */
+.setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(12rem, 18rem);
+  gap: 8px 24px;
+  align-items: start;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--p-content-border-color, #ebeef5);
+}
+.setting-row:last-child {
+  border-bottom: none;
+}
+.setting-text label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.setting-text p {
+  margin: 4px 0 0;
+}
+.setting-control {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
-.field label {
-  font-size: 12px;
-  font-weight: 600;
+.setting-option {
+  display: flex;
+  flex-direction: column;
+}
+.setting-hint {
+  padding-left: 2px;
 }
 .subtle {
   font-size: 12px;
   color: var(--p-text-muted-color, #909399);
+}
+
+@media (max-width: 575px) {
+  .setting-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

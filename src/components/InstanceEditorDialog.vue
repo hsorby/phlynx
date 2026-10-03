@@ -437,7 +437,7 @@ import { useFlowHistoryStore } from '../stores/historyStore'
 import { useGtm } from '../composables/useGtm'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
 import { useMathSession } from '../composables/useMathSession'
-import { useUnitDisplay } from '../composables/useUnitDisplay'
+import { useAppSettings } from '../composables/useAppSettings'
 
 import { isEmpty, syncInitialiserUnits } from '../utils/variables'
 import { getUnknownUnitsNotice, isValueMissing } from '../utils/parameterRows'
@@ -468,11 +468,11 @@ const history = useFlowHistoryStore()
 const { trackEvent } = useGtm()
 const { nodes } = useVueFlow()
 const { confirm } = useConfirmDialog()
-const { unitDisplay } = useUnitDisplay()
+const { settings: appSettings } = useAppSettings()
 
 /** Each units name's expansion beside its suggestion, in the units the user chose in Settings. */
 const unitExpansions = computed(() =>
-  unitDisplay.value === 'base' ? store.unitExpansions : store.builtInUnitExpansions
+  appSettings.unitDisplay === 'base' ? store.unitExpansions : store.builtInUnitExpansions
 )
 
 // ── State ────────────────────────────────────────────────────────────────────
