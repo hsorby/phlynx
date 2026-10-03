@@ -3,6 +3,40 @@ import Papa from 'papaparse'
 import { IMPORT_KEYS, IMPORT_LABELS, RELEVANT_EXTENSIONS } from './constants'
 import { isCellML, doesComponentExistInModel } from './cellml'
 
+/** Columns an instance array CSV must have. */
+export const INSTANCE_ARRAY_COLUMNS = ['name', 'module_type', 'module_subtype', 'inp_instances', 'out_instances']
+
+/** Columns a parameters CSV must have. */
+export const PARAMETER_COLUMNS = ['variable_name', 'units', 'value', 'data_reference']
+
+/** Keys each module configuration object must have. */
+export const MODULE_CONFIG_KEYS = [
+  'entrance_ports',
+  'exit_ports',
+  'general_ports',
+  'module_subtype',
+  'module_type',
+  'module_format',
+  'component_file',
+  'component_type',
+]
+
+/**
+ * Builds a file format error that records which required fields were absent.
+ * @param {string} description - What the file failed to be, e.g. 'module array file'.
+ * @param {string[]} required - Required column or key names.
+ * @param {string[]} present - Column or key names the file actually has.
+ * @param {string} fieldNoun - 'columns' or 'keys'.
+ */
+function schemaError(description, required, present, fieldNoun) {
+  const presentSet = new Set(present)
+  const missing = required.filter((name) => !presentSet.has(name))
+  const error = new Error(`Invalid ${description} format. Missing ${fieldNoun}: ${missing.join(', ')}.`)
+  error.missing = missing
+  error.required = required
+  return error
+}
+
 export function hasRelevantExtension(filename) {
   const dot = filename.lastIndexOf('.')
   if (dot === -1) return false
@@ -229,17 +263,13 @@ const parseInstanceArray = (file, libraryStore = null) => {
       transformHeader: (header) => header.trim(),
       transform: (v) => v.trim(),
       complete: (results) => {
-        if (
-          !(
-            results.data?.length > 0 &&
-            'name' in results.data[0] &&
-            'module_subtype' in results.data[0] &&
-            'module_type' in results.data[0] &&
-            'inp_instances' in results.data[0] &&
-            'out_instances' in results.data[0]
-          )
-        ) {
-          reject(new Error(`Invalid module array file format. Required columns: name, module_type, module_subtype, inp_instances, out_instances`))
+        const columns = results.meta?.fields ?? Object.keys(results.data?.[0] ?? {})
+        if (!INSTANCE_ARRAY_COLUMNS.every((column) => columns.includes(column))) {
+          reject(schemaError('instance array file', INSTANCE_ARRAY_COLUMNS, columns, 'columns'))
+          return
+        }
+        if (!results.data?.length) {
+          reject(new Error('Instance array file has no rows.'))
           return
         }
         if (libraryStore) {
@@ -269,19 +299,15 @@ const parseConfigJson = (file) => {
     reader.onload = (e) => {
       try {
         const parsed = JSON.parse(e.target.result)
-        if (!Array.isArray(parsed) || parsed.length === 0) {
+        if (!Array.isArray(parsed)) {
+          throw Object.assign(new Error('Config file must be an array of configuration objects.'), { unrelated: true })
+        }
+        if (parsed.length === 0) {
           throw new Error('Config file must be a non-empty array of configuration objects.')
-        } else if (!('entrance_ports' in parsed[0] &&
-            'exit_ports' in parsed[0] &&
-            'general_ports' in parsed[0] &&
-            'module_subtype' in parsed[0] &&
-            'module_type' in parsed[0] &&
-            'module_format' in parsed[0] &&
-            'component_file' in parsed[0] &&
-            'component_type' in parsed[0]
-          ))
-          {
-          throw new Error('Invalid module configuration file format.')
+        }
+        const keys = Object.keys(parsed[0] ?? {})
+        if (!MODULE_CONFIG_KEYS.every((key) => keys.includes(key))) {
+          throw schemaError('module configuration file', MODULE_CONFIG_KEYS, keys, 'keys')
         }
         resolve(parsed)
       } catch (err) {
@@ -299,20 +325,17 @@ export const parseParametersFile = (file) => {
       skipEmptyLines: true,
 
       complete: (results) => {
+        const columns = results.meta?.fields ?? Object.keys(results.data?.[0] ?? {})
+        if (!PARAMETER_COLUMNS.every((column) => columns.includes(column))) {
+          reject(schemaError('parameter file', PARAMETER_COLUMNS, columns, 'columns'))
+          return
+        }
+
         const cleanData = results.data.filter((row) => {
           return row.variable_name && !row.variable_name.trim().startsWith('#')
         })
-
-        if (
-          cleanData.length === 0 ||
-          !(
-            'variable_name' in cleanData[0] &&
-            'units' in cleanData[0] &&
-            'value' in cleanData[0] &&
-            'data_reference' in cleanData[0]
-          )
-        ) {
-          reject(new Error('Invalid parameter file format.'))
+        if (cleanData.length === 0) {
+          reject(new Error('Parameter file has no parameter rows.'))
           return
         }
 
