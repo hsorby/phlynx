@@ -95,7 +95,6 @@
           <CellMLTextEditor
             v-else-if="editorKind === 'text'"
             ref="mathEditorRef"
-            :key="mathRef"
             :model-value="currentModel"
             :layout="currentLayout"
             :simple="isManaged"
@@ -111,7 +110,6 @@
           <MathWorkbenchEditor
             v-else
             ref="mathEditorRef"
-            :key="mathRef"
             :model-value="currentModel"
             :component-name="componentNameForEditor"
             :variable-definitions="editorDefinitions"
@@ -348,7 +346,7 @@
       </div>
     </div>
 
-    <!-- OVERLAY:  -->
+    <!-- OVERLAY: Resize Warning -->
     <Transition name="resize-warning">
       <div v-if="isScreenTooSmall" class="resize-warning-overlay">
         <div class="resize-warning-card">
@@ -621,7 +619,7 @@ const SPLIT_STORAGE_KEY = 'instanceEditorDialog.leftPanePercent'
 const DEFAULT_LEFT_PERCENT = 55
 const MIN_LEFT_PERCENT = 38
 const MAX_LEFT_PERCENT = 55
-const MIN_REQUIRED_WIDTH = 1000;
+const MIN_REQUIRED_WIDTH = 1000
 
 function loadStoredSplit() {
   try {
@@ -862,7 +860,7 @@ watch(
     nameError.value = ''
     rejectedName = ''
     flaggedPorts.value = new Set()
-    activeTab.value = props.defaultTab || 'parameters'
+    activeTab.value = props.defaultTab
     issueFilter.reset()
 
     editableName.value = props.initialName
@@ -1150,7 +1148,7 @@ async function handleSave() {
       if (!overwrite) return
     }
     store.addMath(newMathRef, currentModel.value, true, currentLayout.value)
-  } else if (newMathRef && session.isLayoutDirty()) {
+  } else if (session.isLayoutDirty()) {
     // Only comments or formatting changed: the math, and so every instance using it, is unchanged.
     store.setMathLayout(newMathRef, currentLayout.value)
   }
@@ -1187,7 +1185,6 @@ async function handleSave() {
   font-size: 1.125rem;
   font-weight: 600;
   width: 100%;
-  overflow: visible;
   flex-wrap: wrap;
 }
 
@@ -1513,7 +1510,6 @@ async function handleSave() {
   height: 100%;
 }
 
-.parameters-tab-body,
 .ports-tab-body {
   display: flex;
   flex-direction: column;
@@ -1537,8 +1533,7 @@ async function handleSave() {
   overflow: hidden !important;
 }
 
-.table-flex-wrapper :deep(.p-datatable-table-container),
-.table-flex-wrapper :deep(.p-datatable-wrapper) {
+.table-flex-wrapper :deep(.p-datatable-table-container) {
   min-height: 0 !important;
   flex: 1 1 auto !important;
   overflow-y: auto !important;
@@ -1578,7 +1573,6 @@ async function handleSave() {
   background-color: color-mix(in srgb, var(--p-yellow-500, #eab308) 14%, transparent);
 }
 
-/* Units cell: input plus a small flag when the name needs fixing or isn't in the library */
 /* Selection checkboxes: the default is sized for forms, which is large in a dense table */
 .right-pane :deep(.parameters-table) {
   --p-checkbox-width: 1rem;
@@ -1633,7 +1627,6 @@ async function handleSave() {
 }
 
 .w-full { width: 100%; }
-.text-muted { color: var(--p-text-muted-color); }
 
 /* Normalise table typography - DataTable renders these cells directly */
 /* in our own template output (not teleported), so :deep() reaches them. */
