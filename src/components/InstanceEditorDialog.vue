@@ -427,16 +427,19 @@ import CellMLTextEditor from './CellMLTextEditor.vue'
 import MathWorkbenchEditor from './MathWorkbenchEditor.vue'
 import ParameterTable from './ParameterTable.vue'
 import SanitisedInput from './SanitisedInput.vue'
+
 import { useLibraryStore } from '../stores/libraryStore'
-import { useIssueFilter } from '../composables/useIssueFilter'
 import { useFlowHistoryStore } from '../stores/historyStore'
+
+import { useIssueFilter } from '../composables/useIssueFilter'
 import { useGtm } from '../composables/useGtm'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
 import { useMathSession } from '../composables/useMathSession'
 
+import { isInitialisable } from '../services/math/variableKinds'
+
 import { isEmpty, syncInitialiserUnits } from '../utils/variables'
 import { getUnknownUnitsNotice, isValueMissing } from '../utils/parameterRows'
-import { isInitialisable } from '../services/math/variableKinds'
 import { PORT_TYPE_OPTIONS, MULTIPORT_OPTIONS } from '../utils/constants'
 import { cleanName, sanitiseName } from '../utils/identifiers'
 import { detachReactivity } from '../utils/reactivity'
@@ -790,7 +793,7 @@ const issueChips = computed(() => {
     chips.push({ key: 'units', kind: 'units', icon: 'pi-exclamation-circle', count: missingUnits, label: `${plural(missingUnits, 'variable')} missing units` })
   }
   if (missingValues) {
-    chips.push({ key: 'values', kind: 'units', icon: 'pi-pencil', count: missingValues, label: `${plural(missingValues, 'value')} required` })
+    chips.push({ key: 'values', kind: 'units', icon: 'pi-sliders-h', count: missingValues, label: `${plural(missingValues, 'value')} required` })
   }
   if (timeVaryingInitialisers) {
     chips.push({
@@ -1009,6 +1012,7 @@ async function handleCancel() {
   emit('update:modelValue', false)
 }
 
+// TODO: math overwrite confirmation should let user "fork" if there is a library conflict.
 async function handleMathOverwrite() {
   const message = siblingCount.value > 0 ? `This will affect ${siblingCount.value} other instances. ` : ''
   return confirm({
@@ -1154,7 +1158,7 @@ async function handleSave() {
     store.setMathLayout(newMathRef, currentLayout.value)
   }
 
-  const updateAll = (siblingCount.value > 0 && applyToAll.value) || siblingCount.value === 0
+  const updateAll = applyToAll.value || siblingCount.value === 0
 
   trackEvent('editor_action', {
     category: 'Editor',
