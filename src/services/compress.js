@@ -4,6 +4,8 @@ import { generateSedmlData } from './export/sedml'
 import { buildManifestXml } from './export/omex'
 import { buildSimulationJson } from './export/simulation'
 
+import { PHLYNX_PROJECT_VERSION } from '../utils/constants'
+
 import { useOmexStore } from '../stores/omexStore.js'
 
 // Helper: Converts a Blob to a pure Base64 string (strips the "data:..." prefix)
