@@ -45,9 +45,7 @@ for (const [symbol, atom] of [...UCUM_ATOMS]) {
 /** UCUM's affine temperature symbols and the affine units each one names. */
 const AFFINE_SYMBOLS = new Map([['Cel', 'celsius'], ['[degF]', 'fahrenheit'], ['degF', 'fahrenheit']])
 
-/** CellML 2.0 names for the built-in units older files may use; libcellml rejects the old ones. */
-const CELLML_2_NAMES = new Map([['liter', 'litre'], ['meter', 'metre'], ['kat', 'katal']])
-const BUILT_IN_NAMES = new Set([...STANDARD_UNITS, ...CELLML_2_NAMES.values()])
+const BUILT_IN_NAMES = new Set(STANDARD_UNITS)
 
 /** Powers of ten that get a word, so `10*9/L` reads `giga_per_L`. */
 const FACTOR_WORDS = new Map([...PREFIX_NAMES].filter(([power]) => Math.abs(power) >= 3))
@@ -179,7 +177,7 @@ export function resolveSymbol(text, names) {
 
 // ── Conversion ──────────────────────────────────────────────────────────────
 
-const builtInPart = (units, prefix, exponent) => ({ units: CELLML_2_NAMES.get(units) ?? units, prefix, exponent })
+const builtInPart = (units, prefix, exponent) => ({ units, prefix, exponent })
 
 /**
  * Writes a library units in CellML's built-in units, as `factor × parts`.

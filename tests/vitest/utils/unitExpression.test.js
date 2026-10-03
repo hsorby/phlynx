@@ -192,9 +192,10 @@ describe('interpretUnitExpression', () => {
     expect(interpret('Hz2.s').parts).toEqual([{ units: 'second', prefix: 0, exponent: -1, multiplier: 1 }])
   })
 
-  it('writes built-in units by their CellML 2.0 names', () => {
-    const library = libraryOf([model('<units name="old"><unit units="liter"/><unit units="katal"/></units>')])
-    expect(interpret('old.s', library).parts.map((part) => part.units)).toEqual(['litre', 'katal', 'second'])
+  it('treats only CellML 2.0 names as built-in units', () => {
+    const library = libraryOf([model('<units name="old"><unit units="liter"/></units>')])
+    expect(interpret('kat/L').parts.map((part) => part.units)).toEqual(['katal', 'litre'])
+    expect(interpret('old.s', library).error).toMatch(/built-in/)
   })
 
   it('finds library units that expand to the same thing', () => {
@@ -316,6 +317,11 @@ describe('generated units on the bundled library, checked by libcellml', () => {
 
   it('uses library names before UCUM symbols', () => {
     expect(interpretUnitExpression('mmHg', bundled)).toEqual({ name: 'mmHg', existing: true })
-    expect(expandDefinition(interpretUnitExpression('mmHg/s', bundled).parts)).toBe('133.32 kg·m⁻¹·s⁻³')
+    expect(interpretUnitExpression('mmHg/s', bundled).parts[0]).toMatchObject({ units: 'pascal', multiplier: 133.322 })
+  })
+
+  it('agrees with UCUM on the library\'s mmHg, so mm[Hg] reuses it', () => {
+    expect(interpretUnitExpression('mm[Hg]', bundled)).toEqual({ name: 'mmHg', existing: true })
+    expect(expandDefinition(interpretUnitExpression('mm[Hg]/s', bundled).parts)).toBe('133.322 kg·m⁻¹·s⁻³')
   })
 })

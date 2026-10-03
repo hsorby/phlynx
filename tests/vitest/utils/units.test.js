@@ -224,14 +224,14 @@ describe('expandUnits in CellML built-in units', () => {
     expect(expansions.get('g_per_kg')).toBe('g·kg⁻¹')
   })
 
-  it('merges spellings of the same built-in units, which can cancel', () => {
+  it('knows only CellML 2.0\'s names for the built-in units, as libcellml does', () => {
     const expansions = expandBuiltIn(
-      '<units name="l_per_l"><unit units="litre"/><unit units="liter" exponent="-1"/></units>' +
-        '<units name="m2"><unit units="metre"/><unit units="meter"/></units>'
+      '<units name="l_per_l"><unit units="litre"/><unit units="litre" exponent="-1"/></units>' +
+        '<units name="old"><unit units="liter"/></units><units name="old_m"><unit units="meter"/></units>'
     )
     expect(expansions.get('l_per_l')).toBe('dimensionless')
-    expect(expansions.get('m2')).toBe('m²')
     expect(expansions.get('katal')).toBe('kat')
+    for (const name of ['old', 'old_m', 'liter', 'meter', 'kat']) expect(expansions.has(name), name).toBe(false)
   })
 
   it('writes terms as defined, positive powers first, and drops cancelled ones', () => {
@@ -302,6 +302,20 @@ describe('expandUnits on the bundled units library', () => {
     )
   })
 
+  it('lists only built-in units names that libcellml accepts', async () => {
+    const { instance: libcellml } = await ensureLibCellmlReady()
+    const units = STANDARD_UNITS.map((name) => `<units name="u_${name}"><unit units="${name}"/></units>`).join('')
+    const parser = new libcellml.Parser(true)
+    const validator = new libcellml.Validator()
+    const parsed = parser.parseModel(model(units))
+    validator.validateModel(parsed)
+    const issues = Array.from({ length: validator.issueCount() }, (_, i) => validator.issue(i).description())
+    parsed.delete()
+    parser.delete()
+    validator.delete()
+    expect(issues).toEqual([])
+  })
+
   it('expands every units name', () => {
     const expansions = expandUnits(models)
     const names = models.flatMap((xml) => [...extractUnitDefinitions(xml).keys()])
@@ -312,7 +326,7 @@ describe('expandUnits on the bundled units library', () => {
   it('expands representative units', () => {
     const expansions = expandUnits(models)
     expect(expansions.get('mV')).toBe('10⁻³ kg·m²·s⁻³·A⁻¹')
-    expect(expansions.get('mmHg')).toBe('133.32 kg·m⁻¹·s⁻²')
+    expect(expansions.get('mmHg')).toBe('133.322 kg·m⁻¹·s⁻²')
     expect(expansions.get('UnitValve')).toBe('kg^-0.5·m^3.5')
     expect(expansions.get('Hz')).toBe(expansions.get('per_s'))
   })
@@ -326,7 +340,7 @@ describe('expandUnits on the bundled units library', () => {
   it('expands representative units to CellML built-in units', () => {
     const expansions = expandUnits(models, { builtIn: true })
     expect(expansions.get('mV')).toBe('10⁻³ V')
-    expect(expansions.get('mmHg')).toBe('133.32 Pa')
+    expect(expansions.get('mmHg')).toBe('133.322 Pa')
     expect(expansions.get('Hz')).toBe('s⁻¹')
     expect(expansions.get('hertz')).toBe('Hz')
     expect(expansions.get('C')).toBe('A·s')
