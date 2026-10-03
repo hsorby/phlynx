@@ -173,21 +173,21 @@ describe('ImportDialog instance-array folder drop', () => {
     }
   )
 
-  it('explains a malformed module array without claiming readiness', async () => {
+  it('explains a malformed instance array without claiming readiness', async () => {
     mountDialog()
     const files = { ...FOLDER_FILES, 'modules.csv': 'name,module_type,module_subtype\nheart,heart,simple\n' }
     await drop(dropEvent(folderEntry('model', files)))
 
     const all = toasts()
     expect(all).toHaveLength(1)
-    expect(all[0]).toMatchObject({ type: 'warning', title: 'Module Array Needed' })
-    expect(all[0].message).toContain('modules.csv — Invalid module array file format. Missing columns: inp_instances')
+    expect(all[0]).toMatchObject({ type: 'warning', title: 'Instance Array Needed' })
+    expect(all[0].message).toContain('modules.csv — Invalid instance array file format. Missing columns: inp_instances')
     expect(wrapper.vm.importReadiness).toBeNull()
     expect(wrapper.find('.folder-import-row').exists()).toBe(true)
     expect(importButton().attributes('disabled')).toBeDefined()
   })
 
-  it('replaces the module array when a second folder is dropped', async () => {
+  it('replaces the instance array when a second folder is dropped', async () => {
     mountDialog()
     await drop(dropEvent(folderEntry('a', FOLDER_FILES)))
     const { 'modules.csv': modules, ...rest } = FOLDER_FILES
@@ -226,7 +226,7 @@ describe('ImportDialog instance-array folder drop', () => {
     await drop(dropEvent(folderEntry('model', { ...FOLDER_FILES, 'other.cellml': '<model name="other"/>' })))
 
     expect(fileNames(IMPORT_KEYS.CELLML_FILE)).toEqual(['heart.cellml'])
-    expect(toasts()[0].message).toContain('Ignored: other.cellml — not used by any module in the module array')
+    expect(toasts()[0].message).toContain('Ignored: other.cellml — not used by any module in the instance array')
   })
 })
 
@@ -242,12 +242,12 @@ describe('ImportDialog repeat drops', () => {
     expect(toasts()).toEqual([expect.objectContaining({ type: 'success', title: 'Ready to Import' })])
   })
 
-  it('removes an empty required field once the module array no longer needs it', async () => {
+  it('removes an empty required field once the instance array no longer needs it', async () => {
     mountDialog()
     await drop(dropEvent(fileEntry('modules.csv', MODULES_CSV)))
     expect(wrapper.vm.dynamicFields.map((f) => f.key)).toContain(IMPORT_KEYS.MODULE_CONFIG)
 
-    // The library gains the module from elsewhere, so the same module array now needs nothing more.
+    // The library gains the module from elsewhere, so the same instance array now needs nothing more.
     const { useLibraryStore } = await import('../../../src/stores/libraryStore')
     const libraryStore = useLibraryStore()
     libraryStore.availableMath.set('heart.cellml:heart_simple', '<math/>')

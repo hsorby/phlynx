@@ -752,8 +752,8 @@ function setFieldFile(field, filename, payload) {
 }
 
 /**
- * Lists the CellML file names used by the module array's modules, counting staged configs.
- * @param {Object[]} instanceArrayPayload - Module array rows.
+ * Lists the CellML file names used by the instance array's modules, counting staged configs.
+ * @param {Object[]} instanceArrayPayload - Instance array rows.
  * @returns {Set<string>}
  */
 function getReferencedCellMLFilenames(instanceArrayPayload) {
@@ -812,7 +812,7 @@ function commitParsedFiles(parsed, skipped, { onlyRequiredCellML = false } = {})
 
   const [instanceArray, ...extraArrays] = byKey(IMPORT_KEYS.INSTANCE_ARRAY)
   for (const extra of extraArrays) {
-    skipped.push({ name: extra.file.name, reason: `only one module array per import (using ${instanceArray.file.name})` })
+    skipped.push({ name: extra.file.name, reason: `only one instance array per import (using ${instanceArray.file.name})` })
   }
   if (instanceArray) {
     const existingFiles = formState[IMPORT_KEYS.INSTANCE_ARRAY]?.files
@@ -831,7 +831,7 @@ function commitParsedFiles(parsed, skipped, { onlyRequiredCellML = false } = {})
 
   const instanceArrayPayload = getInstanceArrayPayload()
   const status = instanceArrayPayload ? checkReadiness(instanceArrayPayload) : null
-  // While configs are still missing, the full set of CellML files the module array uses is unknown.
+  // While configs are still missing, the full set of CellML files the instance array uses is unknown.
   const canJudgeCellML = status && (onlyRequiredCellML || !status.missingResources.modules.size)
   let allowedCellMLFiles = null
   if (canJudgeCellML) {
@@ -843,7 +843,7 @@ function commitParsedFiles(parsed, skipped, { onlyRequiredCellML = false } = {})
   for (const result of byKey(IMPORT_KEYS.CELLML_FILE)) {
     if (result.field.processUpload === 'cellml') {
       if (allowedCellMLFiles && !allowedCellMLFiles.has(result.file.name)) {
-        skipped.push({ name: result.file.name, reason: 'not used by any module in the module array' })
+        skipped.push({ name: result.file.name, reason: 'not used by any module in the instance array' })
         continue
       }
       stageFile('mathFiles', result.file.name, result.components)

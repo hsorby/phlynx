@@ -23,7 +23,7 @@ export const MODULE_CONFIG_KEYS = [
 
 /**
  * Builds a file format error that records which required fields were absent.
- * @param {string} description - What the file failed to be, e.g. 'module array file'.
+ * @param {string} description - What the file failed to be, e.g. 'instance array file'.
  * @param {string[]} required - Required column or key names.
  * @param {string[]} present - Column or key names the file actually has.
  * @param {string} fieldNoun - 'columns' or 'keys'.
@@ -87,7 +87,7 @@ export const checkResourcesAreLoaded = (requestedModules, store) => {
   }
 
   if (!requestedModules || requestedModules.length === 0) {
-    warnings.push('No modules specified in the module array file.')
+    warnings.push('No modules specified in the instance array file.')
   }
 
   for (const module of requestedModules) {

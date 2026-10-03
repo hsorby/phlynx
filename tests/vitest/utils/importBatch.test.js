@@ -52,7 +52,7 @@ describe('planBatchEntries', () => {
 })
 
 describe('parseForRole', () => {
-  it('reads a module array as the instance array even when parameters is preferred', async () => {
+  it('reads an instance array CSV as the instance array even when parameters is preferred', async () => {
     const [instanceField, parameterField] = csvCandidates()
     const result = await parseForRole(entry('a.csv', MODULES_CSV).file, [parameterField, instanceField], {
       store: emptyStore,
@@ -81,7 +81,7 @@ describe('parseForRole', () => {
       store: emptyStore,
     })
 
-    expect(result).toEqual({ error: 'not a module array or parameters file', unrecognised: true })
+    expect(result).toEqual({ error: 'not an instance array or parameters file', unrecognised: true })
   })
 
   it('explains malformed JSON', async () => {
@@ -176,10 +176,10 @@ describe('buildBatchSummary', () => {
     expect(summary.message).toContain('Missing configurations for: heart:simple')
   })
 
-  it('never claims readiness without a module array', () => {
+  it('never claims readiness without an instance array', () => {
     const summary = buildBatchSummary({ ...base, hasInstanceArray: false, readiness: null })
 
-    expect(summary.title).toBe('Module Array Needed')
+    expect(summary.title).toBe('Instance Array Needed')
     expect(summary.message).not.toContain('Ready')
   })
 

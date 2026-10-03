@@ -108,7 +108,9 @@ function isUnexpectedError(error) {
 function describeFailures(failures) {
   const related = failures.filter(({ error }) => !isUnrelatedFormat(error))
   if (related.length === 0) {
-    return { error: `not a ${failures.map(({ field }) => roleNoun(field)).join(' or ')}`, unrecognised: true }
+    const nouns = failures.map(({ field }) => roleNoun(field)).join(' or ')
+    const article = /^[aeiou]/i.test(nouns) ? 'an' : 'a'
+    return { error: `not ${article} ${nouns}`, unrecognised: true }
   }
   const closest = related.reduce((best, current) =>
     (current.error?.missing?.length ?? Infinity) < (best.error?.missing?.length ?? Infinity) ? current : best
@@ -243,8 +245,8 @@ export function buildBatchSummary({ placed, failed, skipped, isInstanceArrayImpo
     title = 'Nothing Added'
   } else if (isInstanceArrayImport && !hasInstanceArray) {
     type = 'warning'
-    title = 'Module Array Needed'
-    lines.push('Add a module array (.csv) to continue.')
+    title = 'Instance Array Needed'
+    lines.push('Add an instance array (.csv) to continue.')
   } else if (isInstanceArrayImport && !readiness?.resourcesAreLoaded) {
     type = 'warning'
     title = 'More Files Needed'
