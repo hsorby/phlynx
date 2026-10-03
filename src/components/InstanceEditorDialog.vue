@@ -1010,9 +1010,10 @@ async function handleCancel() {
 }
 
 async function handleMathOverwrite() {
+  const message = siblingCount.value > 0 ? `This will affect ${siblingCount.value} other instances. ` : ''
   return confirm({
     header: 'Overwrite Math?',
-    message: `You are about to overwrite an existing math definition. This will affect ${siblingCount.value} other instances. Are you sure you want to proceed?`,
+    message: `You are about to overwrite an existing math definition. ${message}Are you sure you want to proceed?`,
     severity: 'warning',
     acceptLabel: 'Proceed',
     rejectLabel: 'Cancel',
