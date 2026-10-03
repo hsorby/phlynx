@@ -47,4 +47,28 @@ describe('SanitisedInput', () => {
     expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
     expect(wrapper.find('input').attributes('role')).toBeUndefined()
   })
+
+  it('shows each suggestion\'s detail beside it, in two columns', async () => {
+    wrapper = mount(SanitisedInput, {
+      props: { modelValue: '', suggest: () => [{ value: 'mV', detail: '10⁻³ kg·m²·s⁻³·A⁻¹' }, 'mmHg'] },
+      global: { plugins: [PrimeVue] },
+    })
+    await wrapper.find('input').setValue('m')
+
+    const detail = wrapper.find('.sanitised-input__option-detail')
+    expect(detail.text()).toBe('10⁻³ kg·m²·s⁻³·A⁻¹')
+    expect(detail.attributes('title')).toBe('10⁻³ kg·m²·s⁻³·A⁻¹')
+    expect(wrapper.find('.sanitised-input__suggestions--detailed').exists()).toBe(true)
+
+    await wrapper.findAll('[role="option"]')[0].trigger('click')
+    expect(wrapper.emitted('update:modelValue').at(-1)).toEqual(['mV'])
+  })
+
+  it('keeps a single column when no suggestion has a detail', async () => {
+    wrapper = mount(SanitisedInput, { props: { modelValue: '', suggest: () => ['mV'] }, global: { plugins: [PrimeVue] } })
+    await wrapper.find('input').setValue('m')
+    expect(wrapper.find('[role="option"]').exists()).toBe(true)
+    expect(wrapper.find('.sanitised-input__suggestions--detailed').exists()).toBe(false)
+    expect(wrapper.find('.sanitised-input__option-detail').exists()).toBe(false)
+  })
 })

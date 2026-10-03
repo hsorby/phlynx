@@ -52,22 +52,27 @@
     <Teleport to="body" :disabled="!floating">
       <div
         v-if="showSuggestions"
+        ref="suggestionsRef"
         class="sanitised-input__suggestions"
-        :class="{ 'sanitised-input__suggestions--floating': floating }"
-        :style="floating ? floatingStyle : undefined"
+        :class="{
+          'sanitised-input__suggestions--floating': floating,
+          'sanitised-input__suggestions--detailed': hasDetails,
+        }"
+        :style="floating ? suggestionsStyle : undefined"
         @mousedown.prevent
       >
         <ul :id="listId" class="sanitised-input__options" role="listbox">
           <li
             v-for="(match, index) in matches"
-            :key="match"
+            :key="match.value"
             class="sanitised-input__option"
             :class="{ 'sanitised-input__option--highlighted': index === highlighted }"
             role="option"
             :aria-selected="index === highlighted"
             @click="pick(index)"
           >
-            {{ match }}
+            <span class="sanitised-input__option-value">{{ match.value }}</span>
+            <span v-if="match.detail" class="sanitised-input__option-detail" :title="match.detail">{{ match.detail }}</span>
           </li>
         </ul>
         <p class="sanitised-input__hint"><kbd>↑</kbd><kbd>↓</kbd> choose · <kbd>Tab</kbd> insert · <kbd>Esc</kbd> close</p>
@@ -103,7 +108,7 @@ const props = defineProps({
   inputId: { type: String, default: '' },
   /** Focuses the input when it mounts (e.g. a dialog's first field). */
   autofocus: { type: Boolean, default: false },
-  /** (typed) => names to offer as the user types. Omit for no suggestion list. */
+  /** (typed) => names, or { value, detail } with muted detail text, to offer as the user types. Omit for no list. */
   suggest: { type: Function, default: null },
 })
 
@@ -141,6 +146,8 @@ const { matches, highlighted, open, close, pick, onKeydown: onSuggestionKeydown 
 
 // The rename popover sits in the same place and matters more.
 const showSuggestions = computed(() => matches.value.length > 0 && !unsanitary.value)
+const hasDetails = computed(() => matches.value.some((match) => match.detail))
+const suggestionsRef = ref(null)
 
 function onInput(value) {
   emit('update:modelValue', value ?? '')
@@ -164,12 +171,16 @@ function onKeydown(event) {
 
 // ── Floating placement ───────────────────────────────────────────────────────
 const floatingStyle = ref({})
+const suggestionsStyle = ref({})
 
-/** Re-anchors the floating popover to the field. */
+/** Re-anchors the floating popovers to the field, keeping the suggestion list inside the window. */
 function updatePosition() {
   const rect = rootRef.value?.getBoundingClientRect()
   if (!rect) return
   floatingStyle.value = { top: `${rect.bottom + 8}px`, left: `${rect.left}px` }
+  const listWidth = suggestionsRef.value?.offsetWidth ?? 0
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - listWidth - 8))
+  suggestionsStyle.value = { top: `${rect.bottom + 6}px`, left: `${left}px` }
 }
 
 function trackPosition(active) {
@@ -190,6 +201,13 @@ watch(
   },
   { immediate: true }
 )
+
+// The list's width follows its matches, so re-clamp it when they change.
+watch(matches, async () => {
+  if (!props.floating || !showSuggestions.value) return
+  await nextTick()
+  updatePosition()
+})
 
 onBeforeUnmount(() => trackPosition(false))
 
@@ -307,12 +325,44 @@ defineExpose({ focus, updatePosition })
 .sanitised-input__option {
   padding: 0.3rem 0.5rem;
   border-radius: 0.35rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.sanitised-input__option-value {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-  font-size: 0.8125rem;
-  cursor: pointer;
+}
+
+/* Name and detail in two columns shared by every row, so the details line up. */
+.sanitised-input__suggestions--detailed {
+  max-width: min(28rem, calc(100vw - 16px));
+}
+
+.sanitised-input__suggestions--detailed .sanitised-input__options {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 0.75rem;
+}
+
+.sanitised-input__suggestions--detailed .sanitised-input__option {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+}
+
+.sanitised-input__option-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--p-text-muted-color);
+  font-family: var(--p-font-family, system-ui, sans-serif);
+  font-size: 0.72rem;
 }
 
 .sanitised-input__option:hover {

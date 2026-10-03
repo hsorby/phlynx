@@ -202,6 +202,7 @@
                 :connection-supplied="connectionSupplied"
                 :math-references="mathReferences"
                 :unit-names="store.availableUnitNames"
+                :unit-expansions="store.unitExpansions"
               />
             </TabPanel>
 

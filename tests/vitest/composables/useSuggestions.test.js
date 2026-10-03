@@ -20,7 +20,7 @@ describe('useSuggestions', () => {
     const { matches, open, highlighted } = setup()
     expect(matches.value).toEqual([])
     open()
-    expect(matches.value).toEqual(['millivolt', 'millisecond'])
+    expect(matches.value.map((match) => match.value)).toEqual(['millivolt', 'millisecond'])
     expect(highlighted.value).toBe(0)
   })
 
@@ -89,5 +89,17 @@ describe('useSuggestions', () => {
     list.open()
     expect(list.matches.value).toEqual([])
     expect(list.onKeydown(key('ArrowDown'))).toBe(false)
+  })
+
+  it('carries each suggestion\'s detail and picks its value', () => {
+    const onPick = vi.fn()
+    const list = useSuggestions(ref('mil'), () => () => [{ value: 'millivolt', detail: '10⁻³ V' }, 'millisecond'], { onPick })
+    list.open()
+    expect(list.matches.value).toEqual([
+      { value: 'millivolt', detail: '10⁻³ V' },
+      { value: 'millisecond', detail: '' },
+    ])
+    list.onKeydown(key('Tab'))
+    expect(onPick).toHaveBeenCalledWith('millivolt')
   })
 })

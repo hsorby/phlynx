@@ -222,12 +222,15 @@ const props = defineProps({
   mathReferences: { type: Set, default: () => new Set() },
   /** Units names in the library, offered as the units are typed. */
   unitNames: { type: Set, default: () => new Set() },
+  /** Each units name's SI base-unit expansion, shown beside its suggestion. */
+  unitExpansions: { type: Map, default: () => new Map() },
 })
 
 const { confirm } = useConfirmDialog()
 
-/** Library units names that could complete the typed units. */
-const suggestUnits = (typed) => unitSuggestions(typed, props.unitNames)
+/** Library units names that could complete the typed units, each with its SI base-unit expansion. */
+const suggestUnits = (typed) =>
+  unitSuggestions(typed, props.unitNames).map((value) => ({ value, detail: props.unitExpansions.get(value) ?? '' }))
 
 /** Picker value meaning "create a new initialiser" rather than pick an existing variable. */
 const NEW_INITIALISER_VALUE = '__new_initialiser__'
