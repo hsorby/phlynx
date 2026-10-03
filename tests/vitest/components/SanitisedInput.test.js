@@ -41,6 +41,24 @@ describe('SanitisedInput', () => {
     expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
   })
 
+  it('lists suggestions for text that is not a name yet, warning of the rename instead of the popover', async () => {
+    const created = []
+    const suggest = () => [{ value: 'mV_per_ms', detail: 'new', onPick: () => created.push('mV_per_ms') }]
+    wrapper = mount(SanitisedInput, {
+      props: { modelValue: '', sanitise: (value) => value.replace(/[^A-Za-z0-9_]/g, ''), suggest },
+      global: { plugins: [PrimeVue] },
+    })
+    await wrapper.find('input').setValue('mV/ms')
+    await wrapper.setProps({ modelValue: 'mV/ms' })
+
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.find('.sanitised-input__rename').text()).toContain('mVms')
+
+    await wrapper.find('[role="option"]').trigger('click')
+    expect(created).toEqual(['mV_per_ms'])
+    expect(wrapper.emitted('commit').at(-1)).toEqual(['mV_per_ms'])
+  })
+
   it('shows no list without a suggest function', async () => {
     wrapper = mount(SanitisedInput, { props: { modelValue: '' }, global: { plugins: [PrimeVue] } })
     await wrapper.find('input').setValue('mil')

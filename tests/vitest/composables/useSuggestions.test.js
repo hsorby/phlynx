@@ -51,6 +51,18 @@ describe('useSuggestions', () => {
     expect(matches.value).toEqual([])
   })
 
+  it('runs a picked item\'s own onPick before taking its value, keeping its other fields', () => {
+    const typed = ref('mV/ms')
+    const calls = []
+    const item = { value: 'mV_per_ms', create: { name: 'mV_per_ms' }, onPick: () => calls.push('item') }
+    const list = useSuggestions(typed, () => () => [item], { onPick: (value) => calls.push(value) })
+    list.open()
+    expect(list.matches.value[0]).toMatchObject({ value: 'mV_per_ms', detail: '', create: { name: 'mV_per_ms' } })
+
+    list.pick(0)
+    expect(calls).toEqual(['item', 'mV_per_ms'])
+  })
+
   it('leaves Enter to the caller until an arrow key has picked a name', () => {
     const { open, onKeydown, onPick } = setup()
     open()
