@@ -4,6 +4,8 @@ import { useLibraryStore } from '../stores/libraryStore'
 import { FLOW_IDS } from '../utils/constants'
 import { detachReactivity } from '../utils/reactivity'
 
+const isSame = (value, otherValue) => JSON.stringify(value) === JSON.stringify(otherValue)
+
 /**
  * Records edits to node data, edge couplings and global constants as canvas undo steps. Nodes and
  * edges are found by id on every undo and redo, so a step still applies after they are re-created.
@@ -33,13 +35,18 @@ export function useNodeDataHistory(flowId = FLOW_IDS.MAIN) {
   }
 
   /**
-   * Writes copied fields back, skipping nodes that no longer exist.
+   * Writes copied fields back to each node whose fields still match `expected`, skipping nodes that
+   * no longer exist or that something else has changed since.
    *
    * @param {ReturnType<typeof captureNodeFields>} snapshot
+   * @param {ReturnType<typeof captureNodeFields>} expected
    */
-  function restoreNodeFields(snapshot) {
+  function restoreNodeFields(snapshot, expected) {
+    const expectedById = new Map(expected.map(({ id, fields }) => [id, fields]))
     snapshot.forEach(({ id, fields }) => {
-      if (findNode(id)) updateNodeData(id, detachReactivity(fields))
+      const current = captureNodeFields([id], Object.keys(fields))[0]
+      if (!current || !isSame(current.fields, expectedById.get(id))) return
+      updateNodeData(id, detachReactivity(fields))
     })
   }
 
@@ -68,14 +75,18 @@ export function useNodeDataHistory(flowId = FLOW_IDS.MAIN) {
   }
 
   /**
-   * Writes copied couplings back, skipping edges that no longer exist.
+   * Writes copied couplings back to each edge whose couplings still match `expected`, skipping
+   * edges that no longer exist or that something else has changed since.
    *
    * @param {ReturnType<typeof captureEdgeCouplings>} snapshot
+   * @param {ReturnType<typeof captureEdgeCouplings>} expected
    */
-  function restoreEdgeCouplings(snapshot) {
+  function restoreEdgeCouplings(snapshot, expected) {
+    const expectedById = new Map(expected.map(({ id, couplings }) => [id, couplings]))
     snapshot.forEach(({ id, couplings }) => {
       const edge = findEdge(id)
-      if (edge) edge.data = { ...edge.data, couplings: couplings && detachReactivity(couplings) }
+      if (!edge || !isSame(edge.data?.couplings, expectedById.get(id))) return
+      edge.data = { ...edge.data, couplings: couplings && detachReactivity(couplings) }
     })
   }
 
@@ -110,19 +121,21 @@ export function useNodeDataHistory(flowId = FLOW_IDS.MAIN) {
   function diffConstants(before, after) {
     return [...after].flatMap(([name, value]) => {
       const previous = before.get(name)
-      return JSON.stringify(previous) === JSON.stringify(value) ? [] : [{ name, before: previous, after: value }]
+      return isSame(previous, value) ? [] : [{ name, before: previous, after: value }]
     })
   }
 
   /**
-   * Puts constants back to one side of a diff. A constant the edit added is only removed while no
-   * node uses it.
+   * Puts constants back to one side of a diff, skipping any that something else has changed since.
+   * A constant the edit added is only removed while no node uses it.
    *
    * @param {ReturnType<typeof diffConstants>} changes
    * @param {'before'|'after'} side
    */
   function applyConstants(changes, side) {
     changes.forEach((change) => {
+      const expected = side === 'before' ? change.after : change.before
+      if (!isSame(libraryStore.getGlobalConstant(change.name), expected)) return
       const constant = change[side]
       if (constant) {
         libraryStore.assignGlobalConstant(change.name, constant.value, constant.units, constant.data_reference, true)
@@ -160,19 +173,15 @@ export function useNodeDataHistory(flowId = FLOW_IDS.MAIN) {
     const edgesAfter = captureEdgeCouplings(edgeIds)
     const constants = diffConstants(constantsBefore, captureConstants())
 
-    const isUnchanged =
-      !library &&
-      !constants.length &&
-      JSON.stringify(nodesBefore) === JSON.stringify(nodesAfter) &&
-      JSON.stringify(edgesBefore) === JSON.stringify(edgesAfter)
+    const isUnchanged = !library && !constants.length && isSame(nodesBefore, nodesAfter) && isSame(edgesBefore, edgesAfter)
     if (isUnchanged) return false
 
     let isApplied = true
     await history.executeAndAddCommand({
       type,
       undo: () => {
-        restoreNodeFields(nodesBefore)
-        restoreEdgeCouplings(edgesBefore)
+        restoreNodeFields(nodesBefore, nodesAfter)
+        restoreEdgeCouplings(edgesBefore, edgesAfter)
         library?.undo()
         applyConstants(constants, 'before')
       },
@@ -181,8 +190,8 @@ export function useNodeDataHistory(flowId = FLOW_IDS.MAIN) {
           isApplied = false
           return
         }
-        restoreNodeFields(nodesAfter)
-        restoreEdgeCouplings(edgesAfter)
+        restoreNodeFields(nodesAfter, nodesBefore)
+        restoreEdgeCouplings(edgesAfter, edgesBefore)
         library?.redo()
         applyConstants(constants, 'after')
       },

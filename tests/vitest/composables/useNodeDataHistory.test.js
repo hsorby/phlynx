@@ -87,10 +87,30 @@ describe('useNodeDataHistory', () => {
 
   it('finds a node by id after it was removed and added back', async () => {
     await rename('a', 'renamed')
-    nodes.value = [createNode('a'), findNode('b')]
+    const restored = createNode('a')
+    restored.data = { ...restored.data, name: 'renamed' }
+    nodes.value = [restored, findNode('b')]
 
     await history.undo()
     expect(findNode('a').data.name).toBe('a')
+  })
+
+  it('leaves a node that something else has changed since', async () => {
+    await rename('a', 'renamed')
+    nodes.value = [createNode('a'), findNode('b')]
+    findNode('a').data = { ...findNode('a').data, name: 'loaded' }
+
+    await history.undo()
+    expect(findNode('a').data.name).toBe('loaded')
+  })
+
+  it('leaves a constant that something else has changed since', async () => {
+    const library = useLibraryStore()
+    await recordEdit({ type: 'edit-global-constant', nodeIds: [], keys: [], apply: () => library.assignGlobalConstant('g', '2', 'second', null) })
+    library.assignGlobalConstant('g', '7', 'second', null, true)
+
+    await history.undo()
+    expect(library.getGlobalConstant('g').value).toBe('7')
   })
 
   it('skips nodes and edges that no longer exist', async () => {
