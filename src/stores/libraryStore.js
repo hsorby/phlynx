@@ -41,9 +41,11 @@ export const useLibraryStore = defineStore('library', () => {
   const mathRefHash = ref(new Map())
   const availableUnits = ref([])
   const globalConstants = ref(new Map())
+
   // mathRef -> Map of the values that came with that math when it was added. They only seed new
   // instances: an existing instance's rows never read them, so math and parameters stay separate.
-  const mathDefaults = ref(new Map())
+  const mathDefaults = ref(new Map()) // TODO - somehow separate this from the library store, since values are separate from the math.
+  
   // mathRef -> TextLayout: the comments, blank lines and typed statements the math XML can't hold.
   const mathLayouts = ref(new Map())
 
@@ -345,6 +347,19 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
+  function removeMath(mathRef) {
+    if (!availableMath.value.has(mathRef)) return
+    
+    removeMathHashEntry(mathRef, mathRefHash.value.get(mathRef))
+    availableMath.value.delete(mathRef)
+    mathRefHash.value.delete(mathRef)
+    availableMathAnalysis.delete(mathRef)
+    mathDefaults.value.delete(mathRef)
+    mathLayouts.value.delete(mathRef)
+
+    updateStubStatus(mathRef)
+  }
+
   function createModuleForMath(mathRef) {
     if ([GHOST_MATH_REF, NEW_MODULE_MATH_REF].includes(mathRef)) return
 
@@ -392,12 +407,14 @@ export const useLibraryStore = defineStore('library', () => {
   }
 
   function updateStubStatus(mathRef) {
-    if (!availableMath.value.has(mathRef)) return
-
+    if (!availableCollections.value.has(mathRef)) return
+    
     availableCollections.value.get(mathRef)?.forEach((moduleRef) => {
       const module = availableModules.value.get(moduleRef)
-      if (module && module.isStub) {
-        delete module.isStub
+      if (availableMath.value.has(mathRef)) {
+        if (module.isStub) delete module.isStub
+      } else {
+        module.isStub = true
       }
     })
   }
@@ -519,6 +536,7 @@ export const useLibraryStore = defineStore('library', () => {
     removeModule,
     removeCollection,
     removeGlobalConstant,
+    removeMath,
     cleanupUnusedGlobalConstants,
     findMathRefByMath,
     getMathHashByRef,
