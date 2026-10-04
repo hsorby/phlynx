@@ -156,15 +156,16 @@ export function useInstanceSave(flowId = FLOW_IDS.MAIN) {
         mathAfter = writtenMathRef && libraryStore.getMathEntry(writtenMathRef)
       },
       library: writtenMathRef && {
-        undo: () => {
+        // Math a save created stays while another node uses it, so an undo may leave it in place.
+        isAt: (side) => {
           const current = libraryStore.getMathEntry(writtenMathRef)
-          if (!isSameMathEntry(current, mathAfter)) return
+          if (side === 'after') return isSameMathEntry(current, mathAfter)
+          return isSameMathEntry(current, mathBefore) || (!mathBefore && isSameMathEntry(current, mathAfter))
+        },
+        restore: (side) => {
+          if (side === 'after') return libraryStore.restoreMathEntry(writtenMathRef, mathAfter)
           if (!mathBefore && isUsed(writtenMathRef)) return
           libraryStore.restoreMathEntry(writtenMathRef, mathBefore)
-        },
-        redo: () => {
-          const current = libraryStore.getMathEntry(writtenMathRef)
-          if (isSameMathEntry(current, mathBefore)) libraryStore.restoreMathEntry(writtenMathRef, mathAfter)
         },
       },
     })

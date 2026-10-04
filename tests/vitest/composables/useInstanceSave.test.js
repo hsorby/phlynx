@@ -212,4 +212,50 @@ describe('useInstanceSave', () => {
     expect(library.getMathEntry(GROWTH_REF)).toEqual(loadedMath)
     expect(library.getGlobalConstant('g').value).toBe('7')
   })
+
+  it('leaves math in place when the library has changed it since an overwrite', async () => {
+    await saveInstanceEdit(buildSave({ math: DECAY_WITHOUT_K }))
+    library.addMath(DECAY_REF, DECAY_XML.replace('initial_value="0.5"', 'initial_value="9"'))
+    const loaded = snapshot()
+    const loadedMath = library.getMathEntry(DECAY_REF)
+
+    await history.undo()
+    expect(library.getMathEntry(DECAY_REF)).toEqual(loadedMath)
+    expect(snapshot()).toEqual(loaded)
+  })
+
+  it('applies nothing when one rebuilt instance has changed since', async () => {
+    await saveInstanceEdit(buildSave({ math: DECAY_WITHOUT_K }))
+    findNode('a').data = { ...findNode('a').data, variables: [{ name: 'x', value: 'csv', type: 'variable' }] }
+    const changed = snapshot()
+    const savedMath = library.getMathEntry(DECAY_REF)
+
+    await history.undo()
+    expect(snapshot()).toEqual(changed)
+    expect(library.getMathEntry(DECAY_REF)).toEqual(savedMath)
+  })
+
+  it('redoes nothing when the instances have changed since the undo', async () => {
+    await saveInstanceEdit(fork())
+    await history.undo()
+    findNode('b').data = { ...findNode('b').data, name: 'elsewhere' }
+    const changed = snapshot()
+
+    await history.redo()
+    expect(snapshot()).toEqual(changed)
+    expect(library.availableMath.has(GROWTH_REF)).toBe(false)
+  })
+
+  it('redoes a fork whose math an undo kept for another instance', async () => {
+    await saveInstanceEdit(fork())
+    const other = createNode('c')
+    other.data = { ...other.data, mathRef: GROWTH_REF }
+    nodes.value = [...nodes.value, other]
+    await history.undo()
+    expect(library.availableMath.has(GROWTH_REF)).toBe(true)
+
+    await history.redo()
+    expect(findNode('a').data.mathRef).toBe(GROWTH_REF)
+  })
 })
+
