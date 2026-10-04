@@ -408,11 +408,12 @@ export const useLibraryStore = defineStore('library', () => {
 
   function updateStubStatus(mathRef) {
     if (!availableCollections.value.has(mathRef)) return
-    
+
     availableCollections.value.get(mathRef)?.forEach((moduleRef) => {
       const module = availableModules.value.get(moduleRef)
+      if (!module) return
       if (availableMath.value.has(mathRef)) {
-        if (module.isStub) delete module.isStub
+        delete module.isStub
       } else {
         module.isStub = true
       }
