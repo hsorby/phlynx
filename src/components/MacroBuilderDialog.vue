@@ -62,7 +62,6 @@
                 :id="props.id"
                 :data="props.data"
                 :selected="props.selected"
-                @open-edit-dialog="onOpenEditDialog"
                 :ref="(el) => (nodeRefs[props.id] = el)"
               />
             </template>
@@ -158,7 +157,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:modelValue', 'generate', 'edit-node'])
+const emit = defineEmits(['update:modelValue', 'generate'])
 
 const multiplier = ref(1)
 const nodeRefs = ref({})
@@ -312,13 +311,6 @@ onConnect(async (connection) => {
 onConnectEnd(() => {
   revertPendingGhostIfUnused()
 })
-
-function onOpenEditDialog(eventPayload) {
-  emit('edit-node', {
-    ...eventPayload,
-    instanceId: FLOW_IDS.MACRO,
-  })
-}
 
 async function onDialogShow() {
   isFlowReady.value = false

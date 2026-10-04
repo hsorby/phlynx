@@ -483,7 +483,6 @@
   <MacroBuilderDialog
     v-model="macroBuilderDialogVisible"
     @generate="onMacroBuilderGenerate"
-    @edit-node="onOpenPortEditorDialog"
   />
 
   <SimSettingsDialog v-model="simSettingsDialogVisible" :nodes="nodes" />
@@ -547,6 +546,7 @@ import { importOmexFile, extractOmexArchive } from '../services/import/omex'
 
 import useDragAndDrop from '../composables/useDnD'
 import { useHandleManagement } from '../composables/useHandleManagement'
+import { useNodeDataHistory } from '../composables/useNodeDataHistory'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
 import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { useLoadFromUrl } from '../composables/useLoadFromUrl'
@@ -696,12 +696,10 @@ const {
   reactivateEdgeHandles,
   revertHandleIfUnused,
 } = useHandleManagement()
+const { recordEdit, findIncidentEdgeIds } = useNodeDataHistory(FLOW_IDS.MAIN)
 
 const dialogVisible = computed(() => {
   return (
-    portEditorDialogVisible.value ||
-    cellMLEditorDialogVisible.value ||
-    parameterEditorDialogVisible.value ||
     saveDialogVisible.value ||
     importDialogVisible.value ||
     exportDialogVisible.value ||
@@ -931,9 +929,6 @@ const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
 const instanceEditorDefaultTab = ref('parameters')
 const instanceEditorDialogVisible = ref(false)
-const parameterEditorDialogVisible = ref(false)
-const portEditorDialogVisible = ref(false)
-const cellMLEditorDialogVisible = ref(false)
 const saveDialogVisible = ref(false)
 const importDialogVisible = ref(false)
 const exportDialogVisible = ref(false)
@@ -2081,13 +2076,6 @@ async function onImportConfirm(importPayload, updateProgress) {
   }
 }
 
-function onOpenPortEditorDialog(eventPayload) {
-  currentEditingNode.value = {
-    ...eventPayload,
-  }
-  portEditorDialogVisible.value = true
-}
-
 function onOpenInstanceEditorDialog(eventPayload, tab = 'parameters') {
   currentEditingNode.value = {
     ...eventPayload,
@@ -2171,11 +2159,6 @@ async function handleCellMLSave(saveData) {
   })
 }
 
-async function handleParameterSave(saveData) {
-  const { id, variables } = saveData
-  updateNodeData(id, { variables })
-}
-
 /**
  * Recomputes couplings on every edge touching a given node, using the node's
  * current ports. Call this after any operation that changes ports on
@@ -2236,14 +2219,6 @@ async function onInstanceEditConfirm(updatedData) {
 
   updateNodeData(updatedData.id, { name: updatedData.name, variables: updatedData.variables, ports: updatedData.ports })
   await handleCellMLSave(saveData)
-}
-
-async function onPortEditConfirm(updatedData) {
-  const { id } = currentEditingNode.value
-  if (!id) return
-
-  updateNodeData(id, updatedData)
-  recomputeEdgeCouplings(id)
 }
 
 const nodeRefs = ref({})
@@ -2344,27 +2319,30 @@ function onEdgeConnectionConfirm({
   couplings,
   foreignCouplings,
 }) {
-  // Update ports on both nodes
-  updateNodeData(sourceNodeId, { ports: sourcePorts })
-  updateNodeData(targetNodeId, { ports: targetPorts })
+  const nodeIds = [sourceNodeId, targetNodeId]
+  recordEdit({
+    type: 'edit-connection',
+    nodeIds,
+    keys: ['ports'],
+    edgeIds: findIncidentEdgeIds(nodeIds),
+    apply: () => {
+      updateNodeData(sourceNodeId, { ports: sourcePorts })
+      updateNodeData(targetNodeId, { ports: targetPorts })
 
-  // Write the new couplings directly onto the active edge
-  const activeEdge = findEdge(edgeDialogActiveEdge.value?.id)
-  if (activeEdge) {
-    activeEdge.data = { ...activeEdge.data, couplings }
-  }
-
-  // Apply any coupling changes to sibling edges that were displaced by the user
-  // swapping a "taken elsewhere" port. The dialog tracks these explicitly in
-  // foreignCouplings so we write them directly.
-  if (foreignCouplings) {
-    for (const [edgeId, updatedCouplings] of Object.entries(foreignCouplings)) {
-      const edge = findEdge(edgeId)
-      if (edge) {
-        edge.data = { ...edge.data, couplings: updatedCouplings }
+      const activeEdge = findEdge(edgeDialogActiveEdge.value?.id)
+      if (activeEdge) {
+        activeEdge.data = { ...activeEdge.data, couplings }
       }
-    }
-  }
+
+      // Sibling edges displaced by the user swapping a "taken elsewhere" port.
+      for (const [edgeId, updatedCouplings] of Object.entries(foreignCouplings ?? {})) {
+        const edge = findEdge(edgeId)
+        if (edge) {
+          edge.data = { ...edge.data, couplings: updatedCouplings }
+        }
+      }
+    },
+  })
 }
 
 function onOpenReplacementDialog(eventPayload) {
@@ -2377,7 +2355,12 @@ function onOpenReplacementDialog(eventPayload) {
 async function onReplaceConfirm(updatedData) {
   const { id } = currentEditingNode.value
   if (!id) return
-  updateNodeData(id, updatedData)
+  recordEdit({
+    type: 'replace-module',
+    nodeIds: [id],
+    keys: Object.keys(updatedData),
+    apply: () => updateNodeData(id, updatedData),
+  })
   replacementDialogVisible.value = false
 }
 
