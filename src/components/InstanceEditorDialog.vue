@@ -405,7 +405,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
@@ -431,7 +431,7 @@ import ParameterTable from './ParameterTable.vue'
 import SanitisedInput from './SanitisedInput.vue'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useIssueFilter } from '../composables/useIssueFilter'
-import { useFlowHistoryStore } from '../stores/historyStore'
+import { createHistory } from '../stores/historyStore'
 import { useGtm } from '../composables/useGtm'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
 import { useMathSession } from '../composables/useMathSession'
@@ -460,7 +460,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'confirm'])
 
 const store = useLibraryStore()
-const history = useFlowHistoryStore()
+const history = reactive(createHistory())
 
 const { trackEvent } = useGtm()
 const { nodes } = useVueFlow()
@@ -852,10 +852,12 @@ watch(
     if (!isOpen) {
       isEditorReady.value = false
       isDialogShown.value = false
+      history.clear()
       return
     }
 
     const requestId = ++openRequestId
+    history.clear()
     loading.value = true
     isEditorReady.value = false
     applyToAll.value = false
