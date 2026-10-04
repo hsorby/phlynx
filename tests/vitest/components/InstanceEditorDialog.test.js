@@ -9,7 +9,8 @@ import { useFlowHistoryStore } from '../../../src/stores/historyStore.js'
 import { useLibraryStore } from '../../../src/stores/libraryStore.js'
 import { ensureLibCellmlReady } from '../helpers/libcellml-bootstrap.js'
 
-vi.mock('../../../src/composables/useConfirmDialog', () => ({ useConfirmDialog: () => ({ confirm: vi.fn() }) }))
+const confirm = vi.fn(async () => true)
+vi.mock('../../../src/composables/useConfirmDialog', () => ({ useConfirmDialog: () => ({ confirm }) }))
 vi.mock('@vue-flow/core', async (importOriginal) => ({
   ...(await importOriginal()),
   useVueFlow: () => ({ nodes: ref([]) }),
@@ -47,6 +48,13 @@ const FakeEditor = defineComponent({
   },
 })
 
+const ParameterTableStub = defineComponent({
+  setup(_, { expose }) {
+    expose({ flushPendingRenames: () => {} })
+    return () => h('div')
+  },
+})
+
 const DialogStub = defineComponent({
   setup(_, { slots }) {
     return () => h('div', [slots.header?.(), slots.default?.(), slots.footer?.()])
@@ -66,7 +74,7 @@ function mountDialog() {
     props: { modelValue: false, id: 'a', initialName: 'a', mathRef: MATH_REF },
     global: {
       plugins: [PrimeVue],
-      stubs: { Dialog: DialogStub, CellMLTextEditor: FakeEditor, MathWorkbenchEditor: FakeEditor, ParameterTable: true },
+      stubs: { Dialog: DialogStub, CellMLTextEditor: FakeEditor, MathWorkbenchEditor: FakeEditor, ParameterTable: ParameterTableStub },
     },
   })
   return wrapper
@@ -135,5 +143,21 @@ describe('InstanceEditorDialog undo (#605)', () => {
     await flushPromises()
     expect(setModel).not.toHaveBeenCalled()
     expect(setText).not.toHaveBeenCalled()
+  })
+
+  it('leaves the library to the workspace on Save, sending the whole change', async () => {
+    const stored = useLibraryStore().availableMath.get(MATH_REF)
+    mountDialog()
+    const editor = await open()
+    await report(editor, 'init', XML)
+    await report(editor, 'edit', EDITED_XML)
+
+    await wrapper.findAll('button').find((button) => button.text() === 'Save').trigger('click')
+    await flushPromises()
+
+    expect(useLibraryStore().availableMath.get(MATH_REF)).toBe(stored)
+    const [save] = wrapper.emitted('confirm')[0]
+    expect(save).toMatchObject({ id: 'a', mathRef: MATH_REF, previousMathRef: MATH_REF, isLayoutChanged: false, updateAll: true })
+    expect(save.math).toContain('<cn>1</cn>')
   })
 })
