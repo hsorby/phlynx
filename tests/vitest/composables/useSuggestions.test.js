@@ -63,15 +63,26 @@ describe('useSuggestions', () => {
     expect(calls).toEqual(['item', 'mV_per_ms'])
   })
 
-  it('leaves Enter to the caller until an arrow key has picked a name', () => {
+  it('takes the highlighted name on Enter', () => {
     const { open, onKeydown, onPick } = setup()
     open()
+    const event = key('Enter')
+    expect(onKeydown(event)).toBe(true)
+    expect(event.preventDefault).toHaveBeenCalled()
+    expect(onPick).toHaveBeenCalledWith('millivolt')
+
+    open()
+    onKeydown(key('ArrowDown'))
+    onKeydown(key('Enter'))
+    expect(onPick).toHaveBeenLastCalledWith('millisecond')
+  })
+
+  it('leaves Enter to the caller once Escape has closed the list', () => {
+    const { open, onKeydown, onPick } = setup()
+    open()
+    onKeydown(key('Escape'))
     expect(onKeydown(key('Enter'))).toBe(false)
     expect(onPick).not.toHaveBeenCalled()
-
-    onKeydown(key('ArrowDown'))
-    expect(onKeydown(key('Enter'))).toBe(true)
-    expect(onPick).toHaveBeenCalledWith('millisecond')
   })
 
   it('closes on Escape without picking, stopping it reaching the dialog', () => {
@@ -85,15 +96,15 @@ describe('useSuggestions', () => {
     expect(onKeydown(key('Escape'))).toBe(false)
   })
 
-  it('resets the highlight and arrow-key choice when the text changes', async () => {
+  it('resets the highlight to the first match when the text changes', async () => {
     const { typed, open, onKeydown, onPick, highlighted } = setup()
     open()
     onKeydown(key('ArrowDown'))
     typed.value = 'millis'
     await nextTick()
     expect(highlighted.value).toBe(0)
-    expect(onKeydown(key('Enter'))).toBe(false)
-    expect(onPick).not.toHaveBeenCalled()
+    onKeydown(key('Enter'))
+    expect(onPick).toHaveBeenCalledWith('millisecond')
   })
 
   it('does nothing without a suggest function', () => {

@@ -81,7 +81,7 @@
           <span v-else-if="fallback">Pick one, or it will revert to <strong>{{ fallback }}</strong></span>
           <span v-else>Not a valid name: pick one</span>
         </p>
-        <p class="sanitised-input__hint"><kbd>↑</kbd><kbd>↓</kbd> choose · <kbd>Tab</kbd> insert · <kbd>Esc</kbd> close</p>
+        <p class="sanitised-input__hint"><kbd>↑</kbd><kbd>↓</kbd> choose · <kbd>Enter</kbd>/<kbd>Tab</kbd> insert · <kbd>Esc</kbd> close</p>
       </div>
     </Teleport>
   </div>

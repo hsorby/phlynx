@@ -59,6 +59,36 @@ describe('SanitisedInput', () => {
     expect(wrapper.emitted('commit').at(-1)).toEqual(['mV_per_ms'])
   })
 
+  for (const keyName of ['Tab', 'Enter']) {
+    it(`commits the highlighted suggestion on ${keyName}`, async () => {
+      wrapper = mount(SanitisedInput, {
+        props: { modelValue: '', suggest: (typed) => ['millivolt', 'millisecond'].filter((n) => typed && n.startsWith(typed)) },
+        global: { plugins: [PrimeVue] },
+      })
+      const input = wrapper.find('input')
+      await input.setValue('mil')
+      await wrapper.setProps({ modelValue: 'mil' })
+
+      await input.trigger('keydown', { key: keyName })
+      expect(wrapper.emitted('commit').at(-1)).toEqual(['millivolt'])
+      expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
+    })
+  }
+
+  it('keeps the text as typed on Enter after Escape closes the list', async () => {
+    wrapper = mount(SanitisedInput, {
+      props: { modelValue: '', suggest: (typed) => ['millivolt'].filter((n) => typed && n.startsWith(typed)) },
+      global: { plugins: [PrimeVue] },
+    })
+    const input = wrapper.find('input')
+    await input.setValue('mil')
+    await wrapper.setProps({ modelValue: 'mil' })
+
+    await input.trigger('keydown', { key: 'Escape' })
+    await input.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('commit').at(-1)).toEqual(['mil'])
+  })
+
   it('shows no list without a suggest function', async () => {
     wrapper = mount(SanitisedInput, { props: { modelValue: '' }, global: { plugins: [PrimeVue] } })
     await wrapper.find('input').setValue('mil')

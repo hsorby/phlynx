@@ -1,8 +1,8 @@
 import { computed, ref, toValue, watch } from 'vue'
 
 /**
- * Keyboard-driven suggestion list for a text input, after the math editor's command list. Tab takes the highlighted
- * suggestion; Enter only does once an arrow key has picked one, so a new name that prefixes a known one is kept as typed.
+ * Keyboard-driven suggestion list for a text input, after the math editor's command list. Tab or Enter takes the
+ * highlighted suggestion; Escape closes the list, so the text can be kept as typed.
  *
  * @param typed ref or getter of the input's text
  * @param suggest ref or getter of `(typed) => Array<string | { value: string, detail?: string, onPick?: () => void }>`,
@@ -14,7 +14,6 @@ export function useSuggestions(typed, suggest, { onPick }) {
 
   const isOpen = ref(false)
   const highlighted = ref(-1)
-  const hasNavigated = ref(false)
 
   const matches = computed(() => {
     const getSuggestions = toValue(suggest)
@@ -24,7 +23,6 @@ export function useSuggestions(typed, suggest, { onPick }) {
   watch(
     () => toValue(typed),
     () => {
-      hasNavigated.value = false
       highlighted.value = matches.value.length ? 0 : -1
     }
   )
@@ -33,7 +31,6 @@ export function useSuggestions(typed, suggest, { onPick }) {
   function open() {
     if (isOpen.value) return
     isOpen.value = true
-    hasNavigated.value = false
     highlighted.value = matches.value.length ? 0 : -1
   }
 
@@ -55,7 +52,6 @@ export function useSuggestions(typed, suggest, { onPick }) {
     const count = matches.value.length
     if (!count) return
     highlighted.value = (highlighted.value + step + count) % count
-    hasNavigated.value = true
   }
 
   /**
@@ -71,9 +67,7 @@ export function useSuggestions(typed, suggest, { onPick }) {
       return false
     } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       moveHighlight(event.key === 'ArrowDown' ? 1 : -1)
-    } else if (event.key === 'Tab' && highlighted.value >= 0) {
-      pick(highlighted.value)
-    } else if (event.key === 'Enter' && hasNavigated.value) {
+    } else if ((event.key === 'Tab' || event.key === 'Enter') && highlighted.value >= 0) {
       pick(highlighted.value)
     } else if (event.key === 'Escape') {
       close()
