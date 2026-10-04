@@ -121,12 +121,14 @@ describe('libraryStore removing and restoring math', () => {
   it('removes math with its hash, defaults, layout and analysis', () => {
     store.addMath(MATH_REF, XML, true, layout)
     expect(store.getMathLayout(MATH_REF)).not.toBeNull()
-    const stored = store.availableMath.get(MATH_REF)
+    const hash = store.getMathHashByRef(MATH_REF)
+    expect(store.getMathRefsByHash(hash)).toEqual([MATH_REF])
     expect(store.getMathAnalysis(MATH_REF)).not.toBeNull()
 
     store.removeMath(MATH_REF)
     expect(store.availableMath.has(MATH_REF)).toBe(false)
-    expect(store.findMathRefByMath(stored)).toBeNull()
+    expect(store.getMathHashByRef(MATH_REF)).toBeFalsy()
+    expect(store.getMathRefsByHash(hash)).toEqual([])
     expect(store.getMathDefaults(MATH_REF).size).toBe(0)
     expect(store.getMathLayout(MATH_REF)).toBeNull()
     expect(store.getMathAnalysis(MATH_REF)).toBeNull()
@@ -170,14 +172,23 @@ describe('libraryStore removing and restoring math', () => {
     expect(store.getMathLayout(MATH_REF)).toBeNull()
   })
 
-  it('keeps a restored entry separate from later changes to the store', () => {
-    store.addMath(MATH_REF, XML, true, layout)
+  it('keeps an entry separate from later changes to the store, before and after restoring it', () => {
+    const changeStore = () => {
+      store.getMathDefaults(MATH_REF).set('k', '9')
+      store.getMathLayout(MATH_REF).changed = true
+    }
+    store.addMath(MATH_REF, XML, true, structuredClone(layout))
     const entry = store.getMathEntry(MATH_REF)
-    store.restoreMathEntry(MATH_REF, entry)
-    store.getMathDefaults(MATH_REF).set('k', '9')
+
+    changeStore()
     expect(entry.defaults.get('k')).toBe('0.5')
-    expect(store.getMathLayout(MATH_REF)).not.toBe(entry.layout)
+    expect(entry.layout).toEqual(layout)
+
+    store.restoreMathEntry(MATH_REF, entry)
     expect(store.getMathLayout(MATH_REF)).toEqual(layout)
+    changeStore()
+    expect(entry.defaults.get('k')).toBe('0.5')
+    expect(entry.layout).toEqual(layout)
   })
 
   it('removes math restored from a null entry', () => {
