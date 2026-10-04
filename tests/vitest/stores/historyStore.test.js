@@ -73,6 +73,24 @@ describe('createHistory', () => {
     expect(history.canRedo).toBe(false)
   })
 
+  it('drops commands still waiting to be batched when cleared, then batches afresh', async () => {
+    vi.useFakeTimers()
+    const log = []
+    const history = reactive(createHistory())
+    history.addCommand(loggedCommand('a', log))
+    history.startBatch()
+    history.addCommand(loggedCommand('b', log))
+
+    history.clear()
+    vi.advanceTimersByTime(25)
+    expect(history.canUndo).toBe(false)
+
+    history.addCommand(loggedCommand('c', log))
+    vi.advanceTimersByTime(25)
+    await history.undo()
+    expect(log).toEqual(['undo c'])
+  })
+
   it('batches commands added close together in the workspace store', async () => {
     vi.useFakeTimers()
     const log = []
