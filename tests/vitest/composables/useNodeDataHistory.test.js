@@ -73,10 +73,18 @@ describe('useNodeDataHistory', () => {
 
   it('records nothing during undo or redo, or off the main flow', async () => {
     await rename('a', 'first')
-    const replay = { undo: () => rename('b', 'during'), redo: () => {} }
+    const replay = { undo: () => rename('b', 'undone'), redo: () => rename('b', 'redone') }
     await history.executeAndAddCommand(replay)
+
     await history.undo()
-    expect(findNode('b').data.name).toBe('during')
+    expect(findNode('b').data.name).toBe('undone')
+    expect(history.pointerIndex).toBe(0)
+    expect(history.canRedo).toBe(true)
+
+    await history.redo()
+    expect(findNode('b').data.name).toBe('redone')
+    expect(history.pointerIndex).toBe(1)
+    expect(history.canRedo).toBe(false)
 
     history.clear()
     const macro = useNodeDataHistory(FLOW_IDS.MACRO)
@@ -143,10 +151,23 @@ describe('useNodeDataHistory', () => {
     expect(library.getGlobalConstant('g').value).toBe('7')
   })
 
-  it('skips nodes and edges that no longer exist', async () => {
-    await rename('a', 'renamed')
-    nodes.value = [findNode('b')]
-    await expect(history.undo()).resolves.toBeUndefined()
+  it('applies nothing when one of the step’s nodes or edges has since been removed', async () => {
+    const edit = () => {
+      findNode('a').data = { ...findNode('a').data, name: 'a2' }
+      findNode('b').data = { ...findNode('b').data, name: 'b2' }
+      edges.value[0].data = { couplings: [] }
+    }
+    await recordEdit({ type: 'edit-connection', nodeIds: ['a', 'b'], keys: ['name'], edgeIds: ['e'], apply: edit })
+
+    edges.value = []
+    await history.undo()
+    expect([findNode('a').data.name, findNode('b').data.name]).toEqual(['a2', 'b2'])
+
+    await history.redo()
+    edges.value = [{ id: 'e', source: 'a', target: 'b', data: { couplings: [] } }]
+    nodes.value = [findNode('a')]
+    await history.undo()
+    expect(findNode('a').data.name).toBe('a2')
   })
 
   it('restores couplings after the edge object is replaced', async () => {
