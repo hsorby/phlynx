@@ -104,6 +104,36 @@ describe('useNodeDataHistory', () => {
     expect(findNode('a').data.name).toBe('loaded')
   })
 
+  it('applies nothing when one of the step’s nodes has changed since', async () => {
+    const renameBoth = () => {
+      findNode('a').data = { ...findNode('a').data, name: 'a2' }
+      findNode('b').data = { ...findNode('b').data, name: 'b2' }
+    }
+    await recordEdit({ type: 'rename-nodes', nodeIds: ['a', 'b'], keys: ['name'], edgeIds: ['e'], apply: renameBoth })
+    findNode('b').data = { ...findNode('b').data, name: 'elsewhere' }
+
+    await history.undo()
+    expect(findNode('a').data.name).toBe('a2')
+    expect(findNode('b').data.name).toBe('elsewhere')
+  })
+
+  it('redoes a step whose added constant an undo kept for another node', async () => {
+    const library = useLibraryStore()
+    const makeGlobal = (id) => {
+      library.assignGlobalConstant('k', '1', 'second', null)
+      findNode(id).data = { ...findNode(id).data, variables: [{ name: 'k', value: '1', type: 'global_constant' }] }
+    }
+    await recordEdit({ type: 'edit-parameters', nodeIds: ['a'], keys: ['variables'], apply: () => makeGlobal('a') })
+    findNode('b').data = { ...findNode('b').data, variables: [{ name: 'k', value: '1', type: 'global_constant' }] }
+
+    await history.undo()
+    expect(library.getGlobalConstant('k')).toBeDefined()
+    expect(findNode('a').data.variables[0].type).toBe('constant')
+
+    await history.redo()
+    expect(findNode('a').data.variables[0].type).toBe('global_constant')
+  })
+
   it('leaves a constant that something else has changed since', async () => {
     const library = useLibraryStore()
     await recordEdit({ type: 'edit-global-constant', nodeIds: [], keys: [], apply: () => library.assignGlobalConstant('g', '2', 'second', null) })

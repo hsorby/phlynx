@@ -35,18 +35,13 @@ export function useNodeDataHistory(flowId = FLOW_IDS.MAIN) {
   }
 
   /**
-   * Writes copied fields back to each node whose fields still match `expected`, skipping nodes that
-   * no longer exist or that something else has changed since.
+   * Writes copied fields back, skipping nodes that no longer exist.
    *
    * @param {ReturnType<typeof captureNodeFields>} snapshot
-   * @param {ReturnType<typeof captureNodeFields>} expected
    */
-  function restoreNodeFields(snapshot, expected) {
-    const expectedById = new Map(expected.map(({ id, fields }) => [id, fields]))
+  function restoreNodeFields(snapshot) {
     snapshot.forEach(({ id, fields }) => {
-      const current = captureNodeFields([id], Object.keys(fields))[0]
-      if (!current || !isSame(current.fields, expectedById.get(id))) return
-      updateNodeData(id, detachReactivity(fields))
+      if (findNode(id)) updateNodeData(id, detachReactivity(fields))
     })
   }
 
@@ -75,18 +70,14 @@ export function useNodeDataHistory(flowId = FLOW_IDS.MAIN) {
   }
 
   /**
-   * Writes copied couplings back to each edge whose couplings still match `expected`, skipping
-   * edges that no longer exist or that something else has changed since.
+   * Writes copied couplings back, skipping edges that no longer exist.
    *
    * @param {ReturnType<typeof captureEdgeCouplings>} snapshot
-   * @param {ReturnType<typeof captureEdgeCouplings>} expected
    */
-  function restoreEdgeCouplings(snapshot, expected) {
-    const expectedById = new Map(expected.map(({ id, couplings }) => [id, couplings]))
+  function restoreEdgeCouplings(snapshot) {
     snapshot.forEach(({ id, couplings }) => {
       const edge = findEdge(id)
-      if (!edge || !isSame(edge.data?.couplings, expectedById.get(id))) return
-      edge.data = { ...edge.data, couplings: couplings && detachReactivity(couplings) }
+      if (edge) edge.data = { ...edge.data, couplings: couplings && detachReactivity(couplings) }
     })
   }
 
@@ -126,16 +117,14 @@ export function useNodeDataHistory(flowId = FLOW_IDS.MAIN) {
   }
 
   /**
-   * Puts constants back to one side of a diff, skipping any that something else has changed since.
-   * A constant the edit added is only removed while no node uses it.
+   * Puts constants back to one side of a diff. A constant the edit added is only removed while no
+   * node uses it.
    *
    * @param {ReturnType<typeof diffConstants>} changes
    * @param {'before'|'after'} side
    */
   function applyConstants(changes, side) {
     changes.forEach((change) => {
-      const expected = side === 'before' ? change.after : change.before
-      if (!isSame(libraryStore.getGlobalConstant(change.name), expected)) return
       const constant = change[side]
       if (constant) {
         libraryStore.assignGlobalConstant(change.name, constant.value, constant.units, constant.data_reference, true)
@@ -148,7 +137,8 @@ export function useNodeDataHistory(flowId = FLOW_IDS.MAIN) {
   /**
    * Runs an edit, then records it as one undo step if it changed the given node fields, the
    * couplings of the given edges, or the global constants. Off the main flow, or during undo and
-   * redo, the edit just runs.
+   * redo, the edit just runs. Undo and redo apply only while everything the step changed is as the
+   * step left it, so they never overwrite a later change or leave the step half applied.
    *
    * @param {Object} options
    * @param {string} options.type - The command type.
@@ -156,7 +146,8 @@ export function useNodeDataHistory(flowId = FLOW_IDS.MAIN) {
    * @param {Array<string>} options.keys - The node data fields the edit may change.
    * @param {Array<string>} [options.edgeIds=[]] - Edges whose couplings the edit may change.
    * @param {Function} options.apply - Makes the edit.
-   * @param {Object} [options.library] - Library changes beyond constants: `{ undo, redo }`, run after the node fields are restored.
+   * @param {Object} [options.library] - Other library state the edit changes: `isAt(side)` checks
+   *   it is as it was 'before' or 'after' the edit, and `restore(side)` puts it back, after the nodes.
    * @returns {Promise<boolean>} Whether a step was recorded, once it is on the stack.
    */
   async function recordEdit({ type, nodeIds, keys, edgeIds = [], apply, library }) {
@@ -176,24 +167,61 @@ export function useNodeDataHistory(flowId = FLOW_IDS.MAIN) {
     const isUnchanged = !library && !constants.length && isSame(nodesBefore, nodesAfter) && isSame(edgesBefore, edgesAfter)
     if (isUnchanged) return false
 
+    const states = {
+      before: { nodes: nodesBefore, edges: edgesBefore },
+      after: { nodes: nodesAfter, edges: edgesAfter },
+    }
+
+    /**
+     * Checks whether a constant is as it was on one side of the edit. A constant the edit added
+     * counts as removed while an undo kept it for another node.
+     *
+     * @param {ReturnType<typeof diffConstants>[number]} change
+     * @param {'before'|'after'} side
+     * @returns {boolean}
+     */
+    const isConstantAt = (change, side) => {
+      const current = libraryStore.getGlobalConstant(change.name)
+      if (isSame(current, change[side])) return true
+      return side === 'before' && !change.before && isSame(current, change.after)
+    }
+
+    /**
+     * Checks whether everything the step changed is as it was on one side of the edit.
+     *
+     * @param {'before'|'after'} side
+     * @returns {boolean}
+     */
+    const isAt = (side) =>
+      isSame(captureNodeFields(nodeIds, keys), states[side].nodes) &&
+      isSame(captureEdgeCouplings(edgeIds), states[side].edges) &&
+      constants.every((change) => isConstantAt(change, side)) &&
+      (library?.isAt(side) ?? true)
+
+    /**
+     * Puts everything the step changed back to one side of the edit.
+     *
+     * @param {'before'|'after'} side
+     */
+    const restore = (side) => {
+      restoreNodeFields(states[side].nodes)
+      restoreEdgeCouplings(states[side].edges)
+      library?.restore(side)
+      applyConstants(constants, side)
+    }
+
     let isApplied = true
     await history.executeAndAddCommand({
       type,
       undo: () => {
-        restoreNodeFields(nodesBefore, nodesAfter)
-        restoreEdgeCouplings(edgesBefore, edgesAfter)
-        library?.undo()
-        applyConstants(constants, 'before')
+        if (isAt('after')) restore('before')
       },
       redo: () => {
         if (isApplied) {
           isApplied = false
           return
         }
-        restoreNodeFields(nodesAfter, nodesBefore)
-        restoreEdgeCouplings(edgesAfter, edgesBefore)
-        library?.redo()
-        applyConstants(constants, 'after')
+        if (isAt('before')) restore('after')
       },
     })
     return true
