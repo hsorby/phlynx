@@ -235,6 +235,18 @@ describe('useInstanceSave', () => {
     expect(library.getMathEntry(DECAY_REF)).toEqual(savedMath)
   })
 
+  it('redoes nothing when only the math has changed since the undo', async () => {
+    await saveInstanceEdit(buildSave({ math: DECAY_WITHOUT_K }))
+    await history.undo()
+    library.addMath(DECAY_REF, DECAY_XML.replace('initial_value="0.5"', 'initial_value="9"'))
+    const changed = snapshot()
+    const changedMath = library.getMathEntry(DECAY_REF)
+
+    await history.redo()
+    expect(snapshot()).toEqual(changed)
+    expect(library.getMathEntry(DECAY_REF)).toEqual(changedMath)
+  })
+
   it('redoes nothing when the instances have changed since the undo', async () => {
     await saveInstanceEdit(fork())
     await history.undo()
