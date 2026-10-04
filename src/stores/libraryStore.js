@@ -8,6 +8,7 @@ import { extractUnitNames } from '../utils/units'
 import { analyzeMathXml } from '../services/math/analyzeMath'
 import { analyzeBatchInBackground, analyzeInBackground } from '../services/math/mathWorkerClient'
 import { separateParameters } from '../services/math/separateParameters'
+import { detachReactivity } from '../utils/reactivity'
 
 function mergeIntoStore(newModules, target) {
   const moduleMap = new Map(target.map((mod) => [mod.componentFile, mod]))
@@ -347,17 +348,56 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
+  /**
+   * Removes math with its defaults, layout and analysis, marking its modules as stubs.
+   *
+   * @param {string} mathRef
+   */
   function removeMath(mathRef) {
+    if ([GHOST_MATH_REF, NEW_MODULE_MATH_REF].includes(mathRef)) return
+
+    mathDefaults.value.delete(mathRef)
+    mathLayouts.value.delete(mathRef)
+    pendingAnalysis.delete(mathRef)
     if (!availableMath.value.has(mathRef)) return
-    
+
     removeMathHashEntry(mathRef, mathRefHash.value.get(mathRef))
     availableMath.value.delete(mathRef)
     mathRefHash.value.delete(mathRef)
     availableMathAnalysis.delete(mathRef)
-    mathDefaults.value.delete(mathRef)
-    mathLayouts.value.delete(mathRef)
-
     updateStubStatus(mathRef)
+  }
+
+  /**
+   * Gets a copy of everything stored for a math, for restoreMathEntry.
+   *
+   * @param {string} mathRef
+   * @returns {{ math: string, defaults: Map<string, string>, layout: Object|null } | null} Null if there is no such math.
+   */
+  function getMathEntry(mathRef) {
+    const math = availableMath.value.get(mathRef)
+    if (math === undefined) return null
+    const layout = getMathLayout(mathRef)
+    return { math, defaults: new Map(getMathDefaults(mathRef)), layout: layout && detachReactivity(layout) }
+  }
+
+  /**
+   * Puts a math back as getMathEntry found it, replacing its defaults and layout, or removes it
+   * when the entry is null.
+   *
+   * @param {string} mathRef
+   * @param {ReturnType<typeof getMathEntry>} entry
+   */
+  function restoreMathEntry(mathRef, entry) {
+    if (!entry) return removeMath(mathRef)
+
+    availableMath.value.set(mathRef, entry.math)
+    if (entry.defaults.size) mathDefaults.value.set(mathRef, new Map(entry.defaults))
+    else mathDefaults.value.delete(mathRef)
+    setMathLayout(mathRef, entry.layout && detachReactivity(entry.layout))
+    addMathHashEntry(mathRef, entry.math)
+    updateStubStatus(mathRef)
+    scheduleMathAnalysis(mathRef, entry.math)
   }
 
   function createModuleForMath(mathRef) {
@@ -538,6 +578,8 @@ export const useLibraryStore = defineStore('library', () => {
     removeCollection,
     removeGlobalConstant,
     removeMath,
+    getMathEntry,
+    restoreMathEntry,
     cleanupUnusedGlobalConstants,
     findMathRefByMath,
     getMathHashByRef,
