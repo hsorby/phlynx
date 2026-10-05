@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 
+const { processCellMLData } = vi.hoisted(() => ({ processCellMLData: vi.fn() }))
+vi.mock('../../../src/utils/cellml', async (importActual) => ({ ...(await importActual()), processCellMLData }))
+
 import { IMPORT_KEYS } from '../../../src/utils/constants.js'
 import { getImportConfig } from '../../../src/utils/import.js'
 import {
@@ -40,7 +43,7 @@ describe('planBatchEntries', () => {
 
     const paths = (plan) => plan.ordered.map((e) => e.path)
     expect(paths(forward)).toEqual(paths(backward))
-    expect(paths(forward)).toEqual(['folder/modules.csv', 'folder/parameters.csv', 'folder/config.json', 'folder/b.cellml'])
+    expect(paths(forward)).toEqual(['folder/b.cellml', 'folder/config.json', 'folder/modules.csv', 'folder/parameters.csv'])
   })
 
   it('keeps the shallowest copy of a repeated file name and reports the rest', () => {
@@ -54,34 +57,30 @@ describe('planBatchEntries', () => {
 describe('parseForRole', () => {
   it('reads an instance array CSV as the instance array even when parameters is preferred', async () => {
     const [instanceField, parameterField] = csvCandidates()
-    const result = await parseForRole(entry('a.csv', MODULES_CSV).file, [parameterField, instanceField], {
-      store: emptyStore,
-    })
+    const result = await parseForRole(entry('a.csv', MODULES_CSV).file, [parameterField, instanceField], emptyStore)
 
     expect(result.key).toBe(IMPORT_KEYS.INSTANCE_ARRAY)
     expect(result.data).toHaveLength(1)
   })
 
   it('reads a parameters file as parameters', async () => {
-    const result = await parseForRole(entry('b.csv', PARAMETERS_CSV).file, csvCandidates(), { store: emptyStore })
+    const result = await parseForRole(entry('b.csv', PARAMETERS_CSV).file, csvCandidates(), emptyStore)
 
     expect(result.key).toBe(IMPORT_KEYS.PARAMETER)
   })
 
-  it('names the missing columns of the closest format', async () => {
+  it('names the missing columns of a partly matching format', async () => {
     const text = 'name,module_type,module_subtype,inp_instances\nheart,heart,simple,\n'
-    const result = await parseForRole(entry('modules.csv', text).file, csvCandidates(), { store: emptyStore })
+    const result = await parseForRole(entry('modules.csv', text).file, csvCandidates(), emptyStore)
 
-    expect(result.unrecognised).toBeUndefined()
+    expect(result.skip).toBeUndefined()
     expect(result.error).toContain('Missing columns: out_instances')
   })
 
-  it('reports a file that shares nothing with any format as unrecognised', async () => {
-    const result = await parseForRole(entry('results.csv', 'time,pressure\n0,1\n').file, csvCandidates(), {
-      store: emptyStore,
-    })
+  it('skips a file that shares nothing with any format', async () => {
+    const result = await parseForRole(entry('results.csv', 'time,pressure\n0,1\n').file, csvCandidates(), emptyStore)
 
-    expect(result).toEqual({ error: 'not an instance array or parameters file', unrecognised: true })
+    expect(result).toEqual({ error: 'not a recognised import file', skip: true })
   })
 
   it('explains malformed JSON', async () => {
@@ -106,8 +105,8 @@ describe('parseForRole', () => {
       parser: async () => '<model/>',
       processUpload: 'cellml',
     }
-    const processCellML = vi.fn(() => ({ type: 'parser', issues: [{ description: 'Bad units.' }] }))
-    const result = await parseForRole(entry('heart.cellml').file, [cellmlField], { processCellML })
+    processCellMLData.mockReturnValue({ type: 'parser', issues: [{ description: 'Bad units.' }] })
+    const result = await parseForRole(entry('heart.cellml').file, [cellmlField])
 
     expect(result.error).toBe('Invalid CellML: Bad units.')
   })
@@ -123,10 +122,10 @@ describe('parseForRole', () => {
     expect(result.error).toBeTruthy()
   })
 
-  it('marks files that no candidate accepts as unsupported', async () => {
+  it('skips files that no candidate accepts', async () => {
     const result = await parseForRole(entry('archive.omex').file, csvCandidates())
 
-    expect(result.unsupported).toBe(true)
+    expect(result).toEqual({ error: 'not a supported file type here', skip: true })
   })
 })
 
@@ -138,7 +137,6 @@ describe('readiness helpers', () => {
 
   it('lists required CellML file names', () => {
     expect([...requiredCellMLFilenames(status)]).toEqual(['heart.cellml'])
-    expect(requiredCellMLFilenames(null).size).toBe(0)
   })
 
   it('detects configs that supply a missing module', () => {

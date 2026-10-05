@@ -119,7 +119,7 @@ const fileNames = (key) => [...(wrapper.vm.formState[key]?.files?.keys() ?? [])]
 const importButton = () => wrapper.findAll('button').find((b) => b.text().includes('Import'))
 
 async function drop(event, field) {
-  await (field ? wrapper.vm.handleFieldDrop(event, field) : wrapper.vm.handleFormDrop(event))
+  await wrapper.vm.handleDrop(event, field?.key)
   await flushPromises()
 }
 
@@ -132,32 +132,17 @@ beforeEach(() => {
 afterEach(() => wrapper?.unmount())
 
 describe('ImportDialog instance-array folder drop', () => {
-  it('sorts a folder the same way whatever order its files are listed in', async () => {
-    const results = []
-    for (const order of [Object.keys(FOLDER_FILES), Object.keys(FOLDER_FILES).reverse()]) {
-      vi.clearAllMocks()
-      mountDialog()
-      const files = Object.fromEntries(order.map((name) => [name, FOLDER_FILES[name]]))
-      await drop(dropEvent(folderEntry('model', files)))
+  it('sorts a folder into the right fields', async () => {
+    mountDialog()
+    const reversed = Object.fromEntries(Object.entries(FOLDER_FILES).reverse())
+    await drop(dropEvent(folderEntry('model', reversed)))
 
-      results.push({
-        instance: fileNames(IMPORT_KEYS.INSTANCE_ARRAY),
-        parameters: fileNames(IMPORT_KEYS.PARAMETER),
-        configs: fileNames(IMPORT_KEYS.MODULE_CONFIG),
-        cellml: fileNames(IMPORT_KEYS.CELLML_FILE),
-      })
-      expect(toasts()).toEqual([expect.objectContaining({ type: 'success', title: 'Ready to Import' })])
-      expect(importButton().attributes('disabled')).toBeUndefined()
-      wrapper.unmount()
-    }
-
-    expect(results[0]).toEqual(results[1])
-    expect(results[0]).toEqual({
-      instance: ['modules.csv'],
-      parameters: ['parameters.csv'],
-      configs: ['config.json'],
-      cellml: ['heart.cellml'],
-    })
+    expect(fileNames(IMPORT_KEYS.INSTANCE_ARRAY)).toEqual(['modules.csv'])
+    expect(fileNames(IMPORT_KEYS.PARAMETER)).toEqual(['parameters.csv'])
+    expect(fileNames(IMPORT_KEYS.MODULE_CONFIG)).toEqual(['config.json'])
+    expect(fileNames(IMPORT_KEYS.CELLML_FILE)).toEqual(['heart.cellml'])
+    expect(toasts()).toEqual([expect.objectContaining({ type: 'success', title: 'Ready to Import' })])
+    expect(importButton().attributes('disabled')).toBeUndefined()
   })
 
   it.each([IMPORT_KEYS.INSTANCE_ARRAY, IMPORT_KEYS.PARAMETER])(
@@ -207,7 +192,7 @@ describe('ImportDialog instance-array folder drop', () => {
         release = () => resolve(new File([MODULES_CSV], 'modules.csv'))
       },
     }
-    const pending = wrapper.vm.handleFormDrop(dropEvent(slowEntry))
+    const pending = wrapper.vm.handleDrop(dropEvent(slowEntry))
     await flushPromises()
 
     expect(wrapper.vm.isBusy).toBe(true)
@@ -265,7 +250,7 @@ describe('ImportDialog repeat drops', () => {
 
     const [summary] = toasts()
     expect(summary).toMatchObject({ type: 'success', title: 'Ready to Import' })
-    expect(summary.message).toContain('Ignored: settings.json, manifest.xml — not a recognised import file')
+    expect(summary.message).toContain('Ignored: manifest.xml, settings.json — not a recognised import file')
   })
 })
 

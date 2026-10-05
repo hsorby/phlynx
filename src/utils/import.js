@@ -4,13 +4,13 @@ import { IMPORT_KEYS, IMPORT_LABELS, RELEVANT_EXTENSIONS } from './constants'
 import { isCellML, doesComponentExistInModel } from './cellml'
 
 /** Columns an instance array CSV must have. */
-export const INSTANCE_ARRAY_COLUMNS = ['name', 'module_type', 'module_subtype', 'inp_instances', 'out_instances']
+const INSTANCE_ARRAY_COLUMNS = ['name', 'module_type', 'module_subtype', 'inp_instances', 'out_instances']
 
 /** Columns a parameters CSV must have. */
-export const PARAMETER_COLUMNS = ['variable_name', 'units', 'value', 'data_reference']
+const PARAMETER_COLUMNS = ['variable_name', 'units', 'value', 'data_reference']
 
 /** Keys each module configuration object must have. */
-export const MODULE_CONFIG_KEYS = [
+const MODULE_CONFIG_KEYS = [
   'entrance_ports',
   'exit_ports',
   'general_ports',
@@ -22,25 +22,34 @@ export const MODULE_CONFIG_KEYS = [
 ]
 
 /**
- * Builds a file format error that records which required fields were absent.
+ * Builds a format error naming the required fields a file lacks, or null when none are missing.
+ * Files with none of the required fields are marked `unrelated`.
  * @param {string} description - What the file failed to be, e.g. 'instance array file'.
  * @param {string[]} required - Required column or key names.
  * @param {string[]} present - Column or key names the file actually has.
  * @param {string} fieldNoun - 'columns' or 'keys'.
+ * @returns {Error|null}
  */
-function schemaError(description, required, present, fieldNoun) {
-  const presentSet = new Set(present)
-  const missing = required.filter((name) => !presentSet.has(name))
-  const error = new Error(`Invalid ${description} format. Missing ${fieldNoun}: ${missing.join(', ')}.`)
-  error.missing = missing
-  error.required = required
-  return error
+function missingFieldsError(description, required, present, fieldNoun) {
+  const missing = required.filter((name) => !present.includes(name))
+  if (!missing.length) return null
+  return Object.assign(new Error(`Invalid ${description} format. Missing ${fieldNoun}: ${missing.join(', ')}.`), {
+    unrelated: missing.length === required.length,
+  })
+}
+
+/**
+ * Returns the lower-case extension of a file name, including the dot.
+ * @param {string} filename
+ * @returns {string}
+ */
+export function extensionOf(filename) {
+  const dot = filename.lastIndexOf('.')
+  return dot === -1 ? '' : filename.slice(dot).toLowerCase()
 }
 
 export function hasRelevantExtension(filename) {
-  const dot = filename.lastIndexOf('.')
-  if (dot === -1) return false
-  return RELEVANT_EXTENSIONS.has(filename.slice(dot).toLowerCase())
+  return RELEVANT_EXTENSIONS.has(extensionOf(filename))
 }
 
 export function readEntries(dirReader) {
@@ -263,9 +272,9 @@ const parseInstanceArray = (file, libraryStore = null) => {
       transformHeader: (header) => header.trim(),
       transform: (v) => v.trim(),
       complete: (results) => {
-        const columns = results.meta?.fields ?? Object.keys(results.data?.[0] ?? {})
-        if (!INSTANCE_ARRAY_COLUMNS.every((column) => columns.includes(column))) {
-          reject(schemaError('instance array file', INSTANCE_ARRAY_COLUMNS, columns, 'columns'))
+        const schemaError = missingFieldsError('instance array file', INSTANCE_ARRAY_COLUMNS, results.meta.fields, 'columns')
+        if (schemaError) {
+          reject(schemaError)
           return
         }
         if (!results.data?.length) {
@@ -305,10 +314,8 @@ const parseConfigJson = (file) => {
         if (parsed.length === 0) {
           throw new Error('Config file must be a non-empty array of configuration objects.')
         }
-        const keys = Object.keys(parsed[0] ?? {})
-        if (!MODULE_CONFIG_KEYS.every((key) => keys.includes(key))) {
-          throw schemaError('module configuration file', MODULE_CONFIG_KEYS, keys, 'keys')
-        }
+        const schemaError = missingFieldsError('module configuration file', MODULE_CONFIG_KEYS, Object.keys(parsed[0] ?? {}), 'keys')
+        if (schemaError) throw schemaError
         resolve(parsed)
       } catch (err) {
         reject(err)
@@ -325,9 +332,9 @@ export const parseParametersFile = (file) => {
       skipEmptyLines: true,
 
       complete: (results) => {
-        const columns = results.meta?.fields ?? Object.keys(results.data?.[0] ?? {})
-        if (!PARAMETER_COLUMNS.every((column) => columns.includes(column))) {
-          reject(schemaError('parameter file', PARAMETER_COLUMNS, columns, 'columns'))
+        const schemaError = missingFieldsError('parameter file', PARAMETER_COLUMNS, results.meta.fields, 'columns')
+        if (schemaError) {
+          reject(schemaError)
           return
         }
 
@@ -429,7 +436,6 @@ const configs = {
         limit: 1,
         required: true,
         parser: parseInstanceArray,
-        requiresStore: true,
         isDynamic: true,
       },
       {

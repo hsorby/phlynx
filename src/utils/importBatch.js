@@ -1,26 +1,8 @@
-import { IMPORT_KEYS } from './constants'
 import { processCellMLData } from './cellml'
 import { normaliseConfig, parseMathRef } from './config'
+import { extensionOf } from './import'
 
 const MAX_LISTED = 5
-
-const ROLE_NOUNS = {
-  [IMPORT_KEYS.INSTANCE_ARRAY]: 'instance array',
-  [IMPORT_KEYS.PARAMETER]: 'parameters file',
-  [IMPORT_KEYS.MODULE_CONFIG]: 'module configuration',
-  [IMPORT_KEYS.CELLML_FILE]: 'CellML file',
-  [IMPORT_KEYS.OMEX]: 'COMBINE archive',
-}
-
-/**
- * Returns the lower-case extension of a file name, including the dot.
- * @param {string} filename
- * @returns {string}
- */
-export function extensionOf(filename) {
-  const dot = filename.lastIndexOf('.')
-  return dot === -1 ? '' : filename.slice(dot).toLowerCase()
-}
 
 /**
  * Checks whether a field's `accept` list allows the file's extension.
@@ -28,7 +10,7 @@ export function extensionOf(filename) {
  * @param {string} filename
  * @returns {boolean}
  */
-export function acceptsExtension(field, filename) {
+function acceptsExtension(field, filename) {
   if (!field?.accept) return true
   return field.accept
     .split(',')
@@ -36,31 +18,17 @@ export function acceptsExtension(field, filename) {
     .includes(extensionOf(filename))
 }
 
-function importPriority(filename) {
-  const ext = extensionOf(filename)
-  if (ext === '.csv') return 0
-  if (ext === '.json') return 1
-  if (ext === '.cellml' || ext === '.xml') return 2
-  return 3
-}
-
 function pathDepth(path) {
   return path.split('/').length
 }
 
 /**
- * Orders entries (CSV, JSON, then CellML; shallower paths first; then by
- * path) and keeps one entry per file name.
+ * Orders entries (shallower paths first, then by path) and keeps one entry per file name.
  * @param {{ file: File, path: string }[]} entries
  * @returns {{ ordered: { file: File, path: string }[], duplicates: { name: string, reason: string }[] }}
  */
 export function planBatchEntries(entries) {
-  const sorted = [...entries].sort(
-    (a, b) =>
-      importPriority(a.file.name) - importPriority(b.file.name) ||
-      pathDepth(a.path) - pathDepth(b.path) ||
-      a.path.localeCompare(b.path)
-  )
+  const sorted = [...entries].sort((a, b) => pathDepth(a.path) - pathDepth(b.path) || a.path.localeCompare(b.path))
 
   const keptByName = new Map()
   const duplicates = []
@@ -75,47 +43,21 @@ export function planBatchEntries(entries) {
   return { ordered: [...keptByName.values()], duplicates }
 }
 
-/**
- * Turns a parser error into a short reason for the user.
- * @param {unknown} error
- * @returns {string}
- */
-export function describeImportError(error) {
-  if (error instanceof SyntaxError) return `not valid JSON (${error.message})`
-  return error?.message || String(error)
-}
-
-function roleNoun(field) {
-  return ROLE_NOUNS[field.key] ?? field.label ?? 'supported file'
-}
-
-/** True when an error shows the file shares nothing with the expected format. */
-function isUnrelatedFormat(error) {
-  if (error?.unrelated) return true
-  return Array.isArray(error?.missing) && error.missing.length === error.required?.length
-}
-
 function isUnexpectedError(error) {
   return error instanceof Error && error.constructor !== Error && !(error instanceof SyntaxError)
 }
 
 /**
- * Builds the result for a file that no candidate field could parse. Files that share no columns or
- * keys with any expected format are reported as unrecognised, not as failures.
- * @param {{ field: Object, error: unknown }[]} failures
- * @returns {{ error: string, unrecognised?: boolean }}
+ * Builds the result for a file that no candidate field could parse. Files unrelated to every
+ * expected format are skipped rather than reported as failures.
+ * @param {unknown[]} errors - One parser error per candidate field.
+ * @returns {{ error: string, skip?: boolean }}
  */
-function describeFailures(failures) {
-  const related = failures.filter(({ error }) => !isUnrelatedFormat(error))
-  if (related.length === 0) {
-    const nouns = failures.map(({ field }) => roleNoun(field)).join(' or ')
-    const article = /^[aeiou]/i.test(nouns) ? 'an' : 'a'
-    return { error: `not ${article} ${nouns}`, unrecognised: true }
-  }
-  const closest = related.reduce((best, current) =>
-    (current.error?.missing?.length ?? Infinity) < (best.error?.missing?.length ?? Infinity) ? current : best
-  )
-  return { error: describeImportError(closest.error) }
+function describeFailures(errors) {
+  const error = errors.find((e) => !e?.unrelated)
+  if (!error) return { error: 'not a recognised import file', skip: true }
+  if (error instanceof SyntaxError) return { error: `not valid JSON (${error.message})` }
+  return { error: error?.message || String(error) }
 }
 
 /**
@@ -123,21 +65,19 @@ function describeFailures(failures) {
  * role whose parser succeeds. Nothing outside the returned object is changed.
  * @param {File} file
  * @param {Object[]} candidates - Import field configs, in order of preference.
- * @param {Object} [options]
- * @param {Object} [options.store] - Library store, for parsers with `requiresStore`.
- * @param {Function} [options.processCellML] - CellML processor for fields with `processUpload: 'cellml'`.
- * @returns {Promise<{ key: string, field: Object, data: any, components?: any[] } | { error: string, unsupported?: boolean, unrecognised?: boolean }>}
+ * @param {Object} [store] - Library store, passed to each parser.
+ * @returns {Promise<{ key: string, field: Object, data: any, components?: any[] } | { error: string, skip?: boolean }>}
  */
-export async function parseForRole(file, candidates, { store = null, processCellML = processCellMLData } = {}) {
+export async function parseForRole(file, candidates, store = null) {
   const accepting = candidates.filter((field) => acceptsExtension(field, file.name))
   if (accepting.length === 0) {
-    return { error: 'not a supported file type here', unsupported: true }
+    return { error: 'not a supported file type here', skip: true }
   }
 
-  const failures = []
+  const errors = []
   for (const field of accepting) {
     try {
-      const parsed = field.requiresStore ? await field.parser(file, store) : await field.parser(file)
+      const parsed = await field.parser(file, store)
       const data = parsed?.data ?? parsed
 
       if (field.processUpload === 'config') {
@@ -145,7 +85,7 @@ export async function parseForRole(file, candidates, { store = null, processCell
         data.forEach(normaliseConfig)
       }
       if (field.processUpload === 'cellml') {
-        const result = processCellML(data)
+        const result = processCellMLData(data)
         if (result?.type !== 'success') {
           throw new Error(`Invalid CellML: ${result?.issues?.[0]?.description ?? 'the model could not be read.'}`)
         }
@@ -156,32 +96,29 @@ export async function parseForRole(file, candidates, { store = null, processCell
       if (isUnexpectedError(error)) {
         console.error(`[importBatch] Unexpected error while reading "${file.name}" as ${field.key}:`, error)
       }
-      failures.push({ field, error })
+      errors.push(error)
     }
   }
-  return describeFailures(failures)
+  return describeFailures(errors)
 }
 
 /**
  * Lists the CellML file names that readiness says are still needed.
- * @param {Object|null} status - Result of `checkResourcesAreLoaded`.
+ * @param {Object} status - Result of `checkResourcesAreLoaded`.
  * @returns {Set<string>}
  */
 export function requiredCellMLFilenames(status) {
-  const mathRefs = status?.missingResources?.math ?? []
-  return new Set([...mathRefs].map((mathRef) => parseMathRef(mathRef).componentFile).filter(Boolean))
+  return new Set([...status.missingResources.math].map((mathRef) => parseMathRef(mathRef).componentFile).filter(Boolean))
 }
 
 /**
  * Checks whether a parsed config file supplies any module that readiness says is missing.
  * @param {Object[]} configs - Parsed module configuration array.
- * @param {Object|null} status - Result of `checkResourcesAreLoaded`.
+ * @param {Object} status - Result of `checkResourcesAreLoaded`.
  * @returns {boolean}
  */
 export function providesMissingModule(configs, status) {
-  const missing = status?.missingResources?.modules
-  if (!missing?.size || !Array.isArray(configs)) return false
-  return configs.some((config) => missing.has(`${config.module_type}:${config.module_subtype}`))
+  return configs.some((config) => status.missingResources.modules.has(`${config.module_type}:${config.module_subtype}`))
 }
 
 /**
@@ -229,7 +166,7 @@ function formatReasonLines(prefix, items) {
  * @param {{ count: number, folderName: string }|null} [result.autoFill] - Files added from the connected folder.
  * @returns {{ type: string, title: string, message: string, duration: number }}
  */
-export function buildBatchSummary({ placed, failed, skipped, isInstanceArrayImport, hasInstanceArray, readiness, autoFill = null }) {
+export function buildBatchSummary({ placed = [], failed = [], skipped = [], isInstanceArrayImport, hasInstanceArray, readiness, autoFill = null }) {
   const lines = []
   const addedParts = []
   if (placed.length) addedParts.push(pluralise(placed.length, 'file'))

@@ -19,7 +19,7 @@
       @dragenter.prevent="handleFormDragEnter"
       @dragover.prevent
       @dragleave.prevent="handleFormDragLeave"
-      @drop.prevent="handleFormDrop"
+      @drop.prevent="handleDrop($event)"
     >
       <form class="import-form" :class="{ 'is-loading-content': isBusy }">
         <div class="form-header" v-if="requiredFieldsCount > 0">
@@ -38,10 +38,8 @@
               <div
                 class="file-input-box"
                 :class="{ 'is-valid': isFieldReady(field.key) }"
-                @dragenter.prevent="handleFieldDragEnter(field.key)"
                 @dragover.prevent
-                @dragleave.prevent="handleFieldDragLeave(field.key)"
-                @drop.stop.prevent="(event) => handleFieldDrop(event, field)"
+                @drop.stop.prevent="handleDrop($event, field.key)"
               >
                 <div class="file-names-area" @click.stop>
                   <span
@@ -280,8 +278,7 @@ const stagedFiles = ref({
 
 // Counts batches in flight so the dialog stays locked until every queued batch has finished.
 const pendingBatchCount = ref(0)
-const isProcessing = computed(() => pendingBatchCount.value > 0)
-const isBusy = computed(() => isLoading.value || isProcessing.value)
+const isBusy = computed(() => isLoading.value || pendingBatchCount.value > 0)
 let lastSummary = null
 // Bumped on every form reset, so slow background work can tell the form it read has gone.
 let formGeneration = 0
@@ -328,8 +325,6 @@ let isAutoFillQueued = false
 const { filesFromDataTransfer } = useFileDrop()
 const isDraggingOverForm = ref(false)
 let formDragCounter = 0
-const fieldsDraggedOver = ref(new Set())
-const fieldDragCounters = new Map() // fieldKey -> counter
 
 function handleFormDragEnter() {
   if (isBusy.value) return
@@ -345,27 +340,9 @@ function handleFormDragLeave() {
   }
 }
 
-function handleFieldDragEnter(fieldKey) {
-  if (isBusy.value) return
-  const count = (fieldDragCounters.get(fieldKey) || 0) + 1
-  fieldDragCounters.set(fieldKey, count)
-  fieldsDraggedOver.value.add(fieldKey)
-}
-
-function handleFieldDragLeave(fieldKey) {
-  if (isBusy.value) return
-  const count = Math.max(0, (fieldDragCounters.get(fieldKey) || 0) - 1)
-  fieldDragCounters.set(fieldKey, count)
-  if (count === 0) {
-    fieldsDraggedOver.value.delete(fieldKey)
-  }
-}
-
 function resetAllDragState() {
   formDragCounter = 0
   isDraggingOverForm.value = false
-  fieldDragCounters.clear()
-  fieldsDraggedOver.value = new Set()
 }
 
 const blockOutsideDrop = (e) => {
@@ -782,11 +759,11 @@ async function parseEntries(entries, candidates) {
   const failed = []
   const skipped = []
   for (const { file } of entries) {
-    const result = await parseForRole(file, candidates, { store: libraryStore })
+    const result = await parseForRole(file, candidates, libraryStore)
     if (!result.error) {
       parsed.push({ ...result, file })
-    } else if (result.unsupported || result.unrecognised) {
-      skipped.push({ name: file.name, reason: result.unsupported ? result.error : 'not a recognised import file' })
+    } else if (result.skip) {
+      skipped.push({ name: file.name, reason: result.error })
     } else {
       failed.push({ name: file.name, reason: result.error })
     }
@@ -874,6 +851,21 @@ function showSummary(options) {
 }
 
 /**
+ * Shows the batch summary for the dialog's current state.
+ * @param {Object} result - `placed`, `failed`, `skipped` and `autoFill` for `buildBatchSummary`.
+ */
+function summarise(result) {
+  showSummary(
+    buildBatchSummary({
+      isInstanceArrayImport: isInstanceArrayImport.value,
+      hasInstanceArray: Boolean(getInstanceArrayPayload()),
+      readiness: importReadiness.value,
+      ...result,
+    })
+  )
+}
+
+/**
  * Sorts dropped or selected files into the dialog as one batch and reports the result once.
  * @param {{ file: File, path: string }[]} entries
  * @param {Object} [options]
@@ -918,7 +910,6 @@ async function runImportBatch(entries, { preferredKey, isSelection = false }) {
   // A single file picked for its own field already shows its result in the form.
   const isQuietSelection =
     isSelection &&
-    entries.length === 1 &&
     placed.length === 1 &&
     placed[0].key === preferredKey &&
     !failed.length &&
@@ -932,17 +923,7 @@ async function runImportBatch(entries, { preferredKey, isSelection = false }) {
     return
   }
 
-  showSummary(
-    buildBatchSummary({
-      placed,
-      failed,
-      skipped,
-      isInstanceArrayImport: isInstanceArrayImport.value,
-      hasInstanceArray: Boolean(getInstanceArrayPayload()),
-      readiness: importReadiness.value,
-      autoFill,
-    })
-  )
+  summarise({ placed, failed, skipped, autoFill })
 }
 
 const handleFileChange = async (event, field) => {
@@ -954,13 +935,6 @@ const handleFileChange = async (event, field) => {
     selectedFiles.map((file) => ({ file, path: file.name })),
     { preferredKey: field.key, isSelection: true }
   )
-}
-
-function notifyNothingToImport() {
-  notify.warning({
-    title: 'Nothing to Import',
-    message: 'No supported files were found in what you dropped.',
-  })
 }
 
 /**
@@ -976,19 +950,11 @@ async function handleDrop(event, preferredKey) {
   await withBusy('Reading dropped files…', async () => {
     const entries = await filesFromDataTransfer(event.dataTransfer)
     if (!entries.length) {
-      notifyNothingToImport()
+      notify.warning({ title: 'Nothing to Import', message: 'No supported files were found in what you dropped.' })
       return
     }
     await importBatch(entries, { preferredKey })
   })
-}
-
-function handleFieldDrop(event, field) {
-  return handleDrop(event, field.key)
-}
-
-function handleFormDrop(event) {
-  return handleDrop(event)
 }
 
 // --- Folder-based auto-import ---
@@ -1044,33 +1010,14 @@ function attemptAutoFillFromFolder() {
   isAutoFillQueued = true
   return withImportLock(async () => {
     isAutoFillQueued = false
-    const result = await runAutoFillFromFolder()
-    if (!result?.count) return
-
-    const isReady = importReadiness.value?.resourcesAreLoaded
-    const files = `${result.count} file${result.count === 1 ? '' : 's'}`
-    showSummary({
-      type: isReady ? 'success' : 'warning',
-      title: 'Folder Import',
-      message: isReady
-        ? `Loaded ${files} from connected folder "${escapeHtml(result.folderName)}". Ready to import.`
-        : `Loaded ${files} from connected folder "${escapeHtml(result.folderName)}". Some required files are still missing.`,
-      duration: isReady ? 3000 : 6000,
-    })
+    const autoFill = await runAutoFillFromFolder()
+    if (autoFill?.count) summarise({ autoFill })
   })
 }
 
-// Batches run the auto-fill themselves; this covers readiness changes from removing files.
-watch(importReadiness, (status) => {
-  if (!status || status.resourcesAreLoaded || isBusy.value) return
-  attemptAutoFillFromFolder()
-})
-
-watch(folderStatus, (status) => {
-  if (status !== 'connected' || isBusy.value) return
-  if (importReadiness.value && !importReadiness.value.resourcesAreLoaded) {
-    attemptAutoFillFromFolder()
-  }
+// Batches run the auto-fill themselves; this covers folder connects and files being removed.
+watch([importReadiness, folderStatus], () => {
+  if (!isBusy.value) attemptAutoFillFromFolder()
 })
 
 function updateDynamicFields(completionStatus) {
