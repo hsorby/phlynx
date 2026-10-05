@@ -249,7 +249,7 @@
 </template>
 
 <script setup>
-import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { computed, onUnmounted, ref, shallowRef, toRaw, watch } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
@@ -270,6 +270,7 @@ import { isTypeFixed, typeOptionsFor } from '../utils/parameterRows'
 import { detachReactivity } from '../utils/reactivity'
 import { hasValueCell, valuePlaceholder } from '../utils/variables'
 
+import { useNodeDataHistory } from '../composables/useNodeDataHistory'
 import { useResizableAside } from '../composables/useResizableAside'
 import { useVirtualScrollerOptions } from '../composables/useVirtualScrollerOptions'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
@@ -320,6 +321,7 @@ const libraryStore = useLibraryStore()
 const inspectionModuleStore = useInspectionModuleStore()
 
 const { getSelectedNodes, updateNodeData, userSelectionActive } = useVueFlow(FLOW_IDS.MAIN)
+const { recordEdit } = useNodeDataHistory(FLOW_IDS.MAIN)
 
 const selectedNode = computed(() => getSelectedNodes.value[0] || null)
 
@@ -386,7 +388,12 @@ watch(
 )
 
 function handleGlobalConstantChange(row) {
-  libraryStore.assignGlobalConstant(row.name, row.value, row.units, row.data_reference, { override: true })
+  recordEdit({
+    type: 'edit-global-constant',
+    nodeIds: [],
+    keys: [],
+    apply: () => libraryStore.assignGlobalConstant(row.name, row.value, row.units, row.data_reference, true),
+  })
 }
 
 onUnmounted(() => {
@@ -399,6 +406,8 @@ const parameterRows = ref([])
 const parameterRowsNode = shallowRef(null)
 const parameterSearch = ref('')
 let pendingRowsRequestId = 0
+// The variables the sidebar last wrote, so only changes made elsewhere (e.g. undo) rebuild the rows.
+let lastWrittenVariables = null
 
 const filteredParameterRows = computed(() => {
   const term = parameterSearch.value.trim().toLowerCase()
@@ -454,23 +463,40 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () => toRaw(parameterRowsNode.value?.data?.variables),
+  (variables) => {
+    if (!variables || variables === lastWrittenVariables) return
+    parameterRows.value = buildParameterRows(parameterRowsNode.value)
+  }
+)
+
 function persistParameterRows() {
   // Write back to the node the rows came from, which may briefly differ from the current selection.
-  if (!parameterRowsNode.value) return
-
-  parameterRows.value.forEach((row) => {
-    if (row.type === 'global_constant') {
-      libraryStore.assignGlobalConstant(row.name, row.value, row.units, row.data_reference)
-    }
-  })
+  const node = parameterRowsNode.value
+  if (!node) return
 
   // Merge only what the sidebar edits, so saved fields it doesn't show (e.g. stateRole, initialiser) survive.
   const editsByName = new Map(parameterRows.value.map((row) => [row.name, row]))
-  const variables = (parameterRowsNode.value.data?.variables || []).map((variable) => {
+  const variables = (node.data?.variables || []).map((variable) => {
     const edited = editsByName.get(variable.name)
     return edited ? { ...variable, value: edited.value, type: edited.type } : variable
   })
-  updateNodeData(parameterRowsNode.value.id, { variables: detachReactivity(variables) })
+
+  recordEdit({
+    type: 'edit-parameters',
+    nodeIds: [node.id],
+    keys: ['variables'],
+    apply: () => {
+      parameterRows.value.forEach((row) => {
+        if (row.type === 'global_constant') {
+          libraryStore.assignGlobalConstant(row.name, row.value, row.units, row.data_reference)
+        }
+      })
+      lastWrittenVariables = detachReactivity(variables)
+      updateNodeData(node.id, { variables: lastWrittenVariables })
+    },
+  })
 }
 
 function handleParameterValueChange() {

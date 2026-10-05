@@ -108,11 +108,13 @@ import { isEditableVariableType, isEmpty } from '../utils/variables'
 import { detachReactivity } from '../utils/reactivity'
 import { HANDLE_VARIANT } from '../utils/constants'
 import { useHandleManagement } from '../composables/useHandleManagement'
+import { useNodeDataHistory } from '../composables/useNodeDataHistory'
 
 import '../assets/vueflownode.css'
 
-const { addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes, viewport } = useVueFlow()
+const { id: flowId, addEdges, edges, removeEdges, updateNodeData, updateNodeInternals, nodes, viewport } = useVueFlow()
 const { beginGhostActivation, revertPendingGhostIfUnused } = useHandleManagement()
+const { recordEdit } = useNodeDataHistory(flowId)
 const historyStore = useFlowHistoryStore()
 const libraryStore = useLibraryStore()
 
@@ -325,8 +327,12 @@ function saveEdit() {
     return
   }
 
-  // Update the node's data in the store
-  updateNodeData(props.id, { name: sanitisedName })
+  recordEdit({
+    type: 'rename-node',
+    nodeIds: [props.id],
+    keys: ['name'],
+    apply: () => updateNodeData(props.id, { name: sanitisedName }),
+  })
   isEditing.value = false
 }
 
