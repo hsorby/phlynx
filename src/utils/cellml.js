@@ -15,9 +15,13 @@ import {
 
 let _libcellml = null
 let resolveLibCellMLReady
-const libcellmlReady = new Promise((resolve) => {
+let rejectLibCellMLReady
+const libcellmlReady = new Promise((resolve, reject) => {
   resolveLibCellMLReady = resolve
+  rejectLibCellMLReady = reject
 })
+// Avoid an unhandled rejection when nothing is waiting on readiness.
+libcellmlReady.catch(() => {})
 
 export function initLibCellML(instance) {
   _libcellml = instance
@@ -25,7 +29,15 @@ export function initLibCellML(instance) {
 }
 
 /**
- * Resolves once initLibCellML has been called and CellML parsing is available.
+ * Rejects whenLibCellMLReady() when libCellML fails to load.
+ */
+export function rejectLibCellML(error) {
+  rejectLibCellMLReady(error)
+}
+
+/**
+ * Resolves once initLibCellML has been called and CellML parsing is available;
+ * rejects if rejectLibCellML is called first.
  */
 export function whenLibCellMLReady() {
   return libcellmlReady
