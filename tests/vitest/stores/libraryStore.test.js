@@ -5,6 +5,7 @@ import { CellMLTextParser } from 'cellml-text-editor'
 import { useLibraryStore } from '../../../src/stores/libraryStore.js'
 import { buildInstance } from '../../../src/services/import/buildWorkflow.js'
 import { ensureLibCellmlReady } from '../helpers/libcellml-bootstrap.js'
+import { GHOST_MATH_REF } from '../../../src/utils/constants.js'
 
 const MATH_REF = 'file:decay'
 const XML = `<model xmlns="http://www.cellml.org/cellml/2.0#" name="decay">
@@ -97,6 +98,104 @@ describe('libraryStore math layouts', () => {
     restored.loadState(state)
     expect(restored.getMathLayout(MATH_REF)).toEqual(layout)
     expect(restored.getMathLayout('file:other')).toBeNull()
+  })
+})
+
+describe('libraryStore removing and restoring math', () => {
+  let store, layout
+  const moduleRef = 'decay:default'
+
+  beforeAll(async () => {
+    await ensureLibCellmlReady()
+    layout = new CellMLTextParser({ simplified: true }).parse('// Exponential decay\node(x, t) = -k * x;\n', {
+      componentName: 'decay',
+      baseXml: XML,
+    }).layout
+  })
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    store = useLibraryStore()
+  })
+
+  it('removes math with its hash, defaults, layout and analysis', () => {
+    store.addMath(MATH_REF, XML, true, layout)
+    expect(store.getMathLayout(MATH_REF)).not.toBeNull()
+    const hash = store.getMathHashByRef(MATH_REF)
+    expect(store.getMathRefsByHash(hash)).toEqual([MATH_REF])
+    expect(store.getMathAnalysis(MATH_REF)).not.toBeNull()
+
+    store.removeMath(MATH_REF)
+    expect(store.availableMath.has(MATH_REF)).toBe(false)
+    expect(store.getMathHashByRef(MATH_REF)).toBeFalsy()
+    expect(store.getMathRefsByHash(hash)).toEqual([])
+    expect(store.getMathDefaults(MATH_REF).size).toBe(0)
+    expect(store.getMathLayout(MATH_REF)).toBeNull()
+    expect(store.getMathAnalysis(MATH_REF)).toBeNull()
+  })
+
+  it('marks the math’s modules as stubs, until the math is added again', () => {
+    store.addMathFile('file', [{ name: 'decay', math: XML }])
+    store.removeMath(MATH_REF)
+    expect(store.availableModules.get(moduleRef).isStub).toBe(true)
+
+    store.addMath(MATH_REF, XML)
+    expect(store.availableModules.get(moduleRef).isStub).toBeUndefined()
+  })
+
+  it('skips a collection entry whose module is missing', () => {
+    store.addMathFile('file', [{ name: 'decay', math: XML }])
+    store.availableModules.delete(moduleRef)
+    expect(() => store.removeMath(MATH_REF)).not.toThrow()
+  })
+
+  it('never removes the ghost math', () => {
+    store.addMath(GHOST_MATH_REF, XML)
+    store.removeMath(GHOST_MATH_REF)
+    expect(store.availableMath.has(GHOST_MATH_REF)).toBe(true)
+  })
+
+  it('restores overwritten math exactly, replacing defaults and layout', () => {
+    store.addMath(MATH_REF, XML)
+    const entry = store.getMathEntry(MATH_REF)
+    const stored = store.availableMath.get(MATH_REF)
+
+    const other = XML.replace('initial_value="0.5"', 'initial_value="2"').replace('<variable name="t"', '<variable name="y" units="metre" initial_value="3"/>\n    <variable name="t"')
+    store.addMath(MATH_REF, other, true, layout)
+    expect(store.getMathDefaults(MATH_REF).get('y')).toBe('3')
+    expect(store.getMathLayout(MATH_REF)).not.toBeNull()
+
+    store.restoreMathEntry(MATH_REF, entry)
+    expect(store.availableMath.get(MATH_REF)).toBe(stored)
+    expect(store.findMathRefByMath(stored)).toBe(MATH_REF)
+    expect(store.getMathDefaults(MATH_REF)).toEqual(new Map([['x_init', '1.5'], ['k', '0.5']]))
+    expect(store.getMathLayout(MATH_REF)).toBeNull()
+  })
+
+  it('keeps an entry separate from later changes to the store, before and after restoring it', () => {
+    const changeStore = () => {
+      store.getMathDefaults(MATH_REF).set('k', '9')
+      store.getMathLayout(MATH_REF).changed = true
+    }
+    store.addMath(MATH_REF, XML, true, structuredClone(layout))
+    const entry = store.getMathEntry(MATH_REF)
+
+    changeStore()
+    expect(entry.defaults.get('k')).toBe('0.5')
+    expect(entry.layout).toEqual(layout)
+
+    store.restoreMathEntry(MATH_REF, entry)
+    expect(store.getMathLayout(MATH_REF)).toEqual(layout)
+    changeStore()
+    expect(entry.defaults.get('k')).toBe('0.5')
+    expect(entry.layout).toEqual(layout)
+  })
+
+  it('removes math restored from a null entry', () => {
+    expect(store.getMathEntry(MATH_REF)).toBeNull()
+    store.addMath(MATH_REF, XML)
+    store.restoreMathEntry(MATH_REF, null)
+    expect(store.availableMath.has(MATH_REF)).toBe(false)
   })
 })
 
