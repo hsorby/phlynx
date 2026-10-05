@@ -115,3 +115,89 @@ describe('boundary values in a migrated workspace', () => {
     expect(suppliedNa).toHaveLength(1)
   })
 })
+
+// A hub whose q drains through v_sum into leaves, each passing on a flow v = k * u of the hub's u.
+const HUB_XML = `<model xmlns="http://www.cellml.org/cellml/2.0#" name="hub">
+  <component name="hub">
+    <variable name="t" units="second" interface="public"/>
+    <variable name="q" units="dimensionless" initial_value="q_init" interface="public"/>
+    <variable name="q_init" units="dimensionless" initial_value="1" interface="public"/>
+    <variable name="v_sum" units="per_second" interface="public"/>
+    <variable name="u" units="dimensionless" interface="public"/>
+    <math xmlns="http://www.w3.org/1998/Math/MathML">
+      <apply><eq/>
+        <apply><diff/><bvar><ci>t</ci></bvar><ci>q</ci></apply>
+        <apply><minus/><ci>v_sum</ci></apply>
+      </apply>
+      <apply><eq/><ci>u</ci><ci>q</ci></apply>
+    </math>
+  </component>
+</model>`
+const LEAF_XML = `<model xmlns="http://www.cellml.org/cellml/2.0#" name="leaf">
+  <component name="leaf">
+    <variable name="u" units="dimensionless" interface="public"/>
+    <variable name="v" units="per_second" interface="public"/>
+    <variable name="k" units="per_second" initial_value="0.5" interface="public"/>
+    <math xmlns="http://www.w3.org/1998/Math/MathML">
+      <apply><eq/><ci>v</ci><apply><times/><ci>k</ci><ci>u</ci></apply></apply>
+    </math>
+  </component>
+</model>`
+
+describe('generateFlattenedModel multiport couplings', () => {
+  let store
+
+  beforeAll(async () => {
+    await ensureLibCellmlReady()
+  }, 120000)
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    store = useLibraryStore()
+    store.addUnitsFile({ componentFile: 'units.cellml', model: UNITS })
+    store.addMath('file:hub', HUB_XML)
+    store.addMath('file:leaf', LEAF_XML)
+  })
+
+  /** A node built from the stored math, its port inputs typed as boundary conditions. */
+  function buildNode(id, mathRef, ports, values = {}) {
+    const portVariables = new Set(ports.flatMap((port) => port.variables))
+    const rows = reconcileRows(analyzeMathXml(store.availableMath.get(mathRef)), [], {
+      defaults: store.getMathDefaults(mathRef),
+    }).map((row) => ({
+      ...row,
+      type: row.type === 'constant' && portVariables.has(row.name) ? 'boundary_condition' : row.type,
+      ...(row.name in values && { value: values[row.name] }),
+    }))
+    return { id, type: 'instanceNode', data: { name: id, mathRef, variables: rows, ports } }
+  }
+
+  /** An edge between two nodes, coupling their first ports of each label. */
+  function connect(source, target, id = `${source.id}_${target.id}`) {
+    return { id, source: source.id, target: target.id, data: { couplings: resolvePortCouplings(source.data.ports, target.data.ports) } }
+  }
+
+  const leafPorts = () => [
+    { portType: 'entrance_ports', label: 'flow', variables: ['v'], multiportType: 'None' },
+    { portType: 'entrance_ports', label: 'pressure', variables: ['u'], multiportType: 'None' },
+  ]
+
+  /** The MathML of the generated summation component. */
+  async function summationMath(nodes, edges) {
+    const text = await (await generateFlattenedModel(nodes, edges, store)).text()
+    return text.match(/<component name="generated_summations">[\s\S]*?<\/component>/)?.[0] ?? ''
+  }
+
+  it('adds every term of a Sum port on the source side of its edges', async () => {
+    const hub = buildNode('hub', 'file:hub', [
+      { portType: 'exit_ports', label: 'flow', variables: ['v_sum'], multiportType: 'Sum' },
+      { portType: 'exit_ports', label: 'pressure', variables: ['u'], multiportType: 'True' },
+    ])
+    const leaves = ['leaf_1', 'leaf_2'].map((id) => buildNode(id, 'file:leaf', leafPorts()))
+
+    const math = await summationMath([hub, ...leaves], leaves.map((leaf) => connect(hub, leaf)))
+    expect(math).toMatch(/<plus\/>/)
+    expect(math).not.toMatch(/<minus\/>/)
+    expect(math.match(/<ci>op_v[^<]*<\/ci>/g)).toHaveLength(2)
+  })
+})
