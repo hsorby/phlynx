@@ -41,7 +41,8 @@ export function unitSuggestions(typed, names, limit = 8) {
 
 // ── Units expansion ───────────────────────────────────────────────────────
 
-const PREFIX_POWERS = new Map(
+/** CellML prefix names and their powers of ten. */
+export const PREFIX_POWERS = new Map(
   Object.entries({
     yotta: 24, zetta: 21, exa: 18, peta: 15, tera: 12, giga: 9, mega: 6, kilo: 3, hecto: 2, deca: 1, deka: 1,
     deci: -1, centi: -2, milli: -3, micro: -6, nano: -9, pico: -12, femto: -15, atto: -18, zepto: -21, yocto: -24,
@@ -64,15 +65,12 @@ const SI_UNITS = new Map(
     henry: base({ kg: 1, m: 2, s: -2, A: -2 }),
     hertz: base({ s: -1 }),
     joule: base({ kg: 1, m: 2, s: -2 }),
-    kat: base({ mol: 1, s: -1 }),
     katal: base({ mol: 1, s: -1 }),
     kelvin: base({ K: 1 }),
     kilogram: base({ kg: 1 }),
-    liter: base({ m: 3 }, -3),
     litre: base({ m: 3 }, -3),
     lumen: base({ cd: 1 }),
     lux: base({ cd: 1, m: -2 }),
-    meter: base({ m: 1 }),
     metre: base({ m: 1 }),
     mole: base({ mol: 1 }),
     newton: base({ kg: 1, m: 1, s: -2 }),
@@ -108,15 +106,12 @@ const BUILT_IN_UNITS = new Map(
     henry: symbol('H'),
     hertz: symbol('Hz'),
     joule: symbol('J'),
-    kat: symbol('kat'),
     katal: symbol('kat'),
     kelvin: symbol('K'),
     kilogram: symbol('kg'),
-    liter: symbol('L'),
     litre: symbol('L'),
     lumen: symbol('lm'),
     lux: symbol('lx'),
-    meter: symbol('m'),
     metre: symbol('m'),
     mole: symbol('mol'),
     newton: symbol('N'),
@@ -300,6 +295,35 @@ export function formatUnitExpansion({ coefficient, power, dimensions, affine }, 
 }
 
 /**
+ * Reads the `<units>` definitions of several units files into one map.
+ *
+ * @param {string[]} models - Units files' XML, in library order; the first definition of a name wins.
+ * @returns {Map<string, Array<{ units: string, prefix: number, exponent: number, multiplier: number }>>}
+ */
+export function mergeUnitDefinitions(models) {
+  const definitions = new Map()
+  for (const model of models) {
+    for (const [name, parts] of extractUnitDefinitions(model)) {
+      if (!definitions.has(name)) definitions.set(name, parts)
+    }
+  }
+  return definitions
+}
+
+/**
+ * Expands one definition whose parts are all CellML built-in units, as expandUnits would.
+ *
+ * @param {Array<{ units: string, prefix: number, exponent: number, multiplier: number }>} parts
+ * @param {{ builtIn?: boolean }} [options] - builtIn: stop at CellML's built-in units.
+ * @returns {string} The formatted expansion, or '' when a part isn't a built-in units.
+ */
+export function expandDefinition(parts, { builtIn = false } = {}) {
+  if (!parts.length) return ''
+  const expansion = combineParts('', parts, new Map(), new Map(), builtIn ? BUILT_IN_UNITS : SI_UNITS)
+  return expansion ? formatUnitExpansion(expansion, { builtIn }) : ''
+}
+
+/**
  * Expands every built-in and library units name, for display: to SI base units, or only as far as CellML's
  * built-in units so "mV" reads "10⁻³ V". Built-in units are never inferred from base units.
  *
@@ -308,13 +332,7 @@ export function formatUnitExpansion({ coefficient, power, dimensions, affine }, 
  * @returns {Map<string, string>} Each resolvable name's formatted expansion.
  */
 export function expandUnits(models, { builtIn = false } = {}) {
-  const definitions = new Map()
-  for (const model of models) {
-    for (const [name, parts] of extractUnitDefinitions(model)) {
-      if (!definitions.has(name)) definitions.set(name, parts)
-    }
-  }
-
+  const definitions = mergeUnitDefinitions(models)
   const leaves = builtIn ? BUILT_IN_UNITS : SI_UNITS
   const cache = new Map()
   const expansions = new Map()

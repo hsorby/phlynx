@@ -102,6 +102,15 @@ describe('reconcileRows (simple mode)', () => {
     expect(rows.t.data_reference).toBeNull()
   })
 
+  it('gives an initialiser whose units drifted its state units', () => {
+    const previous = [
+      { name: 'x', stateRole: 'state', initialiser: 'x_init', units: 'metre', type: 'variable' },
+      { name: 'x_init', value: '1', units: 'm', type: 'constant', access: 'no_access' },
+    ]
+    const rows = byName(reconcileRows(analysis({ referenced: ['x'], stateVariables: ['x'] }), previous))
+    expect(rows.x_init.units).toBe('metre')
+  })
+
   it('does not mutate previous rows', () => {
     const previous = [{ name: 'V', units: 'volt', value: '1', type: 'constant', access: 'access' }]
     const snapshot = JSON.parse(JSON.stringify(previous))
@@ -131,6 +140,20 @@ describe('reconcileRows (advanced mode)', () => {
     expect(rows.I.textInit).toBeUndefined()
     expect(rows.t).toMatchObject({ type: 'variable', access: 'access' })
     expect(rows.V).toMatchObject({ stateRole: 'state', type: 'variable', textInit: '-0.08' })
+  })
+
+  it('keeps the units the text declares, even where a state and its initialiser differ', () => {
+    const math = analysis({
+      referenced: ['V', 'V0'],
+      stateVariables: ['V'],
+      declared: [
+        { name: 'V', units: 'volt', interface: '', initialValue: 'V0' },
+        { name: 'V0', units: 'millivolt', interface: '', initialValue: '1' },
+      ],
+    })
+    const rows = byName(reconcileRows(math, [], { mode: 'advanced' }))
+    expect(rows.V).toMatchObject({ units: 'volt', initialiser: 'V0' })
+    expect(rows.V0.units).toBe('millivolt')
   })
 })
 
