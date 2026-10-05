@@ -1909,7 +1909,8 @@ async function processImportedOmexArchive(archivePayload, result, fileName) {
       for (const p of parameters.globalParameters) {
         libraryStore.assignGlobalConstant(p.name, p.value, p.units, p.data_reference)
       }
-      // A global the CellML doesn't set keeps its value from older math.
+      // After the CellML globals, and without overwriting, so a global the CellML doesn't set keeps
+      // its value from older math.
       for (const [name, { value, units, data_reference }] of loaded?.globalValues ?? []) {
         libraryStore.assignGlobalConstant(name, value, units, data_reference)
       }
@@ -2723,11 +2724,7 @@ const pasteSelection = async (atMouse = false) => {
 
   // Nodes copied from an older version keep values in their math; they move into the rows here.
   const clipboardMath = Object.values(sourceClipboard.storeSnapshot ?? {}).map((entry) => [entry.mathRef, entry.math])
-  const { nodes: clipboardNodes, globalValues } = separateNodeParameters(sourceClipboard.nodes, clipboardMath)
-  // A global this workspace doesn't have yet keeps its value from older math.
-  for (const [name, { value, units, data_reference }] of globalValues) {
-    libraryStore.assignGlobalConstant(name, value, units, data_reference)
-  }
+  const clipboardNodes = separateNodeParameters(sourceClipboard.nodes, clipboardMath).nodes
 
   if (sourceClipboard.storeSnapshot) {
     for (const entry of Object.values(sourceClipboard.storeSnapshot)) {
