@@ -154,13 +154,12 @@
 
           <Button
             iconOnly
-            :disabled="true"
             style="margin-left: 10px"
             icon="pi pi-cog"
             size="small"
             variant="text"
             severity="info"
-            v-tooltip.bottom="{ value: 'Settings coming soon', showDelay: 300 }"
+            v-tooltip.bottom="{ value: 'Settings', showDelay: 300 }"
             @click="onOpenSettingsDialog"
           />
 
@@ -267,18 +266,7 @@
         >
           Report Issue
         </a>
-        <!-- Light / Dark Mode Toggle Slider -->
-        <div
-          class="theme-slider-container"
-          style="display: flex; align-items: center; margin-left: 20px; gap: 8px"
-          v-tooltip.bottom="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
-        >
-          <ToggleSwitch :model-value="isDarkMode" @change="toggleDarkMode" aria-label="Toggle Theme">
-            <template #handle="{ checked }">
-              <i :class="['pi', checked ? 'pi-moon' : 'pi-sun']" style="font-size: 0.75rem"></i>
-            </template>
-          </ToggleSwitch>
-        </div>
+        <ThemeToggle style="margin-left: 20px" />
       </div>
     </header>
 
@@ -487,7 +475,7 @@
 
   <SimSettingsDialog v-model="simSettingsDialogVisible" :nodes="nodes" />
 
-  <SettingsDialog v-model="settingsDialogVisible" @confirm="onSettingsConfirm" />
+  <SettingsDialog v-model="settingsDialogVisible" />
 
   <ImportDialog
     ref="importDialogRef"
@@ -528,7 +516,7 @@ import InputText from 'primevue/inputtext'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import ConfirmDialog from 'primevue/confirmdialog'
-import ToggleSwitch from 'primevue/toggleswitch'
+import ThemeToggle from '../components/ThemeToggle.vue'
 import { Toast } from 'primevue'
 import { useToast } from 'primevue/usetoast'
 
@@ -553,7 +541,6 @@ import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { useLoadFromUrl } from '../composables/useLoadFromUrl'
 import { createUrlLoaders } from '../services/urlLoaders'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
-import { useColorScheme } from '../composables/useColorScheme'
 import { useGtm } from '../composables/useGtm'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
 import { useImportExportSend } from '../composables/useImportExportSend'
@@ -605,6 +592,7 @@ import {
   NEW_INSTANCE_MODULE_REF,
   NUM_GHOST_HANDLES_TOP_BOT,
   NUM_GHOST_HANDLES_LEFT_RIGHT,
+  PHLYNX_PROJECT_VERSION,
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
@@ -633,8 +621,8 @@ function onContextSidebarResize(width) {
 
 const fitViewParams = computed(() => ({
   padding: {
-    left: 0.5,
-    right: 0,
+    left: `${libraryPanelWidth.value + 40}px`,
+    right: 0.1,
     top: 0.1,
     bottom: 0.1,
   },
@@ -645,7 +633,6 @@ const SEARCH_BAR_TOP = 150
 const TOAST_GAP_BELOW_SEARCH_BAR = 16
 const toastTop = computed(() => SEARCH_BAR_TOP + TOAST_GAP_BELOW_SEARCH_BAR)
 
-const { isDarkMode, toggleDarkMode } = useColorScheme()
 
 const {
   addEdges,
@@ -916,8 +903,8 @@ const inspectionModuleStore = useInspectionModuleStore()
 const historyStore = useFlowHistoryStore()
 const simulationSettingsStore = useSimulationSettingsStore()
 const omexStore = useOmexStore()
-const { loadFromInstanceArray } = useLoadFromInstanceArray()
-const { loadFromCellML } = useLoadFromCellML()
+const { loadFromInstanceArray } = useLoadFromInstanceArray({ fitViewParams })
+const { loadFromCellML } = useLoadFromCellML({ fitViewParams })
 const { capture } = useScreenshot()
 const { trackEvent } = useGtm()
 const { clearWorkspace } = useClearWorkspace()
@@ -2112,10 +2099,6 @@ async function onMacroBuilderGenerate(data) {
   macroBuilderDialogVisible.value = false
 }
 
-async function onSettingsConfirm(data) {
-  settingsDialogVisible.value = false
-}
-
 function handleMacroGeneration(macroPayload) {
   // Insert at the center of the current view.
   const screenCenterX = dimensions.value.width / 2
@@ -2513,7 +2496,7 @@ function snapshotFlowState() {
 
   return JSON.stringify({
     id: 'phlynx-flow-snapshot',
-    version: '1.0.0',
+    version: PHLYNX_PROJECT_VERSION,
     nodeData,
     edges: flowState.edges,
     mathLibrary: mathLibraryObject,
@@ -3103,7 +3086,9 @@ watch(
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem 1rem;
+  height: var(--view-header-height);
+  box-sizing: border-box;
+  padding: 0 var(--view-header-padding-x);
   border-bottom: 1px solid var(--p-content-border-color);
   background-color: var(--p-content-background);
 }

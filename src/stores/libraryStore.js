@@ -2,9 +2,16 @@ import { defineStore } from 'pinia'
 import { parseLayout } from 'cellml-text-editor'
 import { ref, computed, markRaw } from 'vue'
 import { normaliseConfig, buildModule, parseMathRef } from '../utils/config'
-import { AFFINE_UNIT_CONVERSIONS, NEW_MODULE_MATH_REF, GHOST_MATH_REF, STANDARD_UNITS } from '../utils/constants'
+import {
+  AFFINE_UNIT_CONVERSIONS,
+  GENERATED_UNITS_FILE,
+  NEW_MODULE_MATH_REF,
+  GHOST_MATH_REF,
+  STANDARD_UNITS,
+} from '../utils/constants'
 import { cyrb53 } from '../utils/misc'
-import { extractUnitNames } from '../utils/units'
+import { expandUnits, extractUnitDefinitions, extractUnitNames, mergeUnitDefinitions } from '../utils/units'
+import { unitsModelXml } from '../utils/unitExpression'
 import { analyzeMathXml } from '../services/math/analyzeMath'
 import { analyzeBatchInBackground, analyzeInBackground } from '../services/math/mathWorkerClient'
 import { separateParameters } from '../services/math/separateParameters'
@@ -521,6 +528,19 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
+  /**
+   * Adds a units made from a typed expression to the generated units file, creating the file if needed.
+   *
+   * @param {{ name: string, parts: Array<{ units: string, prefix: number, exponent: number, multiplier: number }> }} units
+   *   From interpretUnitExpression; every part is a CellML built-in units.
+   */
+  function addGeneratedUnits({ name, parts }) {
+    const file = availableUnits.value.find((f) => f.componentFile === GENERATED_UNITS_FILE)
+    const definitions = extractUnitDefinitions(file?.model)
+    definitions.set(name, parts)
+    addUnitsFile({ componentFile: GENERATED_UNITS_FILE, model: unitsModelXml(definitions) })
+  }
+
   // ---- GETTERS ----
 
   function getState() {
@@ -548,6 +568,17 @@ export const useLibraryStore = defineStore('library', () => {
     return names
   })
 
+  /** Every library units definition, the first of each name winning. Derived, so never saved. */
+  const unitDefinitions = computed(() => mergeUnitDefinitions(availableUnits.value.map((file) => file.model)))
+
+  /** Each units name's SI base-unit expansion, for display. Derived, so never saved. */
+  const unitExpansions = computed(() => expandUnits(availableUnits.value.map((file) => file.model)))
+
+  /** Each units name expanded only as far as CellML's built-in units, e.g. "10⁻³ V". Derived, so never saved. */
+  const builtInUnitExpansions = computed(() =>
+    expandUnits(availableUnits.value.map((file) => file.model), { builtIn: true })
+  )
+
   function hasUnits(name) {
     return availableUnitNames.value.has(name)
   }
@@ -563,6 +594,9 @@ export const useLibraryStore = defineStore('library', () => {
     // Derived State 
     globalVariables,
     availableUnitNames,
+    unitExpansions,
+    builtInUnitExpansions,
+    unitDefinitions,
 
     // Actions
     addConfigFile,
@@ -570,6 +604,7 @@ export const useLibraryStore = defineStore('library', () => {
     addMathFile,
     addMath,
     addUnitsFile,
+    addGeneratedUnits,
     assignGlobalConstant,
     createMathHash,
     resetGlobalConstants,
