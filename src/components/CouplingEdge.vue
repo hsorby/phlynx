@@ -40,13 +40,15 @@
 
 <script setup>
 import { computed } from 'vue'
-import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath } from '@vue-flow/core'
-import { couplingConflicts } from '../utils/multiport'
+import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, useVueFlow } from '@vue-flow/core'
+import { couplingConflicts, sharedSumConflicts } from '../utils/multiport'
 
 defineOptions({ inheritAttrs: false })
 
 const props = defineProps({
   id: { type: String, required: true },
+  source: { type: String, required: true },
+  target: { type: String, required: true },
   sourceX: { type: Number, required: true },
   sourceY: { type: Number, required: true },
   targetX: { type: Number, required: true },
@@ -63,9 +65,19 @@ const props = defineProps({
 // [path, labelX, labelY, ...], drawn as the default smoothstep edge is.
 const path = computed(() => getSmoothStepPath(props))
 
-const conflicts = computed(() =>
-  (props.data?.couplings ?? []).flatMap(({ sourcePort, targetPort }) => couplingConflicts(sourcePort, targetPort))
-)
+const { edges, findNode } = useVueFlow()
+
+// A variable summed through two ports of one node shows on every edge into those ports.
+const sharedSums = computed(() => {
+  const ends = [props.source, props.target]
+  const touching = edges.value.filter((edge) => ends.includes(edge.source) || ends.includes(edge.target))
+  return sharedSumConflicts(touching, (id) => findNode(id)?.data?.name ?? id).get(props.id) ?? []
+})
+
+const conflicts = computed(() => [
+  ...(props.data?.couplings ?? []).flatMap(({ sourcePort, targetPort }) => couplingConflicts(sourcePort, targetPort)),
+  ...sharedSums.value,
+])
 
 const ownMarker = computed(() => props.selected || conflicts.value.length > 0)
 const markerId = `coupling-edge-arrow-${props.id}`

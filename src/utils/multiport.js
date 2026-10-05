@@ -8,7 +8,8 @@
  * - None: a plain link, on a port that takes one connection. A port never mixes None with the other
  *   types: beside them, None reads as True.
  * - True: a plain link shared with every connected module.
- * - Sum: the sum, over every connection, of the neighbour's paired variable.
+ * - Sum: the sum, over every connection, of the neighbour's paired variable. A variable sums through
+ *   one port only (see sharedSumConflicts).
  * - Multiply: reaches the neighbour's paired variable times its factor.
  *
  * Imports nothing, so config.js, cellml.js and boundaryValues.js can all use it.
@@ -90,6 +91,46 @@ export function couplingConflicts(sourcePort, targetPort) {
       ? [`"${sourcePort.variables[i]}" and "${targetPort.variables[i]}" are both ${type} variables.`]
       : []
   )
+}
+
+/**
+ * Why edges can't be exported because a node's variable sums through more than one port, by edge id.
+ * Only connected ports count; a coupling whose ports are malformed is left to couplingConflicts.
+ *
+ * @param {Object[]} edges - Edges with source, target and data.couplings.
+ * @param {(nodeId: string) => string} [nameOf] - A node's name for the messages.
+ * @returns {Map<string, string[]>}
+ */
+export function sharedSumConflicts(edges, nameOf = (id) => id) {
+  const sums = new Map() // `nodeId::variable` → { nodeId, varName, labels, edgeIds }
+  for (const edge of edges) {
+    for (const { sourcePort, targetPort } of edge.data?.couplings ?? []) {
+      for (const [nodeId, port] of [[edge.source, sourcePort], [edge.target, targetPort]]) {
+        let types
+        try {
+          types = variableTypes(port)
+        } catch {
+          continue
+        }
+        types.forEach((type, i) => {
+          const varName = port.variables[i]
+          if (type !== 'Sum' || !varName) return
+          const key = `${nodeId}::${varName}`
+          if (!sums.has(key)) sums.set(key, { nodeId, varName, labels: new Set(), edgeIds: new Set() })
+          sums.get(key).labels.add(port.label)
+          sums.get(key).edgeIds.add(edge.id)
+        })
+      }
+    }
+  }
+  const conflicts = new Map()
+  for (const { nodeId, varName, labels, edgeIds } of sums.values()) {
+    if (labels.size < 2) continue
+    const ports = [...labels].map((label) => `"${label}"`).join(' and ')
+    const message = `"${nameOf(nodeId)}" sums "${varName}" through ports ${ports}; a variable can be summed through one port only.`
+    for (const id of edgeIds) conflicts.set(id, [...(conflicts.get(id) ?? []), message])
+  }
+  return conflicts
 }
 
 // ── Editing ─────────────────────────────────────────────────────────────────

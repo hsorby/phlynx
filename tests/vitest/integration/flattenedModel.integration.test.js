@@ -311,4 +311,21 @@ describe('generateFlattenedModel multiport couplings', () => {
     const leaf = buildNode('leaf', 'file:leaf', [vesselPort('entrance_ports', ['v'], 'None')], { u: '1' })
     expect(() => generateFlattenedModel([hub, leaf], [connect(hub, leaf)], store)).toThrow(/same number of variables/)
   })
+
+  it('rejects a variable summed through two ports', () => {
+    const hub = buildNode('hub', 'file:hub', [
+      { portType: 'exit_ports', label: 'flow', variables: ['v_sum'], multiportType: 'Sum' },
+      { portType: 'exit_ports', label: 'drain', variables: ['v_sum'], multiportType: 'Sum' },
+    ])
+    const leaves = ['leaf_1', 'leaf_2'].map((id) => buildNode(id, 'file:leaf', leafPorts(), { u: '1' }))
+    const edges = leaves.map((leaf, i) => ({
+      id: `e${i}`,
+      source: hub.id,
+      target: leaf.id,
+      data: { couplings: [{ sourcePort: hub.data.ports[i], targetPort: leaf.data.ports[0] }] },
+    }))
+    expect(() => generateFlattenedModel([hub, ...leaves], edges, store)).toThrow(
+      '"hub" sums "v_sum" through ports "flow" and "drain"; a variable can be summed through one port only.'
+    )
+  })
 })
