@@ -370,7 +370,11 @@ export function separateNodeParameters(nodes, mathEntries) {
     carryStateInitialValues(variables, previousRows, initialisers)
     for (const row of variables) {
       if (row.type !== 'global_constant' || !values.has(row.name) || globalValues.has(row.name)) continue
-      globalValues.set(row.name, { value: values.get(row.name), units: row.units, data_reference: row.data_reference ?? null })
+      globalValues.set(row.name, {
+        value: values.get(row.name),
+        units: row.units,
+        data_reference: row.data_reference ?? null,
+      })
     }
     return { ...node, data: { ...node.data, variables } }
   })
