@@ -1501,6 +1501,50 @@ export function getModelComponentNames(modelString) {
   return componentNames
 }
 
+/**
+ * Renames a component in a CellML model, along with every encapsulation and connection reference to it.
+ *
+ * @param {string} modelString - CellML XML.
+ * @param {string} fromName
+ * @param {string} toName
+ * @returns {string} The renamed model's XML.
+ */
+export function renameModelComponent(modelString, fromName, toName) {
+  const doc = new DOMParser().parseFromString(modelString, 'application/xml')
+  const renameAttribute = (tagName, attribute) => {
+    Array.from(doc.getElementsByTagNameNS(CELLML_NS, tagName)).forEach((el) => {
+      if (el.getAttribute(attribute) === fromName) el.setAttribute(attribute, toName)
+    })
+  }
+  renameAttribute('component', 'name')
+  renameAttribute('component_ref', 'component')
+  renameAttribute('map_components', 'component_1')
+  renameAttribute('map_components', 'component_2')
+  renameAttribute('connection', 'component_1')
+  renameAttribute('connection', 'component_2')
+  return new XMLSerializer().serializeToString(doc)
+}
+
+/**
+ * Renames a component in a CellML text layout, so its comments still match it after a rename.
+ *
+ * @param {import('cellml-text-editor').TextLayout | null} layout
+ * @param {string} fromName
+ * @param {string} toName
+ * @returns {import('cellml-text-editor').TextLayout | null} A renamed copy, or the layout unchanged when empty.
+ */
+export function renameLayoutComponent(layout, fromName, toName) {
+  if (!layout) return layout
+  const rename = (item) => (item.name === fromName ? { ...item, name: toName } : item)
+  return {
+    ...layout,
+    components: layout.components.map(rename),
+    ...(layout.model && {
+      model: { ...layout.model, blocks: layout.model.blocks.map((block) => (block.kind === 'comp' ? rename(block) : block)) },
+    }),
+  }
+}
+
 export function extractVoiAndParametersFromModel(modelString, parameterInfo) {
   const mappedParameters = {}
   const garbageCollector = new Set()

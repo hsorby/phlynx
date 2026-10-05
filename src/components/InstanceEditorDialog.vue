@@ -389,6 +389,17 @@
       </div>
     </Transition>
 
+    <ComponentSaveAsDialog
+      v-if="saveAs.visible"
+      v-model="saveAs.visible"
+      :message="saveAs.message"
+      :initial-name="saveAs.initialName"
+      :file="componentFile"
+      :is-taken="isComponentNameTaken"
+      @confirm="(name) => resolveSaveAs(name)"
+      @cancel="resolveSaveAs(null)"
+    />
+
     <!-- DIALOG FOOTER -->
     <template #footer>
       <div class="dialog-footer" v-if="!loading && !isScreenTooSmall">
@@ -440,6 +451,7 @@ import ParameterTable from './ParameterTable.vue'
 import SanitisedInput from './SanitisedInput.vue'
 import MultiportKey from './MultiportKey.vue'
 import PortVariableChips from './PortVariableChips.vue'
+import ComponentSaveAsDialog from './dialogs/ComponentSaveAsDialog.vue'
 
 import { useLibraryStore } from '../stores/libraryStore'
 import { useIssueFilter } from '../composables/useIssueFilter'
@@ -453,12 +465,12 @@ import { isInitialisable } from '../services/math/variableKinds'
 
 import { isEmpty, syncInitialiserUnits } from '../utils/variables'
 import { getUnknownUnitsNotice, isValueMissing } from '../utils/parameterRows'
-import { PORT_TYPE_OPTIONS } from '../utils/constants'
+import { PORT_TYPE_OPTIONS, PROTECTED_MATH_REFS } from '../utils/constants'
 import { cleanName, sanitiseName } from '../utils/identifiers'
 import { detachReactivity } from '../utils/reactivity'
 import { waitUntilStable } from '../utils/layout'
 import { notify } from '../utils/notify'
-import { getModelComponentNames } from '../utils/cellml'
+import { getModelComponentNames, renameLayoutComponent, renameModelComponent } from '../utils/cellml'
 import { findPort } from '../utils/ports'
 import { isMultiport, multiplyVariables, setMultiport, setPortVariables, variableFactor } from '../utils/multiport'
 import { suggestUnits } from '../utils/unitExpression'
@@ -1071,7 +1083,42 @@ async function handleCancel() {
   emit('update:modelValue', false)
 }
 
-// TODO: math overwrite confirmation should let user "fork" if there is a library conflict.
+// ── Save As ──────────────────────────────────────────────────────────────────
+const saveAs = ref({ visible: false, message: '', initialName: '' })
+let saveAsResolver = null
+
+/**
+ * Explains why a component name can't be saved in this file, or returns '' when it can.
+ *
+ * @param {string} name
+ * @returns {string}
+ */
+function isComponentNameTaken(name) {
+  const mathRef = `${componentFile.value}:${name}`
+  if (PROTECTED_MATH_REFS.has(mathRef)) return `"${name}" is a template and can't be overwritten.`
+  if (mathRef !== props.mathRef && store.availableMath.has(mathRef)) return `A component named "${name}" already exists.`
+  return ''
+}
+
+/**
+ * Asks for a new component name before saving math that can't keep its current one.
+ *
+ * @param {string} message - Why a new name is needed.
+ * @returns {Promise<string|null>} The new name, or null if cancelled.
+ */
+function promptComponentSaveAs(message) {
+  resolveSaveAs(null)
+  saveAs.value = { visible: true, message, initialName: sanitiseName(editableName.value ?? '') }
+  return new Promise((resolve) => {
+    saveAsResolver = resolve
+  })
+}
+
+function resolveSaveAs(name) {
+  saveAsResolver?.(name)
+  saveAsResolver = null
+}
+
 async function handleMathOverwrite() {
   const message = siblingCount.value > 0 ? `This will affect ${siblingCount.value} other instances. ` : ''
   return confirm({
@@ -1192,6 +1239,8 @@ async function handleSave() {
   // 3. Check the math's new reference
   let newMathRef = props.mathRef
   const isMathChanged = session.isDirty()
+  let mathToSave = currentModel.value
+  let layoutToSave = currentLayout.value
   if (isMathChanged) {
     const componentNames = getModelComponentNames(currentModel.value)
     if (!componentNames || componentNames.length === 0) {
@@ -1201,7 +1250,15 @@ async function handleSave() {
     const newComponentName = componentNames[0].trim()
 
     newMathRef = `${componentFile.value}:${newComponentName}`
-    if (store.availableMath.has(newMathRef)) {
+    if (PROTECTED_MATH_REFS.has(newMathRef)) {
+      const renamed = await promptComponentSaveAs(
+        `"${newComponentName}" is the template new instances start from. Save your changes as a new component instead.`
+      )
+      if (!renamed) return
+      mathToSave = renameModelComponent(mathToSave, newComponentName, renamed)
+      layoutToSave = renameLayoutComponent(layoutToSave, newComponentName, renamed)
+      newMathRef = `${componentFile.value}:${renamed}`
+    } else if (store.availableMath.has(newMathRef)) {
       const overwrite = await handleMathOverwrite()
       if (!overwrite) return
     }
@@ -1222,8 +1279,8 @@ async function handleSave() {
       name: editableName.value,
       mathRef: newMathRef,
       previousMathRef: props.mathRef,
-      math: isMathChanged ? currentModel.value : null,
-      layout: currentLayout.value,
+      math: isMathChanged ? mathToSave : null,
+      layout: layoutToSave,
       isLayoutChanged: !isMathChanged && session.isLayoutDirty(),
       globalConstants: parameterRows.value
         .filter((row) => row.type === 'global_constant')

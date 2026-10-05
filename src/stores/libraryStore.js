@@ -5,7 +5,7 @@ import { normaliseConfig, buildModule, parseMathRef } from '../utils/config'
 import {
   AFFINE_UNIT_CONVERSIONS,
   GENERATED_UNITS_FILE,
-  NEW_MODULE_MATH_REF,
+  PROTECTED_MATH_REFS,
   GHOST_MATH_REF,
   STANDARD_UNITS,
 } from '../utils/constants'
@@ -361,7 +361,7 @@ export const useLibraryStore = defineStore('library', () => {
    * @param {string} mathRef
    */
   function removeMath(mathRef) {
-    if ([GHOST_MATH_REF, NEW_MODULE_MATH_REF].includes(mathRef)) return
+    if (PROTECTED_MATH_REFS.has(mathRef)) return
 
     mathDefaults.value.delete(mathRef)
     mathLayouts.value.delete(mathRef)
@@ -408,7 +408,7 @@ export const useLibraryStore = defineStore('library', () => {
   }
 
   function createModuleForMath(mathRef) {
-    if ([GHOST_MATH_REF, NEW_MODULE_MATH_REF].includes(mathRef)) return
+    if (PROTECTED_MATH_REFS.has(mathRef)) return
 
     const { componentName } = parseMathRef(mathRef)
     const moduleRef = `${componentName}:default`

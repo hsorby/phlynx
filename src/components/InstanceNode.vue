@@ -150,9 +150,10 @@ function openInstanceEditor(defaultTab = 'parameters') {
   })
 }
 
-const componentName = props.data.mathRef.split(':')[1]
+// Computed, so the card follows a save that moves the node to new math.
+const componentName = computed(() => props.data.mathRef.split(':')[1])
 
-const mathFile = props.data.mathRef.split(':')[0]
+const mathFile = computed(() => props.data.mathRef.split(':')[0])
 
 const domainTypeClass = computed(() => {
   return props.data.domainType ? `domain-type-${props.data.domainType}` : 'domain-type-default'

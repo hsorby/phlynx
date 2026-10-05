@@ -18,6 +18,8 @@ vi.mock('@vue-flow/core', async (importOriginal) => ({
 vi.mock('../../../src/utils/layout', () => ({ waitUntilStable: () => Promise.resolve() }))
 
 const { default: InstanceEditorDialog } = await import('../../../src/components/InstanceEditorDialog.vue')
+const { default: ComponentSaveAsDialog } = await import('../../../src/components/dialogs/ComponentSaveAsDialog.vue')
+const { NEW_MODULE_MATH_REF } = await import('../../../src/utils/constants.js')
 
 const MATH_REF = 'file:decay'
 const XML = `<model xmlns="http://www.cellml.org/cellml/2.0#" name="decay">
@@ -173,5 +175,55 @@ describe('InstanceEditorDialog undo (#605)', () => {
     })
     expect(save.math).toContain('<cn>1</cn>')
     expect(save.variables.find((row) => row.name === 'x0')).toMatchObject({ type: 'global_constant' })
+  })
+})
+
+describe('InstanceEditorDialog new module template (#634)', () => {
+  const TEMPLATE_XML = XML.replace(/"decay"/g, '"new_module"')
+  const EDITED_TEMPLATE_XML = EDITED_XML.replace(/"decay"/g, '"new_module"')
+
+  beforeAll(async () => {
+    await ensureLibCellmlReady()
+  })
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    useLibraryStore().addMath(NEW_MODULE_MATH_REF, TEMPLATE_XML)
+  })
+
+  async function saveEditedTemplate() {
+    mountDialog({ mathRef: NEW_MODULE_MATH_REF, initialName: 'my_instance' })
+    const editor = await open()
+    await report(editor, 'init', TEMPLATE_XML)
+    await report(editor, 'edit', EDITED_TEMPLATE_XML)
+    await wrapper.findAll('button').find((button) => button.text() === 'Save').trigger('click')
+    await flushPromises()
+    return wrapper.findComponent(ComponentSaveAsDialog)
+  }
+
+  it('saves edited template math under the new component name', async () => {
+    const saveAs = await saveEditedTemplate()
+    expect(saveAs.exists()).toBe(true)
+    expect(wrapper.emitted('confirm')).toBeUndefined()
+
+    saveAs.vm.$emit('confirm', 'my_comp')
+    await flushPromises()
+
+    const [save] = wrapper.emitted('confirm')[0]
+    expect(save.mathRef).toBe(`${NEW_MODULE_MATH_REF.split(':')[0]}:my_comp`)
+    expect(save.previousMathRef).toBe(NEW_MODULE_MATH_REF)
+    expect(save.math).toContain('<component name="my_comp"')
+    expect(save.math).not.toContain('<component name="new_module"')
+    expect(useLibraryStore().availableMath.get(NEW_MODULE_MATH_REF)).not.toContain('<cn>1</cn>')
+  })
+
+  it('keeps the editor open when the rename is cancelled', async () => {
+    const saveAs = await saveEditedTemplate()
+    saveAs.vm.$emit('cancel')
+    await flushPromises()
+
+    expect(wrapper.emitted('confirm')).toBeUndefined()
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
   })
 })
