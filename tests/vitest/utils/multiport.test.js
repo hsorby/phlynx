@@ -3,7 +3,18 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import { normaliseConfig, restorePorts } from '../../../src/utils/config.js'
-import { couplingConflicts, multiplyFactor, parseMultiport, variableTypes } from '../../../src/utils/multiport.js'
+import {
+  couplingConflicts,
+  cycleMultiportType,
+  isMultiport,
+  multiplyFactor,
+  parseMultiport,
+  restorePortVariables,
+  setMultiport,
+  setPortVariables,
+  setVariableFactor,
+  variableTypes,
+} from '../../../src/utils/multiport.js'
 
 const port = (variables, multiportType, multiplyFactor) => ({ label: 'p', variables, multiportType, multiplyFactor })
 
@@ -89,6 +100,111 @@ describe('couplingConflicts', () => {
     expect(couplingConflicts(port(['x'], ['sum', 'True']), port(['p'], 'None'))).toEqual([
       'Port "p" has 2 multiport entries for 1 variables.',
     ])
+  })
+})
+
+describe('setMultiport', () => {
+  it('makes every variable True for several connections, or None for one', () => {
+    const p = port(['a', 'b'], ['sum', 'multiply'], 2)
+    setMultiport(p, false)
+    expect(p.multiportType).toBe('None')
+    expect(isMultiport(p)).toBe(false)
+    setMultiport(p, true)
+    expect(p.multiportType).toBe('True')
+    expect(isMultiport(p)).toBe(true)
+  })
+})
+
+describe('cycleMultiportType', () => {
+  it('moves one variable through True, Sum and Multiply, never None', () => {
+    const p = port(['a'], 'True')
+    const seen = []
+    for (let i = 0; i < 3; i++) {
+      cycleMultiportType(p, 'a')
+      seen.push(p.multiportType)
+    }
+    expect(seen).toEqual(['Sum', 'Multiply', 'True'])
+  })
+
+  it('changes only the clicked variable, storing one value when they agree', () => {
+    const p = port(['a', 'b'], 'True')
+    cycleMultiportType(p, 'a')
+    expect(p.multiportType).toEqual(['sum', 'True'])
+    cycleMultiportType(p, 'b')
+    expect(p.multiportType).toBe('Sum')
+  })
+
+  it('gives a new Multiply variable a factor of 1, keeping the others', () => {
+    const p = port(['a', 'b'], ['multiply', 'sum'], 2)
+    cycleMultiportType(p, 'b')
+    expect(p).toMatchObject({ multiportType: 'Multiply', multiplyFactor: [2, 1] })
+  })
+})
+
+describe('setVariableFactor', () => {
+  it('stores one factor until the Multiply variables differ', () => {
+    const p = port(['a', 'b', 'c'], ['multiply', 'multiply', 'True'], 2)
+    setVariableFactor(p, 'b', 2)
+    expect(p.multiplyFactor).toBe(2)
+    setVariableFactor(p, 'b', 3)
+    expect(p.multiplyFactor).toEqual([2, 3, null])
+  })
+})
+
+describe('restorePortVariables', () => {
+  it('puts back removed variables, keeping later changes to the others', () => {
+    const p = port(['a', 'b'], ['sum', 'True'])
+    const earlier = { ...p }
+    setPortVariables(p, ['b'])
+    cycleMultiportType(p, 'b')
+    restorePortVariables(p, earlier)
+    expect(p).toMatchObject({ variables: ['a', 'b'], multiportType: 'Sum' })
+  })
+
+  it('follows a rename back', () => {
+    const p = port(['x'], 'True')
+    const earlier = { ...p }
+    setPortVariables(p, ['y'], () => 'x')
+    cycleMultiportType(p, 'y')
+    restorePortVariables(p, earlier, () => 'y')
+    expect(p).toMatchObject({ variables: ['x'], multiportType: 'Sum' })
+  })
+})
+
+describe('setPortVariables', () => {
+  it('keeps each variable with its type and factor through a reorder or removal', () => {
+    const p = port(['a', 'b', 'c'], ['multiply', 'sum', 'True'], [2, null, null])
+    setPortVariables(p, ['c', 'a', 'b'])
+    expect(p).toMatchObject({ variables: ['c', 'a', 'b'], multiportType: ['True', 'multiply', 'sum'], multiplyFactor: 2 })
+    setPortVariables(p, ['b'])
+    expect(p).toMatchObject({ variables: ['b'], multiportType: 'Sum' })
+  })
+
+  it('adds a variable as True on a multiport and None otherwise', () => {
+    const multi = port(['a'], 'Sum')
+    setPortVariables(multi, ['a', 'b'])
+    expect(multi.multiportType).toEqual(['sum', 'True'])
+    const single = port(['a'], 'None')
+    setPortVariables(single, ['a', 'b'])
+    expect(single.multiportType).toBe('None')
+  })
+
+  it('keeps a port with no variables yet a multiport', () => {
+    const p = port([], 'True')
+    setPortVariables(p, ['a', 'b'])
+    expect(p.multiportType).toBe('True')
+  })
+
+  it('follows a rename', () => {
+    const p = port(['a', 'b'], ['sum', 'True'])
+    setPortVariables(p, ['x', 'b'], (name) => (name === 'x' ? 'a' : name))
+    expect(p.multiportType).toEqual(['sum', 'True'])
+  })
+
+  it('keeps the whole-port value when every variable is removed', () => {
+    const p = port(['a'], 'Sum')
+    setPortVariables(p, [])
+    expect(p).toMatchObject({ variables: [], multiportType: 'Sum' })
   })
 })
 

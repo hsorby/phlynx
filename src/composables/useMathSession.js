@@ -15,6 +15,7 @@ import { separateParameters } from '../services/math/separateParameters'
 import { buildVariableDeclarations } from '../utils/variables'
 import { areModelsEquivalent } from '../utils/cellml'
 import { cleanName } from '../utils/identifiers'
+import { restorePortVariables, setPortVariables } from '../utils/multiport'
 
 /**
  * Checks whether two row lists hold the same set of names.
@@ -218,7 +219,7 @@ export function useMathSession({ history, editorRef, ports }) {
   function pruneMissingPortVariables(rows) {
     const names = new Set(rows.map((row) => row.name))
     for (const port of ports.value) {
-      if (Array.isArray(port.variables)) port.variables = port.variables.filter((name) => names.has(name))
+      if (Array.isArray(port.variables)) setPortVariables(port, port.variables.filter((name) => names.has(name)))
     }
   }
 
@@ -367,34 +368,44 @@ export function useMathSession({ history, editorRef, ports }) {
         redo: async () => setRows(newRows),
       })
 
+      // A port's multiport types and factors are per variable, so they go and come back with its variables;
+      // an undo keeps any multiport change made since.
+      const snapshotPort = ({ variables, multiportType, multiplyFactor }) => ({ variables, multiportType, multiplyFactor })
+
       for (const port of ports.value) {
         if (!Array.isArray(port.variables)) continue
-        const portVariables = port.variables
-        if (!portVariables.some((name) => renamedTo.has(name))) continue
+        const previousPort = snapshotPort(port)
+        if (!port.variables.some((name) => renamedTo.has(name))) continue
 
         await history.executeAndAddCommand({
           type: 'rename-variable-in-port',
           undo: async () => {
-            port.variables = portVariables
+            restorePortVariables(port, previousPort, (name) => renamedTo.get(name) ?? name)
           },
           redo: async () => {
-            port.variables = [...new Set(port.variables.map((name) => renamedTo.get(name) ?? name))]
+            // New name to old, the first old name winning when two are renamed alike.
+            const previousName = new Map()
+            for (const name of port.variables) {
+              const newName = renamedTo.get(name) ?? name
+              if (!previousName.has(newName)) previousName.set(newName, name)
+            }
+            setPortVariables(port, [...previousName.keys()], (name) => previousName.get(name))
           },
         })
       }
 
       for (const port of ports.value) {
         if (!Array.isArray(port.variables)) continue
-        const portVariables = port.variables
-        if (portVariables.every((name) => validNames.has(name))) continue
+        const previousPort = snapshotPort(port)
+        if (port.variables.every((name) => validNames.has(name))) continue
 
         await history.executeAndAddCommand({
           type: 'remove-variable-from-port',
           undo: async () => {
-            port.variables = portVariables
+            restorePortVariables(port, previousPort)
           },
           redo: async () => {
-            port.variables = port.variables.filter((name) => validNames.has(name))
+            setPortVariables(port, port.variables.filter((name) => validNames.has(name)))
           },
         })
       }

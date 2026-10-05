@@ -91,3 +91,103 @@ export function couplingConflicts(sourcePort, targetPort) {
       : []
   )
 }
+
+// ── Editing ─────────────────────────────────────────────────────────────────
+
+const CYCLE = ['True', 'Sum', 'Multiply']
+const LIST_ENTRY = { True: 'True', Sum: 'sum', Multiply: 'multiply' }
+
+// Lenient, for the editors: a missing or unknown entry reads as None.
+const spread = (port) =>
+  unmixed(
+    (port.variables ?? []).map(
+      (_, i) => typeOf(Array.isArray(port.multiportType) ? port.multiportType[i] : port.multiportType) ?? 'None'
+    )
+  )
+const factorAt = (port, i) => (Array.isArray(port.multiplyFactor) ? port.multiplyFactor[i] : port.multiplyFactor)
+const factorsOf = (port) => (port.variables ?? []).map((_, i) => factorAt(port, i) ?? null)
+
+/**
+ * Stores per-variable types and factors, as one whole-port value wherever every variable agrees. A port
+ * with no Multiply variable keeps a whole-port factor.
+ */
+function setTypes(port, types, factors) {
+  port.multiportType = types.every((type) => type === types[0]) ? types[0] : types.map((type) => LIST_ENTRY[type])
+  const used = factors.filter((_, i) => types[i] === 'Multiply')
+  if (new Set(used).size > 1) {
+    port.multiplyFactor = factors.map((factor, i) => (types[i] === 'Multiply' ? factor : null))
+  } else if (used.length || Array.isArray(port.multiplyFactor)) {
+    port.multiplyFactor = used.length ? used[0] : 1
+  }
+}
+
+/** Whether a port takes several connections, which its variables are then True, Sum or Multiply. */
+export const isMultiport = (port) => Array.isArray(port.multiportType) || parseMultiport(port.multiportType) !== 'None'
+
+/** Makes a port take several connections, every variable True, or one, every variable None. */
+export function setMultiport(port, multiport) {
+  port.multiportType = multiport ? 'True' : 'None'
+}
+
+/** The multiport type a port variable's chip shows. */
+export const variableMultiportType = (port, name) => spread(port)[port.variables.indexOf(name)] ?? 'None'
+
+/** A port's Multiply variables, each of which needs a factor. */
+export const multiplyVariables = (port) => port.variables.filter((name) => variableMultiportType(port, name) === 'Multiply')
+
+/** The factor a Multiply variable is scaled by. */
+export const variableFactor = (port, name) => factorAt(port, port.variables.indexOf(name))
+
+/** Sets the factor one Multiply variable is scaled by. */
+export function setVariableFactor(port, name, factor) {
+  const factors = factorsOf(port)
+  factors[port.variables.indexOf(name)] = factor
+  setTypes(port, spread(port), factors)
+}
+
+/** Moves one variable of a multiport to its next type: True → Sum → Multiply → True. */
+export function cycleMultiportType(port, name) {
+  const i = port.variables.indexOf(name)
+  const types = spread(port)
+  const factors = factorsOf(port)
+  types[i] = CYCLE[(CYCLE.indexOf(types[i]) + 1) % CYCLE.length]
+  if (types[i] === 'Multiply') factors[i] = 1
+  setTypes(port, types, factors)
+}
+
+/**
+ * Sets a port's variables, each kept variable keeping its type and factor; an added one is True on a
+ * multiport and None otherwise.
+ *
+ * @param {Object} port
+ * @param {string[]} variables
+ * @param {(name: string) => string} [previousName] - A variable's name before a rename.
+ */
+export function setPortVariables(port, variables, previousName = (name) => name) {
+  const types = spread(port)
+  const added = isMultiport(port) ? 'True' : 'None'
+  const from = variables.map((name) => (port.variables ?? []).indexOf(previousName(name)))
+  const factors = from.map((j) => (j < 0 ? null : (factorAt(port, j) ?? null)))
+  port.variables = variables
+  if (variables.length) setTypes(port, from.map((j) => (j < 0 ? added : types[j])), factors)
+}
+
+/**
+ * Puts back a port's earlier variables (an undo). Each keeps the type and factor it has now, if it is
+ * still on the port, and otherwise gets back its earlier ones.
+ *
+ * @param {Object} port
+ * @param {Object} earlier - The port's earlier { variables, multiportType, multiplyFactor }.
+ * @param {(name: string) => string} [currentName] - An earlier variable's name now, after a rename.
+ */
+export function restorePortVariables(port, earlier, currentName = (name) => name) {
+  const now = { types: spread(port), factors: factorsOf(port) }
+  const before = { types: spread(earlier), factors: factorsOf(earlier) }
+  const from = earlier.variables.map((name) => port.variables.indexOf(currentName(name)))
+  const types = from.map((j, i) => (j < 0 ? before.types[i] : now.types[j]))
+  const factors = from.map((j, i) => (j < 0 ? before.factors[i] : now.factors[j]))
+  const multiport = isMultiport(port)
+  port.variables = earlier.variables
+  if (!port.variables.length) return
+  setTypes(port, multiport ? unmixed(types) : types.map(() => 'None'), factors)
+}

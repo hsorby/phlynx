@@ -225,6 +225,33 @@ describe('useMathSession', () => {
       expect(ports.value[0].variables).toEqual(['x', 'k'])
     })
 
+    it('keeps the multiport type and factor of a renamed port variable', async () => {
+      Object.assign(ports.value[0], { multiportType: ['multiply', 'True'], multiplyFactor: 2 })
+      await editorRef.value.report('edit', 'ode(y, t) = -k * y;\n', true)
+      expect(ports.value[0]).toMatchObject({ variables: ['y', 'k'], multiportType: ['multiply', 'True'], multiplyFactor: 2 })
+
+      await history.undo()
+      expect(ports.value[0]).toMatchObject({ variables: ['x', 'k'], multiportType: ['multiply', 'True'] })
+    })
+
+    it('drops the multiport type of a removed port variable, until undone', async () => {
+      ports.value[0].multiportType = ['sum', 'True']
+      await editorRef.value.report('edit', 'ode(x, t) = -x;\n', true)
+      expect(ports.value[0]).toMatchObject({ variables: ['x'], multiportType: 'Sum' })
+
+      await history.undo()
+      expect(ports.value[0]).toMatchObject({ variables: ['x', 'k'], multiportType: ['sum', 'True'] })
+    })
+
+    it('keeps a multiport change made after a rename when the rename is undone', async () => {
+      ports.value[0].multiportType = 'True'
+      await editorRef.value.report('edit', 'ode(y, t) = -k * y;\n', true)
+      ports.value[0].multiportType = ['sum', 'True']
+
+      await history.undo()
+      expect(ports.value[0]).toMatchObject({ variables: ['x', 'k'], multiportType: ['sum', 'True'] })
+    })
+
     it('keeps both names when the offer is dismissed', async () => {
       await editorRef.value.report('edit', 'ode(x, t) = -k * y;\n', true)
       session.dismissRename()
