@@ -199,6 +199,8 @@
                 :variable-kinds="variableKinds"
                 :connection-supplied="connectionSupplied"
                 :math-references="mathReferences"
+                :unit-names="store.availableUnitNames"
+                :unit-expansions="unitExpansions"
               />
             </TabPanel>
 
@@ -435,6 +437,7 @@ import { useIssueFilter } from '../composables/useIssueFilter'
 import { useGtm } from '../composables/useGtm'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
 import { useMathSession } from '../composables/useMathSession'
+import { useAppSettings } from '../composables/useAppSettings'
 
 import { isInitialisable } from '../services/math/variableKinds'
 
@@ -466,6 +469,12 @@ const history = useFlowHistoryStore()
 const { trackEvent } = useGtm()
 const { nodes } = useVueFlow()
 const { confirm } = useConfirmDialog()
+const { settings: appSettings } = useAppSettings()
+
+/** Each units name's expansion beside its suggestion, in the units the user chose in Settings. */
+const unitExpansions = computed(() =>
+  appSettings.unitDisplay === 'base' ? store.unitExpansions : store.builtInUnitExpansions
+)
 
 // ── State ────────────────────────────────────────────────────────────────────
 const loading = ref(false)
