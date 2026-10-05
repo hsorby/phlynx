@@ -15,9 +15,13 @@ import {
 
 let _libcellml = null
 let resolveLibCellMLReady
-const libcellmlReady = new Promise((resolve) => {
+let rejectLibCellMLReady
+const libcellmlReady = new Promise((resolve, reject) => {
   resolveLibCellMLReady = resolve
+  rejectLibCellMLReady = reject
 })
+// Avoid an unhandled rejection when nothing is waiting on readiness.
+libcellmlReady.catch(() => {})
 
 export function initLibCellML(instance) {
   _libcellml = instance
@@ -25,7 +29,21 @@ export function initLibCellML(instance) {
 }
 
 /**
- * Resolves once initLibCellML has been called and CellML parsing is available.
+ * Initialises libCellML once the plugin's promise resolves, or fails whenLibCellMLReady() if it rejects.
+ *
+ * @param {Promise} ready - The plugin's libCellML promise.
+ * @returns {Promise} Settles with ready.
+ */
+export function bindLibCellML(ready) {
+  return ready.then(initLibCellML, (error) => {
+    rejectLibCellMLReady(error)
+    throw error
+  })
+}
+
+/**
+ * Resolves once initLibCellML has been called and CellML parsing is available; rejects if libCellML
+ * fails to load.
  */
 export function whenLibCellMLReady() {
   return libcellmlReady

@@ -587,7 +587,7 @@ import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../uti
 import { useClearWorkspace } from '../composables/useClearWorkspace'
 import { readFileAsText, cyrb53 } from '../utils/misc'
 import { buildGhostHandles, normaliseHandleSlots } from '../utils/handles'
-import { initLibCellML, processCellMLData, loadParametersFromCellML } from '../utils/cellml'
+import { bindLibCellML, processCellMLData, loadParametersFromCellML } from '../utils/cellml'
 import {
   edgeLineOptions,
   FLOW_IDS,
@@ -2539,7 +2539,7 @@ const onSaveConfirm = async (fileName) => {
 }
 
 /**
- * Reads a JSON file and restores the application state.
+ * Restores the application state from a loaded workspace. Errors are rethrown for the caller to report.
  */
 async function applyWorkspaceState(loadedState, { source = 'json' } = {}) {
   const { clearWorkspace } = useClearWorkspace()
@@ -2585,7 +2585,7 @@ async function applyWorkspaceState(loadedState, { source = 'json' } = {}) {
       label: `Error: ${error.message}`,
       file_type: source,
     })
-    notify.error({ title: 'Failed to load workflow', message: `${error.message}` })
+    throw error
   }
 }
 
@@ -2606,7 +2606,8 @@ function handleLoadWorkspace(event) {
       return
     }
     applyWorkspaceState(loadedState, { source: 'json' })
-    sessionMetadataStore.setLastSaveName(stripExtension(file.name))
+      .then(() => sessionMetadataStore.setLastSaveName(stripExtension(file.name)))
+      .catch((error) => notify.error({ title: 'Failed to load workflow', message: `${error.message}` }))
   }
   reader.readAsText(file)
 }
@@ -2941,7 +2942,7 @@ const moduleConfigs = import.meta.glob('../assets/module_configs/*.json', {
 const hydrateCellmlAndDependents = async () => {
   // Load the manifest and the libCellML WebAssembly module.
   // Initialise libCellML independently of the manifest fetch so URL loads aren't blocked by the network.
-  const [manifest] = await Promise.all([loadManifest(), libcellmlReadyPromise.then(initLibCellML)])
+  const [manifest] = await Promise.all([loadManifest(), bindLibCellML(libcellmlReadyPromise)])
 
   // const printPurgeUrl = false
   // if (printPurgeUrl) {
