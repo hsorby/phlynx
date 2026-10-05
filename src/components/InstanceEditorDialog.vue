@@ -1149,16 +1149,10 @@ async function handleSave() {
   // blank initialisers are filled (see syncInitialiserUnits).
   syncInitialiserUnits(parameterRows.value, { overwrite: isManaged.value })
 
-  // 3. Process Global Constants from Parameters
-  parameterRows.value.forEach((row) => {
-    if (row.type === 'global_constant') {
-      store.assignGlobalConstant(row.name, row.value, row.units, row.data_reference)
-    }
-  })
-
-  // 4. Process CellML Source Changes
+  // 3. Check the math's new reference
   let newMathRef = props.mathRef
-  if (session.isDirty()) {
+  const isMathChanged = session.isDirty()
+  if (isMathChanged) {
     const componentNames = getModelComponentNames(currentModel.value)
     if (!componentNames || componentNames.length === 0) {
       notify.error({ message: 'Could not find a valid component name in the model.' })
@@ -1171,10 +1165,6 @@ async function handleSave() {
       const overwrite = await handleMathOverwrite()
       if (!overwrite) return
     }
-    store.addMath(newMathRef, currentModel.value, true, currentLayout.value)
-  } else if (session.isLayoutDirty()) {
-    // Only comments or formatting changed: the math, and so every instance using it, is unchanged.
-    store.setMathLayout(newMathRef, currentLayout.value)
   }
 
   const updateAll = applyToAll.value || siblingCount.value === 0
@@ -1185,17 +1175,25 @@ async function handleSave() {
     label: editableName.value,
   })
 
-  // Emit consolidated payload to parent workspace
-  emit('confirm', {
-    id: props.id,
-    name: editableName.value,
-    mathRef: newMathRef,
-    math: currentModel.value,
-    variables: parameterRows.value,
-    ports: finalPorts,
-    updateAll,
-    siblings: updateAll ? siblings.value : undefined,
-  })
+  emit(
+    'confirm',
+    detachReactivity({
+      id: props.id,
+      name: editableName.value,
+      mathRef: newMathRef,
+      previousMathRef: props.mathRef,
+      math: isMathChanged ? currentModel.value : null,
+      layout: currentLayout.value,
+      isLayoutChanged: !isMathChanged && session.isLayoutDirty(),
+      globalConstants: parameterRows.value
+        .filter((row) => row.type === 'global_constant')
+        .map(({ name, value, units, data_reference }) => ({ name, value, units, data_reference })),
+      variables: parameterRows.value,
+      ports: finalPorts,
+      updateAll,
+      siblings: updateAll ? siblings.value : [],
+    })
+  )
 
   emit('update:modelValue', false)
 }

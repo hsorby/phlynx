@@ -534,6 +534,7 @@ import { importOmexFile, extractOmexArchive } from '../services/import/omex'
 
 import useDragAndDrop from '../composables/useDnD'
 import { useHandleManagement } from '../composables/useHandleManagement'
+import { useInstanceSave } from '../composables/useInstanceSave'
 import { useNodeDataHistory } from '../composables/useNodeDataHistory'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
 import { useLoadFromCellML } from '../composables/useLoadFromCellml'
@@ -557,7 +558,6 @@ import EdgeConnectionDialog from '../components/EdgeConnectionDialog.vue'
 import SettingsDialog from '../components/SettingsDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
 import PaneContextMenu from '../components/PaneContextMenu.vue'
-import { getPortVariables, reconcileRows } from '../services/math/reconcileRows'
 import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
 import CreateInspectionModuleDialog from '../components/dialogs/CreateInspectionModule.vue'
 import ContextSidebar from '../components/ContextSidebar.vue'
@@ -684,6 +684,7 @@ const {
   revertHandleIfUnused,
 } = useHandleManagement()
 const { recordEdit, findIncidentEdgeIds } = useNodeDataHistory(FLOW_IDS.MAIN)
+const { saveInstanceEdit } = useInstanceSave(FLOW_IDS.MAIN)
 
 const dialogVisible = computed(() => {
   return (
@@ -2083,129 +2084,12 @@ function onOpenSettingsDialog() {
   settingsDialogVisible.value = true
 }
 
-/**
- * Rebuilds a node's parameter rows from its math, keeping every value already set. A row the math
- * newly needs starts blank: the math's defaults only seed new instances.
- *
- * @param {Object} node - A workspace node.
- * @param {string} mathRef - The math the node now uses.
- */
-function updateVariablesFromMath(node, mathRef) {
-  if (!node) return
-  const analysis = libraryStore.getMathAnalysis(mathRef)
-  if (!analysis) return
-  node.data.variables = reconcileRows(analysis, node.data.variables ?? [], {
-    portVariables: getPortVariables(node.data.ports),
-  })
-}
-
-function cleanPorts(currentNode) {
-  const validVariables = new Set(currentNode.data.variables.map((v) => v.name))
-  currentNode.data.ports = currentNode.data.ports.filter((port) =>
-    (port.variables || []).every((v) => validVariables.has(v))
-  )
-}
-
-/**
- * Handler for both Saving (Updating) and Forking CellML modules.
- * Handles:
- * 1. Loading the new/updated CellML data.
- * 2. Migrating configs if the name changed.
- * 3. Updating graph nodes to match new ports.
- */
-async function handleCellMLSave(saveData) {
-  const { id, updateAll, mathRef, siblings } = saveData
-
-  // Update math references
-  updateNodeData(id, { mathRef })
-  let updatedCount = 1
-  if (updateAll) {
-    siblings.forEach((siblingId) => {
-      updateNodeData(siblingId, { mathRef })
-      updatedCount++
-    })
-  }
-
-  // The edited node's rows are already reconciled by the editor. Every other node on this math is
-  // rebuilt here, ticked or not, since an overwrite in place changes their math too.
-  const currentNode = findNode(id)
-  cleanPorts(currentNode)
-  const otherNodes = nodes.value.filter((node) => node.id !== id && node.data?.mathRef === mathRef)
-  otherNodes.forEach((node) => {
-    updateVariablesFromMath(node, mathRef)
-    cleanPorts(node)
-  })
-
-  // Update edge couplings
-  recomputeEdgeCouplings(id)
-  otherNodes.forEach((node) => recomputeEdgeCouplings(node.id))
-
+async function onInstanceEditConfirm(save) {
+  const updatedCount = await saveInstanceEdit(save)
   notify.success({
     title: 'CellML Updated',
-    message: `Updated ${updatedCount} node${updatedCount !== 1 ? 's' : ''} to ${mathRef.split(':').pop()}.`,
+    message: `Updated ${updatedCount} node${updatedCount !== 1 ? 's' : ''} to ${save.mathRef.split(':').pop()}.`,
   })
-}
-
-/**
- * Recomputes couplings on every edge touching a given node, using the node's
- * current ports. Call this after any operation that changes ports on
- * one or more nodes.
- */
-function recomputeEdgeCouplings(nodeId) {
-  const outgoing = edges.value.filter((e) => e.source === nodeId)
-  outgoing.forEach((edge) => {
-    const sourceNode = findNode(edge.source)
-    const targetNode = findNode(edge.target)
-    if (!sourceNode || !targetNode) return
-
-    const sourceIndex = outgoing.indexOf(edge)
-    const edgesIntoTarget = edges.value.filter((e) => e.target === edge.target)
-    const targetIndex = edgesIntoTarget.indexOf(edge)
-
-    edge.data = {
-      ...edge.data,
-      couplings: resolvePortCouplings(
-        sourceNode.data.ports ?? [],
-        targetNode.data.ports ?? [],
-        sourceIndex,
-        targetIndex
-      ),
-    }
-  })
-
-  const incoming = edges.value.filter((e) => e.target === nodeId)
-  incoming.forEach((edge) => {
-    const sourceNode = findNode(edge.source)
-    const targetNode = findNode(edge.target)
-    if (!sourceNode || !targetNode) return
-
-    const edgesFromSource = edges.value.filter((e) => e.source === edge.source)
-    const sourceIndex = edgesFromSource.indexOf(edge)
-    const targetIndex = incoming.indexOf(edge)
-
-    edge.data = {
-      ...edge.data,
-      couplings: resolvePortCouplings(
-        sourceNode.data.ports ?? [],
-        targetNode.data.ports ?? [],
-        sourceIndex,
-        targetIndex
-      ),
-    }
-  })
-}
-
-async function onInstanceEditConfirm(updatedData) {
-  const saveData = {
-    id: updatedData.id,
-    updateAll: updatedData.updateAll,
-    mathRef: updatedData.mathRef,
-    math: updatedData.math,
-    siblings: updatedData.siblings,
-  }
-
-  updateNodeData(updatedData.id, { name: updatedData.name, variables: updatedData.variables, ports: updatedData.ports })
-  await handleCellMLSave(saveData)
 }
 
 const nodeRefs = ref({})
