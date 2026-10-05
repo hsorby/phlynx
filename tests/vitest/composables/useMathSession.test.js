@@ -33,6 +33,21 @@ const XML = `<model xmlns="http://www.cellml.org/cellml/2.0#" name="decay">
   </component>
 </model>`
 
+const GROWTH_REF = 'file:growth'
+const GROWTH_XML = `<model xmlns="http://www.cellml.org/cellml/2.0#" name="growth">
+  <component name="growth">
+    <variable name="t" units="second" interface="public_and_private"/>
+    <variable name="n" units="metre" initial_value="2"/>
+    <variable name="r" units="per_second" initial_value="0.1"/>
+    <math xmlns="http://www.w3.org/1998/Math/MathML">
+      <apply><eq/>
+        <apply><diff/><bvar><ci>t</ci></bvar><ci>n</ci></apply>
+        <apply><times/><ci>r</ci><ci>n</ci></apply>
+      </apply>
+    </math>
+  </component>
+</model>`
+
 const byName = (rows) => Object.fromEntries(rows.map((row) => [row.name, row]))
 
 /** Stands in for CellMLTextEditor: parses text the way it does and reports `change` events. */
@@ -174,6 +189,64 @@ describe('useMathSession', () => {
       await editorRef.value.report('init', 'ode(x, t) = -x;\n', true)
       await editorRef.value.report('edit', SIMPLE_TEXT, true)
       expect(byName(session.parameterRows.value).k.data_reference).toBeNull()
+    })
+  })
+
+  describe('when a load is overtaken by another before its analysis arrives (#609)', () => {
+    const SAVED_K = [{ name: 'k', value: '3', units: 'per_second', type: 'constant', data_reference: null }]
+    let store, resolveFirst
+
+    beforeEach(async () => {
+      store = useLibraryStore()
+      store.addMath(GROWTH_REF, GROWTH_XML)
+      const decayAnalysis = await store.ensureMathAnalysis(MATH_REF)
+      // The first load waits on the worker until the test lets it finish.
+      vi.spyOn(store, 'ensureMathAnalysis').mockImplementationOnce(
+        () => new Promise((resolve) => (resolveFirst = () => resolve(decayAnalysis)))
+      )
+    })
+
+    it('keeps the later instance’s rows and analysis', async () => {
+      const first = session.load({ mathRef: MATH_REF, rows: SAVED_K, managed: true })
+      await session.load({ mathRef: GROWTH_REF, rows: [], managed: true })
+      resolveFirst()
+      await first
+
+      const names = session.parameterRows.value.map((row) => row.name)
+      expect(names).toEqual(expect.arrayContaining(['n', 'r']))
+      expect(names).not.toContain('k')
+      expect(names).not.toContain('x')
+      expect(session.mathReferences.value.has('r')).toBe(true)
+      expect(session.mathReferences.value.has('k')).toBe(false)
+    })
+
+    it('keeps the later instance’s empty session when it has no math', async () => {
+      const first = session.load({ mathRef: MATH_REF, rows: SAVED_K, managed: true })
+      await session.load({ mathRef: null, rows: [], managed: true })
+      resolveFirst()
+      await first
+
+      expect(session.parameterRows.value).toEqual([])
+      expect(session.mathReferences.value.size).toBe(0)
+    })
+
+    it('keeps the later instance’s values when both share the math', async () => {
+      const first = session.load({ mathRef: MATH_REF, rows: SAVED_K, managed: true })
+      await session.load({ mathRef: MATH_REF, rows: [{ ...SAVED_K[0], value: '7' }], managed: true })
+      resolveFirst()
+      await first
+
+      expect(byName(session.parameterRows.value).k.value).toBe('7')
+    })
+
+    it('keeps the later instance’s rows when the earlier analysis arrives first', async () => {
+      const first = session.load({ mathRef: MATH_REF, rows: SAVED_K, managed: true })
+      resolveFirst()
+      await first
+      await session.load({ mathRef: GROWTH_REF, rows: [], managed: true })
+
+      expect(byName(session.parameterRows.value).k).toBeUndefined()
+      expect(session.mathReferences.value.has('r')).toBe(true)
     })
   })
 
