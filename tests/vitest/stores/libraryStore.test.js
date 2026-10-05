@@ -119,3 +119,56 @@ describe('instances of a module built from a CellML file', () => {
     expect(rows).toMatchObject({ k: '0.5', x_init: '1.5' })
   })
 })
+
+describe('libraryStore unit expansions', () => {
+  const UNITS = (definition) =>
+    `<model xmlns="http://www.cellml.org/cellml/2.0#" name="u"><units name="per_millis">${definition}</units></model>`
+
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('follows the units files, and is never saved', () => {
+    const store = useLibraryStore()
+    store.addUnitsFile({ componentFile: 'u.cellml', model: UNITS('<unit prefix="milli" units="second" exponent="-1"/>') })
+    expect(store.unitExpansions.get('per_millis')).toBe('10³ s⁻¹')
+    expect(store.builtInUnitExpansions.get('per_millis')).toBe('10³ s⁻¹')
+
+    store.addUnitsFile({ componentFile: 'u.cellml', model: UNITS('<unit units="second" exponent="-1"/>') })
+    expect(store.unitExpansions.get('per_millis')).toBe('s⁻¹')
+    expect(store.builtInUnitExpansions.get('per_millis')).toBe('s⁻¹')
+
+    expect(Object.keys(store.getState())).not.toContain('unitExpansions')
+    expect(Object.keys(store.getState())).not.toContain('builtInUnitExpansions')
+  })
+})
+
+describe('libraryStore generated units', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  const MV_PER_MS = [
+    { units: 'volt', prefix: -3, exponent: 1, multiplier: 1 },
+    { units: 'second', prefix: -3, exponent: -1, multiplier: 1 },
+  ]
+
+  it('adds each units to one generated file, which saves like any units file', () => {
+    const store = useLibraryStore()
+    store.addGeneratedUnits({ name: 'mV_per_ms', parts: MV_PER_MS })
+    store.addGeneratedUnits({ name: 'per_min', parts: [{ units: 'second', prefix: 0, exponent: -1, multiplier: 1 / 60 }] })
+
+    expect(store.availableUnits.map((file) => file.componentFile)).toEqual(['generated_units.cellml'])
+    expect(store.availableUnitNames.has('mV_per_ms')).toBe(true)
+    expect(store.unitDefinitions.get('mV_per_ms')).toEqual(MV_PER_MS)
+    expect(store.unitExpansions.get('mV_per_ms')).toBe('kg·m²·s⁻⁴·A⁻¹')
+    expect(store.getState().availableUnits[0].model).toContain('<units name="per_min">')
+  })
+
+  it('comes back with a loaded workspace', () => {
+    const store = useLibraryStore()
+    store.addGeneratedUnits({ name: 'mV_per_ms', parts: MV_PER_MS })
+    const saved = JSON.parse(JSON.stringify(store.getState()))
+
+    setActivePinia(createPinia())
+    const loaded = useLibraryStore()
+    loaded.loadState(saved)
+    expect(loaded.unitDefinitions.get('mV_per_ms')).toEqual(MV_PER_MS)
+  })
+})

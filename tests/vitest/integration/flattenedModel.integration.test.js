@@ -11,6 +11,7 @@ import { migrateWorkspace } from '../../../src/services/workspaceMigrator.js'
 import { useLibraryStore } from '../../../src/stores/libraryStore.js'
 import { resolvePortCouplings } from '../../../src/utils/edges.js'
 import { generateFlattenedModel } from '../../../src/utils/cellml.js'
+import { interpretUnitExpression } from '../../../src/utils/unitExpression.js'
 import { resolveBoundaryValues } from '../../../src/services/export/boundaryValues.js'
 import { ensureLibCellmlReady } from '../helpers/libcellml-bootstrap.js'
 
@@ -72,6 +73,40 @@ describe('generateFlattenedModel with values only in the rows', () => {
 
   it('names the parameters left without a value', () => {
     expect(() => generateFlattenedModel([buildNode({ k: '' })], [], store)).toThrow(/Missing parameter values: decay_1\.k/)
+  })
+})
+
+describe('generateFlattenedModel with units made from expressions', () => {
+  const FLOW_REF = 'file:flow'
+  // dV/dt = Q, in units only the generated units file defines.
+  const FLOW_XML = `<model xmlns="http://www.cellml.org/cellml/2.0#" name="flow">
+  <component name="flow">
+    <variable name="t" units="second" interface="public"/>
+    <variable name="V" units="uL" initial_value="1" interface="public"/>
+    <variable name="Q" units="uL_per_s" initial_value="2"/>
+    <math xmlns="http://www.w3.org/1998/Math/MathML">
+      <apply><eq/><apply><diff/><bvar><ci>t</ci></bvar><ci>V</ci></apply><ci>Q</ci></apply>
+    </math>
+  </component>
+</model>`
+
+  beforeAll(async () => {
+    await ensureLibCellmlReady()
+  }, 120000)
+
+  it('imports the generated units, and the result analyses cleanly', async () => {
+    setActivePinia(createPinia())
+    const store = useLibraryStore()
+    const library = { names: store.availableUnitNames, definitions: store.unitDefinitions, expansions: store.unitExpansions }
+    for (const text of ['uL', 'uL/s']) store.addGeneratedUnits(interpretUnitExpression(text, library))
+    store.addMath(FLOW_REF, FLOW_XML)
+
+    const rows = reconcileRows(analyzeMathXml(store.availableMath.get(FLOW_REF)), [], { defaults: store.getMathDefaults(FLOW_REF) })
+    const node = { id: 'n1', type: 'instanceNode', data: { name: 'flow_1', mathRef: FLOW_REF, variables: rows, ports: [] } }
+
+    const text = await (await generateFlattenedModel([node], [], store)).text()
+    expect(text).toMatch(/<units name="uL_per_s">/)
+    expect(text).toMatch(/<unit (?=[^>]*units="litre")(?=[^>]*prefix="micro")[^>]*\/>/)
   })
 })
 

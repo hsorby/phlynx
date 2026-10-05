@@ -81,6 +81,9 @@ export const CELLML_NS = 'http://www.cellml.org/cellml/2.0#'
 export const MATHML_NS = 'http://www.w3.org/1998/Math/MathML'
 export const BQBIOL_NS = 'http://biomodels.net/biology-qualifiers/'
 
+/** The reserved units file that holds units made from typed expressions, e.g. `mV/ms`. */
+export const GENERATED_UNITS_FILE = 'generated_units.cellml'
+
 export const STANDARD_UNITS = [
     'ampere',
     'becquerel',
@@ -93,14 +96,12 @@ export const STANDARD_UNITS = [
     'henry',
     'hertz',
     'joule',
-    'kat',
+    'katal',
     'kelvin',
     'kilogram',
-    'liter',
     'litre',
     'lumen',
     'lux',
-    'meter',
     'metre',
     'mole',
     'newton',
@@ -232,7 +233,7 @@ export const OMEX_FILE_TYPES = [
   },
 ]
 
-export const RELEVANT_EXTENSIONS = new Set(['.csv', '.json', '.omex', '.cellml'])
+export const RELEVANT_EXTENSIONS = new Set(['.csv', '.json', '.omex', '.cellml', '.xml'])
 export const DB_NAME = 'phlynx-import'
 export const STORE_NAME = 'handles'
 export const HANDLE_KEY = 'importFolderHandle'
