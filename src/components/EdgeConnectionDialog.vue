@@ -561,12 +561,14 @@ function buildPayload() {
           label: sp.label,
           variables: sp.variables,
           multiportType: sp.multiportType,
+          multiplyFactor: sp.multiplyFactor,
         },
         targetPort: {
           portType: tp.portType,
           label: tp.label,
           variables: tp.variables,
           multiportType: tp.multiportType,
+          multiplyFactor: tp.multiplyFactor,
         },
       }
     }),

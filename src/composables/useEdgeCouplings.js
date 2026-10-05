@@ -181,6 +181,7 @@ export function useEdgeCouplings(props, askSwapIntent) {
       portType: oldPort.portType,
       variables: oldPort.variables,
       multiportType: oldPort.multiportType,
+      multiplyFactor: oldPort.multiplyFactor,
     }
 
     const newCoupling = side === 'source'

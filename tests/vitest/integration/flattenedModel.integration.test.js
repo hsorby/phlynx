@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { analyzeMathXml } from '../../../src/services/math/analyzeMath.js'
 import { reconcileRows } from '../../../src/services/math/reconcileRows.js'
@@ -182,11 +182,23 @@ describe('generateFlattenedModel multiport couplings', () => {
     { portType: 'entrance_ports', label: 'pressure', variables: ['u'], multiportType: 'None' },
   ]
 
+  const vesselPort = (portType, variables, multiportType, multiplyFactor) => ({
+    portType,
+    label: 'vessel',
+    variables,
+    multiportType,
+    ...(multiplyFactor !== undefined && { multiplyFactor }),
+  })
+
+  const flatten = async (nodes, edges) => (await generateFlattenedModel(nodes, edges, store)).text()
+
+  /** The MathML of a generated component. */
+  const componentOf = (text, name) => text.match(new RegExp(`<component name="${name}">[\\s\\S]*?</component>`))?.[0] ?? ''
+
   /** The MathML of the generated summation component. */
-  async function summationMath(nodes, edges) {
-    const text = await (await generateFlattenedModel(nodes, edges, store)).text()
-    return text.match(/<component name="generated_summations">[\s\S]*?<\/component>/)?.[0] ?? ''
-  }
+  const summationMath = async (nodes, edges) => componentOf(await flatten(nodes, edges), 'generated_summations')
+
+  afterEach(() => vi.restoreAllMocks())
 
   it('adds every term of a Sum port on the source side of its edges', async () => {
     const hub = buildNode('hub', 'file:hub', [
@@ -199,5 +211,69 @@ describe('generateFlattenedModel multiport couplings', () => {
     expect(math).toMatch(/<plus\/>/)
     expect(math).not.toMatch(/<minus\/>/)
     expect(math.match(/<ci>op_v[^<]*<\/ci>/g)).toHaveLength(2)
+  })
+
+  it('sums one variable of a per-variable port and shares the other', async () => {
+    const hub = buildNode('hub', 'file:hub', [vesselPort('exit_ports', ['v_sum', 'u'], ['sum', 'True'])])
+    const leaves = ['leaf_1', 'leaf_2'].map((id) => buildNode(id, 'file:leaf', [vesselPort('entrance_ports', ['v', 'u'], 'None')]))
+
+    const math = await summationMath([hub, ...leaves], leaves.map((leaf) => connect(hub, leaf)))
+    expect(math).toMatch(/<plus\/>/)
+    expect(math).not.toMatch(/<minus\/>/)
+    expect(math.match(/<ci>op_v[^<]*<\/ci>/g)).toHaveLength(2)
+  })
+
+  it.each([
+    ['per-variable', [vesselPort('exit_ports', ['v_sum', 'u'], ['sum', 'True'])]],
+    ['whole-port', [{ portType: 'exit_ports', label: 'flow', variables: ['v_sum'], multiportType: 'Sum' }]],
+  ])('sets a blank %s Sum variable nothing is connected to to 0, with a warning', async (_, ports) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const math = await summationMath([buildNode('hub', 'file:hub', ports)], [])
+    expect(math).toMatch(/<cn cellml:units="per_second">0<\/cn>/)
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/"hub" variable "v_sum" sums over its connections/))
+  })
+
+  it('uses the value of a Sum variable nothing is connected to', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const hub = buildNode('hub', 'file:hub', [vesselPort('exit_ports', ['v_sum', 'u'], ['sum', 'True'])], { v_sum: '0.25' })
+    const text = await flatten([hub], [])
+    expect(componentOf(text, 'generated_summations')).toBe('')
+    expect(text).toMatch(/<variable name="v_sum"[^>]*initial_value="0\.25"/)
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('multiplies a variable on either end of the edge by its own factor', async () => {
+    const hub = buildNode('hub', 'file:hub', [vesselPort('exit_ports', ['v_sum', 'u'], ['None', 'multiply'], [null, 3])])
+    const leaf = buildNode('leaf', 'file:leaf', [vesselPort('entrance_ports', ['v', 'u'], ['multiply', 'None'], [2, null])])
+
+    const math = componentOf(await flatten([hub, leaf], [connect(hub, leaf)]), 'generated_multiplications')
+    expect(math).toMatch(/<ci>scaled_v<\/ci>\s*<apply>\s*<times\/>\s*<cn cellml:units="dimensionless">2<\/cn>/)
+    expect(math).toMatch(/<ci>scaled_u<\/ci>\s*<apply>\s*<times\/>\s*<cn cellml:units="dimensionless">3<\/cn>/)
+  })
+
+  it('adds multiplied variables to a sum', async () => {
+    const hub = buildNode('hub', 'file:hub', [vesselPort('exit_ports', ['v_sum', 'u'], ['sum', 'True'])])
+    const leaves = ['leaf_1', 'leaf_2'].map((id) =>
+      buildNode(id, 'file:leaf', [vesselPort('entrance_ports', ['v', 'u'], ['multiply', 'None'], 2)])
+    )
+
+    const math = await summationMath([hub, ...leaves], leaves.map((leaf) => connect(hub, leaf)))
+    expect(math.match(/<ci>op_scaled_v[^<]*<\/ci>/g)).toHaveLength(2)
+    expect(math).not.toMatch(/<minus\/>/)
+  })
+
+  it.each([
+    [['sum', 'True'], ['sum', 'None'], /"v_sum" and "v" are both Sum variables/],
+    [['multiply', 'True'], ['multiply', 'None'], /"v_sum" and "v" are both Multiply variables/],
+  ])('rejects a pair %j to %j', (hubTypes, leafTypes, message) => {
+    const hub = buildNode('hub', 'file:hub', [vesselPort('exit_ports', ['v_sum', 'u'], hubTypes)])
+    const leaf = buildNode('leaf', 'file:leaf', [vesselPort('entrance_ports', ['v', 'u'], leafTypes)])
+    expect(() => generateFlattenedModel([hub, leaf], [connect(hub, leaf)], store)).toThrow(message)
+  })
+
+  it('rejects a sum between ports with different numbers of variables', () => {
+    const hub = buildNode('hub', 'file:hub', [vesselPort('exit_ports', ['v_sum', 'u'], ['sum', 'True'])])
+    const leaf = buildNode('leaf', 'file:leaf', [vesselPort('entrance_ports', ['v'], 'None')], { u: '1' })
+    expect(() => generateFlattenedModel([hub, leaf], [connect(hub, leaf)], store)).toThrow(/same number of variables/)
   })
 })
