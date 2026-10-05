@@ -143,11 +143,13 @@
           <template #body="slotProps">
             <SanitisedInput
               v-if="isManaged"
-              v-model="slotProps.data.units"
+              :model-value="slotProps.data.units"
               :sanitise="cleanName"
               :notice="getUnitsNotice(slotProps.data)"
+              :suggest="suggestUnits"
               floating
-              placeholder="e.g. millivolt"
+              placeholder="e.g. mV or mV/ms"
+              @update:model-value="(units) => setLinkedUnits(rows, slotProps.data, units)"
             />
             <span v-else class="cell-static text-muted" title="Edit units in the CellML text">
               <span class="cell-static-text">{{ slotProps.data.units || '—' }}</span>
@@ -196,7 +198,7 @@ import Tag from 'primevue/tag'
 
 import SanitisedInput from './SanitisedInput.vue'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
-import { hasValueCell, isBlank, valuePlaceholder } from '../utils/variables'
+import { hasValueCell, isBlank, setLinkedUnits, valuePlaceholder } from '../utils/variables'
 import { useVirtualScrollerOptions } from '../composables/useVirtualScrollerOptions'
 import { isValueMissing, isTypeFixed as isRowTypeFixed, typeOptionsFor as rowTypeOptionsFor } from '../utils/parameterRows'
 import { PARAMETER_TYPE_OPTIONS, NO_ACCESS } from '../utils/constants'
@@ -218,6 +220,8 @@ const props = defineProps({
   connectionSupplied: { type: Set, default: null },
   /** Names the equations use. */
   mathReferences: { type: Set, default: () => new Set() },
+  /** (typed) => units suggestions for the Units field, as SanitisedInput's `suggest`; null for none. */
+  suggestUnits: { type: Function, default: null },
 })
 
 const { confirm } = useConfirmDialog()

@@ -154,13 +154,12 @@
 
           <Button
             iconOnly
-            :disabled="true"
             style="margin-left: 10px"
             icon="pi pi-cog"
             size="small"
             variant="text"
             severity="info"
-            v-tooltip.bottom="{ value: 'Settings coming soon', showDelay: 300 }"
+            v-tooltip.bottom="{ value: 'Settings', showDelay: 300 }"
             @click="onOpenSettingsDialog"
           />
 
@@ -267,18 +266,7 @@
         >
           Report Issue
         </a>
-        <!-- Light / Dark Mode Toggle Slider -->
-        <div
-          class="theme-slider-container"
-          style="display: flex; align-items: center; margin-left: 20px; gap: 8px"
-          v-tooltip.bottom="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
-        >
-          <ToggleSwitch :model-value="isDarkMode" @change="toggleDarkMode" aria-label="Toggle Theme">
-            <template #handle="{ checked }">
-              <i :class="['pi', checked ? 'pi-moon' : 'pi-sun']" style="font-size: 0.75rem"></i>
-            </template>
-          </ToggleSwitch>
-        </div>
+        <ThemeToggle style="margin-left: 20px" />
       </div>
     </header>
 
@@ -486,12 +474,11 @@
   <MacroBuilderDialog
     v-model="macroBuilderDialogVisible"
     @generate="onMacroBuilderGenerate"
-    @edit-node="onOpenPortEditorDialog"
   />
 
   <SimSettingsDialog v-model="simSettingsDialogVisible" :nodes="nodes" />
 
-  <SettingsDialog v-model="settingsDialogVisible" @confirm="onSettingsConfirm" />
+  <SettingsDialog v-model="settingsDialogVisible" />
 
   <ImportDialog
     ref="importDialogRef"
@@ -532,7 +519,7 @@ import InputText from 'primevue/inputtext'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import ConfirmDialog from 'primevue/confirmdialog'
-import ToggleSwitch from 'primevue/toggleswitch'
+import ThemeToggle from '../components/ThemeToggle.vue'
 import { Toast } from 'primevue'
 import { useToast } from 'primevue/usetoast'
 
@@ -550,12 +537,13 @@ import { importOmexFile, extractOmexArchive } from '../services/import/omex'
 
 import useDragAndDrop from '../composables/useDnD'
 import { useHandleManagement } from '../composables/useHandleManagement'
+import { useInstanceSave } from '../composables/useInstanceSave'
+import { useNodeDataHistory } from '../composables/useNodeDataHistory'
 import { useLoadFromInstanceArray } from '../composables/useLoadFromInstanceArray'
 import { useLoadFromCellML } from '../composables/useLoadFromCellml'
 import { useLoadFromUrl } from '../composables/useLoadFromUrl'
 import { createUrlLoaders } from '../services/urlLoaders'
 import { parseCellMLConnections } from '../services/import/parseCellmlConnections'
-import { useColorScheme } from '../composables/useColorScheme'
 import { useGtm } from '../composables/useGtm'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
 import { useImportExportSend } from '../composables/useImportExportSend'
@@ -574,7 +562,6 @@ import EdgeConnectionDialog from '../components/EdgeConnectionDialog.vue'
 import SettingsDialog from '../components/SettingsDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
 import PaneContextMenu from '../components/PaneContextMenu.vue'
-import { getPortVariables, reconcileRows } from '../services/math/reconcileRows'
 import InstanceEditorDialog from '../components/InstanceEditorDialog.vue'
 import CreateInspectionModuleDialog from '../components/dialogs/CreateInspectionModule.vue'
 import ContextSidebar from '../components/ContextSidebar.vue'
@@ -609,6 +596,7 @@ import {
   NEW_INSTANCE_MODULE_REF,
   NUM_GHOST_HANDLES_TOP_BOT,
   NUM_GHOST_HANDLES_LEFT_RIGHT,
+  PHLYNX_PROJECT_VERSION,
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
@@ -637,8 +625,8 @@ function onContextSidebarResize(width) {
 
 const fitViewParams = computed(() => ({
   padding: {
-    left: 0.5,
-    right: 0,
+    left: `${libraryPanelWidth.value + 40}px`,
+    right: 0.1,
     top: 0.1,
     bottom: 0.1,
   },
@@ -649,7 +637,6 @@ const SEARCH_BAR_TOP = 150
 const TOAST_GAP_BELOW_SEARCH_BAR = 16
 const toastTop = computed(() => SEARCH_BAR_TOP + TOAST_GAP_BELOW_SEARCH_BAR)
 
-const { isDarkMode, toggleDarkMode } = useColorScheme()
 
 const {
   addEdges,
@@ -700,12 +687,11 @@ const {
   reactivateEdgeHandles,
   revertHandleIfUnused,
 } = useHandleManagement()
+const { recordEdit, findIncidentEdgeIds } = useNodeDataHistory(FLOW_IDS.MAIN)
+const { saveInstanceEdit } = useInstanceSave(FLOW_IDS.MAIN)
 
 const dialogVisible = computed(() => {
   return (
-    portEditorDialogVisible.value ||
-    cellMLEditorDialogVisible.value ||
-    parameterEditorDialogVisible.value ||
     saveDialogVisible.value ||
     importDialogVisible.value ||
     exportDialogVisible.value ||
@@ -921,8 +907,8 @@ const inspectionModuleStore = useInspectionModuleStore()
 const historyStore = useFlowHistoryStore()
 const simulationSettingsStore = useSimulationSettingsStore()
 const omexStore = useOmexStore()
-const { loadFromInstanceArray } = useLoadFromInstanceArray()
-const { loadFromCellML } = useLoadFromCellML()
+const { loadFromInstanceArray } = useLoadFromInstanceArray({ fitViewParams })
+const { loadFromCellML } = useLoadFromCellML({ fitViewParams })
 const { capture } = useScreenshot()
 const { trackEvent } = useGtm()
 const { clearWorkspace } = useClearWorkspace()
@@ -935,9 +921,6 @@ const libcellmlReadyPromise = inject('$libcellml_ready')
 const libcellml = inject('$libcellml')
 const instanceEditorDefaultTab = ref('parameters')
 const instanceEditorDialogVisible = ref(false)
-const parameterEditorDialogVisible = ref(false)
-const portEditorDialogVisible = ref(false)
-const cellMLEditorDialogVisible = ref(false)
 const saveDialogVisible = ref(false)
 const importDialogVisible = ref(false)
 const exportDialogVisible = ref(false)
@@ -2085,13 +2068,6 @@ async function onImportConfirm(importPayload, updateProgress) {
   }
 }
 
-function onOpenPortEditorDialog(eventPayload) {
-  currentEditingNode.value = {
-    ...eventPayload,
-  }
-  portEditorDialogVisible.value = true
-}
-
 function onOpenInstanceEditorDialog(eventPayload, tab = 'parameters') {
   currentEditingNode.value = {
     ...eventPayload,
@@ -2112,142 +2088,12 @@ function onOpenSettingsDialog() {
   settingsDialogVisible.value = true
 }
 
-/**
- * Rebuilds a node's parameter rows from its math, keeping every value already set. A row the math
- * newly needs starts blank: the math's defaults only seed new instances.
- *
- * @param {Object} node - A workspace node.
- * @param {string} mathRef - The math the node now uses.
- */
-function updateVariablesFromMath(node, mathRef) {
-  if (!node) return
-  const analysis = libraryStore.getMathAnalysis(mathRef)
-  if (!analysis) return
-  node.data.variables = reconcileRows(analysis, node.data.variables ?? [], {
-    portVariables: getPortVariables(node.data.ports),
-  })
-}
-
-function cleanPorts(currentNode) {
-  const validVariables = new Set(currentNode.data.variables.map((v) => v.name))
-  currentNode.data.ports = currentNode.data.ports.filter((port) =>
-    (port.variables || []).every((v) => validVariables.has(v))
-  )
-}
-
-/**
- * Handler for both Saving (Updating) and Forking CellML modules.
- * Handles:
- * 1. Loading the new/updated CellML data.
- * 2. Migrating configs if the name changed.
- * 3. Updating graph nodes to match new ports.
- */
-async function handleCellMLSave(saveData) {
-  const { id, updateAll, mathRef, siblings } = saveData
-
-  // Update math references
-  updateNodeData(id, { mathRef })
-  let updatedCount = 1
-  if (updateAll) {
-    siblings.forEach((siblingId) => {
-      updateNodeData(siblingId, { mathRef })
-      updatedCount++
-    })
-  }
-
-  // The edited node's rows are already reconciled by the editor. Every other node on this math is
-  // rebuilt here, ticked or not, since an overwrite in place changes their math too.
-  const currentNode = findNode(id)
-  cleanPorts(currentNode)
-  const otherNodes = nodes.value.filter((node) => node.id !== id && node.data?.mathRef === mathRef)
-  otherNodes.forEach((node) => {
-    updateVariablesFromMath(node, mathRef)
-    cleanPorts(node)
-  })
-
-  // Update edge couplings
-  recomputeEdgeCouplings(id)
-  otherNodes.forEach((node) => recomputeEdgeCouplings(node.id))
-
+async function onInstanceEditConfirm(save) {
+  const updatedCount = await saveInstanceEdit(save)
   notify.success({
     title: 'CellML Updated',
-    message: `Updated ${updatedCount} node${updatedCount !== 1 ? 's' : ''} to ${mathRef.split(':').pop()}.`,
+    message: `Updated ${updatedCount} node${updatedCount !== 1 ? 's' : ''} to ${save.mathRef.split(':').pop()}.`,
   })
-}
-
-async function handleParameterSave(saveData) {
-  const { id, variables } = saveData
-  updateNodeData(id, { variables })
-}
-
-/**
- * Recomputes couplings on every edge touching a given node, using the node's
- * current ports. Call this after any operation that changes ports on
- * one or more nodes.
- */
-function recomputeEdgeCouplings(nodeId) {
-  const outgoing = edges.value.filter((e) => e.source === nodeId)
-  outgoing.forEach((edge) => {
-    const sourceNode = findNode(edge.source)
-    const targetNode = findNode(edge.target)
-    if (!sourceNode || !targetNode) return
-
-    const sourceIndex = outgoing.indexOf(edge)
-    const edgesIntoTarget = edges.value.filter((e) => e.target === edge.target)
-    const targetIndex = edgesIntoTarget.indexOf(edge)
-
-    edge.data = {
-      ...edge.data,
-      couplings: resolvePortCouplings(
-        sourceNode.data.ports ?? [],
-        targetNode.data.ports ?? [],
-        sourceIndex,
-        targetIndex
-      ),
-    }
-  })
-
-  const incoming = edges.value.filter((e) => e.target === nodeId)
-  incoming.forEach((edge) => {
-    const sourceNode = findNode(edge.source)
-    const targetNode = findNode(edge.target)
-    if (!sourceNode || !targetNode) return
-
-    const edgesFromSource = edges.value.filter((e) => e.source === edge.source)
-    const sourceIndex = edgesFromSource.indexOf(edge)
-    const targetIndex = incoming.indexOf(edge)
-
-    edge.data = {
-      ...edge.data,
-      couplings: resolvePortCouplings(
-        sourceNode.data.ports ?? [],
-        targetNode.data.ports ?? [],
-        sourceIndex,
-        targetIndex
-      ),
-    }
-  })
-}
-
-async function onInstanceEditConfirm(updatedData) {
-  const saveData = {
-    id: updatedData.id,
-    updateAll: updatedData.updateAll,
-    mathRef: updatedData.mathRef,
-    math: updatedData.math,
-    siblings: updatedData.siblings,
-  }
-
-  updateNodeData(updatedData.id, { name: updatedData.name, variables: updatedData.variables, ports: updatedData.ports })
-  await handleCellMLSave(saveData)
-}
-
-async function onPortEditConfirm(updatedData) {
-  const { id } = currentEditingNode.value
-  if (!id) return
-
-  updateNodeData(id, updatedData)
-  recomputeEdgeCouplings(id)
 }
 
 const nodeRefs = ref({})
@@ -2255,10 +2101,6 @@ const nodeRefs = ref({})
 async function onMacroBuilderGenerate(data) {
   handleMacroGeneration(data)
   macroBuilderDialogVisible.value = false
-}
-
-async function onSettingsConfirm(data) {
-  settingsDialogVisible.value = false
 }
 
 function handleMacroGeneration(macroPayload) {
@@ -2348,27 +2190,30 @@ function onEdgeConnectionConfirm({
   couplings,
   foreignCouplings,
 }) {
-  // Update ports on both nodes
-  updateNodeData(sourceNodeId, { ports: sourcePorts })
-  updateNodeData(targetNodeId, { ports: targetPorts })
+  const nodeIds = [sourceNodeId, targetNodeId]
+  recordEdit({
+    type: 'edit-connection',
+    nodeIds,
+    keys: ['ports'],
+    edgeIds: findIncidentEdgeIds(nodeIds),
+    apply: () => {
+      updateNodeData(sourceNodeId, { ports: sourcePorts })
+      updateNodeData(targetNodeId, { ports: targetPorts })
 
-  // Write the new couplings directly onto the active edge
-  const activeEdge = findEdge(edgeDialogActiveEdge.value?.id)
-  if (activeEdge) {
-    activeEdge.data = { ...activeEdge.data, couplings }
-  }
-
-  // Apply any coupling changes to sibling edges that were displaced by the user
-  // swapping a "taken elsewhere" port. The dialog tracks these explicitly in
-  // foreignCouplings so we write them directly.
-  if (foreignCouplings) {
-    for (const [edgeId, updatedCouplings] of Object.entries(foreignCouplings)) {
-      const edge = findEdge(edgeId)
-      if (edge) {
-        edge.data = { ...edge.data, couplings: updatedCouplings }
+      const activeEdge = findEdge(edgeDialogActiveEdge.value?.id)
+      if (activeEdge) {
+        activeEdge.data = { ...activeEdge.data, couplings }
       }
-    }
-  }
+
+      // Sibling edges displaced by the user swapping a "taken elsewhere" port.
+      for (const [edgeId, updatedCouplings] of Object.entries(foreignCouplings ?? {})) {
+        const edge = findEdge(edgeId)
+        if (edge) {
+          edge.data = { ...edge.data, couplings: updatedCouplings }
+        }
+      }
+    },
+  })
 }
 
 function onOpenReplacementDialog(eventPayload) {
@@ -2381,7 +2226,12 @@ function onOpenReplacementDialog(eventPayload) {
 async function onReplaceConfirm(updatedData) {
   const { id } = currentEditingNode.value
   if (!id) return
-  updateNodeData(id, updatedData)
+  recordEdit({
+    type: 'replace-module',
+    nodeIds: [id],
+    keys: Object.keys(updatedData),
+    apply: () => updateNodeData(id, updatedData),
+  })
   replacementDialogVisible.value = false
 }
 
@@ -2650,7 +2500,7 @@ function snapshotFlowState() {
 
   return JSON.stringify({
     id: 'phlynx-flow-snapshot',
-    version: '1.0.0',
+    version: PHLYNX_PROJECT_VERSION,
     nodeData,
     edges: flowState.edges,
     mathLibrary: mathLibraryObject,
@@ -3240,7 +3090,9 @@ watch(
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem 1rem;
+  height: var(--view-header-height);
+  box-sizing: border-box;
+  padding: 0 var(--view-header-padding-x);
   border-bottom: 1px solid var(--p-content-border-color);
   background-color: var(--p-content-background);
 }

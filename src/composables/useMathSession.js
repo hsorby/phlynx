@@ -50,7 +50,7 @@ function isSameLayout(layout, otherLayout) {
  * mid-session; a later `init` is the new editor's view of the same math.
  *
  * @param {Object} options
- * @param {Object} options.history - The flow history store.
+ * @param {Object} options.history - The undo history edits are recorded in.
  * @param {import('vue').Ref} options.editorRef - The mounted math editor.
  * @param {import('vue').Ref<Array>} options.ports - Editable ports; variables removed from the math are removed from them, and renamed ones renamed.
  * @returns {Object} Session state, queries and actions.

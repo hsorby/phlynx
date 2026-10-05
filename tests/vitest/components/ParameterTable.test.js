@@ -139,3 +139,55 @@ describe('ParameterTable initialiser picker', () => {
     expect(labels.some((label) => label.startsWith('a'))).toBe(false)
   })
 })
+
+describe('ParameterTable units', () => {
+  const SanitisedInput = { name: 'SanitisedInput' }
+
+  /** Mounts the table in Simple Mode, so the Units cells are editable. */
+  function mountUnits(rows) {
+    wrapper = mount(ParameterTable, {
+      props: {
+        rows,
+        isManaged: true,
+        isMissingUnits: () => false,
+        getUnitsNotice: () => '',
+        issueFilter: { activeKeys: { value: [] }, toggle: () => {}, isShown: () => true },
+        mathReferences: new Set(['x']),
+      },
+      global: { plugins: [PrimeVue] },
+    })
+  }
+
+  /** The editable Units inputs, in row order. */
+  const unitsInputs = () =>
+    wrapper.findAllComponents(SanitisedInput).filter((input) => input.props('placeholder') === 'e.g. mV or mV/ms')
+
+  it('keeps a state and its initialiser on the same units as each letter is typed', async () => {
+    const rows = reactive([
+      { name: 'x', units: '', type: 'variable', stateRole: 'state', initialiser: 'x_init', access: 'access' },
+      { name: 'x_init', units: '', type: 'constant', value: '1', access: 'no_access' },
+    ])
+    mountUnits(rows)
+    await flushPromises()
+
+    const [stateInput] = unitsInputs()
+    expect(unitsInputs()).toHaveLength(2)
+    for (const typed of ['m', 'me', 'met', 'metr', 'metre']) {
+      stateInput.vm.$emit('update:modelValue', typed)
+      expect(rows.map((row) => row.units)).toEqual([typed, typed])
+    }
+  })
+
+  it("updates a shared initialiser's states when its units are edited", async () => {
+    const rows = reactive([
+      { name: 'a', units: 'mM', type: 'variable', stateRole: 'state', initialiser: 'shared', access: 'access' },
+      { name: 'b', units: 'mM', type: 'variable', stateRole: 'state', initialiser: 'shared', access: 'access' },
+      { name: 'shared', units: 'mM', type: 'constant', value: '1', access: 'no_access' },
+    ])
+    mountUnits(rows)
+    await flushPromises()
+
+    unitsInputs().at(-1).vm.$emit('update:modelValue', 'uM')
+    expect(rows.map((row) => row.units)).toEqual(['uM', 'uM', 'uM'])
+  })
+})

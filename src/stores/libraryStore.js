@@ -2,12 +2,20 @@ import { defineStore } from 'pinia'
 import { parseLayout } from 'cellml-text-editor'
 import { ref, computed, markRaw } from 'vue'
 import { normaliseConfig, buildModule, parseMathRef } from '../utils/config'
-import { AFFINE_UNIT_CONVERSIONS, NEW_MODULE_MATH_REF, GHOST_MATH_REF, STANDARD_UNITS } from '../utils/constants'
+import {
+  AFFINE_UNIT_CONVERSIONS,
+  GENERATED_UNITS_FILE,
+  NEW_MODULE_MATH_REF,
+  GHOST_MATH_REF,
+  STANDARD_UNITS,
+} from '../utils/constants'
 import { cyrb53 } from '../utils/misc'
-import { extractUnitNames } from '../utils/units'
+import { expandUnits, extractUnitDefinitions, extractUnitNames, mergeUnitDefinitions } from '../utils/units'
+import { unitsModelXml } from '../utils/unitExpression'
 import { analyzeMathXml } from '../services/math/analyzeMath'
 import { analyzeBatchInBackground, analyzeInBackground } from '../services/math/mathWorkerClient'
 import { separateParameters } from '../services/math/separateParameters'
+import { detachReactivity } from '../utils/reactivity'
 
 function mergeIntoStore(newModules, target) {
   const moduleMap = new Map(target.map((mod) => [mod.componentFile, mod]))
@@ -41,9 +49,11 @@ export const useLibraryStore = defineStore('library', () => {
   const mathRefHash = ref(new Map())
   const availableUnits = ref([])
   const globalConstants = ref(new Map())
+
   // mathRef -> Map of the values that came with that math when it was added. They only seed new
   // instances: an existing instance's rows never read them, so math and parameters stay separate.
-  const mathDefaults = ref(new Map())
+  const mathDefaults = ref(new Map()) // TODO - somehow separate this from the library store, since values are separate from the math.
+  
   // mathRef -> TextLayout: the comments, blank lines and typed statements the math XML can't hold.
   const mathLayouts = ref(new Map())
 
@@ -345,6 +355,58 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
+  /**
+   * Removes math with its defaults, layout and analysis, marking its modules as stubs.
+   *
+   * @param {string} mathRef
+   */
+  function removeMath(mathRef) {
+    if ([GHOST_MATH_REF, NEW_MODULE_MATH_REF].includes(mathRef)) return
+
+    mathDefaults.value.delete(mathRef)
+    mathLayouts.value.delete(mathRef)
+    pendingAnalysis.delete(mathRef)
+    if (!availableMath.value.has(mathRef)) return
+
+    removeMathHashEntry(mathRef, mathRefHash.value.get(mathRef))
+    availableMath.value.delete(mathRef)
+    mathRefHash.value.delete(mathRef)
+    availableMathAnalysis.delete(mathRef)
+    updateStubStatus(mathRef)
+  }
+
+  /**
+   * Gets a copy of everything stored for a math, for restoreMathEntry.
+   *
+   * @param {string} mathRef
+   * @returns {{ math: string, defaults: Map<string, string>, layout: Object|null } | null} Null if there is no such math.
+   */
+  function getMathEntry(mathRef) {
+    const math = availableMath.value.get(mathRef)
+    if (math === undefined) return null
+    const layout = getMathLayout(mathRef)
+    return { math, defaults: new Map(getMathDefaults(mathRef)), layout: layout && detachReactivity(layout) }
+  }
+
+  /**
+   * Puts a math back as getMathEntry found it, replacing its defaults and layout, or removes it
+   * when the entry is null.
+   *
+   * @param {string} mathRef
+   * @param {ReturnType<typeof getMathEntry>} entry
+   */
+  function restoreMathEntry(mathRef, entry) {
+    if (!entry) return removeMath(mathRef)
+
+    availableMath.value.set(mathRef, entry.math)
+    if (entry.defaults.size) mathDefaults.value.set(mathRef, new Map(entry.defaults))
+    else mathDefaults.value.delete(mathRef)
+    setMathLayout(mathRef, entry.layout && detachReactivity(entry.layout))
+    addMathHashEntry(mathRef, entry.math)
+    updateStubStatus(mathRef)
+    scheduleMathAnalysis(mathRef, entry.math)
+  }
+
   function createModuleForMath(mathRef) {
     if ([GHOST_MATH_REF, NEW_MODULE_MATH_REF].includes(mathRef)) return
 
@@ -392,12 +454,15 @@ export const useLibraryStore = defineStore('library', () => {
   }
 
   function updateStubStatus(mathRef) {
-    if (!availableMath.value.has(mathRef)) return
+    if (!availableCollections.value.has(mathRef)) return
 
     availableCollections.value.get(mathRef)?.forEach((moduleRef) => {
       const module = availableModules.value.get(moduleRef)
-      if (module && module.isStub) {
+      if (!module) return
+      if (availableMath.value.has(mathRef)) {
         delete module.isStub
+      } else {
+        module.isStub = true
       }
     })
   }
@@ -463,6 +528,19 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
+  /**
+   * Adds a units made from a typed expression to the generated units file, creating the file if needed.
+   *
+   * @param {{ name: string, parts: Array<{ units: string, prefix: number, exponent: number, multiplier: number }> }} units
+   *   From interpretUnitExpression; every part is a CellML built-in units.
+   */
+  function addGeneratedUnits({ name, parts }) {
+    const file = availableUnits.value.find((f) => f.componentFile === GENERATED_UNITS_FILE)
+    const definitions = extractUnitDefinitions(file?.model)
+    definitions.set(name, parts)
+    addUnitsFile({ componentFile: GENERATED_UNITS_FILE, model: unitsModelXml(definitions) })
+  }
+
   // ---- GETTERS ----
 
   function getState() {
@@ -490,6 +568,17 @@ export const useLibraryStore = defineStore('library', () => {
     return names
   })
 
+  /** Every library units definition, the first of each name winning. Derived, so never saved. */
+  const unitDefinitions = computed(() => mergeUnitDefinitions(availableUnits.value.map((file) => file.model)))
+
+  /** Each units name's SI base-unit expansion, for display. Derived, so never saved. */
+  const unitExpansions = computed(() => expandUnits(availableUnits.value.map((file) => file.model)))
+
+  /** Each units name expanded only as far as CellML's built-in units, e.g. "10⁻³ V". Derived, so never saved. */
+  const builtInUnitExpansions = computed(() =>
+    expandUnits(availableUnits.value.map((file) => file.model), { builtIn: true })
+  )
+
   function hasUnits(name) {
     return availableUnitNames.value.has(name)
   }
@@ -505,6 +594,9 @@ export const useLibraryStore = defineStore('library', () => {
     // Derived State 
     globalVariables,
     availableUnitNames,
+    unitExpansions,
+    builtInUnitExpansions,
+    unitDefinitions,
 
     // Actions
     addConfigFile,
@@ -512,6 +604,7 @@ export const useLibraryStore = defineStore('library', () => {
     addMathFile,
     addMath,
     addUnitsFile,
+    addGeneratedUnits,
     assignGlobalConstant,
     createMathHash,
     resetGlobalConstants,
@@ -519,6 +612,9 @@ export const useLibraryStore = defineStore('library', () => {
     removeModule,
     removeCollection,
     removeGlobalConstant,
+    removeMath,
+    getMathEntry,
+    restoreMathEntry,
     cleanupUnusedGlobalConstants,
     findMathRefByMath,
     getMathHashByRef,

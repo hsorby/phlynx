@@ -95,7 +95,6 @@
           <CellMLTextEditor
             v-else-if="editorKind === 'text'"
             ref="mathEditorRef"
-            :key="mathRef"
             :model-value="currentModel"
             :layout="currentLayout"
             :simple="isManaged"
@@ -111,7 +110,6 @@
           <MathWorkbenchEditor
             v-else
             ref="mathEditorRef"
-            :key="mathRef"
             :model-value="currentModel"
             :component-name="componentNameForEditor"
             :variable-definitions="editorDefinitions"
@@ -201,6 +199,7 @@
                 :variable-kinds="variableKinds"
                 :connection-supplied="connectionSupplied"
                 :math-references="mathReferences"
+                :suggest-units="suggestUnitsFor"
               />
             </TabPanel>
 
@@ -359,7 +358,7 @@
       </div>
     </div>
 
-    <!-- OVERLAY:  -->
+    <!-- OVERLAY: Resize Warning -->
     <Transition name="resize-warning">
       <div v-if="isScreenTooSmall" class="resize-warning-overlay">
         <div class="resize-warning-card">
@@ -416,7 +415,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick, toRaw } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick, toRaw } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
@@ -441,16 +440,19 @@ import ParameterTable from './ParameterTable.vue'
 import SanitisedInput from './SanitisedInput.vue'
 import MultiportKey from './MultiportKey.vue'
 import PortVariableChips from './PortVariableChips.vue'
+
 import { useLibraryStore } from '../stores/libraryStore'
 import { useIssueFilter } from '../composables/useIssueFilter'
-import { useFlowHistoryStore } from '../stores/historyStore'
+import { createHistory } from '../stores/historyStore'
 import { useGtm } from '../composables/useGtm'
 import { useConfirmDialog } from '../composables/useConfirmDialog'
 import { useMathSession } from '../composables/useMathSession'
+import { useAppSettings } from '../composables/useAppSettings'
+
+import { isInitialisable } from '../services/math/variableKinds'
 
 import { isEmpty, syncInitialiserUnits } from '../utils/variables'
 import { getUnknownUnitsNotice, isValueMissing } from '../utils/parameterRows'
-import { isInitialisable } from '../services/math/variableKinds'
 import { PORT_TYPE_OPTIONS } from '../utils/constants'
 import { cleanName, sanitiseName } from '../utils/identifiers'
 import { detachReactivity } from '../utils/reactivity'
@@ -459,6 +461,7 @@ import { notify } from '../utils/notify'
 import { getModelComponentNames } from '../utils/cellml'
 import { findPort } from '../utils/ports'
 import { isMultiport, multiplyVariables, setMultiport, setPortVariables, variableFactor } from '../utils/multiport'
+import { suggestUnits } from '../utils/unitExpression'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -474,11 +477,26 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'confirm'])
 
 const store = useLibraryStore()
-const history = useFlowHistoryStore()
+const history = reactive(createHistory())
 
 const { trackEvent } = useGtm()
 const { nodes, edges } = useVueFlow()
 const { confirm } = useConfirmDialog()
+const { settings: appSettings } = useAppSettings()
+
+/** Each units name's expansion beside its suggestion, in the units the user chose in Settings. */
+const unitExpansions = computed(() =>
+  appSettings.unitDisplay === 'base' ? store.unitExpansions : store.builtInUnitExpansions
+)
+
+/** Library units that could complete the typed units; a units expression (e.g. `mV/ms`) also offers a new units. */
+function suggestUnitsFor(typed) {
+  const library = { names: store.availableUnitNames, definitions: store.unitDefinitions, expansions: store.unitExpansions }
+  const options = { details: unitExpansions.value, builtIn: appSettings.unitDisplay !== 'base' }
+  return suggestUnits(typed, library, options).map(({ create, ...item }) =>
+    create ? { ...item, onPick: () => store.addGeneratedUnits(create) } : item
+  )
+}
 
 // ── State ────────────────────────────────────────────────────────────────────
 const loading = ref(false)
@@ -635,7 +653,7 @@ const SPLIT_STORAGE_KEY = 'instanceEditorDialog.leftPanePercent'
 const DEFAULT_LEFT_PERCENT = 55
 const MIN_LEFT_PERCENT = 38
 const MAX_LEFT_PERCENT = 55
-const MIN_REQUIRED_WIDTH = 1000;
+const MIN_REQUIRED_WIDTH = 1000
 
 function loadStoredSplit() {
   try {
@@ -806,7 +824,7 @@ const issueChips = computed(() => {
     chips.push({ key: 'units', kind: 'units', icon: 'pi-exclamation-circle', count: missingUnits, label: `${plural(missingUnits, 'variable')} missing units` })
   }
   if (missingValues) {
-    chips.push({ key: 'values', kind: 'units', icon: 'pi-pencil', count: missingValues, label: `${plural(missingValues, 'value')} required` })
+    chips.push({ key: 'values', kind: 'units', icon: 'pi-sliders-h', count: missingValues, label: `${plural(missingValues, 'value')} required` })
   }
   if (timeVaryingInitialisers) {
     chips.push({
@@ -866,17 +884,19 @@ watch(
     if (!isOpen) {
       isEditorReady.value = false
       isDialogShown.value = false
+      history.clear()
       return
     }
 
     const requestId = ++openRequestId
+    history.clear()
     loading.value = true
     isEditorReady.value = false
     applyToAll.value = false
     nameError.value = ''
     rejectedName = ''
     flaggedPorts.value = new Set()
-    activeTab.value = props.defaultTab || 'parameters'
+    activeTab.value = props.defaultTab
     issueFilter.reset()
 
     editableName.value = props.initialName
@@ -1051,10 +1071,12 @@ async function handleCancel() {
   emit('update:modelValue', false)
 }
 
+// TODO: math overwrite confirmation should let user "fork" if there is a library conflict.
 async function handleMathOverwrite() {
+  const message = siblingCount.value > 0 ? `This will affect ${siblingCount.value} other instances. ` : ''
   return confirm({
     header: 'Overwrite Math?',
-    message: `You are about to overwrite an existing math definition. This will affect ${siblingCount.value} other instances. Are you sure you want to proceed?`,
+    message: `You are about to overwrite an existing math definition. ${message}Are you sure you want to proceed?`,
     severity: 'warning',
     acceptLabel: 'Proceed',
     rejectLabel: 'Cancel',
@@ -1163,20 +1185,14 @@ async function handleSave() {
   // Values typed into the text belong in the rows, so an edit to values alone leaves the math unchanged.
   session.separateTypedValues()
 
-  // Sync each state's initialiser to the state's units (only where the initialiser's own units
-  // are still blank - see syncInitialiserUnits).
-  syncInitialiserUnits(parameterRows.value)
+  // Give each state and its initialiser the same units. In Advanced Mode the text owns units, so only
+  // blank initialisers are filled (see syncInitialiserUnits).
+  syncInitialiserUnits(parameterRows.value, { overwrite: isManaged.value })
 
-  // 3. Process Global Constants from Parameters
-  parameterRows.value.forEach((row) => {
-    if (row.type === 'global_constant') {
-      store.assignGlobalConstant(row.name, row.value, row.units, row.data_reference)
-    }
-  })
-
-  // 4. Process CellML Source Changes
+  // 3. Check the math's new reference
   let newMathRef = props.mathRef
-  if (session.isDirty()) {
+  const isMathChanged = session.isDirty()
+  if (isMathChanged) {
     const componentNames = getModelComponentNames(currentModel.value)
     if (!componentNames || componentNames.length === 0) {
       notify.error({ message: 'Could not find a valid component name in the model.' })
@@ -1185,17 +1201,13 @@ async function handleSave() {
     const newComponentName = componentNames[0].trim()
 
     newMathRef = `${componentFile.value}:${newComponentName}`
-    if (newMathRef === props.mathRef && store.availableMath.has(newMathRef)) {
+    if (store.availableMath.has(newMathRef)) {
       const overwrite = await handleMathOverwrite()
       if (!overwrite) return
     }
-    store.addMath(newMathRef, currentModel.value, true, currentLayout.value)
-  } else if (newMathRef && session.isLayoutDirty()) {
-    // Only comments or formatting changed: the math, and so every instance using it, is unchanged.
-    store.setMathLayout(newMathRef, currentLayout.value)
   }
 
-  const updateAll = (siblingCount.value > 0 && applyToAll.value) || siblingCount.value === 0
+  const updateAll = applyToAll.value || siblingCount.value === 0
 
   trackEvent('editor_action', {
     category: 'Editor',
@@ -1203,17 +1215,25 @@ async function handleSave() {
     label: editableName.value,
   })
 
-  // Emit consolidated payload to parent workspace
-  emit('confirm', {
-    id: props.id,
-    name: editableName.value,
-    mathRef: newMathRef,
-    math: currentModel.value,
-    variables: parameterRows.value,
-    ports: finalPorts,
-    updateAll,
-    siblings: updateAll ? siblings.value : undefined,
-  })
+  emit(
+    'confirm',
+    detachReactivity({
+      id: props.id,
+      name: editableName.value,
+      mathRef: newMathRef,
+      previousMathRef: props.mathRef,
+      math: isMathChanged ? currentModel.value : null,
+      layout: currentLayout.value,
+      isLayoutChanged: !isMathChanged && session.isLayoutDirty(),
+      globalConstants: parameterRows.value
+        .filter((row) => row.type === 'global_constant')
+        .map(({ name, value, units, data_reference }) => ({ name, value, units, data_reference })),
+      variables: parameterRows.value,
+      ports: finalPorts,
+      updateAll,
+      siblings: updateAll ? siblings.value : [],
+    })
+  )
 
   emit('update:modelValue', false)
 }
@@ -1227,7 +1247,6 @@ async function handleSave() {
   font-size: 1.125rem;
   font-weight: 600;
   width: 100%;
-  overflow: visible;
   flex-wrap: wrap;
 }
 
@@ -1553,7 +1572,6 @@ async function handleSave() {
   height: 100%;
 }
 
-.parameters-tab-body,
 .ports-tab-body {
   display: flex;
   flex-direction: column;
@@ -1577,8 +1595,7 @@ async function handleSave() {
   overflow: hidden !important;
 }
 
-.table-flex-wrapper :deep(.p-datatable-table-container),
-.table-flex-wrapper :deep(.p-datatable-wrapper) {
+.table-flex-wrapper :deep(.p-datatable-table-container) {
   min-height: 0 !important;
   flex: 1 1 auto !important;
   overflow-y: auto !important;
@@ -1618,7 +1635,6 @@ async function handleSave() {
   background-color: color-mix(in srgb, var(--p-yellow-500, #eab308) 14%, transparent);
 }
 
-/* Units cell: input plus a small flag when the name needs fixing or isn't in the library */
 /* Selection checkboxes: the default is sized for forms, which is large in a dense table */
 .right-pane :deep(.parameters-table) {
   --p-checkbox-width: 1rem;
@@ -1696,7 +1712,6 @@ async function handleSave() {
 }
 
 .w-full { width: 100%; }
-.text-muted { color: var(--p-text-muted-color); }
 
 /* Normalise table typography - DataTable renders these cells directly */
 /* in our own template output (not teleported), so :deep() reaches them. */
