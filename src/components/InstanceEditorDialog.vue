@@ -1141,9 +1141,9 @@ async function handleSave() {
   // Values typed into the text belong in the rows, so an edit to values alone leaves the math unchanged.
   session.separateTypedValues()
 
-  // Sync each state's initialiser to the state's units (only where the initialiser's own units
-  // are still blank - see syncInitialiserUnits).
-  syncInitialiserUnits(parameterRows.value)
+  // Give each state and its initialiser the same units. In Advanced Mode the text owns units, so only
+  // blank initialisers are filled (see syncInitialiserUnits).
+  syncInitialiserUnits(parameterRows.value, { overwrite: isManaged.value })
 
   // 3. Process Global Constants from Parameters
   parameterRows.value.forEach((row) => {

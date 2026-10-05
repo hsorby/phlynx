@@ -14,6 +14,7 @@ import { useMathSession } from '../../../src/composables/useMathSession.js'
 import { useFlowHistoryStore } from '../../../src/stores/historyStore.js'
 import { useLibraryStore } from '../../../src/stores/libraryStore.js'
 import { reconcileRows } from '../../../src/services/math/reconcileRows.js'
+import { setLinkedUnits } from '../../../src/utils/variables.js'
 import { ensureLibCellmlReady } from '../helpers/libcellml-bootstrap.js'
 
 const MATH_REF = 'file:decay'
@@ -115,6 +116,22 @@ describe('useMathSession', () => {
   it('flags a row whose units are cleared', () => {
     byName(session.parameterRows.value).k.units = ''
     expect(session.parameterRows.value.filter(session.isMissingUnits).map((r) => r.name)).toEqual(['k'])
+  })
+
+  it('keeps a state and its initialiser on the same units when an edit lands mid-typing', async () => {
+    await editorRef.value.report('init', 'ode(x, t) = -x;\n', true)
+    setLinkedUnits(session.parameterRows.value, byName(session.parameterRows.value).x, 'm')
+    await editorRef.value.report('edit', 'ode(x, t) = -k * x;\n', true)
+
+    setLinkedUnits(session.parameterRows.value, byName(session.parameterRows.value).x, 'metre')
+    expect(byName(session.parameterRows.value).x0.units).toBe('metre')
+  })
+
+  it('gives a drifted initialiser its state units when the math is edited', async () => {
+    await editorRef.value.report('init', 'ode(x, t) = -x;\n', true)
+    byName(session.parameterRows.value).x0.units = 'm'
+    await editorRef.value.report('edit', 'ode(x, t) = -k * x;\n', true)
+    expect(byName(session.parameterRows.value)).toMatchObject({ x: { units: 'metre' }, x0: { units: 'metre' } })
   })
 
   it('turns a valid edit into rows and port changes that undo together', async () => {

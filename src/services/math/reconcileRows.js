@@ -260,6 +260,6 @@ export function reconcileRows(analysis, previousRows = [], { mode = SIMPLE_MODE,
   }
 
   resolveStateInitialisers(rows, analysis.stateVariables)
-  syncInitialiserUnits(rows)
+  syncInitialiserUnits(rows, { overwrite: mode === SIMPLE_MODE })
   return rows
 }
