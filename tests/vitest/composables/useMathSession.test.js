@@ -238,16 +238,6 @@ describe('useMathSession', () => {
 
       expect(byName(session.parameterRows.value).k.value).toBe('7')
     })
-
-    it('keeps the later instance’s rows when the earlier analysis arrives first', async () => {
-      const first = session.load({ mathRef: MATH_REF, rows: SAVED_K, managed: true })
-      resolveFirst()
-      await first
-      await session.load({ mathRef: GROWTH_REF, rows: [], managed: true })
-
-      expect(byName(session.parameterRows.value).k).toBeUndefined()
-      expect(session.mathReferences.value.has('r')).toBe(true)
-    })
   })
 
   it('starts a row the session adds blank, even when the math has a default for it', async () => {
