@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { resolveBoundaryValues } from '../../../../src/services/export/boundaryValues.js'
 
-const node = (id, variables) => ({ id, data: { name: id, variables } })
+const node = (id, variables, ports = []) => ({ id, data: { name: id, variables, ports } })
 const row = (name, type, value = '', units = 'mM') => ({ name, type, value, units })
 const edge = (source, target, sourcePort, targetPort) => ({
   source,
@@ -95,6 +95,72 @@ describe('resolveBoundaryValues', () => {
     ]
     const { supplied, missing } = resolveBoundaryValues(nodes, [edge('a', 'b', port(['T']), port(['T_c']))])
     expect(supplied.size).toBe(0)
+    expect(missing.size).toBe(0)
+  })
+
+  it('sums and shares the variables of a per-variable multiport', () => {
+    const hubPort = port(['v_sum', 'u'], ['sum', 'True'])
+    const nodes = [
+      node('hub', [row('v_sum', 'boundary_condition', '3'), row('u', 'variable')], [hubPort]),
+      node('leaf', [row('v', 'variable'), row('u', 'boundary_condition')]),
+    ]
+    const { supplied, missing, emptySums } = resolveBoundaryValues(nodes, [edge('hub', 'leaf', hubPort, port(['v', 'u']))])
+    expect(supplied.size).toBe(0)
+    expect(missing.size).toBe(0)
+    expect(emptySums.size).toBe(0)
+  })
+
+  it('does not join a sum to its term', () => {
+    const nodes = [node('hub', [row('v_sum', 'boundary_condition')]), node('leaf', [row('v', 'boundary_condition', '2')])]
+    const { supplied } = resolveBoundaryValues(nodes, [edge('hub', 'leaf', port(['v_sum'], ['sum']), port(['v']))])
+    expect(namesFor(supplied, 'leaf')).toEqual(['v'])
+  })
+
+  it('sets a blank Sum variable nothing is connected to to 0, scalar or per variable', () => {
+    const nodes = [
+      node('a', [row('v_sum', 'boundary_condition'), row('u', 'boundary_condition', '1')], [port(['v_sum', 'u'], ['sum', 'True'])]),
+      node('b', [row('total', 'boundary_condition')], [port(['total'], 'Sum')]),
+    ]
+    const { missing, emptySums } = resolveBoundaryValues(nodes, [])
+    expect(missing.size).toBe(0)
+    expect(namesFor(emptySums, 'a')).toEqual(['v_sum'])
+    expect(namesFor(emptySums, 'b')).toEqual(['total'])
+  })
+
+  it('uses the value of a Sum variable nothing is connected to', () => {
+    const nodes = [node('a', [row('total', 'boundary_condition', '4')], [port(['total'], 'Sum')])]
+    const { supplied, emptySums } = resolveBoundaryValues(nodes, [])
+    expect(namesFor(supplied, 'a')).toEqual(['total'])
+    expect(emptySums.size).toBe(0)
+  })
+
+  it('leaves a Sum variable nothing is connected to alone when another coupling supplies it', () => {
+    const nodes = [
+      node('a', [row('s', 'boundary_condition')], [port(['s'], 'Sum'), port(['s'])]),
+      node('b', [row('p', 'boundary_condition', '5')]),
+    ]
+    const { supplied, emptySums } = resolveBoundaryValues(nodes, [edge('a', 'b', port(['s']), port(['p']))])
+    expect(namesFor(supplied, 'b')).toEqual(['p'])
+    expect(emptySums.size).toBe(0)
+  })
+
+  it('names the instance whose port has a malformed per-variable multiport', () => {
+    const nodes = [node('a', [row('s', 'boundary_condition', '1')], [port(['s', 't'], ['sum'])])]
+    expect(() => resolveBoundaryValues(nodes, [])).toThrow('"a" port "p": Port "p" has 1 multiport entries for 2 variables.')
+  })
+
+  it('counts the neighbour of a multiply on the target side as computed', () => {
+    const nodes = [node('src', [row('q_in', 'boundary_condition', '2')]), node('dst', [row('q', 'variable')])]
+    const { supplied, missing } = resolveBoundaryValues(nodes, [
+      edge('src', 'dst', port(['q_in']), port(['q'], ['multiply'])),
+    ])
+    expect(supplied.size).toBe(0)
+    expect(missing.size).toBe(0)
+  })
+
+  it('counts a sum fed by a multiply as computed', () => {
+    const nodes = [node('src', [row('q', 'variable')]), node('hub', [row('total', 'boundary_condition')])]
+    const { missing } = resolveBoundaryValues(nodes, [edge('src', 'hub', port(['q'], 'Multiply'), port(['total'], 'Sum'))])
     expect(missing.size).toBe(0)
   })
 })

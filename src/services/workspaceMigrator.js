@@ -322,6 +322,9 @@ function convertStore(oldStore, globalConstantNames) {
  *   names an initialiser variable, and store.mathDefaults holds the values taken out of each math.
  *   store.mathLayouts holds `[mathRef, TextLayout]` pairs: each math's CellML text comments, blank
  *   lines and statements as typed (see cellml-text-editor), which the XML can't hold.
+ *   A port's multiportType and multiplyFactor may be lists, one entry per variable, when its
+ *   variables differ (see utils/multiport.js); a whole-port value still means every variable, so
+ *   1.0.0 ports need no migration.
  */
 const LEGACY_VERSION = 'legacy'
 

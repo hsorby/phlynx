@@ -42,8 +42,8 @@
             <div class="col-subheaders">
               <span class="col-header">Type</span>
               <span class="col-header">Label</span>
-              <span class="col-header">Variables</span>
               <span class="col-header">Multiport</span>
+              <span class="col-header">Variables</span>
               <span aria-hidden="true"></span>
               <span aria-hidden="true"></span>
             </div>
@@ -59,8 +59,8 @@
               <span aria-hidden="true"></span>
               <span class="col-header">Type</span>
               <span class="col-header">Label</span>
-              <span class="col-header">Variables</span>
               <span class="col-header">Multiport</span>
+              <span class="col-header">Variables</span>
             </div>
           </div>
         </div>
@@ -181,6 +181,7 @@
           <span class="legend-item"><span class="legend-dot dot-connected"></span>Connected</span>
           <span class="legend-item"><span class="legend-dot dot-taken"></span>Taken</span>
           <span class="legend-item"><span class="legend-dot dot-free"></span>Available</span>
+          <MultiportKey />
         </div>
       </div>
     </div>
@@ -225,6 +226,7 @@ import { isCompatible } from '../utils/ports'
 import { detachReactivity } from '../utils/reactivity'
 import { waitUntilStable } from '../utils/layout'
 
+import MultiportKey from './MultiportKey.vue'
 import PortRow from './PortRow.vue'
 import { useEdgeCouplings } from '../composables/useEdgeCouplings'
 import { usePortDrag } from '../composables/usePortDrag'
@@ -561,12 +563,14 @@ function buildPayload() {
           label: sp.label,
           variables: sp.variables,
           multiportType: sp.multiportType,
+          multiplyFactor: sp.multiplyFactor,
         },
         targetPort: {
           portType: tp.portType,
           label: tp.label,
           variables: tp.variables,
           multiportType: tp.multiportType,
+          multiplyFactor: tp.multiplyFactor,
         },
       }
     }),
@@ -754,12 +758,12 @@ watch(
 
 /* Source side header grid */
 .source-side .col-subheaders {
-  grid-template-columns: 60px minmax(0, 1fr) minmax(0, 1.2fr) 85px 16px 28px;
+  grid-template-columns: 60px minmax(0, 1fr) 56px minmax(0, 1.6fr) 16px 28px;
 }
 
 /* Target side header grid + 20px offset */
 .target-side .col-subheaders {
-  grid-template-columns: 16px 28px 60px minmax(0, 1fr) minmax(0, 1.2fr) 85px;
+  grid-template-columns: 16px 28px 60px minmax(0, 1fr) 56px minmax(0, 1.6fr);
   transform: translateX(20px); 
 }
 

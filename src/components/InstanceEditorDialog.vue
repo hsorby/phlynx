@@ -237,20 +237,45 @@
 
                     <Column header="Label" style="min-width: 140px">
                       <template #body="slotProps">
-                        <InputText
-                          v-model="slotProps.data.label"
-                          :invalid="isPortFlagged(slotProps.data) && !slotProps.data.label?.trim()"
-                          placeholder="Enter label"
+                        <div class="flex items-center gap-2">
+                          <!-- Whether the port is connected, as the edge dialog shows it -->
+                          <span
+                            :class="['port-status', portConnections(slotProps.data).length ? 'port-status--connected' : 'port-status--free']"
+                            v-tooltip.top="portStatus(slotProps.data)"
+                          ></span>
+                          <InputText
+                            v-model="slotProps.data.label"
+                            :invalid="isPortFlagged(slotProps.data) && !slotProps.data.label?.trim()"
+                            placeholder="Enter label"
+                            size="small"
+                            class="w-full"
+                          />
+                        </div>
+                      </template>
+                    </Column>
+
+                    <!-- One connection with every variable None, or several with each True, Sum or Multiply -->
+                    <Column header="Multiport" style="width: 5rem">
+                      <template #body="slotProps">
+                        <Button
+                          icon="pi pi-arrows-h"
+                          text
+                          rounded
                           size="small"
-                          class="w-full"
+                          :severity="isMultiport(slotProps.data) ? undefined : 'secondary'"
+                          :aria-pressed="isMultiport(slotProps.data)"
+                          aria-label="Multiport"
+                          v-tooltip.top="isMultiport(slotProps.data) ? 'Multiport: takes several connections' : 'Takes one connection'"
+                          @click="setMultiport(slotProps.data, !isMultiport(slotProps.data))"
                         />
                       </template>
                     </Column>
 
-                    <Column header="Variable(s)" style="min-width: 180px">
+                    <Column header="Variables" style="min-width: 200px">
                       <template #body="slotProps">
                         <MultiSelect
-                          v-model="slotProps.data.variables"
+                          :modelValue="slotProps.data.variables"
+                          @update:modelValue="setPortVariables(slotProps.data, $event)"
                           :invalid="isPortFlagged(slotProps.data) && !slotProps.data.variables?.length"
                           :options="parameterRows"
                           optionLabel="name"
@@ -258,7 +283,6 @@
                           size="small"
                           placeholder="Select variables"
                           class="w-full"
-                          :maxSelectedLabels="3"
                           filter
                           autoFilterFocus
                           resetFilterOnHide
@@ -266,6 +290,15 @@
                           emptyFilterMessage="No matching variables"
                           :pt="{ overlay: { class: 'ports-variable-overlay' } }"
                         >
+                          <template #value="{ value, placeholder }">
+                            <PortVariableChips
+                              v-if="value?.length"
+                              :port="slotProps.data"
+                              :limit="3"
+                              :invalid="isPortFlagged(slotProps.data)"
+                            />
+                            <template v-else>{{ placeholder }}</template>
+                          </template>
                           <template #filtericon>
                             <span class="ports-variable-filter-icons">
                               <i class="pi pi-search"></i>
@@ -279,33 +312,6 @@
                             </span>
                           </template>
                         </MultiSelect>
-                      </template>
-                    </Column>
-
-                    <Column header="Multiport" style="min-width: 110px">
-                      <template #body="slotProps">
-                        <div class="flex flex-col gap-1">
-                          <Select
-                            v-model="slotProps.data.multiportType"
-                            :options="MULTIPORT_OPTIONS"
-                            optionLabel="label"
-                            optionValue="value"
-                            size="small"
-                            placeholder="Select"
-                            class="w-full"
-                          />
-                          <div v-if="slotProps.data.multiportType === 'Multiply'" class="flex items-center gap-1">
-                            <span class="multiply-prefix">&times;</span>
-                            <InputNumber
-                              v-model="slotProps.data.multiplyFactor"
-                              :invalid="isPortFlagged(slotProps.data) && isEmpty(slotProps.data.multiplyFactor)"
-                              :showButtons="false"
-                              size="small"
-                              placeholder="1"
-                              class="w-full"
-                            />
-                          </div>
-                        </div>
                       </template>
                     </Column>
 
@@ -336,6 +342,11 @@
                   text
                   @click="addPort"
                 />
+                <div v-if="editablePorts.length" class="ports-key">
+                  <span class="port-key-item"><span class="port-status port-status--connected"></span>Connected</span>
+                  <span class="port-key-item"><span class="port-status port-status--free"></span>Available</span>
+                  <MultiportKey />
+                </div>
                 <div v-else class="empty-state">
                   <span>No ports defined for this instance.</span>
                   <Button icon="pi pi-plus" label="Add Port" severity="success" size="small" rounded outlined @click="addPort" />
@@ -404,7 +415,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick, toRaw } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
@@ -412,7 +423,6 @@ import Checkbox from 'primevue/checkbox'
 import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
 import Dialog from 'primevue/dialog'
-import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
@@ -428,6 +438,8 @@ import CellMLTextEditor from './CellMLTextEditor.vue'
 import MathWorkbenchEditor from './MathWorkbenchEditor.vue'
 import ParameterTable from './ParameterTable.vue'
 import SanitisedInput from './SanitisedInput.vue'
+import MultiportKey from './MultiportKey.vue'
+import PortVariableChips from './PortVariableChips.vue'
 
 import { useLibraryStore } from '../stores/libraryStore'
 import { useIssueFilter } from '../composables/useIssueFilter'
@@ -441,12 +453,14 @@ import { isInitialisable } from '../services/math/variableKinds'
 
 import { isEmpty, syncInitialiserUnits } from '../utils/variables'
 import { getUnknownUnitsNotice, isValueMissing } from '../utils/parameterRows'
-import { PORT_TYPE_OPTIONS, MULTIPORT_OPTIONS } from '../utils/constants'
+import { PORT_TYPE_OPTIONS } from '../utils/constants'
 import { cleanName, sanitiseName } from '../utils/identifiers'
 import { detachReactivity } from '../utils/reactivity'
 import { waitUntilStable } from '../utils/layout'
 import { notify } from '../utils/notify'
 import { getModelComponentNames } from '../utils/cellml'
+import { findPort } from '../utils/ports'
+import { isMultiport, multiplyVariables, setMultiport, setPortVariables, variableFactor } from '../utils/multiport'
 import { suggestUnits } from '../utils/unitExpression'
 
 const props = defineProps({
@@ -466,7 +480,7 @@ const store = useLibraryStore()
 const history = reactive(createHistory())
 
 const { trackEvent } = useGtm()
-const { nodes } = useVueFlow()
+const { nodes, edges } = useVueFlow()
 const { confirm } = useConfirmDialog()
 const { settings: appSettings } = useAppSettings()
 
@@ -894,6 +908,7 @@ watch(
         ? port.variables.map((v) => (typeof v === 'object' && v !== null ? v.name : v))
         : [],
     }))
+    indexPortConnections()
 
     // Saved stateRole/initialiser keep pairings the math alone can't reveal, such as shared initialisers.
     const savedRows = props.variables.map((row) => ({
@@ -969,16 +984,41 @@ function isIncompletePort(port) {
 }
 
 /**
- * Checks whether a port has a multiply factor selected but no factor entered.
+ * Checks whether a port has a Multiply variable with no factor entered.
  *
  * @param {Object} port
  * @returns {boolean}
  */
 function isMissingFactor(port) {
-  return port.multiportType === 'Multiply' && isEmpty(port.multiplyFactor)
+  return multiplyVariables(port).some((name) => isEmpty(variableFactor(port, name)))
 }
 
 const isPortFlagged = (port) => flaggedPorts.value.has(port)
+
+// The modules each port is connected to, read from the canvas edges when the editor opens.
+const connectionsByPort = new WeakMap()
+
+/** Records, for each editable port, the names of the modules its couplings reach. */
+function indexPortConnections() {
+  const nameOf = (id) => nodes.value.find((node) => node.id === id)?.data.name ?? id
+  editablePorts.value.forEach((port, i) => {
+    const original = props.initialPorts[i]
+    const names = edges.value.flatMap((edge) =>
+      (edge.data?.couplings ?? []).flatMap(({ sourcePort, targetPort }) => {
+        const own = edge.source === props.id ? sourcePort : edge.target === props.id ? targetPort : null
+        return own && findPort([original], own) ? [nameOf(edge.source === props.id ? edge.target : edge.source)] : []
+      })
+    )
+    connectionsByPort.set(toRaw(port), names)
+  })
+}
+
+const portConnections = (port) => connectionsByPort.get(toRaw(port)) ?? []
+
+const portStatus = (port) => {
+  const names = portConnections(port)
+  return names.length ? `Connected to ${names.join(', ')}` : 'Not connected'
+}
 
 const incompletePortCount = computed(
   () => editablePorts.value.filter((port) => isPortFlagged(port) && isIncompletePort(port)).length
@@ -1624,6 +1664,35 @@ async function handleSave() {
   box-shadow: inset 1px 0 0 var(--p-datatable-body-cell-border-color);
 }
 
+/* A port's connection state, coloured as in the edge dialog's legend */
+.port-status {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--p-text-muted-color);
+}
+
+.port-status--connected {
+  background: var(--p-primary-color);
+}
+
+.ports-key {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 4px 0;
+}
+
+.port-key-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--p-text-muted-color);
+}
+
 .add-port-row {
   flex-shrink: 0;
   justify-content: center;
@@ -1640,12 +1709,6 @@ async function handleSave() {
   color: var(--p-text-muted-color);
   font-size: var(--dlg-fs-small);
   margin-top: 16px;
-}
-
-.multiply-prefix {
-  font-size: var(--dlg-fs-tiny);
-  font-weight: 600;
-  color: var(--p-text-muted-color);
 }
 
 .w-full { width: 100%; }

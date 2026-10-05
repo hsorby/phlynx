@@ -5,12 +5,15 @@
  *
  * A coupled group is the variables that direct port couplings make equivalent. A group is already
  * supplied when one of its variables is computed (by its own math, or by a generated sum, multiply
- * or unit conversion component) or set by a constant row.
+ * or unit conversion component) or set by a constant row. Couplings pair variables by position, each
+ * with its own multiport type (see utils/multiport.js).
  */
 import { AFFINE_UNIT_CONVERSIONS, VALUE_REQUIRED_TYPES } from '../../utils/constants'
 import { isBlank } from '../../utils/variables'
+import { variableTypes } from '../../utils/multiport'
 
 const keyOf = (nodeId, name) => `${nodeId}::${name}`
+const isPlain = (type) => type === 'None' || type === 'True'
 
 /**
  * Finds the variable an affine unit conversion computes between two coupled variables, mirroring
@@ -39,9 +42,10 @@ function affineOutputKey(source, target) {
  *
  * @param {Array} nodes - Workspace nodes with `data.name` and `data.variables` rows.
  * @param {Array} edges - Workspace edges with `data.couplings`.
- * @returns {{supplied: Map<string, Set<string>>, missing: Map<string, Set<string>>, conflicts: string[]}}
- *   `supplied` maps node id to the boundary condition names whose values to use, and `missing` to
- *   those nothing supplies; `conflicts` describes groups given several different values.
+ * @returns {{supplied: Map<string, Set<string>>, missing: Map<string, Set<string>>, conflicts: string[],
+ *   emptySums: Map<string, Set<string>>}} `supplied` maps node id to the boundary condition names whose
+ *   values to use, `missing` to those nothing supplies, and `emptySums` to the blank Sum variables
+ *   nothing is connected to, which are set to 0; `conflicts` describes groups given several different values.
  */
 export function resolveBoundaryValues(nodes, edges) {
   const rows = new Map()
@@ -66,29 +70,45 @@ export function resolveBoundaryValues(nodes, edges) {
     for (const { sourcePort, targetPort } of edge.data?.couplings ?? []) {
       const sourceVariables = sourcePort?.variables ?? []
       const targetVariables = targetPort?.variables ?? []
-      const isSourceSum = sourcePort?.multiportType === 'Sum'
-      const isTargetSum = targetPort?.multiportType === 'Sum'
+      const sourceTypes = variableTypes(sourcePort ?? {})
+      const targetTypes = variableTypes(targetPort ?? {})
 
-      // A sum's result and a multiply's output are computed by generated components.
-      if (isSourceSum) sourceVariables.forEach((name) => computed.add(keyOf(edge.source, name)))
-      if (isTargetSum) targetVariables.forEach((name) => computed.add(keyOf(edge.target, name)))
-      if (sourcePort?.multiportType === 'Multiply') {
-        targetVariables.forEach((name) => computed.add(keyOf(edge.target, name)))
-        continue
-      }
-      if (isSourceSum || isTargetSum) continue
-
-      const count = Math.min(sourceVariables.length, targetVariables.length)
+      const count = Math.min(sourceTypes.length, targetTypes.length)
       for (let i = 0; i < count; i++) {
         if (!sourceVariables[i] || !targetVariables[i]) continue
         const source = { key: keyOf(edge.source, sourceVariables[i]) }
         const target = { key: keyOf(edge.target, targetVariables[i]) }
+
+        // A sum's result and a multiply's output are computed by generated components.
+        if (sourceTypes[i] === 'Sum') computed.add(source.key)
+        if (targetTypes[i] === 'Sum') computed.add(target.key)
+        if (sourceTypes[i] === 'Multiply') computed.add(target.key)
+        if (targetTypes[i] === 'Multiply') computed.add(source.key)
+        if (!isPlain(sourceTypes[i]) || !isPlain(targetTypes[i])) continue
+
         source.units = rows.get(source.key)?.row.units
         target.units = rows.get(target.key)?.row.units
         const affineOutput = affineOutputKey(source, target)
         if (affineOutput) computed.add(affineOutput)
         else join(source.key, target.key)
       }
+    }
+  }
+
+  // Sum variables nothing is connected to; each sums over nothing.
+  const unconnectedSums = new Set()
+  for (const node of nodes) {
+    for (const port of node.data?.ports ?? []) {
+      let types
+      try {
+        types = variableTypes(port)
+      } catch (error) {
+        throw new Error(`"${node.data.name}" port "${port.label}": ${error.message}`)
+      }
+      types.forEach((type, i) => {
+        const key = keyOf(node.id, port.variables[i])
+        if (type === 'Sum' && !computed.has(key)) unconnectedSums.add(key)
+      })
     }
   }
 
@@ -101,6 +121,7 @@ export function resolveBoundaryValues(nodes, edges) {
 
   const supplied = new Map()
   const missing = new Map()
+  const emptySums = new Map()
   const conflicts = []
   const addTo = (map, { nodeId, row }) => {
     if (!map.has(nodeId)) map.set(nodeId, new Set())
@@ -120,7 +141,10 @@ export function resolveBoundaryValues(nodes, edges) {
     const withValues = boundaries.filter(({ row }) => !isBlank(row.value))
     const label = ({ nodeName, row }) => `${nodeName}.${row.name}`
     if (!withValues.length) {
-      boundaries.forEach((member) => addTo(missing, member))
+      // Nothing else supplies the group, so a Sum nothing is connected to sets it to 0.
+      const emptySum = members.find(({ key }) => unconnectedSums.has(key))
+      if (emptySum) addTo(emptySums, emptySum)
+      else boundaries.forEach((member) => addTo(missing, member))
       continue
     }
 
@@ -134,5 +158,5 @@ export function resolveBoundaryValues(nodes, edges) {
     addTo(supplied, withValues[0])
   }
 
-  return { supplied, missing, conflicts }
+  return { supplied, missing, conflicts, emptySums }
 }
