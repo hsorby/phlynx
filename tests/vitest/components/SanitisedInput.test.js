@@ -19,6 +19,18 @@ describe('SanitisedInput', () => {
     expect(input.attributes()).toHaveProperty('autofocus')
   })
 
+  it('shows the rename popover only while the field has focus', async () => {
+    wrapper = mount(SanitisedInput, {
+      props: { modelValue: 'mV/ms', sanitise: (value) => value.replace(/\W/g, '_') },
+      global: { plugins: [PrimeVue] },
+    })
+    const popover = () => wrapper.find('[role="alert"]')
+    expect(popover().exists()).toBe(false)
+
+    await wrapper.find('input').trigger('focus')
+    expect(popover().text()).toContain('Will be renamed to mV_ms')
+  })
+
   it('exposes updatePosition for callers that move the field', () => {
     wrapper = mount(SanitisedInput, { props: { modelValue: 'x', floating: true }, global: { plugins: [PrimeVue] } })
     expect(typeof wrapper.vm.updatePosition).toBe('function')

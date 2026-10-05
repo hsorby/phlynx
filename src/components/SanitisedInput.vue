@@ -19,6 +19,7 @@
       :aria-expanded="suggest ? showSuggestions : undefined"
       :aria-controls="showSuggestions ? listId : undefined"
       @update:model-value="onInput"
+      @focus="focused = true"
       @blur="onBlur"
       @keydown="onKeydown"
     />
@@ -30,7 +31,7 @@
     <Teleport to="body" :disabled="!floating">
       <Transition name="sanitised-pop">
         <div
-          v-if="unsanitary && !showSuggestions"
+          v-if="showRenamePopover"
           class="sanitised-input__popover"
           :class="{ 'sanitised-input__popover--floating': floating }"
           :style="floating ? floatingStyle : undefined"
@@ -127,6 +128,8 @@ const cleaned = computed(() => props.sanitise(props.modelValue ?? ''))
 const unsanitary = computed(() => !props.disabled && (props.modelValue ?? '') !== cleaned.value)
 // The rename popover is the more important message, so it takes over from the notice.
 const showNotice = computed(() => !!props.notice && !unsanitary.value)
+// Only the field being typed in shows the popover; one changed from elsewhere (e.g. linked units) keeps its border.
+const focused = ref(false)
 
 // Fix the value when the user leaves the field, so typing is never interrupted.
 function commit() {
@@ -153,6 +156,7 @@ const { matches, highlighted, open, close, pick, onKeydown: onSuggestionKeydown 
 // Suggestions can turn text that isn't a name (e.g. a units expression) into one, so they replace the rename
 // popover, which sits in the same place, and repeat its warning.
 const showSuggestions = computed(() => matches.value.length > 0)
+const showRenamePopover = computed(() => unsanitary.value && focused.value && !showSuggestions.value)
 const hasDetails = computed(() => matches.value.some((match) => match.detail))
 const suggestionsRef = ref(null)
 
@@ -162,6 +166,7 @@ function onInput(value) {
 }
 
 function onBlur() {
+  focused.value = false
   close()
   commit()
 }
@@ -198,7 +203,7 @@ function trackPosition(active) {
 }
 
 watch(
-  () => props.floating && (unsanitary.value || showSuggestions.value),
+  () => props.floating && (showRenamePopover.value || showSuggestions.value),
   async (active) => {
     trackPosition(active)
     if (active) {
