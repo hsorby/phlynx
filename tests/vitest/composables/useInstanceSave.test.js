@@ -269,5 +269,23 @@ describe('useInstanceSave', () => {
     await history.redo()
     expect(findNode('a').data.mathRef).toBe(GROWTH_REF)
   })
-})
 
+  it('updates a shared constant the node already used, and undo puts it back', async () => {
+    library.assignGlobalConstant('g', '1', 'second', 'Smith2020')
+    const globalConstants = [{ name: 'g', value: '2', units: 'metre', data_reference: null, overwrite: true }]
+
+    await saveInstanceEdit(buildSave({ globalConstants }))
+    expect(library.getGlobalConstant('g')).toEqual({ value: '2', units: 'second', data_reference: 'Smith2020' })
+
+    await history.undo()
+    expect(library.getGlobalConstant('g')).toEqual({ value: '1', units: 'second', data_reference: 'Smith2020' })
+  })
+
+  it('keeps the shared value when a row is switched to a constant that already exists', async () => {
+    library.assignGlobalConstant('g', '1', 'second', null)
+    const globalConstants = [{ name: 'g', value: '9', units: 'second', data_reference: null, overwrite: false }]
+
+    await saveInstanceEdit(buildSave({ globalConstants }))
+    expect(library.getGlobalConstant('g').value).toBe('1')
+  })
+})

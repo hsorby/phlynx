@@ -171,7 +171,7 @@ describe('InstanceEditorDialog undo (#605)', () => {
       isLayoutChanged: false,
       updateAll: true,
       ports: [],
-      globalConstants: [{ name: 'x0', units: 'metre', data_reference: 'Smith2020' }],
+      globalConstants: [{ name: 'x0', units: 'metre', data_reference: 'Smith2020', overwrite: true }],
     })
     expect(save.math).toContain('<cn>1</cn>')
     expect(save.variables.find((row) => row.name === 'x0')).toMatchObject({ type: 'global_constant' })

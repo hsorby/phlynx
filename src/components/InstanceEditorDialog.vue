@@ -1272,6 +1272,8 @@ async function handleSave() {
     label: editableName.value,
   })
 
+  const wasGlobal = new Set(props.variables.filter((row) => row.type === 'global_constant').map((row) => row.name))
+
   emit(
     'confirm',
     detachReactivity({
@@ -1282,9 +1284,16 @@ async function handleSave() {
       math: isMathChanged ? mathToSave : null,
       layout: layoutToSave,
       isLayoutChanged: !isMathChanged && session.isLayoutDirty(),
+      // Only rows that were already global edit the shared value; a row just switched to global joins it as is.
       globalConstants: parameterRows.value
         .filter((row) => row.type === 'global_constant')
-        .map(({ name, value, units, data_reference }) => ({ name, value, units, data_reference })),
+        .map(({ name, value, units, data_reference }) => ({
+          name,
+          value,
+          units,
+          data_reference,
+          overwrite: wasGlobal.has(name),
+        })),
       variables: parameterRows.value,
       ports: finalPorts,
       updateAll,
