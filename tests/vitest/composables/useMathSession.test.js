@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { ref } from 'vue'
+import { reactive, ref } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -11,7 +11,7 @@ import {
 } from 'cellml-text-editor'
 
 import { useMathSession } from '../../../src/composables/useMathSession.js'
-import { useFlowHistoryStore } from '../../../src/stores/historyStore.js'
+import { createHistory, useFlowHistoryStore } from '../../../src/stores/historyStore.js'
 import { useLibraryStore } from '../../../src/stores/libraryStore.js'
 import { reconcileRows } from '../../../src/services/math/reconcileRows.js'
 import { setLinkedUnits } from '../../../src/utils/variables.js'
@@ -364,6 +364,73 @@ describe('useMathSession', () => {
     await history.undo()
     expect(editorRef.value.setText).toHaveBeenLastCalledWith(simpleText)
     expect(editorRef.value.setModel).not.toHaveBeenCalled()
+  })
+
+  describe('with the editor’s own history (#605)', () => {
+    const SIMPLE_TEXT = 'ode(x, t) = -k * x;\n'
+    let local
+
+    beforeEach(async () => {
+      local = reactive(createHistory())
+      session = useMathSession({ history: local, editorRef, ports })
+      editorRef.value = fakeEditor(session)
+      const rows = [{ name: 'k', value: '3', units: 'per_second', type: 'constant' }]
+      await session.load({ mathRef: MATH_REF, rows, managed: true })
+      await editorRef.value.report('init', SIMPLE_TEXT, true)
+    })
+
+    /** What the dialog does when another instance is opened. */
+    async function openAnother(text) {
+      local.clear()
+      await session.load({ mathRef: MATH_REF, rows: [], managed: true })
+      await editorRef.value.report('init', text, true)
+      editorRef.value.setText.mockClear()
+      editorRef.value.setModel.mockClear()
+    }
+
+    it('records edits in its own history, not the workspace’s', async () => {
+      await editorRef.value.report('edit', 'ode(x, t) = -x;\n', true)
+      expect(local.canUndo).toBe(true)
+      expect(history.canUndo).toBe(false)
+    })
+
+    it('does not replay an earlier instance’s edits into the next one', async () => {
+      await editorRef.value.report('edit', 'ode(x, t) = -x;\n', true)
+      await openAnother('ode(x, t) = -x;\n')
+      const rows = session.parameterRows.value
+      const model = session.currentModel.value
+
+      await local.undo()
+
+      expect(session.parameterRows.value).toBe(rows)
+      expect(session.currentModel.value).toBe(model)
+      expect(byName(rows).k).toBeUndefined()
+      expect(editorRef.value.setText).not.toHaveBeenCalled()
+      expect(editorRef.value.setModel).not.toHaveBeenCalled()
+      expect(local.canUndo).toBe(false)
+    })
+
+    it('leaves saved ports alone once cleared', async () => {
+      await editorRef.value.report('edit', 'ode(y, t) = -k * y;\n', true)
+      const saved = ports.value[0]
+      expect(saved.variables).toEqual(['y', 'k'])
+
+      local.clear()
+      await local.undo()
+      expect(saved.variables).toEqual(['y', 'k'])
+    })
+
+    it('still undoes edits made after another instance is opened', async () => {
+      await editorRef.value.report('edit', 'ode(x, t) = -x;\n', true)
+      await openAnother(SIMPLE_TEXT)
+      await editorRef.value.report('edit', 'ode(x, t) = -x;\n', true)
+      expect(byName(session.parameterRows.value).k).toBeUndefined()
+
+      await local.undo()
+      expect(byName(session.parameterRows.value).k).toBeDefined()
+      expect(editorRef.value.setText).toHaveBeenLastCalledWith(SIMPLE_TEXT)
+      expect(local.canUndo).toBe(false)
+    })
   })
 
   describe('text layout', () => {
