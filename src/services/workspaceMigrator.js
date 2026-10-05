@@ -8,7 +8,7 @@ import {
 } from '../utils/constants'
 import { normalisePorts, normaliseVariables } from '../utils/config'
 import { buildGhostHandles, findMostCentralGhostHandle } from '../utils/handles'
-import { isBlank } from '../utils/variables'
+import { isBlank, isNumericLiteral } from '../utils/variables'
 import { analyzeMathXml } from './math/analyzeMath'
 import { getPortVariables, reconcileRows } from './math/reconcileRows'
 import { separateParameters } from './math/separateParameters'
@@ -339,8 +339,10 @@ const MIGRATIONS = [
  *
  * @param {Array} nodes - Workspace nodes.
  * @param {Array<[string, string]>} mathEntries - mathRef and math pairs.
- * @returns {{ nodes: Array, mathEntries: Array<[string, string]>, mathDefaults: Array<[string, Array<[string, string]>]> }}
- *   The nodes and math, and the values taken out of each math, as libraryStore.getState saves them.
+ * @returns {{ nodes: Array, mathEntries: Array<[string, string]>, mathDefaults: Array<[string, Array<[string, string]>]>,
+ *   globalValues: Map<string, { value: string, units: string, data_reference: ?string }> }}
+ *   The nodes and math, the values taken out of each math, as libraryStore.getState saves them, and
+ *   the first value taken out for each global constant, as a libraryStore global constant entry.
  */
 export function separateNodeParameters(nodes, mathEntries) {
   const separatedByRef = new Map()
@@ -350,20 +352,26 @@ export function separateNodeParameters(nodes, mathEntries) {
     return [mathRef, separated.math]
   })
 
+  const globalValues = new Map()
   const separatedNodes = nodes.map((node) => {
     const separated = separatedByRef.get(node.data?.mathRef)
     if (!separated) return node
 
     // Before, a blank row fell back to the math's value, so a blank row takes that value now.
-    const { values } = separated
-    const rows = (node.data.variables ?? []).map((row) =>
+    const { values, initialisers } = separated
+    const previousRows = node.data.variables ?? []
+    const rows = previousRows.map((row) =>
       isBlank(row.value) && values.has(row.name) ? { ...row, value: values.get(row.name) } : row
     )
     const variables = reconcileRows(analyzeMathXml(separated.math), rows, {
       portVariables: getPortVariables(node.data.ports),
       defaults: values,
     })
-    carryStateReferences(variables, rows)
+    carryStateInitialValues(variables, previousRows, initialisers)
+    for (const row of variables) {
+      if (row.type !== 'global_constant' || !values.has(row.name) || globalValues.has(row.name)) continue
+      globalValues.set(row.name, { value: values.get(row.name), units: row.units, data_reference: row.data_reference ?? null })
+    }
     return { ...node, data: { ...node.data, variables } }
   })
 
@@ -371,24 +379,28 @@ export function separateNodeParameters(nodes, mathEntries) {
     ([, values]) => values.length
   )
 
-  return { nodes: separatedNodes, mathEntries: separatedEntries, mathDefaults }
+  return { nodes: separatedNodes, mathEntries: separatedEntries, mathDefaults, globalValues }
 }
 
 /**
- * Gives each initialiser created by separation its state's data reference, since the state's value
- * was its initial value.
+ * Gives each initialiser created by separation its state's numeric value and data reference, since
+ * the state's value was its initial value.
  *
  * @param {Array} rows - Reconciled rows; mutated in place.
  * @param {Array} previousRows - The rows before separation.
+ * @param {Set<string>} initialisers - The initialiser names separation created.
  */
-function carryStateReferences(rows, previousRows) {
+function carryStateInitialValues(rows, previousRows, initialisers) {
   const previousByName = new Map(previousRows.map((row) => [row.name, row]))
   const rowsByName = new Map(rows.map((row) => [row.name, row]))
   for (const row of rows) {
-    if (row.stateRole !== 'state' || !row.initialiser || previousByName.has(row.initialiser)) continue
-    const reference = previousByName.get(row.name)?.data_reference
     const initialiserRow = rowsByName.get(row.initialiser)
-    if (reference != null && initialiserRow && initialiserRow.data_reference == null) initialiserRow.data_reference = reference
+    if (row.stateRole !== 'state' || !initialisers.has(row.initialiser) || !initialiserRow) continue
+    const previous = previousByName.get(row.name)
+    const value = String(previous?.value ?? '').trim()
+    if (isNumericLiteral(value)) initialiserRow.value = value
+    const reference = previous?.data_reference
+    if (reference != null && initialiserRow.data_reference == null) initialiserRow.data_reference = reference
   }
 }
 
@@ -450,8 +462,8 @@ export function migrateWorkspace(doc) {
 }
 
 /**
- * 1.0.0 -> 1.1.0: moves the math's values into the rows and records them as math defaults. Math
- * from 1.0.0 has no text layouts.
+ * 1.0.0 -> 1.1.0: moves the math's values into the rows and records them as math defaults. A global
+ * constant with no stored value takes its math value. Math from 1.0.0 has no text layouts.
  *
  * @param {Object} doc - A 1.0.0 workspace.
  * @returns {Object}
@@ -459,11 +471,26 @@ export function migrateWorkspace(doc) {
 function migrate1_0_0To1_1_0(doc) {
   const store = doc.store ?? {}
   const mathEntries = Array.isArray(store.availableMath) ? store.availableMath : Object.entries(store.availableMath ?? {})
-  const { nodes, mathEntries: separatedEntries, mathDefaults } = separateNodeParameters(doc.flow?.nodes ?? [], mathEntries)
+  const { nodes, mathEntries: separatedEntries, mathDefaults, globalValues } = separateNodeParameters(
+    doc.flow?.nodes ?? [],
+    mathEntries
+  )
+  // Before, a global with no stored value fell back to the math's value.
+  const globalConstants = new Map(store.globalConstants ?? [])
+  for (const [name, entry] of globalValues) {
+    const stored = globalConstants.get(name)
+    if (isBlank(stored?.value)) globalConstants.set(name, stored ? { ...stored, value: entry.value } : entry)
+  }
   return {
     ...doc,
     flow: { ...doc.flow, nodes },
-    store: { ...store, availableMath: separatedEntries, mathDefaults, mathLayouts: store.mathLayouts ?? [] },
+    store: {
+      ...store,
+      availableMath: separatedEntries,
+      mathDefaults,
+      mathLayouts: store.mathLayouts ?? [],
+      globalConstants: Array.from(globalConstants),
+    },
   }
 }
 
