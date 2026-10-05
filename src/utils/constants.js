@@ -137,6 +137,7 @@ export const GHOST_MODULE_REF = 'ghost:ghost'
 export const NEW_MODULE_FILENAME = 'template_modules.cellml'
 export const NEW_MODULE_MATH_REF = `${NEW_MODULE_FILENAME}:new_module`
 export const NEW_MODULE_REF = 'new_module:phlynx'
+export const PROTECTED_MATH_REFS = new Set([NEW_MODULE_MATH_REF, GHOST_MATH_REF])
 
 export const GHOST_MODULE_DEFINITION = {
   moduleRef: GHOST_MODULE_REF,
