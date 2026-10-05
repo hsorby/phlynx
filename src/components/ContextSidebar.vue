@@ -140,7 +140,7 @@
                           size="small"
                           :placeholder="valuePlaceholder(slotProps.data.type)"
                           class="w-full"
-                          @change="handleParameterValueChange"
+                          @change="handleParameterValueChange(slotProps.data)"
                         />
                         <span v-else class="text-muted">-</span>
                       </template>
@@ -375,8 +375,6 @@ watch(
     const addedNames = Array.from(map.keys()).filter((name) => !previousNames.has(name))
     if (addedNames.length === 0) return
 
-    // Surface newly-added constants even if the user is currently on the Parameters tab.
-    activeTabId.value = 'global'
     newlyAddedNames.value = new Set(addedNames)
 
     clearTimeout(highlightTimeoutId)
@@ -471,36 +469,57 @@ watch(
   }
 )
 
-function persistParameterRows() {
+// Undo or redo of a global constant changes only the store, so refresh the shown values in place.
+watch(
+  () => libraryStore.globalVariables,
+  (map) => {
+    parameterRows.value.forEach((row) => {
+      if (row.type === 'global_constant' && map.has(row.name)) row.value = map.get(row.name).value
+    })
+  },
+  { deep: true }
+)
+
+/**
+ * Write one edited row back to its node, leaving the node's other variables as they are.
+ * @param {Object} row - Edited sidebar row.
+ * @param {Object} options
+ * @param {boolean} options.isValueEdit - A value edit on a global constant overwrites the shared value.
+ */
+function persistParameterRow(row, { isValueEdit }) {
   // Write back to the node the rows came from, which may briefly differ from the current selection.
   const node = parameterRowsNode.value
   if (!node) return
 
   // Merge only what the sidebar edits, so saved fields it doesn't show (e.g. stateRole, initialiser) survive.
-  const editsByName = new Map(parameterRows.value.map((row) => [row.name, row]))
-  const variables = (node.data?.variables || []).map((variable) => {
-    const edited = editsByName.get(variable.name)
-    return edited ? { ...variable, value: edited.value, type: edited.type } : variable
-  })
+  const variables = (node.data?.variables || []).map((variable) =>
+    variable.name === row.name ? { ...variable, value: row.value, type: row.type } : variable
+  )
 
   recordEdit({
     type: 'edit-parameters',
     nodeIds: [node.id],
     keys: ['variables'],
     apply: () => {
-      parameterRows.value.forEach((row) => {
-        if (row.type === 'global_constant') {
-          libraryStore.assignGlobalConstant(row.name, row.value, row.units, row.data_reference)
-        }
-      })
+      if (row.type === 'global_constant') {
+        // Keep the shared units and reference, so one node's fields don't replace them.
+        const shared = libraryStore.getGlobalConstant(row.name)
+        libraryStore.assignGlobalConstant(
+          row.name,
+          row.value,
+          shared?.units ?? row.units,
+          shared?.data_reference ?? row.data_reference,
+          isValueEdit
+        )
+      }
       lastWrittenVariables = detachReactivity(variables)
       updateNodeData(node.id, { variables: lastWrittenVariables })
     },
   })
 }
 
-function handleParameterValueChange() {
-  persistParameterRows()
+function handleParameterValueChange(row) {
+  persistParameterRow(row, { isValueEdit: true })
 }
 
 function handleParameterTypeChange(row) {
@@ -509,7 +528,7 @@ function handleParameterTypeChange(row) {
   if (row.type === 'global_constant') {
     row.value = libraryStore.getGlobalConstant(row.name)?.value ?? row.value
   }
-  persistParameterRows()
+  persistParameterRow(row, { isValueEdit: false })
 }
 </script>
 

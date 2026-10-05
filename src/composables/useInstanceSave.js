@@ -102,8 +102,10 @@ export function useInstanceSave(flowId = FLOW_IDS.MAIN) {
    * @param {Object} save - The instance editor's `confirm` payload.
    */
   function applySave({ id, name, variables, ports, mathRef, math, layout, isLayoutChanged, globalConstants, updateAll, siblings }) {
-    globalConstants.forEach((constant) => {
-      libraryStore.assignGlobalConstant(constant.name, constant.value, constant.units, constant.data_reference)
+    // Keep the shared units and reference, so one node's fields don't replace them.
+    globalConstants.forEach(({ name, value, units, data_reference, overwrite }) => {
+      const shared = libraryStore.getGlobalConstant(name)
+      libraryStore.assignGlobalConstant(name, value, shared?.units ?? units, shared?.data_reference ?? data_reference, !!overwrite)
     })
     if (math !== null) libraryStore.addMath(mathRef, math, true, layout)
     else if (isLayoutChanged) libraryStore.setMathLayout(mathRef, layout)
