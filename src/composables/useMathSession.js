@@ -184,9 +184,12 @@ export function useMathSession({ history, editorRef, ports }) {
     return hasInvalidEdit
   }
 
+  // Bumped by each load, so an analysis that arrives after a later load started is dropped.
+  let loadRequestId = 0
+
   /**
    * Loads an instance's math and rows. A cache miss is analyzed in the worker, so the caller can
-   * show a loading state meanwhile.
+   * show a loading state meanwhile. A load overtaken by a later one leaves the session to it.
    *
    * @param {Object} options
    * @param {string} options.mathRef
@@ -195,6 +198,7 @@ export function useMathSession({ history, editorRef, ports }) {
    * @returns {Promise<void>}
    */
   async function load({ mathRef, rows, managed }) {
+    const requestId = ++loadRequestId
     isManaged.value = managed
     const math = (mathRef && store.availableMath.get(mathRef)) || ''
     currentModel.value = math
@@ -207,8 +211,10 @@ export function useMathSession({ history, editorRef, ports }) {
     hasInvalidEdit = false
     parkedRows.clear()
 
-    analysis.value = mathRef ? await store.ensureMathAnalysis(mathRef) : null
-    setRows(reconcileRows(analysis.value, rows, reconcileOptions()))
+    const nextAnalysis = mathRef ? await store.ensureMathAnalysis(mathRef) : null
+    if (requestId !== loadRequestId) return
+    analysis.value = nextAnalysis
+    setRows(reconcileRows(nextAnalysis, rows, reconcileOptions()))
   }
 
   /**
