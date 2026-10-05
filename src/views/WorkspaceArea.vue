@@ -410,6 +410,9 @@
                 <i class="pi pi-image"></i>
               </ControlButton>
             </Controls>
+            <template #edge-smoothstep="edgeProps">
+              <CouplingEdge v-bind="edgeProps" />
+            </template>
             <template #node-instanceNode="props">
               <InstanceNode
                 :id="props.id"
@@ -560,6 +563,7 @@ import { useImportExportSend } from '../composables/useImportExportSend'
 import LibraryArea from '../components/LibraryArea.vue'
 import ResizableLibraryPanel from '../components/ResizableLibraryPanel.vue'
 import Workbench from '../components/WorkbenchArea.vue'
+import CouplingEdge from '../components/CouplingEdge.vue'
 import InstanceNode from '../components/InstanceNode.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
