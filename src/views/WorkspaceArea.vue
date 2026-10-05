@@ -1758,6 +1758,7 @@ async function loadFlowSnapshot(fileName, flowSnapshot, parameterData = {}, { no
     flowSnapshot.mathLibrary && typeof flowSnapshot.mathLibrary === 'object' ? flowSnapshot.mathLibrary : {}
 
   let nodeNameToIdMap = new Map()
+  const globalValues = new Map()
   // Convert nodeData to nodes format expected by the workspace.
   const nodes = flowSnapshot.nodeData.map((snapshotNode) => {
     let node = snapshotNode
@@ -1785,6 +1786,7 @@ async function loadFlowSnapshot(fileName, flowSnapshot, parameterData = {}, { no
       const separated = separateNodeParameters([node], [[node.data.mathRef, nodeMathFromSnapshot]])
       node = separated.nodes[0]
       nodeMathFromSnapshot = separated.mathEntries[0][1]
+      for (const [name, entry] of separated.globalValues) if (!globalValues.has(name)) globalValues.set(name, entry)
     }
 
     // Check node math is the same as the math in the library store
@@ -1847,7 +1849,8 @@ async function loadFlowSnapshot(fileName, flowSnapshot, parameterData = {}, { no
     message: 'The flow snapshot has been successfully loaded into the workspace.',
   })
 
-  return nodeNameToIdMap
+  // globalValues: global constant values taken out of older math, for the caller to seed.
+  return { nodeNameToIdMap, globalValues }
 }
 
 async function processImportedOmexArchive(archivePayload, result, fileName) {
@@ -1900,10 +1903,16 @@ async function processImportedOmexArchive(archivePayload, result, fileName) {
       const flowSnapshot = JSON.parse(await flowSnapshotFile.async('string'))
 
       const parameters = loadParametersFromCellML(cellmlContent)
-      nodeNameToIdMap = await loadFlowSnapshot(fileName, flowSnapshot, parameters.parameters, { notify: false })
+      const loaded = await loadFlowSnapshot(fileName, flowSnapshot, parameters.parameters, { notify: false })
+      nodeNameToIdMap = loaded?.nodeNameToIdMap
 
       for (const p of parameters.globalParameters) {
         libraryStore.assignGlobalConstant(p.name, p.value, p.units, p.data_reference)
+      }
+      // After the CellML globals, and without overwriting, so a global the CellML doesn't set keeps
+      // its value from older math.
+      for (const [name, { value, units, data_reference }] of loaded?.globalValues ?? []) {
+        libraryStore.assignGlobalConstant(name, value, units, data_reference)
       }
     }
   } else if (result.files?.moduleConfig) {

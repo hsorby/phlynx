@@ -39,19 +39,21 @@ function printVariable(prefix, attributes) {
  * this form comes back unchanged.
  *
  * @param {string} xml - CellML model XML with one component.
- * @returns {{ math: string, values: Map<string, string> }} The math, and each variable's value by name.
+ * @returns {{ math: string, values: Map<string, string>, initialisers: Set<string> }} The math, each
+ *   variable's value by name, and the initialisers this created.
  */
 export function separateParameters(xml) {
   const values = new Map()
+  const initialisers = new Set()
   const analysis = analyzeMathXml(xml)
-  if (!analysis) return { math: xml, values }
+  if (!analysis) return { math: xml, values, initialisers }
 
   const states = new Set(analysis.stateVariables)
   const needsChange = analysis.declared.some(
     (variable) =>
       isNumericLiteral(variable.initialValue) || (states.has(variable.name) && !variable.initialValue.trim())
   )
-  if (!needsChange) return { math: xml, values }
+  if (!needsChange) return { math: xml, values, initialisers }
 
   const takenNames = new Set([...analysis.declared.map((variable) => variable.name), ...analysis.referenced])
 
@@ -75,6 +77,7 @@ export function separateParameters(xml) {
 
     const initialiserName = getUniqueName(`${name}_init`, takenNames)
     takenNames.add(initialiserName)
+    initialisers.add(initialiserName)
     if (initialValue) values.set(initialiserName, initialValue)
 
     const units = get('units')
@@ -82,5 +85,5 @@ export function separateParameters(xml) {
     return printVariable(prefix, [...others, ['initial_value', initialiserName]]) + printVariable(prefix, initialiser)
   })
 
-  return { math, values }
+  return { math, values, initialisers }
 }

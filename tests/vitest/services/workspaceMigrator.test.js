@@ -42,6 +42,37 @@ describe('separateNodeParameters', () => {
     expect(byName(nodes[0].data.variables).k.value).toBe('3')
   })
 
+  it("gives the new initialiser the state row's value and data reference", () => {
+    const { nodes } = separateNodeParameters(
+      [node([{ name: 'x', value: '2', type: 'variable', data_reference: 'Jones1999' }])],
+      [[MATH_REF, XML]]
+    )
+    expect(byName(nodes[0].data.variables).x_init).toMatchObject({ value: '2', data_reference: 'Jones1999' })
+  })
+
+  it.each([
+    ['not numeric', 'k*2'],
+    ['blank', '  '],
+  ])('falls back to the math value when the state row is %s', (_, value) => {
+    const { nodes } = separateNodeParameters([node([{ name: 'x', value, type: 'variable' }])], [[MATH_REF, XML]])
+    expect(byName(nodes[0].data.variables).x_init.value).toBe('1.5')
+  })
+
+  it('gives a state with no math initial value its row value', () => {
+    const xml = XML.replace('initial_value="1.5"', '')
+    const { nodes } = separateNodeParameters([node([{ name: 'x', value: '2', type: 'variable' }])], [[MATH_REF, xml]])
+    expect(byName(nodes[0].data.variables).x_init.value).toBe('2')
+  })
+
+  it('leaves an initialiser the math already linked alone', () => {
+    const xml = XML.replace('initial_value="1.5"', 'initial_value="x0"').replace(
+      '<variable name="k"',
+      '<variable name="x0" units="metre" initial_value="3"/>\n    <variable name="k"'
+    )
+    const { nodes } = separateNodeParameters([node([{ name: 'x', value: '2', type: 'variable' }])], [[MATH_REF, xml]])
+    expect(byName(nodes[0].data.variables).x0.value).toBe('3')
+  })
+
   it('leaves separated math and its nodes alone', () => {
     const first = separateNodeParameters([node([])], [[MATH_REF, XML]])
     const second = separateNodeParameters(first.nodes, first.mathEntries)
@@ -94,6 +125,40 @@ describe('migrateWorkspace', () => {
     expect(rows.k.data_reference).toBe('Smith2001')
     expect(rows.x.data_reference).toBe('Jones1999')
     expect(rows.x_init.data_reference).toBe('Jones1999')
+  })
+
+  describe('global constants', () => {
+    const globalNode = (id) => ({
+      ...node([{ name: 'k', value: '', type: 'global_constant', units: 'per_second' }]),
+      id,
+    })
+    const migrateGlobals = (globalConstants, nodes = [globalNode('n1')]) =>
+      new Map(
+        migrateWorkspace({
+          version: '1.0.0',
+          flow: { nodes, edges: [] },
+          store: { availableMath: [[MATH_REF, XML]], ...(globalConstants && { globalConstants }) },
+        }).store.globalConstants
+      )
+
+    it('gives a global with no stored value its math value', () => {
+      expect(migrateGlobals().get('k')).toEqual({ value: '0.5', units: 'per_second', data_reference: null })
+    })
+
+    it('keeps a stored value', () => {
+      const stored = { value: '9', units: 'per_second', data_reference: 'Smith2001' }
+      expect(migrateGlobals([['k', stored]]).get('k')).toEqual(stored)
+    })
+
+    it('fills a stored blank value', () => {
+      const stored = { value: '', units: 'per_second', data_reference: 'Smith2001' }
+      expect(migrateGlobals([['k', stored]]).get('k')).toEqual({ ...stored, value: '0.5' })
+    })
+
+    it('makes one entry for a global several nodes share', () => {
+      const constants = migrateGlobals(undefined, [globalNode('n1'), globalNode('n2')])
+      expect([...constants.keys()]).toEqual(['k'])
+    })
   })
 
   it('gives 1.0.0 math no text layouts, and keeps any already there', () => {

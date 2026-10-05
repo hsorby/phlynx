@@ -31,7 +31,7 @@ describe('separateParameters', () => {
 
   it('keeps a state linked to its initialiser', () => {
     const xml = model('<variable name="t" units="second"/><variable name="x" units="metre" initial_value="x0"/><variable name="x0" units="metre"/><variable name="k" units="per_second"/>')
-    expect(separateParameters(xml)).toEqual({ math: xml, values: new Map() })
+    expect(separateParameters(xml)).toEqual({ math: xml, values: new Map(), initialisers: new Set() })
   })
 
   it('moves a numeric state value to a new initialiser the state links to', () => {
@@ -63,7 +63,7 @@ describe('separateParameters', () => {
 
   it('leaves separated math unchanged', () => {
     const { math } = separateParameters(model('<variable name="t" units="second"/><variable name="x" units="metre" initial_value="1"/><variable name="k" units="per_second" initial_value="2"/>'))
-    expect(separateParameters(math)).toEqual({ math, values: new Map() })
+    expect(separateParameters(math)).toEqual({ math, values: new Map(), initialisers: new Set() })
   })
 
   it('separates every bundled library component without changing its states', () => {
