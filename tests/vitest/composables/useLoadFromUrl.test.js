@@ -46,17 +46,6 @@ describe('useLoadFromUrl', () => {
 
     expect(handler).toHaveBeenCalledWith('encoded-workspace')
     expect(isLoading.value).toBe(false)
-  })
-
-  it('clears the hash after a successful load', async () => {
-    const { useLoadFromUrl, initLibCellML } = await loadModules()
-    initLibCellML({})
-    const onError = vi.fn()
-    const { load } = useLoadFromUrl()
-
-    await load({ workspace_json: vi.fn() }, onError)
-
-    expect(onError).not.toHaveBeenCalled()
     expect(replaceState).toHaveBeenCalledWith(null, '', window.location.pathname)
   })
 
@@ -81,13 +70,13 @@ describe('useLoadFromUrl', () => {
   })
 
   it('reports the error and stops loading when libCellML fails to load', async () => {
-    const { useLoadFromUrl, rejectLibCellML } = await loadModules()
+    const { useLoadFromUrl, bindLibCellML } = await loadModules()
     const handler = vi.fn()
     const onError = vi.fn()
     const { load, isLoading } = useLoadFromUrl()
 
     const loadPromise = load({ workspace_json: handler }, onError)
-    rejectLibCellML(new Error('wasm failed'))
+    bindLibCellML(Promise.reject(new Error('wasm failed'))).catch(() => {})
     await loadPromise
 
     expect(handler).not.toHaveBeenCalled()

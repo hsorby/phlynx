@@ -29,15 +29,21 @@ export function initLibCellML(instance) {
 }
 
 /**
- * Rejects whenLibCellMLReady() when libCellML fails to load.
+ * Initialises libCellML once the plugin's promise resolves, or fails whenLibCellMLReady() if it rejects.
+ *
+ * @param {Promise} ready - The plugin's libCellML promise.
+ * @returns {Promise} Settles with ready.
  */
-export function rejectLibCellML(error) {
-  rejectLibCellMLReady(error)
+export function bindLibCellML(ready) {
+  return ready.then(initLibCellML, (error) => {
+    rejectLibCellMLReady(error)
+    throw error
+  })
 }
 
 /**
- * Resolves once initLibCellML has been called and CellML parsing is available;
- * rejects if rejectLibCellML is called first.
+ * Resolves once initLibCellML has been called and CellML parsing is available; rejects if libCellML
+ * fails to load.
  */
 export function whenLibCellMLReady() {
   return libcellmlReady
