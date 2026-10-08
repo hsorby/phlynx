@@ -1,7 +1,8 @@
 <template>
   <div class="node-colour-panel">
     <!-- ── Theme choice ─────────────────────────────────────────────── -->
-    <div class="panel-block">
+    <!-- Hidden while editing so the editor cannot drift from the theme on screen. -->
+    <div v-if="!editingTheme" class="panel-block">
       <div class="block-header">
         <span class="block-title">Colour theme</span>
         <Button
@@ -36,7 +37,7 @@
     </div>
 
     <!-- ── Assign a category to the selection ──────────────────────── -->
-    <div class="panel-block">
+    <div v-if="!editingTheme" class="panel-block">
       <span class="block-title">
         Node colour
         <span class="context-count" v-if="selectedNodes.length">({{ selectedNodes.length }} selected)</span>
@@ -85,6 +86,8 @@
         :key="editingTheme.id"
         :theme="editingTheme"
         :errors="editorErrors"
+        :is-new="isNewTheme"
+        @change="editorErrors = []"
         @save="saveEdit"
         @cancel="stopEditing"
       />
@@ -231,27 +234,31 @@ function assignCategory(key) {
 
 // ── Local themes ───────────────────────────────────────────────────────
 const editingTheme = ref(null)
+const isNewTheme = ref(false)
 const editorErrors = ref([])
 const fileInput = ref(null)
 
+/** Opens the editor on an unsaved copy of the active theme; it is only kept on Save. */
 function duplicateActive() {
-  const theme = themeStore.createLocalTheme(themeStore.activeTheme.id)
   editorErrors.value = []
-  editingTheme.value = theme
+  isNewTheme.value = true
+  editingTheme.value = themeStore.draftLocalTheme(themeStore.activeTheme.id)
 }
 
 function startEditing() {
   editorErrors.value = []
+  isNewTheme.value = false
   editingTheme.value = themeStore.activeTheme
 }
 
 function stopEditing() {
   editingTheme.value = null
+  isNewTheme.value = false
   editorErrors.value = []
 }
 
 function saveEdit(theme) {
-  const errors = themeStore.saveLocalTheme(theme)
+  const errors = isNewTheme.value ? themeStore.addLocalTheme(theme) : themeStore.saveLocalTheme(theme)
   if (errors.length) {
     editorErrors.value = errors
     return

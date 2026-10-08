@@ -1,5 +1,11 @@
 <template>
   <div class="theme-editor">
+    <div class="editor-header">
+      <span class="editor-title">{{ isNew ? 'New theme' : 'Editing theme' }}</span>
+      <Tag v-if="isNew || isDirty" value="Unsaved" severity="warn" />
+    </div>
+    <p class="editor-hint">Changes show on the canvas as you make them. Save keeps them; Cancel puts the theme back.</p>
+
     <div class="field">
       <label :for="`${uid}-name`">Theme name</label>
       <InputText :id="`${uid}-name`" v-model="draft.name" size="small" :maxlength="THEME_LIMITS.name" />
@@ -31,15 +37,19 @@
       />
     </div>
 
+    <div class="category-columns" aria-hidden="true">
+      <span>Light</span>
+      <span class="category-columns-label">Label</span>
+      <span>Dark</span>
+      <span class="category-columns-spacer"></span>
+    </div>
     <ul class="category-rows">
       <li v-for="(category, index) in draft.categories" :key="category._rowId" class="category-row">
-        <input
-          type="color"
-          class="colour-input"
-          :value="safeColour(category.color)"
-          v-tooltip.top="'Colour'"
-          :aria-label="`${category.label || 'Category'} colour`"
-          @input="category.color = $event.target.value"
+        <ThemeColourButton
+          v-model="category.color"
+          :title="`${category.label || 'Category'} colour`"
+          :text-colour="TEXT_COLOURS.light"
+          :theme-colours="themeColours"
         />
         <div class="category-text">
           <InputText
@@ -53,22 +63,11 @@
             {{ category.key || '—' }}
           </span>
         </div>
-        <input
-          v-if="category.dark !== undefined"
-          type="color"
-          class="colour-input colour-input--dark"
-          :value="safeColour(category.dark)"
-          v-tooltip.top="'Dark mode colour'"
-          :aria-label="`${category.label || 'Category'} dark mode colour`"
-          @input="category.dark = $event.target.value"
-        />
-        <Button
-          icon="pi pi-moon"
-          size="small"
-          :text="category.dark === undefined"
-          rounded
-          v-tooltip.top="category.dark !== undefined ? 'Use automatic dark mode colour' : 'Set a dark mode colour'"
-          @click="toggleDark(category)"
+        <ThemeColourButton
+          v-model="category.dark"
+          :auto-colour="autoDarkColour(safeColour(category.color))"
+          :title="`${category.label || 'Category'} dark mode colour`"
+          :text-colour="TEXT_COLOURS.dark"
         />
         <Button
           icon="pi pi-trash"
@@ -78,6 +77,7 @@
           severity="danger"
           :disabled="draft.categories.length <= 1"
           v-tooltip.top="'Remove category'"
+          :aria-label="`Remove ${category.label || 'category'}`"
           @click="draft.categories.splice(index, 1)"
         />
       </li>
@@ -95,19 +95,30 @@
 
     <div class="editor-actions">
       <Button label="Cancel" size="small" text @click="emit('cancel')" />
-      <Button label="Save" icon="pi pi-check" size="small" @click="save" />
+      <Button label="Save" icon="pi pi-check" size="small" :disabled="!isNew && !isDirty" @click="save" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, reactive, useId } from 'vue'
+import { computed, onBeforeUnmount, reactive, useId, watch } from 'vue'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
+import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 
-import { THEME_LIMITS, contrastWarnings, isValidColour, normaliseColour, slugify } from '../utils/nodeThemes'
+import ThemeColourButton from './ThemeColourButton.vue'
+import { useNodeThemeStore } from '../stores/nodeThemeStore'
+import {
+  TEXT_COLOURS,
+  THEME_LIMITS,
+  autoDarkColour,
+  contrastWarnings,
+  isValidColour,
+  normaliseColour,
+  slugify,
+} from '../utils/nodeThemes'
 
 const props = defineProps({
   theme: {
@@ -119,9 +130,17 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  /** The theme has not been kept yet, so Save is always offered. */
+  isNew: {
+    type: Boolean,
+    default: false,
+  },
 })
 
-const emit = defineEmits(['save', 'cancel'])
+/** `change` fires on every edit so the parent can clear stale errors. */
+const emit = defineEmits(['save', 'cancel', 'change'])
+
+const themeStore = useNodeThemeStore()
 
 const uid = useId()
 let nextRowId = 0
@@ -134,6 +153,38 @@ const draft = reactive({
 })
 
 const warnings = computed(() => contrastWarnings(draft))
+
+/** The theme's colours as it was opened, offered as presets; fixed so they don't move while picking. */
+const themeColours = props.theme.categories.map((category) => category.color)
+
+/** The draft as a theme, without the editor's row bookkeeping. */
+function toTheme() {
+  const theme = {
+    ...draft,
+    categories: draft.categories.map(({ _rowId, _isNew, ...category }) => {
+      if (category.dark === undefined) delete category.dark
+      return category
+    }),
+  }
+  if (!theme.author) delete theme.author
+  if (!theme.description) delete theme.description
+  return theme
+}
+
+const initialSnapshot = JSON.stringify(toTheme())
+const isDirty = computed(() => JSON.stringify(toTheme()) !== initialSnapshot)
+
+// Show the draft on the canvas while editing.
+watch(
+  draft,
+  () => {
+    themeStore.setPreviewTheme(toTheme())
+    emit('change')
+  },
+  { deep: true }
+)
+themeStore.setPreviewTheme(toTheme())
+onBeforeUnmount(() => themeStore.setPreviewTheme(null))
 
 function safeColour(value) {
   return isValidColour(value) ? normaliseColour(value) : '#000000'
@@ -156,24 +207,13 @@ function syncKey(category) {
 }
 
 function addCategory() {
-  const category = { key: '', label: '', color: '#cccccc', _rowId: nextRowId++, _isNew: true }
-  category.key = uniqueKey('category', category)
+  const category = { key: '', label: 'New category', color: '#e5e7eb', _rowId: nextRowId++, _isNew: true }
+  category.key = uniqueKey(slugify(category.label), category)
   draft.categories.push(category)
 }
 
-function toggleDark(category) {
-  if (category.dark === undefined) category.dark = '#333333'
-  else delete category.dark
-}
-
 function save() {
-  const theme = {
-    ...draft,
-    categories: draft.categories.map(({ _rowId, _isNew, ...category }) => category),
-  }
-  if (!theme.author) delete theme.author
-  if (!theme.description) delete theme.description
-  emit('save', theme)
+  emit('save', toTheme())
 }
 </script>
 
@@ -185,6 +225,45 @@ function save() {
   padding: 0.75rem;
   border: 1px solid var(--p-content-border-color);
   border-radius: 8px;
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.editor-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.editor-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--p-text-muted-color);
+}
+
+.category-columns {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  color: var(--p-text-muted-color);
+}
+
+.category-columns > span {
+  width: 28px;
+  text-align: center;
+}
+
+.category-columns > .category-columns-label {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.category-columns > .category-columns-spacer {
+  width: 2rem;
 }
 
 .field {
@@ -244,29 +323,21 @@ function save() {
   text-overflow: ellipsis;
 }
 
-.colour-input {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid var(--p-content-border-color);
-  border-radius: 6px;
-  background: none;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.colour-input--dark {
-  outline: 2px solid color-mix(in srgb, var(--p-text-color) 40%, transparent);
-  outline-offset: 1px;
-}
-
 .editor-message {
   font-size: 0.75rem;
 }
 
+/* Keep Save/Cancel in view however long the category list gets. */
 .editor-actions {
+  position: sticky;
+  bottom: 0;
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
+  margin: 0 -0.75rem -0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--p-content-border-color);
+  border-radius: 0 0 8px 8px;
+  background: var(--p-content-background);
 }
 </style>

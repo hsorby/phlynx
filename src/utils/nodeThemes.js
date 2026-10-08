@@ -36,7 +36,7 @@ const CATEGORY_KEY = /^[a-z][a-z0-9-]{0,31}$/
 const THEME_ID = /^[a-z][a-z0-9-]{1,47}$/
 
 /** Rough luminance of the node text colour in each colour scheme, for contrast hints. */
-const TEXT_COLOURS = { light: '#334155', dark: '#f8fafc' }
+export const TEXT_COLOURS = { light: '#334155', dark: '#f8fafc' }
 
 /**
  * @param {*} value
@@ -233,7 +233,15 @@ export function categoryStyle(theme, key) {
 export function categoryColour(theme, key, isDark = false) {
   const category = findCategory(theme, key)
   if (!category) return null
-  return isDark ? category.dark ?? mixHex(category.color, '#18181b', 0.3) : category.color
+  return isDark ? category.dark ?? autoDarkColour(category.color) : category.color
+}
+
+/**
+ * @param {string} color - Hex colour.
+ * @returns {string} The dark mode colour used when a category gives none.
+ */
+export function autoDarkColour(color) {
+  return mixHex(color, '#18181b', 0.3)
 }
 
 function hexToRgb(hex) {
@@ -282,7 +290,7 @@ export function contrastWarnings(theme) {
     if (!isValidColour(category.color)) continue
     const light = contrastRatio(category.color, TEXT_COLOURS.light)
     if (light < 4.5) warnings.push({ key: category.key, scheme: 'light', ratio: light })
-    const darkFill = isValidColour(category.dark) ? category.dark : mixHex(category.color, '#18181b', 0.3)
+    const darkFill = isValidColour(category.dark) ? category.dark : autoDarkColour(category.color)
     const dark = contrastRatio(darkFill, TEXT_COLOURS.dark)
     if (dark < 4.5) warnings.push({ key: category.key, scheme: 'dark', ratio: dark })
   }
