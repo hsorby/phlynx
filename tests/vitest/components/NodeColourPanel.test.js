@@ -124,4 +124,41 @@ describe('NodeColourPanel', () => {
     expect(store.activeTheme.derivedFrom).toBe('domain-types')
     expect(wrapper.find('.theme-editor').exists()).toBe(false)
   })
+  it('keeps a new theme only on Save, so Cancel leaves nothing behind', async () => {
+    const store = useNodeThemeStore()
+    await mountPanel()
+    await wrapper.findAll('button').find((b) => b.text() === 'New from this theme').trigger('click')
+    await flushPromises()
+    expect(store.localThemes).toHaveLength(0)
+
+    await wrapper.find('.theme-editor').findAll('button').find((b) => b.text() === 'Cancel').trigger('click')
+    await flushPromises()
+    expect(store.localThemes).toHaveLength(0)
+    expect(store.activeThemeId).toBe('domain-types')
+  })
+
+  it('previews edits on the canvas and puts the theme back on Cancel', async () => {
+    const store = useNodeThemeStore()
+    store.createLocalTheme('domain-types', 'Mine')
+    await mountPanel()
+    await wrapper.findAll('button').find((b) => b.text() === 'Edit').trigger('click')
+    await flushPromises()
+
+    await wrapper.find('input[id$="-name"]').setValue('Mine, edited')
+    await flushPromises()
+    expect(store.activeTheme.name).toBe('Mine, edited')
+    expect(wrapper.find('.theme-editor').text()).toContain('Unsaved')
+
+    await wrapper.find('.theme-editor').findAll('button').find((b) => b.text() === 'Cancel').trigger('click')
+    await flushPromises()
+    expect(store.previewTheme).toBeNull()
+    expect(store.activeTheme.name).toBe('Mine')
+  })
+
+  it('hides the theme picker and swatches while editing', async () => {
+    await mountPanel()
+    await wrapper.findAll('button').find((b) => b.text() === 'New from this theme').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('button.swatch')).toHaveLength(0)
+  })
 })

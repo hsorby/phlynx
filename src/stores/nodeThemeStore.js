@@ -60,6 +60,8 @@ export const useNodeThemeStore = defineStore('nodeThemes', () => {
   const remoteStatus = ref('idle')
   const remoteError = ref(null)
   const remoteFetchedAt = ref(null)
+  /** An unsaved theme being edited; while set it colours the canvas in place of the chosen theme. */
+  const previewTheme = ref(null)
 
   let initialised = false
   let inFlight = null
@@ -68,9 +70,9 @@ export const useNodeThemeStore = defineStore('nodeThemes', () => {
 
   const allThemes = computed(() => [...builtInThemes, ...remoteThemes.value, ...localThemes.value])
 
-  /** The chosen theme; falls back to the default while a remote theme has not arrived or has gone. */
+  /** The chosen theme (or its preview); falls back to the default while a remote theme has not arrived or has gone. */
   const activeTheme = computed(
-    () => allThemes.value.find((theme) => theme.id === activeThemeId.value) ?? DEFAULT_THEME
+    () => previewTheme.value ?? allThemes.value.find((theme) => theme.id === activeThemeId.value) ?? DEFAULT_THEME
   )
 
   const isActiveThemeAvailable = computed(() => allThemes.value.some((theme) => theme.id === activeThemeId.value))
@@ -156,12 +158,46 @@ export const useNodeThemeStore = defineStore('nodeThemes', () => {
    * @returns {Object} The new theme.
    */
   function createLocalTheme(fromId = activeTheme.value.id, name) {
-    const base = findTheme(fromId) ?? DEFAULT_THEME
-    const theme = deriveTheme(base, { name, takenIds: allThemes.value.map((t) => t.id) })
+    const theme = draftLocalTheme(fromId, name)
     localThemes.value = [...localThemes.value, theme]
     persistLocal()
     setActiveTheme(theme.id)
     return theme
+  }
+
+  /**
+   * Copies a theme under a new local id without keeping it; pass it to addLocalTheme to keep it.
+   *
+   * @param {string} [fromId] - Defaults to the active theme.
+   * @param {string} [name]
+   * @returns {Object} The unsaved theme.
+   */
+  function draftLocalTheme(fromId = activeTheme.value.id, name) {
+    const base = findTheme(fromId) ?? DEFAULT_THEME
+    return deriveTheme(base, { name, takenIds: allThemes.value.map((t) => t.id) })
+  }
+
+  /**
+   * Validates and keeps a new local theme, and makes it active.
+   *
+   * @param {Object} theme - Usually from draftLocalTheme.
+   * @returns {Array<string>} Validation errors; empty when saved.
+   */
+  function addLocalTheme(theme) {
+    if (!isLocalThemeId(theme.id) || findTheme(theme.id)) return ['This theme already exists.']
+    const { theme: clean, errors } = validateTheme(theme, { allowLocalId: true })
+    if (!clean) return errors
+    localThemes.value = [...localThemes.value, clean]
+    persistLocal()
+    setActiveTheme(clean.id)
+    return []
+  }
+
+  /**
+   * @param {Object|null} theme - The theme to show on the canvas while editing, or null to stop.
+   */
+  function setPreviewTheme(theme) {
+    previewTheme.value = theme
   }
 
   /**
@@ -229,11 +265,15 @@ export const useNodeThemeStore = defineStore('nodeThemes', () => {
     remoteStatus,
     remoteError,
     remoteFetchedAt,
+    previewTheme,
     findTheme,
     init,
     refreshRemote,
     setActiveTheme,
     createLocalTheme,
+    draftLocalTheme,
+    addLocalTheme,
+    setPreviewTheme,
     saveLocalTheme,
     deleteLocalTheme,
     importTheme,
