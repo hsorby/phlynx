@@ -30,16 +30,16 @@ export function useScreenshot() {
 
     switch (format) {
       case 'jpeg':
-        data = toJpeg(el, options)
+        data = await toJpeg(el, options)
         break
       case 'png':
-        data = toPng(el, options)
+        data = await toPng(el, options)
         break
       case 'svg':
         data = toSvg(el, options)
         break
       default:
-        data = toPng(el, options)
+        data = await toPng(el, options)
         break
     }
 
