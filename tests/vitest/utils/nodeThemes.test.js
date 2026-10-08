@@ -141,7 +141,7 @@ describe('local themes and submission', () => {
     expect(toSubmission({ ...local, name: 'Renamed later' }).id).toBe('renamed-later')
 
     const url = new URL(buildSubmissionUrl(local))
-    expect(url.pathname).toBe('/physiomelinks/phlynx-themes/issues/new')
+    expect(url.pathname).toBe('/physiomelinks/PhLynxThemes/issues/new')
     expect(url.searchParams.get('template')).toBe('theme-submission.yml')
     const submitted = JSON.parse(url.searchParams.get('theme-json'))
     expect(submitted.id).toBe('warm-cells')

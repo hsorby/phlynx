@@ -5,7 +5,7 @@ import plainTheme from '../assets/node-themes/plain.json'
  *
  * A theme names a set of categories and gives each one a colour. A node stores only the category
  * key (`data.domainType`), never a colour, so switching theme recolours every node and saved
- * workspaces do not depend on any one theme. Shared themes live in the physiomelinks/phlynx-themes
+ * workspaces do not depend on any one theme. Shared themes live in the physiomelinks/PhLynxThemes
  * repository and are served from jsDelivr; themes a user makes are kept in their browser.
  */
 
