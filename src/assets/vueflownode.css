@@ -96,22 +96,15 @@ div.instance-name,
   background: #f5f7fa;
 }
 
-.domain-type-default.instance-card {
+/* Node colour comes from the active theme via --node-fill / --node-fill-dark (see utils/nodeThemes.js). */
+.instance-card {
   background-color: var(--p-content-background);
 }
 
-.domain-type-compartment.instance-card {
-  background-color: #ffe7e1;
+.instance-card.has-category {
+  background-color: var(--node-fill);
 }
 
-.domain-type-membrane.instance-card {
-  background-color: #ffe2ec;
-}
-
-.domain-type-process.instance-card {
-  background-color: #e1edff;
-}
-
-.domain-type-protein.instance-card {
-  background-color: #d1fff0;
+.p-dark .instance-card.has-category {
+  background-color: var(--node-fill-dark);
 }
