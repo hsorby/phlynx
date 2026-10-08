@@ -17,11 +17,13 @@ export const SVG_EXCLUDE_SELECTOR = [
   'input',
   'textarea',
   '.instance-button',
-  '.status-indicator',
   '.delete-handle-popover-btn',
   '.vue-flow__resize-control',
   '.vue-flow__handle.handle--ghost',
 ].join(', ')
+
+/** Warning badges: an instance's missing-parameter marker and an edge's coupling conflict. */
+export const SVG_WARNING_SELECTOR = '.status-indicator, .coupling-edge-warning'
 
 /**
  * PrimeIcons drawn as simple stroked paths in a 14 x 14 box (icon fonts would not survive the trip
@@ -30,6 +32,7 @@ export const SVG_EXCLUDE_SELECTOR = [
 export const SVG_ICONS = {
   'pi-box': 'M7 1.2 12.6 4.1v5.8L7 12.8 1.4 9.9V4.1Z M1.4 4.1 7 7l5.6-2.9 M7 7v5.8',
   'pi-file': 'M3 1.2h5.6L11.4 4v8.8H3Z M8.6 1.2V4h2.8',
+  'pi-exclamation-triangle': 'M7 1.6 13 12.2H1Z M7 5.4v3.2 M7 10.3v.1',
 }
 
 const ELLIPSIS = '…'
@@ -262,10 +265,12 @@ export function markerPlacement(path, atStart, orient) {
  * @param {'auto'|string|null} [options.background='auto'] - 'auto' uses the canvas background on
  *   screen, a CSS colour sets one, null leaves it transparent.
  * @param {string} [options.exclude=SVG_EXCLUDE_SELECTOR] - Elements to leave out.
+ * @param {boolean} [options.includeWarnings=false] - Draw the warning badges on instances and edges.
  * @param {string} [options.title='PhLynx workflow']
  * @returns {string|null} The SVG markup, or null when there is nothing to draw.
  */
-export function buildFlowSvg(root, { viewport, padding = 24, background = 'auto', exclude = SVG_EXCLUDE_SELECTOR, title = 'PhLynx workflow' }) {
+export function buildFlowSvg(root, { viewport, padding = 24, background = 'auto', exclude = SVG_EXCLUDE_SELECTOR, includeWarnings = false, title = 'PhLynx workflow' }) {
+  const skip = includeWarnings ? exclude : `${exclude}, ${SVG_WARNING_SELECTOR}`
   const doc = root.ownerDocument
   const win = doc.defaultView
   const colour = createColourResolver(doc)
@@ -500,7 +505,7 @@ export function buildFlowSvg(root, { viewport, padding = 24, background = 'auto'
   }
 
   function walk(element, nodeRoot, out) {
-    if (element !== nodeRoot && element.matches(exclude)) return
+    if (element.matches(skip)) return
     if (element instanceof win.SVGElement) return
     const style = win.getComputedStyle(element)
     if (isHidden(style)) return
@@ -534,6 +539,10 @@ export function buildFlowSvg(root, { viewport, padding = 24, background = 'auto'
     )
   }
 
+  // Edge labels (Vue Flow's EdgeLabelRenderer), such as the coupling-conflict badge, are HTML too.
+  const labelParts = []
+  for (const label of root.querySelectorAll('.vue-flow__edge-labels > *')) walk(label, label, labelParts)
+
   if (bounds.empty) return null
 
   // ── Document ──────────────────────────────────────────────────────────
@@ -558,6 +567,7 @@ export function buildFlowSvg(root, { viewport, padding = 24, background = 'auto'
     el('title', {}, escapeXml(title)),
     backdrop ? el('rect', { x, y, width, height, ...paintAttrs('fill', backdrop) }) : '',
     `<g id="edges">${edgeParts.join('')}</g>`,
+    labelParts.length ? `<g id="edge-labels">${labelParts.join('')}</g>` : '',
     `<g id="nodes">${nodeParts.join('')}</g>`,
     '</svg>',
     '',

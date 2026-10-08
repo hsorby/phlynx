@@ -394,11 +394,8 @@
             <HelperLines :horizontal="helperLineHorizontal" :vertical="helperLineVertical" :alignment="alignment" />
             <MiniMap :pannable="true" :zoomable="true" :node-color="miniMapNodeColour" class="mini-map" />
             <Controls :fit-view-params="fitViewParams">
-              <ControlButton :disabled="screenshotDisabled" title="PNG Screenshot" @click="doPngScreenshot">
+              <ControlButton :disabled="screenshotDisabled" :title="imageExportTitle" @click="doImageExport">
                 <i class="pi pi-image"></i>
-              </ControlButton>
-              <ControlButton :disabled="screenshotDisabled" title="SVG export (vector, for posters)" @click="doSvgExport">
-                <span class="svg-export-label">SVG</span>
               </ControlButton>
             </Controls>
             <template #edge-smoothstep="edgeProps">
@@ -589,6 +586,7 @@ import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../composables/useClearWorkspace'
 import { useColorScheme } from '../composables/useColorScheme'
+import { useAppSettings } from '../composables/useAppSettings'
 import { useNodeThemeStore } from '../stores/nodeThemeStore'
 import { categoryColour } from '../utils/nodeThemes'
 import { readFileAsText, cyrb53 } from '../utils/misc'
@@ -937,6 +935,7 @@ const simulationSettingsStore = useSimulationSettingsStore()
 const omexStore = useOmexStore()
 const nodeThemeStore = useNodeThemeStore()
 const { isDarkMode } = useColorScheme()
+const { settings: appSettings } = useAppSettings()
 
 /** MiniMap nodes follow the active node colour theme; uncategorised nodes keep the MiniMap default grey. */
 function miniMapNodeColour(node) {
@@ -944,7 +943,7 @@ function miniMapNodeColour(node) {
 }
 const { loadFromInstanceArray } = useLoadFromInstanceArray({ fitViewParams })
 const { loadFromCellML } = useLoadFromCellML({ fitViewParams })
-const { capture, captureSvg } = useScreenshot()
+const { capture, error: captureError } = useScreenshot()
 const { trackEvent } = useGtm()
 const { clearWorkspace } = useClearWorkspace()
 
@@ -2687,15 +2686,31 @@ async function withoutSelection(captureFn) {
   }
 }
 
-function doPngScreenshot() {
-  return withoutSelection(() => capture(vueFlowRef.value, { shouldDownload: true }))
-}
+const imageExportTitle = computed(
+  () => `Export image (${appSettings.imageExportFormat.toUpperCase()}); format and warnings are in Settings`
+)
 
-function doSvgExport() {
-  return withoutSelection(() => {
-    const svg = captureSvg(vueFlowRef.value, { viewport: viewport.value, shouldDownload: true })
-    if (!svg) notify.warning({ title: 'Nothing to export', message: 'Add an instance to the workspace first.' })
-  }).catch((err) => notify.error({ title: 'SVG export failed', message: err?.message ?? String(err) }))
+/**
+ * Exports the canvas in the format chosen in Settings. Edit buttons are always hidden, warning badges
+ * unless Settings asks for them; hiding (rather than removing) keeps the rest of each card in place.
+ */
+function doImageExport() {
+  const root = vueFlowRef.value
+  const format = appSettings.imageExportFormat
+  const includeWarnings = appSettings.imageExportWarnings
+  return withoutSelection(async () => {
+    root.classList.add('image-export')
+    root.classList.toggle('image-export--no-warnings', !includeWarnings)
+    
+    try {
+      await capture(root, { format: format, viewport: viewport.value, includeWarnings, shouldDownload: true })
+      if (captureError.value) {
+        notify.error({ title: 'Screenshot error', message: 'Something went wrong while taking the screenshot, is the workflow empty?' })
+      }
+    } finally {
+      root.classList.remove('image-export', 'image-export--no-warnings')
+    }
+  }).catch((err) => notify.error({ title: 'Image export failed', message: err?.message ?? String(err) }))
 }
 
 const getBoundingCenter = (nodes) => {
@@ -3428,11 +3443,12 @@ watch(
   transition: opacity 0.2s ease;
 }
 
-/* Text badge on the SVG export control, sized to sit with the icon buttons */
-.svg-export-label {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  line-height: 1;
+/* While exporting an image: never the edit controls, and warnings only when Settings asks. */
+.image-export .instance-button,
+.image-export .delete-handle-popover-btn,
+.image-export .vue-flow__resize-control,
+.image-export--no-warnings .status-indicator,
+.image-export--no-warnings .coupling-edge-warning {
+  visibility: hidden !important;
 }
 </style>

@@ -25,18 +25,21 @@ export function useScreenshot() {
     fixEdges(el)
     let data
 
-    const readableDate = new Date().toISOString().slice(0, 19).replace('T', '-T').replace(/:/g, '-')
-    const fileName = options.fileName ?? `phylnx-screenshot-D${readableDate}`
+    const fileName = options.fileName ?? defaultFileName()
+    const format = options.format ?? 'png'
 
-    switch (options.type) {
+    switch (format) {
       case 'jpeg':
-        data = await toJpeg(el, options)
+        data = toJpeg(el, options)
         break
       case 'png':
-        data = await toPng(el, options)
+        data = toPng(el, options)
+        break
+      case 'svg':
+        data = toSvg(el, options)
         break
       default:
-        data = await toPng(el, options)
+        data = toPng(el, options)
         break
     }
 
@@ -105,7 +108,7 @@ export function useScreenshot() {
    * @param {string} [options.fileName]
    * @returns {string|null} The SVG markup, or null when there is nothing to draw.
    */
-  function captureSvg(el, options = {}) {
+  function toSvg(el, options = {}) {
     error.value = null
     try {
       const svg = buildFlowSvg(el, options)
@@ -123,7 +126,7 @@ export function useScreenshot() {
 
   function defaultFileName() {
     const readableDate = new Date().toISOString().slice(0, 19).replace('T', '-T').replace(/:/g, '-')
-    return `phlynx-workflow-D${readableDate}`
+    return `phlynx-screenshot-D${readableDate}`
   }
 
   function download(fileName) {
@@ -135,7 +138,6 @@ export function useScreenshot() {
 
   return {
     capture,
-    captureSvg,
     dataUrl,
     error,
   }

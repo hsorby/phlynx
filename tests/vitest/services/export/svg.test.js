@@ -58,8 +58,8 @@ describe('SVG export helpers', () => {
     expect(parseRgb('color(srgb 0.2 0.3 0.4)')).toBeUndefined()
   })
 
-  it('has a path for the icons the instance card uses', () => {
-    for (const name of ['pi-box', 'pi-file']) expect(SVG_ICONS[name]).toMatch(/^M/)
+  it('has a path for the icons the instance card and warning badges use', () => {
+    for (const name of ['pi-box', 'pi-file', 'pi-exclamation-triangle']) expect(SVG_ICONS[name]).toMatch(/^M/)
   })
 
   it('rewrites path data with plain separators and rounded numbers', () => {
