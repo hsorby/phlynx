@@ -3,7 +3,8 @@
  * an image or HTML inside <foreignObject>, so it stays sharp at any size and opens in Inkscape,
  * Illustrator and poster tools.
  *
- * Edges are already SVG and are copied with their computed colours. Nodes are HTML, so each node's
+ * Edges are already SVG and are copied with their computed colours, their arrowheads redrawn as
+ * plain shapes (Illustrator mishandles <marker>). Nodes are HTML, so each node's
  * rendered DOM is walked and redrawn: every element with a background or border becomes a rect,
  * every text run becomes a <text> (truncated with an ellipsis where the screen truncates it), and
  * known PrimeIcons become small vector icons. Positions come from the rendered layout, so what is
@@ -179,6 +180,79 @@ function paintAttrs(prefix, colour) {
 }
 
 /**
+ * Rewrites path data with one space between every command and number and numbers rounded to two
+ * decimals. Browsers accept any spacing, but some importers (Illustrator among them) are fussier.
+ * Arc commands are left alone, since their flags may be written run together.
+ *
+ * @param {string} d
+ * @returns {string}
+ */
+export function normalisePathData(d) {
+  if (/[aA]/.test(d)) return d.trim()
+  const tokens = String(d).match(/[a-zA-Z]|[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g) ?? []
+  return tokens.map((token) => (/^[a-zA-Z]$/.test(token) ? token : num(parseFloat(token)))).join(' ')
+}
+
+/**
+ * The transform that places a marker's contents at a path vertex, as the SVG spec does for
+ * `<marker>`. Drawing arrowheads this way, rather than with markers, keeps them correct in tools
+ * that don't support markers or SVG 2's `orient="auto-start-reverse"`.
+ *
+ * @param {Object} marker
+ * @param {number[]} marker.viewBox - [x, y, width, height].
+ * @param {number} marker.refX
+ * @param {number} marker.refY
+ * @param {number} marker.markerWidth
+ * @param {number} marker.markerHeight
+ * @param {string} marker.markerUnits - 'strokeWidth' or 'userSpaceOnUse'.
+ * @param {{ x: number, y: number }} point - The vertex.
+ * @param {number} angle - Orientation in degrees.
+ * @param {number} strokeWidth - Of the path carrying the marker.
+ * @returns {string} A `matrix(…)` transform.
+ */
+export function markerTransform(marker, point, angle, strokeWidth) {
+  const [, , vbWidth, vbHeight] = marker.viewBox
+  const unit = marker.markerUnits === 'userSpaceOnUse' ? 1 : strokeWidth
+  // preserveAspectRatio's default, xMidYMid meet: one uniform scale. The alignment offset cancels
+  // out because the reference point moves with the content.
+  const scale = Math.min((marker.markerWidth * unit) / vbWidth, (marker.markerHeight * unit) / vbHeight)
+  const radians = (angle * Math.PI) / 180
+  const a = scale * Math.cos(radians)
+  const b = scale * Math.sin(radians)
+  const c = -b
+  const d = a
+  const e = point.x - marker.refX * a - marker.refY * c
+  const f = point.y - marker.refX * b - marker.refY * d
+  const fixed = (value) => String(Math.round(value * 10000) / 10000)
+  return `matrix(${[a, b, c, d, e, f].map(fixed).join(' ')})`
+}
+
+/**
+ * Where a marker sits on a path and which way it points.
+ *
+ * @param {{ getTotalLength: Function, getPointAtLength: Function }} path
+ * @param {boolean} atStart - marker-start rather than marker-end.
+ * @param {string} orient - The marker's orient attribute.
+ * @returns {{ point: { x: number, y: number }, angle: number }|null}
+ */
+export function markerPlacement(path, atStart, orient) {
+  const length = path.getTotalLength()
+  if (!(length > 0)) return null
+  const step = Math.min(1, length)
+  const [from, to] = atStart
+    ? [path.getPointAtLength(0), path.getPointAtLength(step)]
+    : [path.getPointAtLength(length - step), path.getPointAtLength(length)]
+  const direction = (Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI
+  const point = atStart ? from : to
+  const value = String(orient ?? '0').trim()
+  let angle
+  if (value === 'auto') angle = direction
+  else if (value === 'auto-start-reverse') angle = atStart ? direction + 180 : direction
+  else angle = parseFloat(value) || 0
+  return { point: { x: point.x, y: point.y }, angle }
+}
+
+/**
  * Draws the workflow inside a Vue Flow element as a standalone SVG document.
  *
  * @param {HTMLElement} root - The `.vue-flow` element.
@@ -211,65 +285,87 @@ export function buildFlowSvg(root, { viewport, padding = 24, background = 'auto'
   const isHidden = (style) => style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity) === 0
 
   // ── Edges ─────────────────────────────────────────────────────────────
-  const defs = []
-  const markerIds = new Map()
+  // Arrowheads are drawn as plain shapes at each end, not as <marker>s, which Illustrator and some
+  // other editors import wrongly.
+  const markers = new Map()
 
-  function markerRef(attr) {
+  function readMarker(attr) {
     const id = /url\(\s*['"]?#([^'")]+)['"]?\s*\)/.exec(attr ?? '')?.[1]
     if (!id) return null
-    if (markerIds.has(id)) return markerIds.get(id)
-    const marker = doc.getElementById(id)
-    if (!marker || marker.tagName.toLowerCase() !== 'marker') return null
-    const newId = `marker-${markerIds.size + 1}`
-    markerIds.set(id, newId)
-    const clone = marker.cloneNode(true)
-    clone.setAttribute('id', newId)
-    clone.removeAttribute('class')
-    // Inline each shape's computed paint, since the stylesheet won't come along.
-    const originals = [marker, ...marker.querySelectorAll('*')]
-    const copies = [clone, ...clone.querySelectorAll('*')]
-    originals.forEach((original, i) => {
-      const copy = copies[i]
-      copy.removeAttribute('class')
-      copy.removeAttribute('style')
-      if (original === marker) return
-      const style = win.getComputedStyle(original)
-      for (const [prop, value] of Object.entries({ ...paintAttrs('fill', colour(style.fill)), ...paintAttrs('stroke', colour(style.stroke)) })) {
-        if (value === null) copy.removeAttribute(prop)
-        else copy.setAttribute(prop, value)
+    if (markers.has(id)) return markers.get(id)
+    const element = doc.getElementById(id)
+    let marker = null
+    if (element && element.tagName.toLowerCase() === 'marker') {
+      const number = (name, fallback) => {
+        const value = parseFloat(element.getAttribute(name))
+        return Number.isFinite(value) ? value : fallback
       }
-      copy.setAttribute('stroke-width', parseFloat(style.strokeWidth) || 1)
-    })
-    defs.push(new win.XMLSerializer().serializeToString(clone).replace(/ xmlns="[^"]*"/, ''))
-    return newId
+      const markerWidth = number('markerWidth', 3)
+      const markerHeight = number('markerHeight', 3)
+      const viewBox = (element.getAttribute('viewBox') ?? `0 0 ${markerWidth} ${markerHeight}`).trim().split(/[\s,]+/).map(Number)
+      const shapes = [...element.querySelectorAll('path, polyline, polygon, line, circle, ellipse, rect')].map((shape) => {
+        const style = win.getComputedStyle(shape)
+        const copy = shape.cloneNode(false)
+        for (const name of ['class', 'style', 'id']) copy.removeAttribute(name)
+        const paint = {
+          ...paintAttrs('fill', colour(style.fill)),
+          ...paintAttrs('stroke', colour(style.stroke)),
+          'stroke-width': parseFloat(style.strokeWidth) || 1,
+          'stroke-linejoin': style.strokeLinejoin !== 'miter' ? style.strokeLinejoin : null,
+          'stroke-linecap': style.strokeLinecap !== 'butt' ? style.strokeLinecap : null,
+        }
+        for (const [name, value] of Object.entries(paint)) {
+          if (value === null) copy.removeAttribute(name)
+          else copy.setAttribute(name, value)
+        }
+        return new win.XMLSerializer().serializeToString(copy).replace(/ xmlns="[^"]*"/, '')
+      })
+      if (shapes.length && viewBox.length === 4 && viewBox[2] > 0 && viewBox[3] > 0) {
+        marker = {
+          viewBox,
+          refX: number('refX', 0),
+          refY: number('refY', 0),
+          markerWidth,
+          markerHeight,
+          markerUnits: element.getAttribute('markerUnits') ?? 'strokeWidth',
+          orient: element.getAttribute('orient') ?? '0',
+          shapes: shapes.join(''),
+        }
+      }
+    }
+    markers.set(id, marker)
+    return marker
   }
 
   const edgeParts = []
   for (const edge of root.querySelectorAll('.vue-flow__edges .vue-flow__edge')) {
     const edgeStyle = win.getComputedStyle(edge)
     if (isHidden(edgeStyle)) continue
+    const edgeOpacity = parseFloat(edgeStyle.opacity)
     for (const path of edge.querySelectorAll('path.vue-flow__edge-path')) {
       const style = win.getComputedStyle(path)
       const stroke = colour(style.stroke)
       const d = path.getAttribute('d')
       if (!d || !stroke) continue
       const width = parseFloat(style.strokeWidth) || 1
-      const marker = markerRef(path.getAttribute('marker-end'))
-      const markerStart = markerRef(path.getAttribute('marker-start'))
-      edgeParts.push(
+      const parts = [
         el('path', {
-          d,
+          d: normalisePathData(d),
           fill: 'none',
           ...paintAttrs('stroke', stroke),
           'stroke-width': width,
           'stroke-dasharray': style.strokeDasharray !== 'none' ? style.strokeDasharray : null,
           'stroke-linecap': style.strokeLinecap !== 'butt' ? style.strokeLinecap : null,
           'stroke-linejoin': style.strokeLinejoin !== 'miter' ? style.strokeLinejoin : null,
-          'marker-end': marker && `url(#${marker})`,
-          'marker-start': markerStart && `url(#${markerStart})`,
-          opacity: parseFloat(edgeStyle.opacity) < 1 ? parseFloat(edgeStyle.opacity) : null,
-        })
-      )
+        }),
+      ]
+      for (const [attr, atStart] of [['marker-start', true], ['marker-end', false]]) {
+        const marker = readMarker(path.getAttribute(attr))
+        const placement = marker && markerPlacement(path, atStart, marker.orient)
+        if (!placement) continue
+        parts.push(`<g transform="${markerTransform(marker, placement.point, placement.angle, width)}">${marker.shapes}</g>`)
+      }
+      edgeParts.push(...(edgeOpacity < 1 ? [`<g opacity="${num(edgeOpacity)}">`, ...parts, '</g>'] : parts))
       const box = path.getBBox()
       bounds.add(box.x - width * 3, box.y - width * 3, box.width + width * 6, box.height + width * 6)
     }
@@ -460,7 +556,6 @@ export function buildFlowSvg(root, { viewport, padding = 24, background = 'auto'
     '<?xml version="1.0" encoding="UTF-8"?>',
     `<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="${num(x)} ${num(y)} ${num(width)} ${num(height)}" width="${num(width)}" height="${num(height)}">`,
     el('title', {}, escapeXml(title)),
-    defs.length ? `<defs>${defs.join('')}</defs>` : '',
     backdrop ? el('rect', { x, y, width, height, ...paintAttrs('fill', backdrop) }) : '',
     `<g id="edges">${edgeParts.join('')}</g>`,
     `<g id="nodes">${nodeParts.join('')}</g>`,
