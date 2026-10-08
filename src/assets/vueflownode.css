@@ -108,3 +108,19 @@ div.instance-name,
 .p-dark .instance-card.has-category {
   background-color: var(--node-fill-dark);
 }
+.instance-card.has-category {
+  --node-button-base: var(--node-fill);
+}
+
+.p-dark .instance-card.has-category {
+  --node-button-base: var(--node-fill-dark);
+}
+
+.instance-card.has-category .instance-button {
+  --p-button-secondary-background: color-mix(in srgb, var(--node-button-base), var(--p-text-color) 12%);
+  --p-button-secondary-hover-background: color-mix(in srgb, var(--node-button-base), var(--p-text-color) 20%);
+  --p-button-secondary-active-background: color-mix(in srgb, var(--node-button-base), var(--p-text-color) 28%);
+  --p-button-secondary-border-color: transparent;
+  --p-button-secondary-hover-border-color: transparent;
+  --p-button-secondary-active-border-color: transparent;
+}
