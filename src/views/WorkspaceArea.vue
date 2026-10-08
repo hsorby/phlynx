@@ -397,6 +397,9 @@
               <ControlButton :disabled="screenshotDisabled" title="PNG Screenshot" @click="doPngScreenshot">
                 <i class="pi pi-image"></i>
               </ControlButton>
+              <ControlButton :disabled="screenshotDisabled" title="SVG export (vector, for posters)" @click="doSvgExport">
+                <span class="svg-export-label">SVG</span>
+              </ControlButton>
             </Controls>
             <template #edge-smoothstep="edgeProps">
               <CouplingEdge v-bind="edgeProps" />
@@ -941,7 +944,7 @@ function miniMapNodeColour(node) {
 }
 const { loadFromInstanceArray } = useLoadFromInstanceArray({ fitViewParams })
 const { loadFromCellML } = useLoadFromCellML({ fitViewParams })
-const { capture } = useScreenshot()
+const { capture, captureSvg } = useScreenshot()
 const { trackEvent } = useGtm()
 const { clearWorkspace } = useClearWorkspace()
 
@@ -2665,8 +2668,34 @@ const handleRedo = () => {
   historyStore.redo()
 }
 
+/**
+ * Runs a capture with nothing selected, so selection outlines, resize grips and highlighted edges
+ * stay out of the image, then puts the selection back.
+ */
+async function withoutSelection(captureFn) {
+  const selectedNodes = getSelectedNodes.value.slice()
+  const selectedEdges = getSelectedEdges.value.slice()
+  selectedNodes.forEach((n) => (n.selected = false))
+  selectedEdges.forEach((e) => (e.selected = false))
+  await nextTick()
+  await new Promise((resolve) => requestAnimationFrame(resolve))
+  try {
+    return await captureFn()
+  } finally {
+    selectedNodes.forEach((n) => (n.selected = true))
+    selectedEdges.forEach((e) => (e.selected = true))
+  }
+}
+
 function doPngScreenshot() {
-  capture(vueFlowRef.value, { shouldDownload: true })
+  return withoutSelection(() => capture(vueFlowRef.value, { shouldDownload: true }))
+}
+
+function doSvgExport() {
+  return withoutSelection(() => {
+    const svg = captureSvg(vueFlowRef.value, { viewport: viewport.value, shouldDownload: true })
+    if (!svg) notify.warning({ title: 'Nothing to export', message: 'Add an instance to the workspace first.' })
+  }).catch((err) => notify.error({ title: 'SVG export failed', message: err?.message ?? String(err) }))
 }
 
 const getBoundingCenter = (nodes) => {
@@ -3397,5 +3426,13 @@ watch(
 .node-search-dimmed {
   opacity: 0.25 !important;
   transition: opacity 0.2s ease;
+}
+
+/* Text badge on the SVG export control, sized to sit with the icon buttons */
+.svg-export-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
 }
 </style>

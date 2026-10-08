@@ -1,6 +1,8 @@
 import { toJpeg as ElToJpg, toPng as ElToPng } from 'html-to-image'
 import { ref } from 'vue'
 
+import { buildFlowSvg } from './export/svg'
+
 export function useScreenshot() {
   const dataUrl = ref('')
   const imgType = ref('png')
@@ -92,6 +94,38 @@ export function useScreenshot() {
       })
   }
 
+  /**
+   * Draws the flow as a native SVG (vector shapes and text, no embedded bitmap), for posters and
+   * figures that need to scale.
+   *
+   * @param {HTMLElement} el - The `.vue-flow` element.
+   * @param {Object} options
+   * @param {{ x: number, y: number, zoom: number }} options.viewport
+   * @param {boolean} [options.shouldDownload]
+   * @param {string} [options.fileName]
+   * @returns {string|null} The SVG markup, or null when there is nothing to draw.
+   */
+  function captureSvg(el, options = {}) {
+    error.value = null
+    try {
+      const svg = buildFlowSvg(el, options)
+      if (!svg) return null
+      if (dataUrl.value.startsWith('blob:')) URL.revokeObjectURL(dataUrl.value)
+      dataUrl.value = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
+      imgType.value = 'svg'
+      if (options.shouldDownload) download(options.fileName ?? defaultFileName())
+      return svg
+    } catch (err) {
+      error.value = err
+      throw err
+    }
+  }
+
+  function defaultFileName() {
+    const readableDate = new Date().toISOString().slice(0, 19).replace('T', '-T').replace(/:/g, '-')
+    return `phlynx-workflow-D${readableDate}`
+  }
+
   function download(fileName) {
     const link = document.createElement('a')
     link.download = `${fileName}.${imgType.value}`
@@ -101,6 +135,7 @@ export function useScreenshot() {
 
   return {
     capture,
+    captureSvg,
     dataUrl,
     error,
   }
