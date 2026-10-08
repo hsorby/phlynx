@@ -2705,7 +2705,7 @@ function doImageExport() {
     try {
       await capture(root, { format: format, viewport: viewport.value, includeWarnings, shouldDownload: true })
       if (captureError.value) {
-        notify.error({ title: 'Screenshot error', message: 'Something went wrong while taking the screenshot, is the workflow empty?' })
+        notify.error({ title: 'Screenshot error', message: 'Something went wrong while taking the screenshot.\n - ' + captureError.value.message })
       }
     } finally {
       root.classList.remove('image-export', 'image-export--no-warnings')
