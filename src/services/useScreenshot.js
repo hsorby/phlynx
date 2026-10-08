@@ -104,8 +104,6 @@ export function useScreenshot() {
    * @param {HTMLElement} el - The `.vue-flow` element.
    * @param {Object} options
    * @param {{ x: number, y: number, zoom: number }} options.viewport
-   * @param {boolean} [options.shouldDownload]
-   * @param {string} [options.fileName]
    * @returns {string|null} The SVG markup, or null when there is nothing to draw.
    */
   function toSvg(el, options = {}) {
@@ -116,7 +114,6 @@ export function useScreenshot() {
       if (dataUrl.value.startsWith('blob:')) URL.revokeObjectURL(dataUrl.value)
       dataUrl.value = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
       imgType.value = 'svg'
-      if (options.shouldDownload) download(options.fileName ?? defaultFileName())
       return svg
     } catch (err) {
       error.value = err
