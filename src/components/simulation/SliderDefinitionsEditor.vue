@@ -4,6 +4,7 @@
       <thead>
         <tr>
           <th scope="col">Parameter</th>
+          <th scope="col">Label</th>
           <th scope="col">Min</th>
           <th scope="col">Default</th>
           <th scope="col">Max</th>
@@ -16,6 +17,14 @@
             <span class="definition-component">{{ row.componentLabel }}/</span><span class="definition-name">{{ row.parameterName }}</span>
             <span class="definition-units">{{ row.units }}</span>
           </th>
+          <td>
+            <InlineText
+              :model-value="row.label"
+              :placeholder="`${row.componentLabel}/${row.parameterName}`"
+              :aria-label="`${row.parameterName} label`"
+              @update:model-value="(value) => updateDefinition(row, { label: value })"
+            />
+          </td>
           <td v-for="field in FIELDS" :key="field">
             <InputNumber
               :model-value="row[field]"
@@ -80,6 +89,7 @@ import { computed, nextTick, ref } from 'vue'
 import Button from 'primevue/button'
 import InputNumber from 'primevue/inputnumber'
 
+import InlineText from './InlineText.vue'
 import VariablePathPicker from './VariablePathPicker.vue'
 import { createSliderDefinition, isSlidableRow, putSlider, removeSlider, sliderValueKey } from '../../services/simulation/parameterSliders'
 import { GLOBAL_COMPONENT, buildVariableIndex } from '../../services/simulation/variableIndex'

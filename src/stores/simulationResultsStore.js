@@ -2,11 +2,26 @@ import { defineStore } from 'pinia'
 import { computed, markRaw, ref, shallowRef } from 'vue'
 
 import { MAX_TRACKED_RUNS, nextRunNumber, runAxisKind } from '../services/simulation/trackedRuns'
+import { computeRunDataItemFeatures, computeRunFeatures } from '../services/simulation/protocolFeatures'
+import { useProtocolStore } from './protocolStore'
+
+/**
+ * Gives one experiment of a protocol run's results as a run's results.
+ *
+ * @param {{experiments: Array, issues: Array, elapsedMs: number, isStopped: boolean}} protocolResults
+ * @param {number} index - Kept within the experiments run.
+ * @returns {Object} `{ voi, variables, subs, issues, elapsedMs, isStopped }`.
+ */
+export function selectExperiment({ experiments, issues, elapsedMs, isStopped }, index) {
+  const experiment = experiments[Math.min(Math.max(index, 0), experiments.length - 1)] ?? { voi: { name: '', unit: '', values: new Float64Array() }, variables: new Map(), subs: [] }
+  return { ...experiment, issues, elapsedMs, isStopped }
+}
 
 /**
  * The latest in-app simulation: its scope, status and results. Never saved with the workspace.
  */
 export const useSimulationResultsStore = defineStore('simulationResults', () => {
+  const protocolStore = useProtocolStore()
   /** 'idle', 'blocked' (the pre-flight found errors), 'running', 'done', 'stopped' or 'error'. */
   const status = ref('idle')
   const progress = ref(0)
@@ -16,6 +31,23 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
   const report = ref({ errors: [], warnings: [] })
   const error = ref(null)
   const results = shallowRef(null)
+  /** A protocol run's results, every experiment's: `{ experiments, issues, elapsedMs, isStopped }`, or null. */
+  const protocolResults = shallowRef(null)
+  /** What shows each of the protocol's parameters, as `parameter → { name, isStepped }`, `name` as reported. */
+  const protocolInputs = shallowRef(new Map())
+  /** The variables a protocol run kept for its features, as `operand → reported name` (see resolveFeatureOperands). */
+  const featureOperands = shallowRef(new Map())
+  /**
+   * The protocol run's features, as circulatory_autogen computes them from the obs_data's prediction items as they
+   * are now; one whose variables the run didn't keep has an error.
+   */
+  const features = computed(() =>
+    protocolResults.value && featureOperands.value.size ? computeRunFeatures(protocolStore.source?.document, protocolResults.value, featureOperands.value) : []
+  )
+  /** The features the run gives the obs_data's data items, as circulatory_autogen scores them, computed as `features` are. */
+  const dataItemFeatures = computed(() =>
+    protocolResults.value && featureOperands.value.size ? computeRunDataItemFeatures(protocolStore.source?.document, protocolResults.value, featureOperands.value) : []
+  )
   const mapping = shallowRef(null)
   /** The run's inspection module outputs: `[{ id, name, units, reportedName }]`. */
   const inspectionOutputs = shallowRef([])
@@ -70,6 +102,7 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
     signature.value = null
     if (!isSameScope) {
       results.value = null
+      protocolResults.value = null
       mapping.value = null
       seriesSlots = markRaw(new Map())
       inspectionOutputs.value = []
@@ -89,6 +122,7 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
     status.value = run.results.isStopped ? 'stopped' : 'done'
     progress.value = 1
     results.value = markRaw(run.results)
+    protocolResults.value = null
     mapping.value = markRaw(run.mapping)
     inspectionOutputs.value = run.inspectionOutputs ?? []
     signature.value = run.signature
@@ -103,6 +137,7 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
     if (status.value === 'running') return 'Wait for the run to finish'
     if (!results.value) return 'Run the simulation first'
     if (!['done', 'stopped'].includes(status.value)) return 'The last run didn’t finish'
+    if (protocolResults.value) return 'A protocol run can’t be tracked: show all its experiments to compare them'
     if (trackedRuns.value.length >= MAX_TRACKED_RUNS) return `Up to ${MAX_TRACKED_RUNS} runs can be tracked: stop tracking one to track another`
     return null
   })
@@ -158,16 +193,45 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
   }
 
   /**
+   * Records a finished protocol run, showing one of its experiments as `results`.
+   *
+   * @param {Object} run - `{ protocolResults, inputs, featureOperands, experiment, mapping, signature, inspectionOutputs }`.
+   */
+  function finishProtocolRun(run) {
+    finishRun({ ...run, results: selectExperiment(run.protocolResults, run.experiment) })
+    // A protocol's experiments are compared with each other, not with tracked runs.
+    removeAllTrackedRuns()
+    protocolResults.value = markRaw(run.protocolResults)
+    protocolInputs.value = markRaw(run.inputs ?? new Map())
+    featureOperands.value = markRaw(run.featureOperands ?? new Map())
+  }
+
+  /**
+   * Shows another experiment of the protocol run's results.
+   *
+   * @param {number} index
+   */
+  function showExperiment(index) {
+    if (protocolResults.value) results.value = markRaw(selectExperiment(protocolResults.value, index))
+  }
+
+  /**
    * Records a run that couldn't start, failed, or was abandoned before it started ('idle'). A failed run's
    * partial results are kept, to show where it got to.
    *
    * @param {'blocked'|'error'|'idle'} nextStatus
    * @param {{message: string, issues?: Array}|null} [nextError]
-   * @param {{results: Object, mapping: Map}|null} [partial] - The results computed before the failure.
+   * @param {{results: Object, mapping: Map, protocolResults?: Object, inputs?: Map, featureOperands?: Map}|null} [partial] -
+   *   The results computed before the failure.
    */
   function failRun(nextStatus, nextError = null, partial = null) {
     status.value = nextStatus
     error.value = nextError
+    protocolResults.value = partial?.protocolResults ? markRaw(partial.protocolResults) : null
+    // As for a finished protocol run, its experiments are shown without tracked runs.
+    if (partial?.protocolResults) removeAllTrackedRuns()
+    protocolInputs.value = markRaw(partial?.inputs ?? new Map())
+    featureOperands.value = markRaw(partial?.featureOperands ?? new Map())
     results.value = partial ? markRaw(partial.results) : null
     mapping.value = partial ? markRaw(partial.mapping) : null
     inspectionOutputs.value = []
@@ -180,6 +244,8 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
     report.value = { errors: [], warnings: [] }
     error.value = null
     results.value = null
+    protocolResults.value = null
+    featureOperands.value = markRaw(new Map())
     mapping.value = null
     signature.value = null
     seriesSlots = markRaw(new Map())
@@ -198,6 +264,11 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
     report,
     error,
     results,
+    protocolResults,
+    protocolInputs,
+    featureOperands,
+    features,
+    dataItemFeatures,
     mapping,
     inspectionOutputs,
     signature,
@@ -217,6 +288,8 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
     toggleTrackedRun,
     startRun,
     finishRun,
+    finishProtocolRun,
+    showExperiment,
     failRun,
     resetState,
   }

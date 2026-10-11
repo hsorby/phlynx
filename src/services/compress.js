@@ -3,6 +3,7 @@ import JSZip from 'jszip'
 import { generateSedmlData } from './export/sedml'
 import { buildManifestXml } from './export/omex'
 import { buildSimulationJson } from './export/simulation'
+import { resolveParamsForIdExport } from './simulation/paramsForId'
 
 import { PHLYNX_PROJECT_VERSION } from '../utils/constants'
 
@@ -100,6 +101,10 @@ export async function generateOmexArchive(cellmlData, flowSnapshot, simData = {}
 
   const reservedLocations = new Set(['manifest.xml', 'document.sedml', cellmlFileName, 'flow-snapshot.json', 'changes.json'])
 
+  // Refreshed from the current sliders below, so it isn't also passed through verbatim from preservedExtras.
+  const paramsForIdExport = resolveParamsForIdExport(simData.parameterScanConfig?.selections, omexStore.preservedExtras)
+  if (paramsForIdExport) reservedLocations.add(paramsForIdExport.location)
+
   const manifestEntries = [
     { location: 'document.sedml', format: 'http://identifiers.org/combine.specifications/sed-ml', master: true },
     { location: cellmlFileName, format: 'http://identifiers.org/combine.specifications/cellml' },
@@ -108,6 +113,9 @@ export async function generateOmexArchive(cellmlData, flowSnapshot, simData = {}
   ]
   if (simulationJson !== null) {
     manifestEntries.push({ location: 'simulation.json', format: 'http://purl.org/NET/mediatypes/application/json' })
+  }
+  if (paramsForIdExport) {
+    manifestEntries.push({ location: paramsForIdExport.location, format: 'text/csv' })
   }
 
   omexStore.preservedExtras.forEach((extra) => {
@@ -127,6 +135,10 @@ export async function generateOmexArchive(cellmlData, flowSnapshot, simData = {}
 
   if (simulationJson !== null) {
     zip.file('simulation.json', simulationJson)
+  }
+
+  if (paramsForIdExport) {
+    zip.file(paramsForIdExport.location, paramsForIdExport.csv)
   }
 
   for (const extra of omexStore.preservedExtras) {

@@ -18,6 +18,19 @@
   >
     <div class="results-toolbar">
       <p class="results-summary">{{ summary }}</p>
+      <!-- As the toolbar's protocol button does, switching runs at once. -->
+      <SelectButton
+        v-if="protocolStore.hasProtocol || protocolStore.source?.parseError"
+        :model-value="protocolStore.isProtocolMode"
+        :options="RUN_MODES"
+        option-label="label"
+        option-value="value"
+        :allow-empty="false"
+        size="small"
+        aria-label="What play runs"
+        @update:model-value="switchRunMode"
+      />
+      <ProtocolResultsControls />
       <ToggleButton
         v-model="isEditing"
         on-label="Edit"
@@ -37,6 +50,19 @@
         aria-label="Download the charts as a PNG image"
         @click="downloadPng"
       />
+      <!-- Wrapped, so its reason shows while it's disabled. -->
+      <span v-if="protocolStore.hasProtocol" v-tooltip.bottom="sedmlReason ?? 'Download the protocol’s run as SED-ML, with the model it runs'" class="export-button">
+        <Button
+          label="SED-ML"
+          icon="pi pi-download"
+          size="small"
+          outlined
+          :disabled="!canExportSedml"
+          :loading="isExportingSedml"
+          aria-label="Download the protocol's run as SED-ML"
+          @click="exportSedml"
+        />
+      </span>
     </div>
 
     <div class="results-body" :class="{ 'results-body--editing': isEditing }">
@@ -53,9 +79,24 @@
             :x="chart.x ?? xAxis"
             :note="chart.note"
             :series="chart.series"
+            :references="chart.references"
             :height="chartHeight"
             :sync-key="chart.x ? null : 'simulation-results-dialog'"
           />
+          <section v-if="predictionPlotCharts.length" class="results-prediction-plots" aria-labelledby="results-prediction-plots-title">
+            <h3 id="results-prediction-plots-title" class="results-prediction-plots-title">Prediction plots</h3>
+            <FeaturePlot
+              v-for="chart in predictionPlotCharts"
+              :key="chart.key"
+              :ref="(plot) => setPlot(chart.key, plot)"
+              :title="chart.title"
+              :unit="chart.unit"
+              :x="chart.x"
+              :y-label="chart.yLabel"
+              :series="chart.series"
+              :height="chartHeight"
+            />
+          </section>
           <p class="results-hint">Drag across a chart to zoom in; double-click it to zoom out.</p>
         </div>
 
@@ -75,19 +116,24 @@
 
 <script setup>
 /**
- * The plotted results at full size: the Simulation tab's charts with their cursors in step, their values
- * downloadable as CSV and the charts as one PNG. Beside them, as in the tab, an
+ * The plotted results at full size: the Simulation tab's charts with their cursors in step, then a protocol run's
+ * prediction plots, their values downloadable as CSV and the charts as one PNG, and a protocol's run as SED-ML. Beside them, as in the tab, an
  * instance's plotted variables and sliders can be changed.
  */
 import { computed, ref } from 'vue'
 
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
+import SelectButton from 'primevue/selectbutton'
 import ToggleButton from 'primevue/togglebutton'
 
+import FeaturePlot from './FeaturePlot.vue'
+import ProtocolResultsControls from './ProtocolResultsControls.vue'
 import SimulationControls from './SimulationControls.vue'
 import SimulationPlot from './SimulationPlot.vue'
+import { useProtocolSedmlExport } from '../../composables/useProtocolSedmlExport'
 import { buildResultsCsv, collectResultColumns, composeChartsImage } from '../../services/simulation/resultsExport'
+import { useProtocolStore } from '../../stores/protocolStore'
 import { legacyDownload } from '../../utils/save'
 
 const FILE_NAME = 'simulation-results'
@@ -96,7 +142,9 @@ const visible = defineModel('visible', { type: Boolean, default: false })
 const props = defineProps({
   summary: { type: String, default: '' },
   x: { type: Object, required: true }, // { label, unit, values }
-  charts: { type: Array, required: true }, // [{ key, title, unit, series }], as the Simulation tab shows them
+  charts: { type: Array, required: true }, // [{ key, title, unit, series, references? }], as the Simulation tab shows them
+  // A protocol run's prediction plots, as FeaturePlot takes them; after the charts, and in the PNG, not the CSV.
+  predictionPlotCharts: { type: Array, default: () => [] },
   // Every node, whose variables can be plotted or given sliders beside the charts.
   nodes: { type: Array, required: true },
   // The nodes the shown run simulated, or null for all of them.
@@ -104,7 +152,25 @@ const props = defineProps({
   keepCurrent: { type: Function, required: true },
 })
 // A slider moved, so the scope wants running again.
-const emit = defineEmits(['change'])
+const emit = defineEmits(['change', 'play'])
+
+const protocolStore = useProtocolStore()
+// Disabled, with why, while PhLynx can't plan the run.
+const { reason: sedmlReason, canExport: canExportSedml, isExporting: isExportingSedml, exportZip: exportSedml } = useProtocolSedmlExport()
+const RUN_MODES = [
+  { label: 'Time course', value: false },
+  { label: 'Protocol', value: true },
+]
+
+/**
+ * Switches play between the time course and the protocol, and runs it.
+ *
+ * @param {boolean} isProtocolMode
+ */
+function switchRunMode(isProtocolMode) {
+  protocolStore.isProtocolMode = isProtocolMode
+  emit('play')
+}
 
 const isEditing = ref(true)
 const isMaximized = ref(false)
@@ -134,9 +200,9 @@ function downloadCsv() {
   legacyDownload(`${FILE_NAME}.csv`, new Blob([buildResultsCsv(columns.value)], { type: 'text/csv' }))
 }
 
-/** Downloads the charts, as shown, as one PNG on the dialog's background. */
+/** Downloads the charts, as shown, as one PNG on the dialog's background, the prediction plots after them. */
 function downloadPng() {
-  const snapshots = props.charts.map((chart) => plots.get(chart.key)?.snapshot()).filter(Boolean)
+  const snapshots = [...props.charts, ...props.predictionPlotCharts].map((chart) => plots.get(chart.key)?.snapshot()).filter(Boolean)
   if (!snapshots.length) return
   const style = getComputedStyle(chartsEl.value.closest('.p-dialog'))
   const image = composeChartsImage(snapshots, { background: style.backgroundColor, text: style.color })
@@ -212,6 +278,26 @@ function downloadPng() {
   gap: 16px;
   min-height: 0;
   overflow-y: auto;
+}
+
+.export-button {
+  display: inline-flex;
+}
+
+.results-prediction-plots {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* After the traces, a group of its own. */
+.results-prediction-plots-title {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--p-content-border-color);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--p-text-muted-color);
 }
 
 .results-hint {

@@ -23,11 +23,27 @@ let loading = null
 const createSimulationWorker = () => new Worker(new URL('../../workers/simulationWorker.js', import.meta.url), { type: 'module' })
 
 /**
- * Wraps the worker in a client with the engine's startSimulation shape.
+ * Rebuilds a run's results as posted: its variables as a Map.
+ *
+ * @param {Object} results
+ * @returns {Object}
+ */
+const decodeRunResults = (results) => ({ ...results, variables: new Map(results.variables) })
+
+/**
+ * Rebuilds a protocol's results as posted: each experiment's as a run's.
+ *
+ * @param {Object} results
+ * @returns {Object}
+ */
+const decodeProtocolResults = (results) => ({ ...results, experiments: results.experiments.map(decodeRunResults) })
+
+/**
+ * Wraps the worker in a client: the engine's startSimulation shape, plus describeModel and startProtocol.
  *
  * @param {Worker} worker
  * @param {Function} onReady - Called with the worker's ready or failed message.
- * @returns {{startSimulation: Function}}
+ * @returns {{startSimulation: Function, describeModel: Function, startProtocol: Function}}
  */
 function createClient(worker, onReady) {
   const pending = new Map()
@@ -43,11 +59,10 @@ function createClient(worker, onReady) {
     if (data.type === 'progress') run.onProgress(data.value)
     else if (data.type === 'done') {
       pending.delete(data.id)
-      run.resolve({ ...data.results, variables: new Map(data.results.variables) })
+      run.resolve(run.decode(data.results))
     } else if (data.type === 'error') {
       pending.delete(data.id)
-      const partial = data.partialResults && { ...data.partialResults, variables: new Map(data.partialResults.variables) }
-      run.reject(new SimulationError(data.message, data.issues, partial, data.code ?? null))
+      run.reject(new SimulationError(data.message, data.issues, data.partialResults && run.decode(data.partialResults), data.code ?? null))
     }
   }
   worker.onerror = (event) => {
@@ -55,6 +70,21 @@ function createClient(worker, onReady) {
     onReady({ type: 'failed', message })
     for (const run of pending.values()) run.reject(new SimulationError(message))
     pending.clear()
+  }
+
+  /**
+   * Sends a request to the worker, settling with its decoded results.
+   *
+   * @param {Object} message - The request, without its id.
+   * @param {Function} decode - Turns the results posted back into the caller's.
+   * @param {Function} [onProgress]
+   * @returns {{promise: Promise<Object>, stop: Function}}
+   */
+  function send(message, decode, onProgress = () => {}) {
+    const id = nextId++
+    const promise = new Promise((resolve, reject) => pending.set(id, { resolve, reject, onProgress, decode }))
+    worker.postMessage({ ...message, id })
+    return { promise, stop: () => worker.postMessage({ type: 'stop', id }) }
   }
 
   return markRaw({
@@ -67,11 +97,31 @@ function createClient(worker, onReady) {
      * @returns {{promise: Promise<Object>, stop: Function}}
      */
     startSimulation({ cellml = null, key = null, settings, changes = [], sweep = null, onProgress = () => {} }) {
-      const id = nextId++
-      const promise = new Promise((resolve, reject) => pending.set(id, { resolve, reject, onProgress }))
-      // Plain copies: a store's settings are reactive proxies, which a worker message can't carry.
-      worker.postMessage({ type: 'run', id, cellml, key, settings: JSON.parse(JSON.stringify(settings)), changes, sweep })
-      return { promise, stop: () => worker.postMessage({ type: 'stop', id }) }
+      // Plain copies: a store's settings are reactive proxies, nested ones too (a sweep), which a worker message can't carry.
+      return send({ type: 'run', cellml, key, settings: JSON.parse(JSON.stringify(settings)), changes, sweep }, decodeRunResults, onProgress)
+    },
+
+    /**
+     * Lists a model's variables without running it, reading and keeping the model as startSimulation does.
+     *
+     * @param {Object} options - `{ cellml, key }`.
+     * @returns {Promise<{voi: Object, variables: Map<string, {kind: string, unit: string}>, isSteadyState: boolean}>}
+     */
+    describeModel({ cellml = null, key = null }) {
+      return send({ type: 'describe', cellml, key }, decodeRunResults).promise
+    },
+
+    /**
+     * Runs a protocol's segments in the worker; see protocolRunner.js. The model is read or reused as by
+     * startSimulation.
+     *
+     * @param {Object} options - `{ cellml, key, settings, plan, targets, baseChanges, recorded, onProgress }`, `targets`
+     *   mapping each protocol parameter to its reported name.
+     * @returns {{promise: Promise<Object>, stop: Function}} Resolves with `{experiments, issues, elapsedMs, isStopped}`.
+     */
+    startProtocol({ cellml = null, key = null, settings, plan, targets, baseChanges = [], recorded = [], onProgress = () => {} }) {
+      const message = { type: 'runProtocol', cellml, key, settings: JSON.parse(JSON.stringify(settings)), plan, targets: [...targets], baseChanges, recorded: [...recorded] }
+      return send(message, decodeProtocolResults, onProgress)
     },
   })
 }

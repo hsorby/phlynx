@@ -5,8 +5,23 @@
         <template v-if="titleParts">
           <template v-for="(part, index) in titleParts" :key="index"
             ><span v-if="index" class="plot-title-separator">, </span
-            ><span v-if="titleParts.length > 1 && part.slot !== undefined" class="plot-key-swatch plot-title-swatch" :style="{ background: colourOf(part) }" aria-hidden="true"></span
-            ><span v-if="part.component" class="plot-title-component">{{ part.component }}/</span><span>{{ part.name }}</span></template
+            ><!-- A span rather than a button, so the title's ellipsis can cut a long name rather than drop it whole. --><span
+              v-if="titleNamesLines && series[index]"
+              role="button"
+              tabindex="0"
+              class="plot-key-toggle"
+              :class="{ 'is-hidden': isHidden(series[index]) }"
+              :aria-pressed="!isHidden(series[index])"
+              :title="toggleHint(series[index])"
+              @click="toggleSeries(series[index])"
+              @keydown.enter.prevent="toggleSeries(series[index])"
+              @keydown.space.prevent="toggleSeries(series[index])"
+              ><span class="plot-key-swatch plot-title-swatch" :style="{ background: colourOf(series[index]) }" aria-hidden="true"></span
+              ><span v-if="part.component" class="plot-title-component">{{ part.component }}/</span><span>{{ part.name }}</span></span
+            ><template v-else
+              ><span v-if="titleParts.length > 1 && part.slot !== undefined" class="plot-key-swatch plot-title-swatch" :style="{ background: colourOf(part) }" aria-hidden="true"></span
+              ><span v-if="part.component" class="plot-title-component">{{ part.component }}/</span><span>{{ part.name }}</span></template
+            ></template
           >
         </template>
         <template v-else>{{ title }}</template>
@@ -17,11 +32,28 @@
       <span class="plot-unit">{{ unit }}</span>
     </figcaption>
     <p v-if="note" class="plot-note">{{ note }}</p>
-    <!-- A key only when the title names the plot rather than its lines, which it colours itself. -->
-    <ul v-if="series.length > 1 && !titleParts && !x.isSteadyState" class="plot-key">
-      <li v-for="item in series" :key="item.key">
-        <RunSwatch v-if="item.run" :colour="colourOf(item)" :dash="item.run.dash" /><span v-else class="plot-key-swatch" :style="{ background: colourOf(item) }" aria-hidden="true"></span
-        >{{ item.label }}
+    <!-- A key of the lines when the title names the plot rather than them, which it colours itself, and of the
+      reference lines: a measurement dashed (or points, for a recorded series), the run's solid. -->
+    <ul v-if="keyed.length" class="plot-key">
+      <li v-for="item in keyed" :key="item.key">
+        <button
+          type="button"
+          class="plot-key-toggle"
+          :class="{ 'is-hidden': isHidden(item) }"
+          :aria-pressed="!isHidden(item)"
+          :title="toggleHint(item)"
+          :data-value="item.role ? item.value : undefined"
+          @click="toggleSeries(item)"
+        >
+          <RunSwatch v-if="item.run" :colour="colourOf(item)" :dash="item.run.dash" /><span
+            v-else
+            class="plot-key-swatch"
+            :class="{ 'is-dashed': item.role === 'obs' && !item.points, 'is-point': !!item.points }"
+            :style="swatchStyle(item)"
+            aria-hidden="true"
+          ></span
+          >{{ item.label }}
+        </button>
       </li>
     </ul>
     <!-- With the title naming the lines, which runs they are from: the live run solid, tracked runs dashed. -->
@@ -45,7 +77,7 @@
       <!-- The values under the cursor, beside it, as plotly's hover does, in place of a legend line. -->
       <div v-if="readout" class="plot-readout" :style="{ left: `${readout.left}px`, top: `${readout.top}px` }" aria-hidden="true">
         <div class="plot-readout-time">{{ readout.time }}</div>
-        <div v-for="row in readout.rows" :key="row.key" class="plot-readout-row">
+        <div v-for="row in readout.rows.filter((row) => !hiddenKeys.has(row.key))" :key="row.key" class="plot-readout-row">
           <RunSwatch v-if="row.dash" :colour="row.colour" :dash="row.dash" />
           <span v-else class="plot-key-swatch" :style="{ background: row.colour }"></span>
           <span v-if="row.label" class="plot-readout-label">{{ row.label }}</span>
@@ -69,26 +101,28 @@ import 'uplot/dist/uPlot.min.css'
 
 import RunSwatch from './RunSwatch.vue'
 import { useColorScheme } from '../../composables/useColorScheme'
+import { AXIS_FONT, CHROME, formatTicks, formatValue, measureLabel, sizeValueAxis } from '../../services/simulation/chartStyle'
 import { getChartZoom, setChartZoom } from '../../services/simulation/chartZoom'
 import { findNearestPoint } from '../../services/simulation/nearestPoint'
 import { SERIES_COLOURS } from '../../services/simulation/seriesSlots'
-import { fadeColour, formatPlotValue as formatValue } from '../../services/simulation/trackedRuns'
+import { fadeColour } from '../../services/simulation/trackedRuns'
 
-const CHROME = {
-  light: { text: '#52514e', grid: '#e1e0d9', axis: '#c3c2b7' },
-  dark: { text: '#c3c2b7', grid: '#2c2c2a', axis: '#383835' },
-}
 const props = defineProps({
   title: { type: String, required: true },
   // The title as instance/variable paths, to show each instance muted, or null to show `title`.
   titleParts: { type: Array, default: null },
   unit: { type: String, required: true },
-  // { label, unit, values, isSteadyState, isSweep, isPhase, run }: a phase plot's `run` is the run's own x-axis.
+  // { label, unit, values, segments?, isSteadyState, isSweep, isPhase, run }: segments [{ from, to, number }] are a
+  // protocol's sub-experiments; a phase plot's `run` is the run's own x-axis.
   x: { type: Object, required: true },
-  // [{ key, label, variableLabel, slot, values, run, xValues, runValues }], run being a tracked run's
+  // [{ key, label, variableLabel, slot, values, run, xValues, runValues, isStepped? }], run being a tracked run's
   // `{ number, dash }`, or null for the live run. On a phase plot, xValues and runValues are the series' own
   // x values and run x-axis values, as a tracked run's differ from the live run's.
   series: { type: Array, required: true },
+  // Lines across a window or up the chart, in values, as protocolPlotGroups builds them: [{ key, label, role, slot,
+  // orientation, from, to, value }], `role` 'obs' (dashed) or 'calc' (solid); or a recorded series' `points`
+  // ([{ x, y }]), orientation 'points'.
+  references: { type: Array, default: () => [] },
   height: { type: Number, default: 220 },
   // Charts with the same key show their cursors at the same time.
   syncKey: { type: String, default: null },
@@ -99,29 +133,12 @@ const props = defineProps({
 })
 
 /**
- * Formats axis ticks to as many decimals as their spacing needs, or in exponent form when very small or
- * large, so ticks a thousandth apart don't all read 0.
+ * Pads the chart's right side by half its last x label, which is centred on the right edge, so it isn't cut off.
  *
- * @param {Object} _ - The chart.
- * @param {number[]} splits - The tick values.
- * @returns {string[]}
- */
-function formatTicks(_, splits) {
-  const step = splits.length > 1 ? Math.abs(splits[1] - splits[0]) : Math.abs(splits[0]) || 1
-  const largest = Math.max(...splits.map(Math.abs))
-  if (largest >= 1e6 || (largest > 0 && step < 1e-4)) return splits.map((value) => (value === 0 ? '0' : value.toExponential(2)))
-  const decimals = Math.max(0, Math.ceil(-Math.log10(step) - 1e-9))
-  return splits.map((value) => value.toFixed(decimals))
-}
-
-/**
- * Sizes the value axis to fit its longest tick label; its unit is in the chart's heading.
- *
- * @param {Object} _ - The chart.
- * @param {string[]|null} values - The tick labels, once known.
+ * @param {Object} chart
  * @returns {number} Pixels.
  */
-const sizeValueAxis = (_, values) => Math.max(32, Math.ceil(Math.max(0, ...(values ?? []).map((value) => value.length)) * 6.5) + 12)
+const padRight = (chart) => Math.max(12, Math.ceil(measureLabel(chart.axes[0]?._values?.at(-1) ?? '') / 2) + 2)
 
 // The readout's width, about, to keep it inside the chart.
 const READOUT_WIDTH_PX = 150
@@ -150,6 +167,62 @@ const xUnit = () => (props.x.unit && props.x.unit !== 'dimensionless' ? shortUni
 const chartEl = ref(null)
 const { isDarkMode } = useColorScheme()
 const readout = ref(null)
+// The keys of the series hidden by clicking them in the title or key, kept across redraws.
+const hiddenKeys = ref(new Set())
+
+/**
+ * Tells whether a series is hidden.
+ *
+ * @param {{key: string}} item
+ * @returns {boolean}
+ */
+const isHidden = (item) => hiddenKeys.value.has(item.key)
+
+const hasRuns = computed(() => props.series.some((item) => item.run))
+// Whether the title names each line, and so carries their toggles; otherwise the key under it does. With tracked
+// runs, the title names the variables, and the run key which runs the lines are from. A steady state lists its values,
+// with no lines to hide.
+const titleNamesLines = computed(
+  () => !hasRuns.value && !props.x.isSteadyState && props.series.length > 1 && props.titleParts?.length === props.series.length
+)
+// What the key lists: the lines, unless the title names them or there's one with nothing beside it, then the
+// reference lines. A steady state lists its values instead.
+const keyed = computed(() => {
+  if (props.x.isSteadyState) return []
+  const listsLines = !titleNamesLines.value && !(hasRuns.value && props.titleParts) && (props.series.length > 1 || props.references.length)
+  return [...(listsLines ? props.series : []), ...props.references]
+})
+
+/**
+ * Describes what clicking a series' name does, with a reference line's value.
+ *
+ * @param {{label: string, role?: string, value?: number}} item
+ * @returns {string}
+ */
+const toggleHint = (item) => `${isHidden(item) ? 'Show' : 'Hide'} ${item.label}${item.role && !item.points ? `: ${formatValue(item.value)}` : ''}`
+
+/**
+ * Shows or hides a series' line, or a reference line, refitting the values to the lines left; the x range stays.
+ *
+ * @param {{key: string, role?: string}} item
+ */
+function toggleSeries(item) {
+  const hidden = new Set(hiddenKeys.value)
+  if (hidden.has(item.key)) hidden.delete(item.key)
+  else hidden.add(item.key)
+  hiddenKeys.value = hidden
+  if (item.role) {
+    // The values' range takes in the reference lines shown, the zoom kept.
+    if (!plot) return
+    isUpdatingData = true
+    plot.setData(buildData())
+    restoreZoom()
+    isUpdatingData = false
+    return
+  }
+  const index = props.series.findIndex((series) => series.key === item.key)
+  if (plot && index >= 0) plot.setSeries(index + 1, { show: !hidden.has(item.key) })
+}
 
 /**
  * Gets a series' line colour.
@@ -158,6 +231,14 @@ const readout = ref(null)
  * @returns {string}
  */
 const colourOf = (item) => SERIES_COLOURS[isDarkMode.value ? 'dark' : 'light'][item.slot]
+
+/**
+ * Colours a key swatch: filled, or a dashed line's colour for a measurement.
+ *
+ * @param {{slot: number, role?: string, points?: Array}} item
+ * @returns {Object}
+ */
+const swatchStyle = (item) => (item.role === 'obs' && !item.points ? { color: colourOf(item) } : { background: colourOf(item) })
 
 const chrome = computed(() => CHROME[isDarkMode.value ? 'dark' : 'light'])
 
@@ -170,24 +251,94 @@ const runKey = computed(() => {
   return props.series.some((item) => !item.run) ? [{ number: 0, label: 'Live', dash: null }, ...key] : key
 })
 
-// How many variables the lines show, however many runs they are from.
+// How many variables the lines show, however many runs or experiments they are from.
 const variableCount = computed(() => new Set(props.series.map((item) => item.variableLabel ?? item.label)).size)
-const hasRuns = computed(() => props.series.some((item) => item.run))
 
 /**
  * Names a line in the readout: its variable, when the chart has several, and its run, apart from the
- * variable so a long name cut short still says which run it is.
+ * variable so a long name cut short still says which run it is. Without tracked runs, lines of one variable
+ * (every experiment of a protocol at once) go by their own names.
  *
  * @param {{label: string, variableLabel?: string, run: {number: number}|null}} item
  * @returns {{label: string|null, run: string|null}}
  */
 function readoutNames(item) {
   const run = hasRuns.value ? (item.run ? `#${item.run.number}` : 'Live') : null
-  return { label: variableCount.value > 1 ? item.variableLabel ?? item.label : null, run }
+  // One of every experiment of a protocol shown at once, named for its experiment.
+  if (item.experiment != null) return { label: item.label, run }
+  if (variableCount.value > 1) return { label: item.variableLabel ?? item.label, run }
+  return { label: !hasRuns.value && props.series.length > 1 ? item.label : null, run }
 }
 
 // The live run's values first, then each tracked run's, though the tracked runs' lines are drawn first.
 const readoutOrder = computed(() => [...props.series].sort((a, b) => (a.run?.number ?? 0) - (b.run?.number ?? 0)))
+
+/**
+ * Draws the reference lines shown, in values: a measurement dashed, the run's solid, across its window or up the chart;
+ * a recorded series as points.
+ *
+ * @param {Object} chart - The uPlot chart.
+ */
+function drawReferences(chart) {
+  const shown = props.references.filter((item) => !isHidden(item))
+  if (!shown.length) return
+  const { ctx, bbox } = chart
+  const ratio = uPlot.pxRatio
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(bbox.left, bbox.top, bbox.width, bbox.height)
+  ctx.clip()
+  ctx.lineWidth = 1.5 * ratio
+  for (const item of shown) {
+    if (item.points) {
+      ctx.fillStyle = colourOf(item)
+      for (const { x, y } of item.points) {
+        ctx.beginPath()
+        ctx.arc(chart.valToPos(x, 'x', true), chart.valToPos(y, 'y', true), 3 * ratio, 0, 2 * Math.PI)
+        ctx.fill()
+      }
+      continue
+    }
+    ctx.strokeStyle = colourOf(item)
+    ctx.setLineDash(item.role === 'obs' ? [6 * ratio, 4 * ratio] : [])
+    ctx.beginPath()
+    if (item.orientation === 'vertical') {
+      const x = chart.valToPos(item.value, 'x', true)
+      ctx.moveTo(x, bbox.top)
+      ctx.lineTo(x, bbox.top + bbox.height)
+    } else {
+      const y = chart.valToPos(item.value, 'y', true)
+      ctx.moveTo(chart.valToPos(item.from, 'x', true), y)
+      ctx.lineTo(chart.valToPos(item.to, 'x', true), y)
+    }
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+/**
+ * Pads the values' range as uPlot does, taking in the reference lines shown across the chart.
+ *
+ * @param {Object} _ - The chart.
+ * @param {number|null} min
+ * @param {number|null} max
+ * @returns {number[]}
+ */
+function rangeY(_, min, max) {
+  let low = min ?? Infinity
+  let high = max ?? -Infinity
+  for (const item of props.references) {
+    if (isHidden(item)) continue
+    for (const { y } of item.points ?? []) {
+      low = Math.min(low, y)
+      high = Math.max(high, y)
+    }
+    if (item.orientation === 'vertical' || !Number.isFinite(item.value)) continue
+    low = Math.min(low, item.value)
+    high = Math.max(high, item.value)
+  }
+  return low <= high ? uPlot.rangeNum(low, high, 0.1, true) : [0, 1]
+}
 
 /**
  * Shows the values under the cursor beside it, flipping to its left near the chart's right edge, or hides
@@ -207,7 +358,7 @@ function updateReadout(chart) {
   }
   readout.value = {
     ...placeReadout(chart, left),
-    time: `${formatValue(chart.data[0][idx])}${xUnit() ? ` ${xUnit()}` : ''}`,
+    time: `${formatValue(chart.data[0][idx])}${xUnit() ? ` ${xUnit()}` : ''}${findSegmentLabel(chart.data[0][idx])}`,
     rows: readoutOrder.value.map((item) => ({ key: item.key, ...readoutNames(item), colour: colourOf(item), dash: item.run?.dash ?? null, value: formatValue(item.values[idx]) })),
   }
 }
@@ -224,6 +375,40 @@ function placeReadout(chart, left) {
   const x = over.offsetLeft + left
   const fitsRight = x + 12 + READOUT_WIDTH_PX <= chart.root.clientWidth
   return { left: fitsRight ? x + 12 : Math.max(0, x - 12 - READOUT_WIDTH_PX), top: over.offsetTop + 6 }
+}
+
+/**
+ * Names the sub-experiment a time falls in, for the readout; the later one at a boundary.
+ *
+ * @param {number} time
+ * @returns {string} ` · sub n`, or nothing outside a protocol.
+ */
+function findSegmentLabel(time) {
+  const segment = (props.x.segments ?? []).findLast(({ from, to }) => time >= from && time <= to)
+  return segment ? ` · sub ${segment.number}` : ''
+}
+
+/**
+ * Shades every other sub-experiment of a protocol's run behind the lines, so where each starts shows.
+ *
+ * @param {Object} chart - The uPlot chart.
+ */
+function drawSegments(chart) {
+  const segments = props.x.segments ?? []
+  if (segments.length < 2) return
+  const { ctx, bbox } = chart
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(bbox.left, bbox.top, bbox.width, bbox.height)
+  ctx.clip()
+  ctx.fillStyle = CHROME[isDarkMode.value ? 'dark' : 'light'].band
+  segments.forEach(({ from, to }, index) => {
+    if (index % 2 === 0) return
+    const left = chart.valToPos(from, 'x', true)
+    const right = chart.valToPos(to, 'x', true)
+    ctx.fillRect(left, bbox.top, right - left, bbox.height)
+  })
+  ctx.restore()
 }
 
 /**
@@ -263,7 +448,7 @@ function updatePhaseReadout(chart) {
   const { left, top, idxs } = chart.cursor
   const found = props.series
     .map((item, i) => ({ item, idx: idxs?.[i + 1] }))
-    .filter(({ idx }) => idx != null)
+    .filter(({ item, idx }) => idx != null && !isHidden(item))
     .map((point) => {
       const pointLeft = chart.valToPos(xValuesOf(point.item)[point.idx], 'x')
       const pointTop = chart.valToPos(point.item.values[point.idx], 'y')
@@ -287,8 +472,11 @@ function updatePhaseReadout(chart) {
       .map(({ item, idx }) => ({ key: item.key, ...readoutNames(item), colour: colourOf(item), dash: item.run?.dash ?? null, value: formatValue(item.values[idx]) })),
   }
 }
+
+const STEPPED_PATHS = uPlot.paths.stepped({ align: -1 })
+
 let plot = null
-// The time range zoomed into, kept across new values and redraws; null when showing the whole run.
+// The x range zoomed into, kept across new values and redraws; null when showing the whole run.
 let zoom = getChartZoom(props.zoomKey)
 let isUpdatingData = false
 
@@ -329,6 +517,22 @@ const ariaLabel = computed(() => {
 })
 
 /**
+ * Gives a series' line its look: its colour, or for a tracked run's line, its colour faded and dashed.
+ *
+ * @param {{slot: number, run: {dash: number[]}|null}} series
+ * @param {string} theme
+ * @returns {Object}
+ */
+const lineStyle = (series, theme) => ({
+  label: series.label,
+  show: !isHidden(series),
+  stroke: series.run ? fadeColour(SERIES_COLOURS[theme][series.slot]) : SERIES_COLOURS[theme][series.slot],
+  width: series.run ? 1.5 : 2,
+  ...(series.run && { dash: series.run.dash }),
+  points: { show: false },
+})
+
+/**
  * Builds the uPlot options for the current series and theme.
  *
  * @param {number} width
@@ -342,10 +546,10 @@ function buildOptions(width) {
     stroke: chrome.text,
     grid: { stroke: chrome.grid, width: 1 },
     ticks: { stroke: chrome.axis, width: 1 },
-    font: '11px system-ui, -apple-system, "Segoe UI", sans-serif',
+    font: AXIS_FONT,
   })
-  // The time's unit on its last tick, in place of an axis title under the ticks.
-  const timeTicks = (chart, splits) => {
+  // The x-axis's unit on its last tick, in place of an axis title under the ticks.
+  const xTicks = (chart, splits) => {
     const labels = formatTicks(chart, splits)
     if (xUnit() && labels.length) labels[labels.length - 1] += ` ${xUnit()}`
     return labels
@@ -361,22 +565,17 @@ function buildOptions(width) {
       cursor: { drag: { x: true, y: true }, points: { size: 8 }, dataIdx: nearestPhasePoint },
       hooks: { setCursor: [updateReadout] },
       legend: { show: false },
-      padding: [8, 12, 0, 0],
-      axes: [{ ...axis(timeTicks), size: 28 }, { ...axis(), size: sizeValueAxis }],
+      padding: [8, padRight, 0, 0],
+      axes: [{ ...axis(xTicks), size: 28 }, { ...axis(), size: sizeValueAxis }],
       series: [
         {},
-        // A tracked run's line is its variable's colour, faded and dashed, as on a chart over the VoI.
         ...props.series.map((series) => ({
-          label: series.label,
-          stroke: series.run ? fadeColour(SERIES_COLOURS[theme][series.slot]) : SERIES_COLOURS[theme][series.slot],
-          width: series.run ? 1.5 : 2,
-          ...(series.run && { dash: series.run.dash }),
+          ...lineStyle(series, theme),
           facets: [
             { scale: 'x', auto: true },
             { scale: 'y', auto: true },
           ],
           paths: joinInOrder,
-          points: { show: false },
         })),
       ],
     }
@@ -384,24 +583,23 @@ function buildOptions(width) {
   return {
     width,
     height: props.height,
-    scales: { x: { time: false } },
+    // A chart with reference lines fits them in too.
+    scales: { x: { time: false }, ...(props.references.length && { y: { range: rangeY } }) },
     // Synced charts plot different series, so hiding one mustn't hide its namesake by position elsewhere.
     cursor: { y: false, points: { size: 8 }, ...(props.syncKey && { sync: { key: props.syncKey, setSeries: false } }) },
-    hooks: { setScale: [recordZoom], setCursor: [updateReadout] },
+    hooks: { setScale: [recordZoom], setCursor: [updateReadout], drawClear: [drawSegments], draw: [drawReferences] },
     legend: { show: false },
-    padding: [8, 12, 0, 0],
-    axes: [{ ...axis(timeTicks), size: 28 }, { ...axis(), size: sizeValueAxis }],
+    padding: [8, padRight, 0, 0],
+    axes: [{ ...axis(xTicks), size: 28 }, { ...axis(), size: sizeValueAxis }],
     series: [
       { label: props.x.label },
-      // A tracked run's line is its variable's colour, faded and dashed.
       ...props.series.map((series) => ({
-        label: series.label,
-        stroke: series.run ? fadeColour(SERIES_COLOURS[theme][series.slot]) : SERIES_COLOURS[theme][series.slot],
-        width: series.run ? 1.5 : 2,
-        ...(series.run && { dash: series.run.dash }),
-        // Runs with different output points share a VoI axis on which each has gaps at the others' points.
+        ...lineStyle(series, theme),
+        // Runs with different output points, and every experiment of a protocol shown at once, share an x-axis on
+        // which each has gaps at the others' points; its line carries on across them.
         spanGaps: true,
-        points: { show: false },
+        // A value that changes at a point holds from the point before, so a step shows where its sub-experiment starts.
+        ...(series.isStepped && { paths: STEPPED_PATHS }),
       })),
     ],
   }
@@ -438,8 +636,20 @@ function joinInOrder(chart, seriesIndex) {
   return { stroke, fill: null, clip: null, band: null, gaps: null, flags: 0 }
 }
 
+/**
+ * Forgets hidden series that no name on the chart can show again: those no longer plotted, every line when one is
+ * left, and the lines once tracked runs, or a steady state's list of values, take their names' place.
+ */
+function pruneHidden() {
+  if (!hiddenKeys.value.size) return
+  const keys = new Set([...(titleNamesLines.value ? props.series.map((series) => series.key) : []), ...keyed.value.map((item) => item.key)])
+  const hidden = new Set([...hiddenKeys.value].filter((key) => keys.has(key)))
+  if (hidden.size !== hiddenKeys.value.size) hiddenKeys.value = hidden
+}
+
 /** Draws the chart afresh, as a change of series or theme needs. */
 function draw() {
+  pruneHidden()
   plot?.destroy()
   plot = null
   if (!chartEl.value) return
@@ -473,7 +683,16 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => [props.series.map((series) => `${series.key}:${series.slot}`).join('|'), isDarkMode.value, props.x.unit, props.x.label, props.x.isPhase, props.unit, props.syncKey],
+  () => [
+    props.series.map((series) => `${series.key}:${series.slot}`).join('|'),
+    props.references.map((item) => `${item.key}:${item.slot}:${item.from}:${item.to}:${item.value}:${item.points?.length}`).join('|'),
+    isDarkMode.value,
+    props.x.unit,
+    props.x.label,
+    props.x.isPhase,
+    props.unit,
+    props.syncKey,
+  ],
   draw
 )
 // The chart's element comes and goes as the results switch between a time course and a steady state.
@@ -494,21 +713,30 @@ defineExpose({
   /**
    * Gets the chart as drawn, with the colours of its series, for an image of it.
    *
-   * @returns {{title: string, canvas: HTMLCanvasElement, legend: Array<{label: string, colour: string}>}|null}
+   * @returns {{title: string, canvas: HTMLCanvasElement, legend: Array<{label: string, colour: string, dash?: number[]|null,
+   *   isDashed?: boolean, isPoint?: boolean}>}|null} A tracked run's line has its `dash`, a measurement's reference line
+   *   `isDashed`, a recorded series' `isPoint`.
    */
   snapshot() {
     if (!plot) return null
     const colours = SERIES_COLOURS[isDarkMode.value ? 'dark' : 'light']
+    // Hidden lines aren't drawn, so the image's title and legend leave them out too.
+    const shown = readoutOrder.value.filter((series) => !isHidden(series))
+    const name = titleNamesLines.value && shown.length ? shown.map((series) => series.label).join(', ') : props.title
     // The unit is in the heading, not on the canvas, so the image's title carries it.
-    const title = `${props.title}${againstLabel.value ? ` vs ${againstLabel.value}` : ''}${props.unit ? ` (${props.unit})` : ''}`
+    const title = `${name}${againstLabel.value ? ` vs ${againstLabel.value}` : ''}${props.unit ? ` (${props.unit})` : ''}`
+    const references = props.references.filter((item) => !isHidden(item))
     return {
       title,
       canvas: plot.ctx.canvas,
-      legend: readoutOrder.value.map((series) => ({ label: series.label, colour: colours[series.slot], dash: series.run?.dash ?? null })),
+      legend: [
+        ...shown.map((series) => ({ label: series.label, colour: colours[series.slot], dash: series.run?.dash ?? null })),
+        ...references.map((item) => ({ label: item.label, colour: colours[item.slot], isDashed: item.role === 'obs' && !item.points, isPoint: !!item.points })),
+      ],
     }
   },
 })
-// New values, as a slider moving gives, keep a zoomed chart on its time range, with the values refitted to it.
+// New values, as a slider moving gives, keep a zoomed chart on its x range, with the values refitted to it.
 watch(
   () => [props.x.values, ...props.series.map((series) => series.values)],
   () => {
@@ -540,7 +768,8 @@ watch(
 
 .plot-title {
   min-width: 0;
-  overflow: hidden;
+  /* Clip rather than hide, so tabbing to a cut-off name can't scroll the title. */
+  overflow: clip;
   white-space: nowrap;
   text-overflow: ellipsis;
   font-size: var(--dlg-fs-small, 0.8125rem);
@@ -621,11 +850,64 @@ watch(
   text-align: right;
 }
 
+.plot-key-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.plot-title .plot-key-toggle {
+  display: inline;
+  gap: 0;
+}
+
+/* Inside the title, which clips anything outside it. */
+.plot-title .plot-key-toggle:focus-visible {
+  outline-offset: -2px;
+}
+
+.plot-key-toggle:hover {
+  text-decoration: underline;
+}
+
+.plot-key-toggle:focus-visible {
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+/* A hidden line's name stays, faded, so it can be clicked back on. */
+.plot-key-toggle.is-hidden {
+  opacity: 0.45;
+}
+
 .plot-key-swatch {
   flex-shrink: 0;
   width: 10px;
   height: 3px;
   border-radius: 2px;
+}
+
+/* A measurement's reference line, dashed as it's drawn. */
+.plot-key-swatch.is-dashed {
+  width: 12px;
+  height: 0;
+  border-radius: 0;
+  border-top: 2px dashed currentColor;
+}
+
+/* A recorded series, a point as it's drawn. */
+.plot-key-swatch.is-point {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
 }
 
 .plot-area {

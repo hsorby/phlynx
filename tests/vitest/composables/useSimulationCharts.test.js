@@ -2,135 +2,125 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { useSimulationCharts } from '../../../src/composables/useSimulationCharts.js'
-import { runDash } from '../../../src/services/simulation/trackedRuns.js'
+import { findSegments, mergeTimes, spreadValues, useSimulationCharts } from '../../../src/composables/useSimulationCharts.js'
+import { ALL_EXPERIMENTS, useProtocolStore } from '../../../src/stores/protocolStore.js'
 import { useSimulationResultsStore } from '../../../src/stores/simulationResultsStore.js'
 import { useSimulationSettingsStore } from '../../../src/stores/simulationSettingsStore.js'
 
-const NODES = [{ id: 'a', data: { name: 'cell' } }]
-const MAPPING = new Map([
-  ['a::V', 'cell/V'],
-  ['a::w', 'cell/w'],
-])
+const NODE = { id: 'n1', data: { name: 'soma' } }
 
 /**
- * Makes results with V and w over some values of the VoI.
+ * Gives an experiment's results: g, a constant the protocol set, and V, plotted.
  *
- * @param {number[]} voi
- * @param {number} offset - Added to each value, to tell runs apart.
  * @returns {Object}
  */
-const makeResults = (voi, offset) => ({
-  voi: { name: 'cell/t', unit: 'second', values: new Float64Array(voi) },
+const experiment = () => ({
+  voi: { name: 'environment/time', unit: 'second', values: Float64Array.of(0, 1, 2, 3, 4) },
   variables: new Map([
-    ['cell/V', { unit: 'mV', values: new Float64Array(voi.map((point) => point + offset)) }],
-    ['cell/w', { unit: 'mV', values: new Float64Array(voi.map(() => offset)) }],
+    ['instance_parameters/g', { kind: 'constant', unit: 'siemens', values: Float64Array.of(1, 1, 1, 2, 2) }],
+    ['soma/V', { kind: 'state', unit: 'volt', values: Float64Array.of(0, 1, 2, 3, 4) }],
   ]),
-  isStopped: false,
+  subs: [
+    { startIndex: 0, endIndex: 2 },
+    { startIndex: 2, endIndex: 4 },
+  ],
 })
 
-describe('useSimulationCharts with tracked runs', () => {
-  let store
-  let settingsStore
+describe('useSimulationCharts', () => {
+  beforeEach(() => setActivePinia(createPinia()))
 
-  /**
-   * Finishes a run with some results.
-   *
-   * @param {Object} results
-   */
-  const finish = (results) => {
-    store.startRun(null)
-    store.finishRun({ results, mapping: MAPPING, signature: 's', inspectionOutputs: [], inputs: { settings: { ...settingsStore.simulationSettings }, overrides: null } })
-  }
-
-  beforeEach(() => {
-    window.localStorage.clear()
-    setActivePinia(createPinia())
-    store = useSimulationResultsStore()
-    settingsStore = useSimulationSettingsStore()
-    settingsStore.simulationSettings = { ...settingsStore.simulationSettings, initialPoint: 0, startingPoint: 0 }
-    settingsStore.setPlotConfig({
-      groups: [{ id: 'p1', name: 'Plot 1' }],
-      selections: [
-        { key: 'a::V', nodeId: 'a', variableName: 'V', groupId: 'p1' },
-        { key: 'a::w', nodeId: 'a', variableName: 'w', groupId: 'p1' },
-      ],
+  it("shows a protocol's run on its own time, with its sub-experiments, then the values it set when asked", () => {
+    useSimulationSettingsStore().setSimulationSettings({ initialPoint: 0, startingPoint: 0 })
+    useSimulationSettingsStore().plotConfig = { groups: [], selections: [{ key: 'n1::V', nodeId: 'n1', variableName: 'V', groupId: '' }] }
+    const store = useSimulationResultsStore()
+    store.finishProtocolRun({
+      protocolResults: { experiments: [experiment()], issues: [], elapsedMs: 1, isStopped: false },
+      inputs: new Map([['soma/g', { name: 'instance_parameters/g', isStepped: true }]]),
+      experiment: 0,
+      mapping: new Map([['n1::V', 'soma/V']]),
+      signature: 's',
     })
+    const { xAxis, charts } = useSimulationCharts([NODE])
+
+    expect(xAxis.value.segments).toEqual([
+      { from: 0, to: 2, number: 1 },
+      { from: 2, to: 4, number: 2 },
+    ])
+    // The results only, at first.
+    expect(charts.value.map(({ plotLabel }) => plotLabel)).toEqual(['Ungrouped'])
+    // A view showing one chart at a time has them as a plot to pick.
+    expect(useSimulationCharts([NODE], { hasInputs: true }).charts.value.map(({ plotLabel }) => plotLabel)).toEqual(['Ungrouped', 'Protocol inputs'])
+
+    useProtocolStore().isShowingInputs = true
+    expect(charts.value.map(({ series }) => series.map(({ isStepped }) => isStepped))).toEqual([[false], [true]])
+    expect(charts.value.map(({ plotLabel, title, unit }) => [plotLabel, title, unit])).toEqual([
+      ['Ungrouped', 'soma/V', 'volt'],
+      ['Protocol inputs', 'soma/g', 'siemens'],
+    ])
   })
 
-  it('draws each tracked run’s lines under the live run’s, in its variable’s colour and the run’s dash', () => {
-    const { charts } = useSimulationCharts(NODES)
-    finish(makeResults([0, 1], 0))
-    store.trackRun()
-    finish(makeResults([0, 1], 10))
-    const [chart] = charts.value
-    expect(chart.series.map((series) => series.label)).toEqual(['cell/V [#1]', 'cell/w [#1]', 'cell/V', 'cell/w'])
-    const [trackedV, , liveV] = chart.series
-    expect(trackedV.slot).toBe(liveV.slot)
-    expect(trackedV.run).toEqual({ number: 1, dash: runDash(1) })
-    expect(liveV.run).toBeNull()
-    expect(Array.from(trackedV.values)).toEqual([0, 1])
-    expect(Array.from(liveV.values)).toEqual([10, 11])
-    expect(chart.titleParts.map((part) => part.slot)).toEqual([chart.series[2].slot, chart.series[3].slot])
-  })
+  it("doesn't count a protocol's time again from where the plots start", () => {
+    useSimulationSettingsStore().setSimulationSettings({ initialPoint: -1, startingPoint: 0 })
+    const store = useSimulationResultsStore()
+    store.finishProtocolRun({ protocolResults: { experiments: [experiment()], issues: [], elapsedMs: 1, isStopped: false }, experiment: 0, mapping: new Map(), signature: 's' })
 
-  it('leaves out hidden runs, and the live run when it is hidden', () => {
-    const { charts } = useSimulationCharts(NODES)
-    finish(makeResults([0, 1], 0))
-    const run = store.trackRun()
-    store.isLiveRunVisible = false
-    expect(charts.value[0].series.every((series) => series.run)).toBe(true)
-    store.toggleTrackedRun(run.id)
-    expect(charts.value[0].series).toEqual([])
+    expect([...useSimulationCharts([NODE]).xAxis.value.values]).toEqual([0, 1, 2, 3, 4])
   })
+})
 
-  it('puts runs with other output points on one VoI axis', () => {
-    const { xAxis, charts } = useSimulationCharts(NODES)
-    finish(makeResults([0, 1], 0))
-    store.trackRun()
-    finish(makeResults([0, 0.5, 1], 10))
-    expect(Array.from(xAxis.value.values)).toEqual([0, 0.5, 1])
-    const tracked = charts.value[0].series.find((series) => series.key === 'run_1::a::V')
-    expect(Array.from(tracked.values)).toEqual([0, null, 1])
-  })
+describe('every experiment at once', () => {
+  beforeEach(() => setActivePinia(createPinia()))
 
-  it('leaves a hidden live run’s points off the VoI axis', () => {
-    const { xAxis, charts } = useSimulationCharts(NODES)
-    finish(makeResults([0, 1], 0))
-    store.trackRun()
-    finish(makeResults([0, 1], 5))
-    store.trackRun()
-    finish(makeResults([0, 0.5, 1], 10))
-    store.isLiveRunVisible = false
-    expect(Array.from(xAxis.value.values)).toEqual([0, 1])
-    expect(charts.value[0].series.every((series) => !series.values.includes(null))).toBe(true)
-  })
-
-  it('plots a tracked run of a phase plot against its own x values, not aligned to the VoI', () => {
-    settingsStore.setPlotConfig({
-      groups: [{ id: 'p1', name: 'Plot 1', xAxis: { key: 'a::V', nodeId: 'a', nodeName: 'cell', variableName: 'V', units: 'mV' } }],
-      selections: [{ key: 'a::w', nodeId: 'a', variableName: 'w', groupId: 'p1' }],
+  it('puts each experiment on one time axis, named after it, its line unbroken across the others\' times', () => {
+    useSimulationSettingsStore().plotConfig = { groups: [], selections: [{ key: 'n1::V', nodeId: 'n1', variableName: 'V', groupId: '' }] }
+    const short = { ...experiment(), voi: { name: 'environment/time', unit: 'second', values: Float64Array.of(0, 0.5, 1) } }
+    short.variables = new Map([['soma/V', { kind: 'state', unit: 'volt', values: Float64Array.of(5, 6, 7) }]])
+    useSimulationResultsStore().finishProtocolRun({
+      protocolResults: { experiments: [experiment(), short], issues: [], elapsedMs: 1, isStopped: false },
+      experiment: 0,
+      mapping: new Map([['n1::V', 'soma/V']]),
+      signature: 's',
     })
-    const { charts } = useSimulationCharts(NODES)
-    finish(makeResults([0, 1], 0))
-    store.trackRun()
-    finish(makeResults([0, 0.5, 1], 10))
-    const [chart] = charts.value
-    expect(chart.x).toMatchObject({ key: 'a::V', label: 'cell/V', isPhase: true })
-    expect(Array.from(chart.x.values)).toEqual([10, 10.5, 11])
-    const [tracked, live] = chart.series
-    expect(Array.from(tracked.xValues)).toEqual([0, 1])
-    expect(Array.from(tracked.values)).toEqual([0, 0])
-    expect(Array.from(tracked.runValues)).toEqual([0, 1])
-    expect(Array.from(live.values)).toEqual([10, 10, 10])
-    expect(live.xValues).toBeUndefined()
-  })
+    useProtocolStore().setActiveExperiment(ALL_EXPERIMENTS)
+    const { xAxis, charts } = useSimulationCharts([NODE])
 
-  it('names a sweep’s x-axis after its parameter, and doesn’t settle its values', () => {
-    settingsStore.simulationSettings = { ...settingsStore.simulationSettings, initialPoint: 0, startingPoint: 1 }
-    const { xAxis } = useSimulationCharts(NODES)
-    finish({ ...makeResults([1, 2, 3], 0), isSteadyState: true, isSweep: true, sweepLabel: 'cell/g' })
-    expect(xAxis.value).toMatchObject({ label: 'cell/g', isSweep: true, isSteadyState: false, offset: 0 })
-    expect(Array.from(xAxis.value.values)).toEqual([1, 2, 3])
+    expect(xAxis.value.values).toEqual([0, 0.5, 1, 2, 3, 4])
+    expect(xAxis.value.segments).toEqual([])
+    const [chart] = charts.value
+    // One variable: named once, its lines by experiment, each in its experiment's colour.
+    expect(chart.title).toBe('soma/V')
+    expect(chart.series.map(({ label, slot }) => [label, slot])).toEqual([
+      ['Experiment 1', 0],
+      ['Experiment 2', 1],
+    ])
+    expect(chart.series.map(({ values }) => values)).toEqual([
+      [0, null, 1, 2, 3, 4],
+      [5, 6, 7, null, null, null],
+    ])
+  })
+})
+
+describe('mergeTimes and spreadValues', () => {
+  it('merges times once each, close ones as one, and spreads values over them with gaps', () => {
+    const { times, positions } = mergeTimes([Float64Array.of(0, 0.1 + 0.2, 1), Float64Array.of(0, 0.3, 0.5)])
+    expect(times).toEqual([0, 0.30000000000000004, 0.5, 1])
+    expect([...positions[1]]).toEqual([0, 1, 2])
+    expect(spreadValues(Float64Array.of(9, 8, 7), positions[0], times.length)).toEqual([9, 8, null, 7])
+  })
+})
+
+describe('findSegments', () => {
+  it('finds no segments in a run of one, and only those a stopped run reached', () => {
+    expect(findSegments(undefined, Float64Array.of(0, 1))).toEqual([])
+    expect(findSegments([{ startIndex: 0, endIndex: 1 }], Float64Array.of(0, 1))).toEqual([])
+    const subs = [
+      { startIndex: 0, endIndex: 2 },
+      { startIndex: 2, endIndex: 4 },
+      { startIndex: 4, endIndex: 6 },
+    ]
+    expect(findSegments(subs, Float64Array.of(0, 1, 2, 3))).toEqual([
+      { from: 0, to: 2, number: 1 },
+      { from: 2, to: 3, number: 2 },
+    ])
   })
 })
