@@ -181,7 +181,8 @@
               :title="chart.title"
               :title-parts="chart.titleParts"
               :unit="chart.unit"
-              :x="xAxis"
+              :x="chart.x ?? xAxis"
+              :note="chart.note"
               :series="chart.series"
               :height="chartHeight"
             />

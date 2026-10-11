@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, markRaw, ref, shallowRef } from 'vue'
 
-import { MAX_TRACKED_RUNS, nextRunNumber } from '../services/simulation/trackedRuns'
+import { MAX_TRACKED_RUNS, nextRunNumber, runAxisKind } from '../services/simulation/trackedRuns'
 
 /**
  * The latest in-app simulation: its scope, status and results. Never saved with the workspace.
@@ -93,8 +93,9 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
     inspectionOutputs.value = run.inspectionOutputs ?? []
     signature.value = run.signature
     runInputs.value = run.inputs ? markRaw(run.inputs) : null
-    // A steady state's values and a time course's lines can't share a chart.
-    if (trackedRuns.value.some((tracked) => !!tracked.results.isSteadyState !== !!run.results.isSteadyState)) removeAllTrackedRuns()
+    // A steady state's values, a sweep's lines and a course over the VoI can't share a chart, nor can sweeps
+    // of different parameters.
+    if (trackedRuns.value.some((tracked) => runAxisKind(tracked.results) !== runAxisKind(run.results))) removeAllTrackedRuns()
   }
 
   /** Why the shown results can't be tracked, or null when they can: a run finished or stopped, with room for another. */

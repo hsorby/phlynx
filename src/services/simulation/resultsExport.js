@@ -8,13 +8,18 @@
  * A steady state has no variable of integration.
  *
  * @param {{label: string, unit: string, values: Float64Array, isSteadyState?: boolean}} xAxis
- * @param {Array<{unit: string, series: Array<{key: string, label: string, values: Float64Array}>}>} charts
+ * @param {Array<{unit: string, x?: Object|null, series: Array<{key: string, label: string, values: Float64Array}>}>} charts
  * @returns {Array<{key: string, label: string, unit: string, values: Float64Array}>}
  */
 export function collectResultColumns(xAxis, charts) {
   const columns = xAxis.isSteadyState ? [] : [{ key: '__voi__', label: xAxis.label, unit: xAxis.unit, values: xAxis.values }]
   const seen = new Set()
   for (const chart of charts) {
+    // A plot against another variable of the run, as a phase plot is, has that variable as a column too.
+    if (chart.x && !seen.has(chart.x.key)) {
+      seen.add(chart.x.key)
+      columns.push({ key: chart.x.key, label: chart.x.label, unit: chart.x.unit, values: chart.x.values })
+    }
     // The live run's series, then each tracked run's, though the charts draw the tracked runs' first.
     for (const series of [...chart.series].sort((a, b) => (a.run?.number ?? 0) - (b.run?.number ?? 0))) {
       if (seen.has(series.key)) continue

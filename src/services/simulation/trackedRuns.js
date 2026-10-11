@@ -122,7 +122,7 @@ export function alignVoi(first, others) {
 
 /**
  * Gets the VoI values a run's charts show: from the start of its plots, when they start after the solve
- * does to let the model settle.
+ * does to let the model settle. A sweep's are its swept values, as they are.
  *
  * @param {{voi?: {values: Float64Array}}|null} results
  * @param {{initialPoint: number, startingPoint: number}} settings - The run's simulation settings.
@@ -131,7 +131,8 @@ export function alignVoi(first, others) {
 export function displayVoi(results, settings) {
   const values = results?.voi?.values ?? new Float64Array()
   const { initialPoint, startingPoint } = settings ?? {}
-  const isSettled = initialPoint < startingPoint && values.length > 0 && isSameVoi(values[0], startingPoint)
+  // A sweep's values are its parameter's, which no solve settles over.
+  const isSettled = !results?.isSweep && initialPoint < startingPoint && values.length > 0 && isSameVoi(values[0], startingPoint)
   return isSettled ? { values: values.map((point) => point - startingPoint), offset: startingPoint } : { values, offset: 0 }
 }
 
@@ -160,3 +161,12 @@ export function describeRunInputs(overrides, definitions, globalComponent) {
   }))
   return [...rows, ...globals]
 }
+
+/**
+ * Names what a run's charts are plotted against, so runs against different things aren't drawn together:
+ * a model's VoI, one solve of a model without one, or a sweep of one of its parameters.
+ *
+ * @param {{isSteadyState?: boolean, isSweep?: boolean, sweepLabel?: string}} results
+ * @returns {string}
+ */
+export const runAxisKind = (results) => (results.isSweep ? `sweep:${results.sweepLabel}` : results.isSteadyState ? 'steady' : 'voi')

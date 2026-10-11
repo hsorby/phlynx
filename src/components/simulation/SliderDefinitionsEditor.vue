@@ -1,13 +1,5 @@
 <template>
   <section class="slider-definitions" aria-label="Slider ranges">
-    <VariablePathPicker
-      :index="index"
-      :filter="(entry) => entry.slidable && !definedKeys.has(entry.key)"
-      placeholder="Add a slider…"
-      aria-label="Add a slider"
-      @pick="addDefinition"
-    />
-
     <table v-if="rows.length" class="definitions-table">
       <thead>
         <tr>
@@ -52,16 +44,38 @@
         </tr>
       </tbody>
     </table>
-    <p v-else class="definitions-empty">No sliders yet. Search above for a parameter to give a slider.</p>
+    <p v-else-if="!isAdding" class="definitions-empty">No sliders yet.</p>
+
+    <!-- Last, as on the Simulation tab. The search shows when asked for, and tucks away after a pick. -->
+    <div v-if="isAdding" ref="pickerEl" class="definitions-picker">
+      <VariablePathPicker
+        :index="index"
+        :filter="(entry) => entry.slidable && !definedKeys.has(entry.key)"
+        placeholder="Add a slider…"
+        aria-label="Add a slider"
+        @pick="addDefinition"
+      />
+      <Button
+        icon="pi pi-times"
+        text
+        rounded
+        size="small"
+        severity="secondary"
+        aria-label="Close the slider search"
+        @click="isAdding = false"
+      />
+    </div>
+    <Button v-else label="Add slider" icon="pi pi-plus" text size="small" class="definitions-add-button" @click="startAdding" />
   </section>
 </template>
 
 <script setup>
 /**
  * The ranges of the parameter sliders, as exported for web OpenCOR: each slider's minimum, default and
- * maximum, with the same search across the whole model the Simulation tab uses to add one.
+ * maximum, with the same search across the whole model the Simulation tab uses to add one, behind an Add
+ * slider button as there.
  */
-import { computed } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 
 import Button from 'primevue/button'
 import InputNumber from 'primevue/inputnumber'
@@ -80,7 +94,18 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:scanConfig'])
 
-const index = computed(() => buildVariableIndex(props.nodes))
+// The search opens from the Add slider button, never on its own.
+const isAdding = ref(false)
+const pickerEl = ref(null)
+
+/** Shows the slider search and puts the cursor in it. */
+async function startAdding() {
+  isAdding.value = true
+  await nextTick()
+  pickerEl.value?.querySelector('input')?.focus()
+}
+
+const index = computed(() => (isAdding.value ? buildVariableIndex(props.nodes) : []))
 const nodesById = computed(() => new Map(props.nodes.map((node) => [node.id, node])))
 const definitions = computed(() => props.scanConfig?.selections ?? [])
 // Sliders by their value: a global constant's is one value however many instances it was added from.
@@ -123,6 +148,7 @@ function addDefinition(entry) {
   const row = node?.data?.variables?.find((candidate) => candidate.name === entry.rowName)
   if (!node || !row) return
   emit('update:scanConfig', putSlider(props.scanConfig, createSliderDefinition(node, row, props.getGlobalConstant)))
+  isAdding.value = false
 }
 
 /**
@@ -152,6 +178,21 @@ function removeRow(row) {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.definitions-picker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.definitions-picker > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.definitions-add-button {
+  align-self: flex-start;
 }
 
 .definitions-table {

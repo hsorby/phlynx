@@ -100,6 +100,19 @@ describe('simulationResultsStore tracked runs', () => {
     expect(store.trackedRuns).toHaveLength(0)
   })
 
+  it('keeps tracked sweeps of one parameter, and forgets them for a single solve or another parameter', () => {
+    const sweepOf = (label) => makeResults({ isSteadyState: true, isSweep: true, sweepLabel: label })
+    finish(null, sweepOf('cell/V'))
+    store.trackRun()
+    finish(null, sweepOf('cell/V'))
+    expect(store.trackedRuns).toHaveLength(1)
+    finish(null, sweepOf('cell/g'))
+    expect(store.trackedRuns).toHaveLength(0)
+    store.trackRun()
+    finish(null, makeResults({ isSteadyState: true }))
+    expect(store.trackedRuns).toHaveLength(0)
+  })
+
   it('shows and hides runs, and shows the live run again once no run is tracked', () => {
     finish()
     const run = store.trackRun()

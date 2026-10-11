@@ -105,4 +105,32 @@ describe('useSimulationCharts with tracked runs', () => {
     expect(Array.from(xAxis.value.values)).toEqual([0, 1])
     expect(charts.value[0].series.every((series) => !series.values.includes(null))).toBe(true)
   })
+
+  it('plots a tracked run of a phase plot against its own x values, not aligned to the VoI', () => {
+    settingsStore.setPlotConfig({
+      groups: [{ id: 'p1', name: 'Plot 1', xAxis: { key: 'a::V', nodeId: 'a', nodeName: 'cell', variableName: 'V', units: 'mV' } }],
+      selections: [{ key: 'a::w', nodeId: 'a', variableName: 'w', groupId: 'p1' }],
+    })
+    const { charts } = useSimulationCharts(NODES)
+    finish(makeResults([0, 1], 0))
+    store.trackRun()
+    finish(makeResults([0, 0.5, 1], 10))
+    const [chart] = charts.value
+    expect(chart.x).toMatchObject({ key: 'a::V', label: 'cell/V', isPhase: true })
+    expect(Array.from(chart.x.values)).toEqual([10, 10.5, 11])
+    const [tracked, live] = chart.series
+    expect(Array.from(tracked.xValues)).toEqual([0, 1])
+    expect(Array.from(tracked.values)).toEqual([0, 0])
+    expect(Array.from(tracked.runValues)).toEqual([0, 1])
+    expect(Array.from(live.values)).toEqual([10, 10, 10])
+    expect(live.xValues).toBeUndefined()
+  })
+
+  it('names a sweep’s x-axis after its parameter, and doesn’t settle its values', () => {
+    settingsStore.simulationSettings = { ...settingsStore.simulationSettings, initialPoint: 0, startingPoint: 1 }
+    const { xAxis } = useSimulationCharts(NODES)
+    finish({ ...makeResults([1, 2, 3], 0), isSteadyState: true, isSweep: true, sweepLabel: 'cell/g' })
+    expect(xAxis.value).toMatchObject({ label: 'cell/g', isSweep: true, isSteadyState: false, offset: 0 })
+    expect(Array.from(xAxis.value.values)).toEqual([1, 2, 3])
+  })
 })
