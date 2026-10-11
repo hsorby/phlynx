@@ -126,7 +126,7 @@
  * runs the workspace's protocol or the sweep, and which experiment is shown, and buttons for the larger view, the protocol and the
  * simulation settings.
  */
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 
 import Button from 'primevue/button'
 import ToggleSwitch from 'primevue/toggleswitch'
@@ -174,6 +174,10 @@ function toggleProtocol() {
 }
 
 const sweep = computed(() => settingsStore.simulationSettings.sweep ?? null)
+// With the sweep removed, from whichever view, play runs once again, and a later sweep starts off.
+watch(sweep, (current) => {
+  if (!current) resultsStore.isSweepMode = false
+})
 const sweepHint = computed(() => {
   const problem = findSweepProblem(sweep.value)
   if (resultsStore.isSweepMode) return `Sweeping ${sweepLabel(sweep.value)}: switch back to one run${problem ? `. ${problem}` : ''}`

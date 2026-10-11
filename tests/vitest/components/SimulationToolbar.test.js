@@ -46,6 +46,11 @@ describe('SimulationToolbar sweep mode', () => {
     expect(protocolStore.isProtocolMode).toBe(false)
     expect(wrapper.emitted('play')).toHaveLength(1)
     expect(wrapper.find('[data-testid="sim-sweep-mode"]').attributes('aria-pressed')).toBe('true')
+
+    // Removing the sweep, from whichever view, turns sweep mode off.
+    settingsStore.setSimulationSettings({ ...settingsStore.simulationSettings, sweep: null })
+    await wrapper.vm.$nextTick()
+    expect(resultsStore.isSweepMode).toBe(false)
     wrapper.unmount()
   })
 })

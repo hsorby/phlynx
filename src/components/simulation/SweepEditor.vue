@@ -291,10 +291,11 @@ function sweepEntry(entry) {
 // The curves' values as typed, until they read as numbers.
 const familyText = ref('')
 const familyError = ref(null)
+// Watched by content, as each save copies the values: a change elsewhere in the sweep keeps what is being typed.
 watch(
-  () => sweep.value?.family?.values,
-  (values) => {
-    familyText.value = (values ?? []).join(', ')
+  () => (sweep.value?.family?.values ?? []).join(', '),
+  (text) => {
+    familyText.value = text
     familyError.value = null
   },
   { immediate: true }

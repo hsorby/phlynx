@@ -375,7 +375,9 @@ export function createSimulationSession({ module: loc, cellml }) {
         if (!point || isStopped) break
         if (point.failure) {
           const at = runSweep ? ` at ${swept.map((change) => `${nameOf(change)} = ${change.value}`).join(', ')}` : ''
-          throw new SimulationError(`${point.failure.message.replace(/\.$/, '')}${at}.`, point.failure.issues, solved > 1 ? collect() : null)
+          // The points solved before it may have said something too.
+          const failureIssues = [...issues.values(), ...point.failure.issues.filter((issue) => !issues.has(`${issue.type}:${issue.description}`))]
+          throw new SimulationError(`${point.failure.message.replace(/\.$/, '')}${at}.`, failureIssues, solved > 1 ? collect() : null)
         }
         for (const [name, { kind, unit, value: pointValue }] of point.values) {
           if (!columns.has(name)) columns.set(name, { kind, unit, values: new Float64Array(points.length) })

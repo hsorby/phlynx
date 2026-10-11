@@ -95,6 +95,20 @@ describe('SliderList', () => {
     expect(wrapper.emitted('change')).toBeUndefined()
   })
 
+  it('turns off the slider of the parameter the sweep’s curves vary', async () => {
+    const settingsStore = useSimulationSettingsStore()
+    settingsStore.setSimulationSettings({
+      ...settingsStore.simulationSettings,
+      sweep: {
+        key: 'a::q', nodeId: 'a', nodeName: 'a', parameterName: 'q', type: 'constant', from: 0, to: 2, points: 3,
+        family: { key: 'a::k', nodeId: 'a', nodeName: 'a', parameterName: 'k', type: 'constant', values: [1, 2] },
+      },
+    })
+    useSimulationResultsStore().isSweepMode = true
+    mountList()
+    expect(wrapper.find('.slider-swept').text()).toBe('swept')
+  })
+
   it('turns off the actions that change the model or ask for a run while the protocol runs', async () => {
     useSimulationResultsStore().setSliderValue('a::k', 1.5)
     useProtocolStore().areSlidersOff = true

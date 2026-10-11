@@ -201,7 +201,8 @@ function inScope(definition) {
 }
 
 /**
- * Tells whether play sweeps a slider's parameter: a global constant is one parameter, whichever instance named it.
+ * Tells whether play sweeps a slider's parameter, or varies it across the sweep's curves: a global constant is one
+ * parameter, whichever instance named it.
  *
  * @param {Object} definition
  * @returns {boolean}
@@ -209,8 +210,9 @@ function inScope(definition) {
 function isSwept(definition) {
   const sweep = settingsStore.simulationSettings.sweep
   if (!resultsStore.isSweepMode || protocolStore.isActive || !sweep) return false
-  if (sweep.type === 'global_constant') return definition.type === 'global_constant' && definition.parameterName === sweep.parameterName
-  return definition.key === sweep.key
+  const matches = (target) =>
+    target.type === 'global_constant' ? definition.type === 'global_constant' && definition.parameterName === target.parameterName : definition.key === target.key
+  return matches(sweep) || (!!sweep.family && matches(sweep.family))
 }
 
 /**

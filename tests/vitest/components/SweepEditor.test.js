@@ -164,6 +164,12 @@ describe('SweepEditor', () => {
       await input.trigger('change')
       expect(wrapper.props('sweep').family.values).toEqual([2, 5.4, 10])
       expect(wrapper.get('[role="alert"]').text()).toBe('high isn’t a number.')
+
+      // A change elsewhere, saved as a copy of the sweep, keeps what was typed, and why it can't be read.
+      const sweep = wrapper.props('sweep')
+      await wrapper.setProps({ sweep: { ...sweep, points: 11, family: { ...sweep.family, values: [...sweep.family.values] } } })
+      expect(input.element.value).toBe('2, high')
+      expect(wrapper.find('[role="alert"]').exists()).toBe(true)
     })
 
     it('draws one curve again from the curves’ menu', async () => {

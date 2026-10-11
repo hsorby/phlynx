@@ -19,6 +19,11 @@ describe('reduceSeries', () => {
     expect(reduceSeries(Float64Array.of(-4, 4), 2, 'peak')).toBe(-4)
   })
 
+  it('reads a peak as NaN when the time course has a NaN, as min and max are', () => {
+    const course = Float64Array.of(1, Number.NaN, -5)
+    for (const readout of ['min', 'max', 'peak']) expect(reduceSeries(course, 3, readout)).toBeNaN()
+  })
+
   it('reads only the values the run computed', () => {
     const longer = Float64Array.of(1, 2, 9, 9)
     expect(reduceSeries(longer, 2, 'end')).toBe(2)

@@ -16,14 +16,18 @@ export const READOUTS = [
 export const DEFAULT_READOUT = 'end'
 
 /**
- * Finds the value furthest from 0, keeping its sign; the first of two as far.
+ * Finds the value furthest from 0, keeping its sign; the first of two as far. NaN anywhere makes it NaN, as it
+ * makes min and max.
  *
  * @param {ArrayLike<number>} values
  * @returns {number}
  */
 function findPeak(values) {
   let peak = values[0]
-  for (let i = 1; i < values.length; i++) if (Math.abs(values[i]) > Math.abs(peak)) peak = values[i]
+  for (let i = 0; i < values.length; i++) {
+    if (Number.isNaN(values[i])) return NaN
+    if (Math.abs(values[i]) > Math.abs(peak)) peak = values[i]
+  }
   return peak
 }
 
