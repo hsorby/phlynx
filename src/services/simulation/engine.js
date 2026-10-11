@@ -429,7 +429,8 @@ export function createSimulationSession({ module: loc, cellml }) {
   /**
    * Lists the model's variables without running it, so that names can be resolved before a first run.
    *
-   * @returns {{voi: {name: string, unit: string}, variables: Map<string, {kind: string, unit: string}>}}
+   * @returns {{voi: {name: string, unit: string}, variables: Map<string, {kind: string, unit: string}>,
+   *   isSteadyState: boolean}} `isSteadyState` for a model without ODEs, which has no time course.
    */
   function describe() {
     const instance = document.instantiate()
@@ -441,7 +442,7 @@ export function createSimulationSession({ module: loc, cellml }) {
       for (const { kind, count, name, unit } of VARIABLE_KINDS) {
         for (let i = 0; i < task[count]; i++) variables.set(task[name](i), { kind, unit: task[unit](i) })
       }
-      return { voi: { name: task.voiName, unit: task.voiUnit }, variables }
+      return { voi: { name: task.voiName, unit: task.voiUnit }, variables, isSteadyState }
     } finally {
       task?.delete()
       instance.delete()

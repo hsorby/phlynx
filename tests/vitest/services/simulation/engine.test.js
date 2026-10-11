@@ -499,7 +499,7 @@ describe('createSimulationSession', () => {
     const fake = createFakeLibOpenCOR()
     const session = createSimulationSession({ module: fake.loc, cellml: '<model/>' })
 
-    expect(session.describe()).toEqual({ voi: { name: 'c/t', unit: 'second' }, variables: new Map([['c/x', { kind: 'state', unit: 'metre' }]]) })
+    expect(session.describe()).toEqual({ voi: { name: 'c/t', unit: 'second' }, variables: new Map([['c/x', { kind: 'state', unit: 'metre' }]]), isSteadyState: false })
     expect(fake.instance.startRun).not.toHaveBeenCalled()
     expect(fake.freed).toEqual(['task', 'instance'])
   })

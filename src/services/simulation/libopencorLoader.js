@@ -105,7 +105,7 @@ function createClient(worker, onReady) {
      * Lists a model's variables without running it, reading and keeping the model as startSimulation does.
      *
      * @param {Object} options - `{ cellml, key }`.
-     * @returns {Promise<{voi: Object, variables: Map<string, {kind: string, unit: string}>}>}
+     * @returns {Promise<{voi: Object, variables: Map<string, {kind: string, unit: string}>, isSteadyState: boolean}>}
      */
     describeModel({ cellml = null, key = null }) {
       return send({ type: 'describe', cellml, key }, decodeRunResults).promise

@@ -180,8 +180,11 @@ const isHidden = (item) => hiddenKeys.value.has(item.key)
 
 const hasRuns = computed(() => props.series.some((item) => item.run))
 // Whether the title names each line, and so carries their toggles; otherwise the key under it does. With tracked
-// runs, the title names the variables, and the run key which runs the lines are from.
-const titleNamesLines = computed(() => !hasRuns.value && props.series.length > 1 && props.titleParts?.length === props.series.length)
+// runs, the title names the variables, and the run key which runs the lines are from. A steady state lists its values,
+// with no lines to hide.
+const titleNamesLines = computed(
+  () => !hasRuns.value && !props.x.isSteadyState && props.series.length > 1 && props.titleParts?.length === props.series.length
+)
 // What the key lists: the lines, unless the title names them or there's one with nothing beside it, then the
 // reference lines. A steady state lists its values instead.
 const keyed = computed(() => {
@@ -261,6 +264,8 @@ const variableCount = computed(() => new Set(props.series.map((item) => item.var
  */
 function readoutNames(item) {
   const run = hasRuns.value ? (item.run ? `#${item.run.number}` : 'Live') : null
+  // One of every experiment of a protocol shown at once, named for its experiment.
+  if (item.experiment != null) return { label: item.label, run }
   if (variableCount.value > 1) return { label: item.variableLabel ?? item.label, run }
   return { label: !hasRuns.value && props.series.length > 1 ? item.label : null, run }
 }
@@ -632,12 +637,12 @@ function joinInOrder(chart, seriesIndex) {
 }
 
 /**
- * Forgets hidden series no longer plotted, and all of them when one line is left, since it has no name
- * to click to show it again.
+ * Forgets hidden series that no name on the chart can show again: those no longer plotted, every line when one is
+ * left, and the lines once tracked runs, or a steady state's list of values, take their names' place.
  */
 function pruneHidden() {
   if (!hiddenKeys.value.size) return
-  const keys = new Set([...(props.series.length > 1 ? props.series.map((series) => series.key) : []), ...props.references.map((item) => item.key)])
+  const keys = new Set([...(titleNamesLines.value ? props.series.map((series) => series.key) : []), ...keyed.value.map((item) => item.key)])
   const hidden = new Set([...hiddenKeys.value].filter((key) => keys.has(key)))
   if (hidden.size !== hiddenKeys.value.size) hiddenKeys.value = hidden
 }

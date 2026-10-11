@@ -142,8 +142,8 @@ function describe(message) {
   try {
     const current = findSession(message)
     if (!current) return
-    const { voi, variables } = current.describe()
-    self.postMessage({ type: 'done', id: message.id, results: { voi, variables: [...variables] } })
+    const { voi, variables, isSteadyState } = current.describe()
+    self.postMessage({ type: 'done', id: message.id, results: { voi, variables: [...variables], isSteadyState } })
   } catch (error) {
     self.postMessage({ type: 'error', id: message.id, message: error.message, issues: error.issues ?? [], partialResults: null })
   }

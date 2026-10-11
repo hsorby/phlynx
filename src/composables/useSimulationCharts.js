@@ -391,6 +391,8 @@ export function useSimulationCharts(scopeNodes, { hasInputs = false } = {}) {
               values: phaseX ? item.values : align(live, item.values),
               slot: slots.get(item.key),
               run: null,
+              // Every experiment of a protocol shown at once: which one the line is.
+              experiment: item.experiment ?? null,
               isStepped: !!item.isStepped,
             }))
           : []

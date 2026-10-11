@@ -56,6 +56,18 @@ describe('simulationResultsStore tracked runs', () => {
     expect(store.trackRun()).toBeNull()
   })
 
+  it('shows a failed protocol run’s experiments without the runs tracked before it', () => {
+    finish()
+    store.trackRun()
+    store.isLiveRunVisible = false
+    store.startRun(null)
+    const experiment = makeResults({ subs: [] })
+    store.failRun('error', { message: 'no' }, { results: experiment, mapping: new Map(), protocolResults: { experiments: [experiment], issues: [], elapsedMs: 0, isStopped: false } })
+
+    expect(store.trackedRuns).toEqual([])
+    expect(store.isLiveRunVisible).toBe(true)
+  })
+
   it('says why the shown run can’t be tracked, as trackRun decides', () => {
     const blockers = []
     const expectAgreement = () => {

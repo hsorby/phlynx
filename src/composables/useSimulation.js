@@ -13,7 +13,7 @@ import {
   resolveScope,
   summariseScopeReport,
 } from '../services/simulation/scopedModel'
-import { addProtocolClock, addProtocolDrivers } from '../services/simulation/protocolDriverModel'
+import { NO_CLOCK, addProtocolClock, addProtocolDrivers } from '../services/simulation/protocolDriverModel'
 import { listFeatureOperands, resolveFeatureOperands } from '../services/simulation/protocolFeatures'
 import { clampSolverSettings, prepareProtocolRun } from '../services/simulation/protocolRun'
 import { findSweepProblem, resolveSweepTarget, sweepLabel, sweepValues } from '../services/simulation/sweep'
@@ -330,6 +330,12 @@ export function useSimulation() {
       source = await mapResults(built, scope, described)
       if (token !== runToken) return
       session = source
+    }
+    // A model without ODEs is solved once, with no time course for a protocol's sub-experiments to follow.
+    if (source.isSteadyState) {
+      store.report = { ...store.report, errors: [NO_CLOCK] }
+      store.failRun('blocked')
+      return
     }
 
     const prepared = prepareProtocolRun({

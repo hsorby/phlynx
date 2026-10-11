@@ -228,6 +228,8 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
     status.value = nextStatus
     error.value = nextError
     protocolResults.value = partial?.protocolResults ? markRaw(partial.protocolResults) : null
+    // As for a finished protocol run, its experiments are shown without tracked runs.
+    if (partial?.protocolResults) removeAllTrackedRuns()
     protocolInputs.value = markRaw(partial?.inputs ?? new Map())
     featureOperands.value = markRaw(partial?.featureOperands ?? new Map())
     results.value = partial ? markRaw(partial.results) : null

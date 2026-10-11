@@ -47,7 +47,7 @@ function findEquivalenceSet(variable, handles) {
 }
 
 // A protocol follows the model's variable of integration (VoI), which a model without ODEs doesn't have.
-const NO_CLOCK = 'The model has no variable of integration for a protocol to follow.'
+export const NO_CLOCK = 'The model has no variable of integration for a protocol to follow.'
 
 /**
  * Finds the model's variable of integration (VoI): the environment's one variable, named and in units as the model's

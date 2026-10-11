@@ -152,6 +152,59 @@ describe('SimulationPlot: reference lines', () => {
     expect(wrapper.vm.snapshot().legend.at(-1)).toMatchObject({ label: 'V recorded (obs)', isDashed: false, isPoint: true })
   })
 
+  it('shows a hidden line again once tracked runs take its name’s place in the title', async () => {
+    const live = [
+      { key: 'a::x', label: 'a/x', variableLabel: 'a/x', slot: 0, values: [1, 2, 3, 4], run: null },
+      { key: 'a::y', label: 'a/y', variableLabel: 'a/y', slot: 1, values: [4, 3, 2, 1], run: null },
+    ]
+    const titleParts = [
+      { component: 'a', name: 'x', slot: 0 },
+      { component: 'a', name: 'y', slot: 1 },
+    ]
+    wrapper = mount(SimulationPlot, { props: { title: 'a/x, a/y', titleParts, unit: 'm', x: X, series: live }, attachTo: document.body })
+    await wrapper.findAll('.plot-title .plot-key-toggle')[0].trigger('click')
+    expect(wrapper.find('.plot-title .plot-key-toggle').classes()).toContain('is-hidden')
+
+    const tracked = live.map((item) => ({ ...item, key: `run_1::${item.key}`, label: `${item.label} #1`, run: { number: 1, dash: [4, 4] } }))
+    await wrapper.setProps({ series: [...tracked, ...live] })
+    expect(wrapper.findAll('.plot-title .plot-key-toggle')).toHaveLength(0)
+    expect(charts.at(-1).options.series.slice(1).map((series) => series.show)).toEqual([true, true, true, true])
+  })
+
+  it('names each experiment’s line in the readout, with every experiment shown at once', async () => {
+    const lines = [
+      { key: 'a::x#e0', label: 'a/x · Exp 1', variableLabel: 'a/x', experiment: 0, slot: 0, values: [1, 2, 3, 4], run: null },
+      { key: 'a::y#e0', label: 'a/y · Exp 1', variableLabel: 'a/y', experiment: 0, slot: 1, values: [1, 2, 3, 4], run: null },
+      { key: 'a::x#e1', label: 'a/x · Exp 2', variableLabel: 'a/x', experiment: 1, slot: 2, values: [1, 2, 3, 4], run: null },
+    ]
+    wrapper = mount(SimulationPlot, { props: { title: 'Plot', unit: 'm', x: X, series: lines }, attachTo: document.body })
+    const [chart] = charts
+    chart.cursor = { idx: 1, left: 10 }
+    chart.options.hooks.setCursor[0](chart)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('.plot-readout-label').map((label) => label.text())).toEqual(['a/x · Exp 1', 'a/y · Exp 1', 'a/x · Exp 2'])
+  })
+
+  it('offers no toggles in a steady state’s title, as its values are listed', () => {
+    wrapper = mount(SimulationPlot, {
+      props: {
+        title: 'lever/y, lever/z',
+        titleParts: [
+          { component: 'lever', name: 'y', slot: 0 },
+          { component: 'lever', name: 'z', slot: 1 },
+        ],
+        unit: 'metre',
+        x: { label: '', unit: '', values: new Float64Array(), isSteadyState: true },
+        series: [
+          { key: 'lever::y', label: 'lever/y', slot: 0, values: new Float64Array([6]) },
+          { key: 'lever::z', label: 'lever/z', slot: 1, values: new Float64Array([2]) },
+        ],
+      },
+    })
+    expect(wrapper.findAll('.plot-title .plot-key-toggle')).toHaveLength(0)
+    expect(wrapper.findAll('.plot-title .plot-title-swatch')).toHaveLength(2)
+  })
+
   it('lists a steady state’s values, as there is no time to plot them against', () => {
     const wrapper = mount(SimulationPlot, {
       props: {

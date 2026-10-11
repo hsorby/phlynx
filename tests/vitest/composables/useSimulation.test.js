@@ -7,7 +7,8 @@ const nodes = ref([])
 const edges = ref([])
 vi.mock('@vue-flow/core', async (importOriginal) => ({ ...(await importOriginal()), useVueFlow: () => ({ nodes, edges }) }))
 
-const engine = vi.hoisted(() => ({ runs: [], described: [], protocolRuns: [] }))
+// `isSteadyState` makes the model described one without ODEs.
+const engine = vi.hoisted(() => ({ runs: [], described: [], protocolRuns: [], isSteadyState: false }))
 // Stands in for the simulator's worker client, recording each run so a test can finish it.
 const simulator = vi.hoisted(() => ({
   startSimulation: (options) => {
@@ -31,6 +32,7 @@ const simulator = vi.hoisted(() => ({
         ['instance_parameters/k', { kind: driven ? 'algebraic' : 'constant', unit: 'dimensionless' }],
         ...(driven ? [['protocol_drivers/driver_1_selector', { kind: 'constant' }], ['protocol_drivers/driver_1_value', { kind: 'constant' }]] : []),
       ]),
+      isSteadyState: engine.isSteadyState,
     }
   },
   startProtocol: (options) => {
@@ -114,6 +116,7 @@ describe('useSimulation', () => {
     edges.value = []
     engine.runs = []
     engine.described = []
+    engine.isSteadyState = false
     engine.protocolRuns = []
     built.scopes = []
     Object.assign(loader, { module: simulator, reason: null, ready: null })
@@ -570,6 +573,35 @@ describe('useSimulation', () => {
       await done
       // Its results are the protocol's before the save, so they show as out of date.
       expect(useSimulation().isStale.value).toBe(true)
+    })
+
+    it('stops before running a protocol on a model without ODEs, which has no time for it to follow', async () => {
+      engine.isSteadyState = true
+      useProtocol(PROTOCOL)
+      const { run } = useSimulation()
+
+      await run(null)
+
+      expect(store.status).toBe('blocked')
+      expect(store.report.errors).toEqual(['The model has no variable of integration for a protocol to follow.'])
+      expect(engine.protocolRuns).toEqual([])
+    })
+
+    it('sweeps the model a protocol read, once the protocol is off, as one without ODEs', async () => {
+      engine.isSteadyState = true
+      useProtocol(PROTOCOL)
+      const { run } = useSimulation()
+      await run(null)
+
+      useProtocolStore().isProtocolMode = false
+      const sweep = { key: 'a::k', nodeId: 'a', nodeName: 'a', parameterName: 'k', type: 'constant', from: 1, to: 3, points: 3 }
+      useSimulationSettingsStore().setSimulationSettings({ ...useSimulationSettingsStore().simulationSettings, sweep })
+      const done = run(null)
+      await settle()
+      expect(engine.runs[0].options.cellml).toBeUndefined()
+      expect(engine.runs[0].options.sweep).toEqual({ component: 'instance_parameters', variable: 'k', values: [1, 2, 3] })
+      engine.runs[0].finish({ ...RESULTS, voi: { name: 'instance_parameters/k', unit: '', values: new Float64Array([1, 2, 3]) }, isSteadyState: true, isSweep: true })
+      await done
     })
 
     it("stops before running a protocol whose parameters the model doesn't have", async () => {
