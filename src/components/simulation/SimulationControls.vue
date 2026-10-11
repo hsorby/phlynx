@@ -118,7 +118,8 @@ const sliderKeys = computed(() => new Set(sliderDefinitions.value.map((definitio
 const views = computed(() => [
   { label: `Plots (${plottedCount.value})`, value: 'plots' },
   { label: `Sliders (${sliderKeys.value.size})`, value: 'sliders' },
-  { label: `Sweep (${settingsStore.simulationSettings.sweep ? 1 : 0})`, value: 'sweep' },
+  // The swept parameter, and the one its curves vary.
+  { label: `Sweep (${settingsStore.simulationSettings.sweep ? (settingsStore.simulationSettings.sweep.family ? 2 : 1) : 0})`, value: 'sweep' },
   { label: `Runs (${resultsStore.trackedRuns.length})`, value: 'runs' },
 ])
 

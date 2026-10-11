@@ -158,7 +158,17 @@ const scopeSummary = computed(() => {
 const stoppedAt = computed(() => {
   const voi = store.results?.voi
   if (!voi?.values.length) return 'the start'
-  const value = `${voi.values.at(-1).toPrecision(4)} ${voi.unit}`.trim()
+  const format = (point, unit) => `${point.toPrecision(4)} ${unit}`.trim()
+  const family = store.results.family
+  if (isSweep.value && family?.curves?.length) {
+    // The last curve reached, as far as it got.
+    const last = family.curves.at(-1)
+    const first = last.variables.values().next().value?.values ?? []
+    const reached = Array.from(first).filter((point) => point != null).length
+    const at = reached ? `, ${store.results.sweepLabel} = ${format(voi.values[reached - 1], voi.unit)}` : ''
+    return `${store.results.familyLabel} = ${format(last.value, family.unit)}${at}`
+  }
+  const value = format(voi.values.at(-1), voi.unit)
   return isSweep.value ? `${store.results.sweepLabel} = ${value}` : value
 })
 
@@ -172,8 +182,10 @@ const sweepNote = computed(() => {
   if (!isSweep.value || !values?.length) return ''
   const unit = store.results.voi.unit ? ` ${store.results.voi.unit}` : ''
   const at = ` at ${values.length} values of ${store.results.sweepLabel}, from ${values[0]} to ${values.at(-1)}${unit}`
+  const curves = store.results.family?.values.length
+  const family = curves ? `${at}, a curve for each of ${curves} values of ${store.results.familyLabel}` : at
   const readout = READOUTS.find(({ id }) => id === store.results.readout)
-  return readout ? `${at}, reading the ${readout.label.toLowerCase()} of each time course` : at
+  return readout ? `${family}, reading the ${readout.label.toLowerCase()} of each time course` : family
 })
 const resultsSummary = computed(() => {
   if (isSweep.value && store.status === 'done') return `${scopeSummary.value}${sweepNote.value}.`

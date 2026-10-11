@@ -44708,7 +44708,19 @@
         "from": 2.25,
         "to": 6.75,
         "points": 21,
-        "readout": "min"
+        "readout": "min",
+        "family": {
+          "key": "dndnode_0::Nao",
+          "nodeId": "dndnode_0",
+          "nodeName": "soma_SN",
+          "parameterName": "Nao",
+          "units": "millimolar",
+          "type": "constant",
+          "values": [
+            145.0,
+            72.5
+          ]
+        }
       }
     },
     "plotConfig": {},

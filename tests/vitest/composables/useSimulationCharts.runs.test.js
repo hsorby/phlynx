@@ -133,4 +133,46 @@ describe('useSimulationCharts with tracked runs', () => {
     expect(xAxis.value).toMatchObject({ label: 'cell/g', isSweep: true, isSteadyState: false, offset: 0 })
     expect(Array.from(xAxis.value.values)).toEqual([1, 2, 3])
   })
+
+  describe('a sweep with curves', () => {
+    /**
+     * Makes a sweep's results with V and w at three values of cell/k, a curve per value of cell/Ko.
+     *
+     * @returns {Object}
+     */
+    const makeFamily = () => {
+      const curve = (offset) => new Map([
+        ['cell/V', { unit: 'mV', values: Float64Array.of(1, 2, 3).map((value) => value + offset) }],
+        ['cell/w', { unit: 'mV', values: Float64Array.of(offset, offset, offset) }],
+      ])
+      const curves = [{ value: 2, variables: curve(0) }, { value: 5.4, variables: curve(10) }]
+      return {
+        voi: { name: 'cell/k', unit: '', values: Float64Array.of(1, 2, 3) },
+        variables: curves[0].variables,
+        isStopped: false,
+        isSweep: true,
+        isSteadyState: true,
+        sweepLabel: 'cell/k',
+        familyLabel: 'cell/Ko',
+        family: { name: 'cell/Ko', unit: 'mM', values: [2, 5.4], curves },
+      }
+    }
+
+    it('draws each variable on a chart of its own, a curve per value, coloured by the value', () => {
+      const { charts } = useSimulationCharts(NODES)
+      finish(makeFamily())
+
+      expect(charts.value.map((chart) => chart.title)).toEqual(['cell/V', 'cell/w'])
+      const [v, w] = charts.value
+      expect(v.series.map(({ label, slot }) => [label, slot])).toEqual([
+        ['cell/Ko = 2 mM', 0],
+        ['cell/Ko = 5.4 mM', 1],
+      ])
+      expect(w.series.map(({ slot }) => slot)).toEqual([0, 1])
+      expect(Array.from(v.series[1].values)).toEqual([11, 12, 13])
+      expect(v.titleParts).toEqual([{ component: 'cell', name: 'V', slot: 0 }])
+      // The plot list shows no one colour for a variable drawn as curves.
+      expect(store.getSeriesSlots().has('a::V')).toBe(false)
+    })
+  })
 })

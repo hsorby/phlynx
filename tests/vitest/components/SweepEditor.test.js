@@ -123,4 +123,55 @@ describe('SweepEditor', () => {
       expect(wrapper.find('[data-testid="sim-sweep-transient"]').exists()).toBe(false)
     })
   })
+
+  describe('its curves', () => {
+    const SWEEP = { key: 'n1::g', nodeId: 'n1', nodeName: 'channel', parameterName: 'g', units: 'siemens', type: 'constant', from: 1, to: 3, points: 51 }
+    const twoParameters = [{ ...nodes[0], data: { ...nodes[0].data, variables: [...nodes[0].data.variables, { name: 'Ko', type: 'constant', units: 'mM', value: '5.4' }] } }]
+
+    /** Mounts the editor on a channel with g and Ko. */
+    function mountWithKo(sweep) {
+      wrapper = mount(SweepEditor, {
+        props: { nodes: twoParameters, sweep, 'onUpdate:sweep': (next) => wrapper.setProps({ sweep: next }) },
+        global: { plugins: [PrimeVue] },
+      })
+    }
+
+    it('adds a curve for each value of another parameter, from its own value, keeping the sweep', async () => {
+      mountWithKo({ ...SWEEP, readout: 'min' })
+      wrapper.findComponent(Menu).props('model').find((item) => item.label === 'Add a curve for each value of…').command()
+      await flushPromises()
+      const picker = wrapper.findComponent(VariablePathPicker)
+      expect(picker.props('ariaLabel') ?? picker.attributes('aria-label')).toBe('Choose a parameter for the curves')
+      expect(picker.props('index').filter((entry) => picker.props('filter')(entry)).map((entry) => entry.path)).toEqual(['channel/Ko'])
+      picker.vm.$emit('pick', picker.props('index').find((entry) => entry.path === 'channel/Ko'))
+      await flushPromises()
+
+      expect(wrapper.props('sweep')).toMatchObject({ key: 'n1::g', readout: 'min', family: { key: 'n1::Ko', parameterName: 'Ko', values: [5.4] } })
+      expect(wrapper.get('[data-testid="sim-sweep-family-values"]').element.value).toBe('5.4')
+      expect(wrapper.get('[data-testid="sim-sweep-cost"]').text()).toBe('51 time courses.')
+    })
+
+    it('reads the values typed, or says which isn’t a number', async () => {
+      mountWithKo({ ...SWEEP, family: { key: 'n1::Ko', nodeId: 'n1', nodeName: 'channel', parameterName: 'Ko', units: 'mM', type: 'constant', values: [5.4] } })
+      const input = wrapper.get('[data-testid="sim-sweep-family-values"]')
+
+      await input.setValue('2, 5.4 10')
+      await input.trigger('change')
+      expect(wrapper.props('sweep').family.values).toEqual([2, 5.4, 10])
+      expect(wrapper.get('[data-testid="sim-sweep-cost"]').text()).toBe('51 × 3 = 153 time courses.')
+
+      await input.setValue('2, high')
+      await input.trigger('change')
+      expect(wrapper.props('sweep').family.values).toEqual([2, 5.4, 10])
+      expect(wrapper.get('[role="alert"]').text()).toBe('high isn’t a number.')
+    })
+
+    it('draws one curve again from the curves’ menu', async () => {
+      mountWithKo({ ...SWEEP, family: { key: 'n1::Ko', nodeId: 'n1', nodeName: 'channel', parameterName: 'Ko', units: 'mM', type: 'constant', values: [5.4] } })
+      wrapper.findAllComponents(Menu)[1].props('model').find((item) => item.label === 'Draw one curve').command()
+      await flushPromises()
+      expect(wrapper.props('sweep')).not.toHaveProperty('family')
+      expect(wrapper.find('[data-testid="sim-sweep-family"]').exists()).toBe(false)
+    })
+  })
 })

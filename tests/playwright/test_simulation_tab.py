@@ -325,6 +325,56 @@ class TestSimulationTab(unittest.TestCase):
             browser.close()
 
 
+    def test_sweeps_a_curve_for_each_value_of_a_second_parameter(self):
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=HEADLESS_MODE)
+
+            context = browser.new_context(viewport={"width": 1600, "height": 1000})
+            context.add_init_script(OPT_IN_TO_ISOLATION)
+            page = context.new_page()
+            with open(os.path.join(RESOURCE_PATH, "workspace-json.base64")) as f:
+                workspace_json = f.read().strip()
+            page.goto(BASE_URL + f"?open=workspace_json#{workspace_json}", wait_until="commit")
+
+            # ---------- START -----------
+            soma = page.get_by_text("SN_somacell_modules.cellmlsoma_SN")
+            soma.wait_for(timeout=APP_MOUNT_TIMEOUT)
+            page.wait_for_function("window.crossOriginIsolated === true", timeout=APP_MOUNT_TIMEOUT)
+            page.evaluate(SHORTEN_SIMULATION)
+            soma.click()
+            page.locator(".resizable-context-panel .aside-collapse-toggle").click()
+            page.locator(".context-tabs [role=tab]").filter(has=page.locator(".pi-chart-line")).click()
+            simulate_selection(page)
+            expect(page.get_by_text("Simulated 1 instance on their own")).to_be_visible(timeout=120000)
+            plot_variable(page, "soma_SN/V")
+            plot_variable(page, "soma_SN/m")
+
+            page.get_by_role("button", name=re.compile(r"^Sweep \(")).click()
+            page.get_by_role("button", name="Sweep a parameter").click()
+            pick_path(page, "Choose a parameter to sweep", "soma_SN/g_Na")
+            page.get_by_test_id("sim-sweep-points").fill("3")
+            page.get_by_test_id("sim-sweep-points").press("Tab")
+            page.get_by_role("button", name="More for the g_Na sweep").click()
+            page.get_by_role("menuitem", name="Add a curve for each value of…").click()
+            pick_path(page, "Choose a parameter for the curves", "soma_SN/Ko")
+            page.get_by_test_id("sim-sweep-family-values").fill("3, 6")
+            page.get_by_test_id("sim-sweep-family-values").press("Enter")
+            expect(page.get_by_test_id("sim-sweep-cost")).to_contain_text("3 × 2 = 6 time courses")
+            expect(page.get_by_role("button", name="Sweep (2)")).to_be_visible()
+            page.get_by_test_id("sim-sweep-mode").click()
+
+            page.wait_for_function(f"{RESULTS_STORE}.status === 'done' && {RESULTS_STORE}.results.family?.curves?.length === 2", timeout=120000)
+            # A chart per variable, a curve per value of Ko in its own colour, keyed by the value.
+            expect(page.locator(".simulation-plot")).to_have_count(2)
+            first = page.locator(".simulation-plot").first
+            expect(first.locator(".plot-key .plot-key-toggle")).to_have_text(["soma_SN/Ko = 3 millimolar", "soma_SN/Ko = 6 millimolar"])
+            expect(page.get_by_text(re.compile(r"a curve for each of 2 values of soma_SN/Ko"))).to_be_visible()
+            # ----------- END ------------
+
+            context.close()
+            browser.close()
+
+
     def test_tracked_run_stays_on_the_chart_as_a_slider_moves(self):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=HEADLESS_MODE)

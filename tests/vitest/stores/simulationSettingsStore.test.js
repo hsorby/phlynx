@@ -20,9 +20,13 @@ describe('simulationSettingsStore', () => {
     expect(loaded.simulationSettings.sweep).toEqual(SWEEP)
   })
 
-  it('copies a sweep, so a draft of it is its own', () => {
-    const copy = cloneSimulationSettings({ sweep: SWEEP })
-    expect(copy.sweep).toEqual(SWEEP)
-    expect(copy.sweep).not.toBe(SWEEP)
+  it('copies a sweep and its curves, so a draft of them is its own', () => {
+    const family = { key: 'a::g', nodeId: 'a', nodeName: 'a', parameterName: 'g', units: '', type: 'constant', values: [1, 2] }
+    const sweep = { ...SWEEP, family }
+    const copy = cloneSimulationSettings({ sweep })
+    expect(copy.sweep).toEqual(sweep)
+    expect(copy.sweep).not.toBe(sweep)
+    expect(copy.sweep.family).not.toBe(family)
+    expect(copy.sweep.family.values).not.toBe(family.values)
   })
 })
