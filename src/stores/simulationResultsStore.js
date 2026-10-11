@@ -91,6 +91,9 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
    */
   // Whether play runs the canvas selection or the whole model; the session's choice, never saved.
   const scopeMode = ref('model')
+  // Whether play runs the sweep (see services/simulation/sweep.js) rather than one run; the session's choice, never
+  // saved, as the protocol's is (protocolStore.isProtocolMode). Only one of them is on at once.
+  const isSweepMode = ref(false)
 
   function startRun(nodeIds) {
     const isSameScope = JSON.stringify(nodeIds) === JSON.stringify(scopeNodeIds.value)
@@ -252,6 +255,7 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
     sliderValues.value = new Map()
     inspectionOutputs.value = []
     scopeMode.value = 'model'
+    isSweepMode.value = false
     runInputs.value = null
     trackedRuns.value = []
     isLiveRunVisible.value = true
@@ -277,6 +281,7 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
     sliderValues,
     setSliderValue,
     scopeMode,
+    isSweepMode,
     runInputs,
     trackedRuns,
     isLiveRunVisible,

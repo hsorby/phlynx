@@ -1,6 +1,10 @@
 <template>
   <section class="sweep-editor" aria-label="Parameter sweep">
-    <p class="sweep-hint">For a model without differential equations: solve it at each value of one parameter, and plot against it.</p>
+    <p class="sweep-hint">
+      Run the model at each value of one parameter, and plot against it: solved once each, or with differential equations, a
+      time course each, read at its end. Play runs it with the toolbar’s Sweep on. To step from a holding value and read the
+      peak, use a protocol.
+    </p>
 
     <div v-if="sweep" class="sweep-card" data-testid="sim-sweep-parameter">
       <div class="sweep-head">
@@ -62,11 +66,8 @@
         </div>
       </div>
       <Message v-if="problem" severity="warn" size="small">{{ problem }}</Message>
-      <Message v-else-if="hasTimeCourse" severity="secondary" size="small" data-testid="sim-sweep-ode-note">
-        The last run had differential equations, so it ran its time course instead. Sweeps are for models without them.
-      </Message>
       <Message v-else severity="secondary" size="small">
-        Web OpenCOR can’t run sweeps, so an export solves the model once, at the parameter’s own value.
+        Web OpenCOR can’t run sweeps, so an export solves or simulates the model once, at the parameter’s own value.
       </Message>
     </div>
 
@@ -134,11 +135,6 @@ const id = useId()
 
 const label = computed(() => (sweep.value ? sweepLabel(sweep.value) : ''))
 const problem = computed(() => (sweep.value ? findSweepProblem(sweep.value) : null))
-// The last run solved a time course, so it ignored the sweep.
-const hasTimeCourse = computed(() => {
-  const results = resultsStore.results
-  return !!results && !results.isSteadyState && !results.isSweep
-})
 
 const pickerEl = ref(null)
 // The search opens from the Sweep a parameter button or the sweep's menu, never on its own.

@@ -212,4 +212,33 @@ describe('variables of integration and algebraic systems in the flattened model'
       session.dispose()
     }
   }, 60000)
+
+  it('sweeps a parameter of a model with ODEs in libOpenCOR, reading each time course as a run of its own ends', async () => {
+    const node = buildNode('decay', TAU_XML, { k: '1', q_init: '2' })
+    const cellml = await flatten([node])
+    const session = createSimulationSession({ module: libOpenCOR, cellml })
+    try {
+      const settings = { ...BASELINE_SIMULATION_SETTINGS, endingPoint: 1, pointInterval: 0.1 }
+      const described = session.describe()
+      expect(described.isSteadyState).toBe(false)
+      const mapping = buildVariableMapping({ libcellml, cellml, nodes: [node], results: described })
+      const sweep = { ...createSweep(node, node.data.variables.find((row) => row.name === 'k'), () => null), from: 0.5, to: 1.5, points: 3 }
+      const target = resolveSweepTarget({ sweep, nodes: [node], mapping, variables: described.variables })
+
+      const ends = await session.run({ settings, sweep: { ...target, values: sweepValues(sweep) } }).promise
+      expect(ends).toMatchObject({ isSteadyState: false, isSweep: true, isStopped: false, readout: 'end' })
+      expect([...ends.voi.values]).toEqual([0.5, 1, 1.5])
+      const q = [...ends.variables.get('decay/q').values]
+      ;[0.5, 1, 1.5].forEach((k, i) => expect(q[i]).toBeCloseTo(2 * Math.exp(-k), 4))
+
+      // As the last point of a run at that value, which starts again from the initial values.
+      const direct = await session.run({ settings, changes: [{ ...target, value: 1 }] }).promise
+      expect(q[1]).toBeCloseTo(direct.variables.get('decay/q').values.at(-1), 10)
+
+      const peaks = await session.run({ settings, sweep: { ...target, values: sweepValues(sweep), readout: 'max' } }).promise
+      expect([...peaks.variables.get('decay/q').values]).toEqual([2, 2, 2])
+    } finally {
+      session.dispose()
+    }
+  }, 60000)
 })

@@ -18,8 +18,14 @@ export function useTrackRun() {
   const store = useSimulationResultsStore()
   const settingsStore = useSimulationSettingsStore()
 
-  // The slider values the shown run ran with, named as the runs list shows them.
-  const liveInputs = computed(() => describeRunInputs(store.runInputs?.overrides, settingsStore.parameterScanConfig?.selections, GLOBAL_COMPONENT))
+  // The slider values the shown run ran with, named as the runs list shows them; a sweep set its own parameter's.
+  const liveInputs = computed(() => {
+    const inputs = describeRunInputs(store.runInputs?.overrides, settingsStore.parameterScanConfig?.selections, GLOBAL_COMPONENT)
+    const sweep = store.results?.isSweep ? store.runInputs?.settings?.sweep : null
+    if (!sweep) return inputs
+    const sweptKey = sweep.type === 'global_constant' ? `global::${sweep.parameterName}` : sweep.key
+    return inputs.filter((input) => input.key !== sweptKey)
+  })
 
   // Why the shown run can't be tracked, or null when it can.
   const trackBlocker = computed(() => store.trackBlocker)

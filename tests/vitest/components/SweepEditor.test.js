@@ -6,7 +6,6 @@ import PrimeVue from 'primevue/config'
 import Menu from 'primevue/menu'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { useSimulationResultsStore } from '../../../src/stores/simulationResultsStore.js'
 
 vi.mock('@vue-flow/core', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -75,12 +74,4 @@ describe('SweepEditor', () => {
     expect(addButton()).toBeDefined()
   })
 
-  it('says when the last run ran a time course instead', async () => {
-    mountEditor({ key: 'n1::g', nodeId: 'n1', nodeName: 'channel', parameterName: 'g', units: 'siemens', type: 'constant', from: 1, to: 3, points: 51 })
-    expect(wrapper.find('[data-testid="sim-sweep-ode-note"]').exists()).toBe(false)
-
-    useSimulationResultsStore().finishRun({ results: { isSteadyState: false, variables: new Map() }, mapping: new Map(), signature: 's', inspectionOutputs: [], inputs: {} })
-    await flushPromises()
-    expect(wrapper.find('[data-testid="sim-sweep-ode-note"]').exists()).toBe(true)
-  })
 })

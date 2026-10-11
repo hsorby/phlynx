@@ -304,6 +304,72 @@ describe('startSimulation', () => {
   })
 
   /**
+   * Builds a fake model with an ODE whose c/x runs through 0, -k, 2k, k, then k/2, k being its swept constant c/k.
+   *
+   * @returns {Object} As createFakeLibOpenCOR.
+   */
+  function createCourseSweepFake() {
+    const fake = createFakeLibOpenCOR()
+    const swept = () => Number(fake.model.changes.find((change) => change.variableName === 'k').newValue)
+    Object.assign(fake.task, {
+      state: () => Float64Array.from([0, -1, 2, 1, 0.5], (factor) => factor * swept()),
+      constantCount: 1,
+      constantName: () => 'c/k',
+      constantUnit: () => 'per_second',
+      constant: () => new Float64Array(5).fill(swept()),
+    })
+    return fake
+  }
+
+  it.each([
+    ['end', [0.5, 1, 1.5]],
+    ['min', [-1, -2, -3]],
+    ['max', [2, 4, 6]],
+    ['peak', [2, 4, 6]],
+  ])('sweeps a constant of a model with ODEs, reading the %s of a time course per value', async (readout, expected) => {
+    const fake = createCourseSweepFake()
+    const onProgress = vi.fn()
+
+    const session = createSimulationSession({ module: fake.loc, cellml: '<model/>' })
+    const sweep = { component: 'c', variable: 'k', values: [1, 2, 3], readout }
+    const result = await session.run({ settings: SETTINGS, sweep, onProgress }).promise
+    session.dispose()
+
+    expect(result).toMatchObject({ isSteadyState: false, isSweep: true, isStopped: false, readout })
+    expect(result.voi).toEqual({ name: 'c/k', unit: 'per_second', values: new Float64Array([1, 2, 3]) })
+    expect([...result.variables.get('c/x').values]).toEqual(expected)
+    // Each time course's progress counts for its share of the sweep.
+    expect(onProgress.mock.calls.map(([value]) => value)).toEqual(expect.arrayContaining([0.5 / 3, 1 / 3, 1]))
+    expect(fake.simulation).toMatchObject({ outputStartTime: SETTINGS.startingPoint, outputEndTime: SETTINGS.endingPoint })
+  })
+
+  it('reads a time course’s end when the sweep names no reading', async () => {
+    const fake = createCourseSweepFake()
+    const session = createSimulationSession({ module: fake.loc, cellml: '<model/>' })
+    const result = await session.run({ settings: SETTINGS, sweep: { component: 'c', variable: 'k', values: [2, 4] } }).promise
+    session.dispose()
+
+    expect(result.readout).toBe('end')
+    expect([...result.variables.get('c/x').values]).toEqual([1, 2])
+  })
+
+  it('keeps what a failed sweep of a model with ODEs read, naming the value it failed at', async () => {
+    const fake = createCourseSweepFake()
+    let runs = 0
+    Object.defineProperty(fake.instance, 'hasErrors', { get: () => runs >= 3 })
+    fake.instance.startRun = vi.fn(() => (runs++, true))
+    const session = createSimulationSession({ module: fake.loc, cellml: '<model/>' })
+    const sweep = { component: 'c', variable: 'k', values: [1, 2, 3], readout: 'min' }
+
+    const error = await session.run({ settings: SETTINGS, sweep }).promise.catch((caught) => caught)
+    session.dispose()
+
+    expect(error.message).toBe('The simulation failed at c/k = 3.')
+    expect(error.partialResults).toMatchObject({ isSweep: true, isSteadyState: false, readout: 'min' })
+    expect([...error.partialResults.variables.get('c/x').values]).toEqual([-1, -2])
+  })
+
+  /**
    * Builds a fake model without ODEs whose c/y is twice its swept constant c/a.
    *
    * @returns {Object} As createFakeLibOpenCOR.
