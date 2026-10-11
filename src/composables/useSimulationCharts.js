@@ -143,6 +143,8 @@ export function useSimulationCharts(scopeNodes, { hasInputs = false } = {}) {
       // A model without ODEs is solved once: one value per variable, and no VoI to plot them against.
       isSteadyState: !!store.results?.isSteadyState && !isSweep,
       isSweep,
+      // What a sweep of a model with ODEs read from each time course (see sweepReadouts.js).
+      readout: (isSweep && store.results.readout) || null,
     }
   })
 

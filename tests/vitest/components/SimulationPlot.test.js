@@ -205,6 +205,15 @@ describe('SimulationPlot: reference lines', () => {
     expect(wrapper.findAll('.plot-title .plot-title-swatch')).toHaveLength(2)
   })
 
+  it('says what a sweep of a model with ODEs read from each run, after its parameter', () => {
+    wrapper = mount(SimulationPlot, {
+      props: { title: 'cell/I', unit: 'nA', x: { label: 'clamp/V', unit: 'mV', values: [-80, 0], isSweep: true, readout: 'min' }, series: [{ key: 'i', label: 'cell/I', slot: 0, values: [1, 2] }] },
+      attachTo: document.body,
+    })
+    expect(wrapper.find('.plot-title-against').text()).toBe('vs clamp/V (min of each run)')
+    expect(wrapper.vm.snapshot().title).toBe('cell/I vs clamp/V (min of each run) (nA)')
+  })
+
   it('lists a steady state’s values, as there is no time to plot them against', () => {
     const wrapper = mount(SimulationPlot, {
       props: {

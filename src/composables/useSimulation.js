@@ -16,7 +16,7 @@ import {
 import { NO_CLOCK, addProtocolClock, addProtocolDrivers } from '../services/simulation/protocolDriverModel'
 import { listFeatureOperands, resolveFeatureOperands } from '../services/simulation/protocolFeatures'
 import { clampSolverSettings, prepareProtocolRun } from '../services/simulation/protocolRun'
-import { findSweepProblem, resolveSweepTarget, sweepLabel, sweepValues } from '../services/simulation/sweep'
+import { findSweepProblem, resolveSweepTarget, sweepLabel, sweepReadout, sweepValues } from '../services/simulation/sweep'
 import { buildVariableMapping, mapInspectionModules } from '../services/simulation/variableMapping'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
 import { useLibraryStore } from '../stores/libraryStore'
@@ -167,7 +167,8 @@ export function useSimulation() {
       if (problem) throw new SimulationError(problem)
       const target = resolveSweepTarget({ sweep: settings.sweep, nodes: scope.nodes, mapping: source.mapping, variables: source.variables })
       if (target.problem) throw new SimulationError(target.problem)
-      return { ...target, values: sweepValues(settings.sweep) }
+      // A model without ODEs has no time course to read.
+      return { ...target, values: sweepValues(settings.sweep), ...(!source.isSteadyState && { readout: sweepReadout(settings.sweep) }) }
     }
 
     // Reusing the kept model, if its scope and everything it was flattened from are unchanged.

@@ -1,9 +1,11 @@
 /**
- * Parameter sweeps: a model without ODEs is solved once per value of one of its constants, so its variables
- * can be plotted against that constant, as an I–V curve is against the membrane voltage. The sweep is kept
- * in simulationSettingsStore.simulationSettings.sweep.
+ * Parameter sweeps: a model is solved once per value of one of its constants, or with ODEs, its time course run once
+ * per value and read (see sweepReadouts.js), so its variables can be plotted against that constant, as an I–V curve is
+ * against the membrane voltage. The sweep is kept in simulationSettingsStore.simulationSettings.sweep, `readout`
+ * naming its reading; one saved without it reads the end.
  */
 import { pickDefaultValue } from './parameterSliders'
+import { DEFAULT_READOUT, READOUTS } from './sweepReadouts'
 import { mappingKey } from './variableMapping'
 
 // The row types a sweep can vary: what the parameter pane gives a value. A boundary condition's own value
@@ -83,6 +85,15 @@ export function createSweep(node, row, getGlobalConstant) {
     points: DEFAULT_SWEEP_POINTS,
   }
 }
+
+/**
+ * Gets the reading a sweep of a model with ODEs takes from each time course: its own, or the end, for a sweep saved
+ * without one.
+ *
+ * @param {{readout?: string}} sweep
+ * @returns {string} One of sweepReadouts' READOUTS.
+ */
+export const sweepReadout = (sweep) => (READOUTS.some(({ id }) => id === sweep?.readout) ? sweep.readout : DEFAULT_READOUT)
 
 /**
  * Names a sweep's parameter as the variable search does.

@@ -26,7 +26,7 @@
         </template>
         <template v-else>{{ title }}</template>
         <!-- What the x-axis is, when it isn't time: a phase plot's variable, or a sweep's parameter. -->
-        <span v-if="againstLabel" class="plot-title-against"> vs {{ againstLabel }}</span>
+        <span v-if="againstLabel" class="plot-title-against"> vs {{ againstLabel }}{{ readoutNote }}</span>
       </span>
       <!-- The values' unit, here rather than as a rotated axis title, which takes a column of the chart. -->
       <span class="plot-unit">{{ unit }}</span>
@@ -105,6 +105,7 @@ import { AXIS_FONT, CHROME, formatTicks, formatValue, measureLabel, sizeValueAxi
 import { getChartZoom, setChartZoom } from '../../services/simulation/chartZoom'
 import { findNearestPoint } from '../../services/simulation/nearestPoint'
 import { SERIES_COLOURS } from '../../services/simulation/seriesSlots'
+import { READOUTS } from '../../services/simulation/sweepReadouts'
 import { fadeColour } from '../../services/simulation/trackedRuns'
 
 const props = defineProps({
@@ -112,8 +113,9 @@ const props = defineProps({
   // The title as instance/variable paths, to show each instance muted, or null to show `title`.
   titleParts: { type: Array, default: null },
   unit: { type: String, required: true },
-  // { label, unit, values, segments?, isSteadyState, isSweep, isPhase, run }: segments [{ from, to, number }] are a
-  // protocol's sub-experiments; a phase plot's `run` is the run's own x-axis.
+  // { label, unit, values, segments?, isSteadyState, isSweep, readout, isPhase, run }: segments [{ from, to, number }]
+  // are a protocol's sub-experiments; `readout` what a sweep read from each time course; a phase plot's `run` is the
+  // run's own x-axis.
   x: { type: Object, required: true },
   // [{ key, label, variableLabel, slot, values, run, xValues, runValues, isStepped? }], run being a tracked run's
   // `{ number, dash }`, or null for the live run. On a phase plot, xValues and runValues are the series' own
@@ -156,6 +158,11 @@ const shortUnit = (unit) => SHORT_UNITS[unit] ?? unit
 
 // Names the x-axis in the heading when it isn't time, as no axis title does.
 const againstLabel = computed(() => (props.x.isPhase || props.x.isSweep ? props.x.label : null))
+// What a sweep of a model with ODEs read from each time course, after the swept parameter.
+const readoutNote = computed(() => {
+  const readout = props.x.isSweep && READOUTS.find(({ id }) => id === props.x.readout)
+  return readout ? ` (${readout.label.toLowerCase()} of each run)` : ''
+})
 
 /**
  * Gets the x-axis unit to show on its last tick and in the readout: none for a dimensionless one.
@@ -724,7 +731,7 @@ defineExpose({
     const shown = readoutOrder.value.filter((series) => !isHidden(series))
     const name = titleNamesLines.value && shown.length ? shown.map((series) => series.label).join(', ') : props.title
     // The unit is in the heading, not on the canvas, so the image's title carries it.
-    const title = `${name}${againstLabel.value ? ` vs ${againstLabel.value}` : ''}${props.unit ? ` (${props.unit})` : ''}`
+    const title = `${name}${againstLabel.value ? ` vs ${againstLabel.value}${readoutNote.value}` : ''}${props.unit ? ` (${props.unit})` : ''}`
     const references = props.references.filter((item) => !isHidden(item))
     return {
       title,

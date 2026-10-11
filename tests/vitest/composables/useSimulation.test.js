@@ -160,6 +160,8 @@ describe('useSimulation', () => {
       ['with ODEs', false],
     ])('sweeps a model %s once it is read, then sweeps a rerun at once', async (_, isSteadyState) => {
       engine.isSteadyState = isSteadyState
+      // A model with ODEs reads each time course: its end, for a sweep that names no reading.
+      const expected = isSteadyState ? TARGET : { ...TARGET, readout: 'end' }
       const { run } = useSimulation()
 
       const done = run(['a'])
@@ -167,7 +169,7 @@ describe('useSimulation', () => {
       expect(engine.described).toEqual([{ cellml: '<model/>', key: expect.any(Number) }])
       expect(engine.runs[0].options.cellml).toBeUndefined()
       expect(engine.runs[0].options.key).toBe(engine.described[0].key)
-      expect(engine.runs[0].options.sweep).toEqual(TARGET)
+      expect(engine.runs[0].options.sweep).toEqual(expected)
       engine.runs[0].finish({ ...swept, isSteadyState })
       await done
       expect(store.status).toBe('done')
@@ -176,9 +178,18 @@ describe('useSimulation', () => {
       const rerun = run(['a'])
       await settle()
       expect(engine.described).toHaveLength(1)
-      expect(engine.runs[1].options.sweep).toEqual(TARGET)
+      expect(engine.runs[1].options.sweep).toEqual(expected)
       engine.runs[1].finish({ ...swept, isSteadyState })
       await rerun
+    })
+
+    it('reads each time course as the sweep says', async () => {
+      useSimulationSettingsStore().setSimulationSettings({ ...useSimulationSettingsStore().simulationSettings, sweep: { ...SWEEP, readout: 'min' } })
+      const { run } = useSimulation()
+
+      run(['a'])
+      await settle()
+      expect(engine.runs[0].options.sweep).toEqual({ ...TARGET, readout: 'min' })
     })
 
     it('runs once, without the sweep, outside sweep mode', async () => {

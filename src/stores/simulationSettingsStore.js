@@ -7,7 +7,7 @@ export function cloneSimulationSettings(settings = {}) {
   return {
     ...BASELINE_SIMULATION_SETTINGS,
     ...settings,
-    // A model without ODEs may sweep a parameter (see services/simulation/sweep.js).
+    // A sweep of one parameter (see services/simulation/sweep.js), copied so a draft of it is its own.
     ...(settings?.sweep && { sweep: { ...settings.sweep } }),
   }
 }

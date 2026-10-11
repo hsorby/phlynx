@@ -10,6 +10,7 @@ import {
   formatPlotValue,
   haveSameVoi,
   nextRunNumber,
+  runAxisKind,
   runDash,
   runLabel,
 } from '../../../../src/services/simulation/trackedRuns.js'
@@ -99,5 +100,14 @@ describe('describeRunInputs', () => {
       { key: 'global::g', label: 'global_parameters/g', value: 0.5, units: 'mS' },
     ])
     expect(describeRunInputs(null, definitions, 'global_parameters')).toEqual([])
+  })
+})
+
+describe('runAxisKind', () => {
+  it('tells apart runs against the VoI, one solve, and sweeps by their parameter and reading', () => {
+    expect(runAxisKind({})).toBe('voi')
+    expect(runAxisKind({ isSteadyState: true })).toBe('steady')
+    expect(runAxisKind({ isSweep: true, isSteadyState: true, sweepLabel: 'a/k' })).toBe('sweep:a/k')
+    expect(runAxisKind({ isSweep: true, sweepLabel: 'a/k', readout: 'min' })).not.toBe(runAxisKind({ isSweep: true, sweepLabel: 'a/k', readout: 'end' }))
   })
 })

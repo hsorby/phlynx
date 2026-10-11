@@ -8,6 +8,7 @@ import {
   MAX_SWEEP_POINTS,
   resolveSweepTarget,
   sweepLabel,
+  sweepReadout,
   sweepValues,
 } from '../../../../src/services/simulation/sweep.js'
 
@@ -125,5 +126,14 @@ describe('resolveSweepTarget', () => {
   it('explains what can’t be swept', () => {
     expect(resolve({ nodeId: 'n1', nodeName: 'cell', parameterName: 'I', type: 'constant' }).problem).toMatch(/computed by the model/)
     expect(resolve({ nodeId: 'n2', nodeName: 'other', parameterName: 'V', type: 'constant' }).problem).toMatch(/isn’t in the simulated instances/)
+  })
+})
+
+describe('sweepReadout', () => {
+  it('reads the sweep’s own reading, or the end for one saved without a reading it knows', () => {
+    expect(sweepReadout({ readout: 'min' })).toBe('min')
+    expect(sweepReadout({})).toBe('end')
+    expect(sweepReadout({ readout: 'mean' })).toBe('end')
+    expect(sweepReadout(null)).toBe('end')
   })
 })

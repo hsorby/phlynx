@@ -307,8 +307,14 @@ class TestSimulationTab(unittest.TestCase):
                 " points: store.results.voi.values.length, values: store.results.variables.get(name).values.length } })()"
             )
             self.assertEqual(results, {"readout": "end", "isSteadyState": False, "points": 3, "values": 3})
-            expect(page.locator(".simulation-plot .plot-title-against")).to_have_text(" vs soma_SN/g_Na")
             expect(page.get_by_text(re.compile(r"at 3 values of soma_SN/g_Na.*reading the end of each time course"))).to_be_visible()
+            expect(page.locator(".simulation-plot .plot-title-against")).to_have_text(" vs soma_SN/g_Na (end of each run)")
+
+            # Another reading, saved with the sweep, reads each time course again.
+            page.get_by_test_id("sim-sweep-readout").get_by_text("Min", exact=True).click()
+            page.keyboard.press("F9")
+            page.wait_for_function(f"{RESULTS_STORE}.status === 'done' && {RESULTS_STORE}.results.readout === 'min'", timeout=120000)
+            expect(page.locator(".simulation-plot .plot-title-against")).to_have_text(" vs soma_SN/g_Na (min of each run)")
 
             # Switched off, play runs the time course again.
             page.get_by_test_id("sim-sweep-mode").click()

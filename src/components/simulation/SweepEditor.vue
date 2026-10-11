@@ -2,8 +2,8 @@
   <section class="sweep-editor" aria-label="Parameter sweep">
     <p class="sweep-hint">
       Run the model at each value of one parameter, and plot against it: solved once each, or with differential equations, a
-      time course each, read at its end. Play runs it with the toolbar’s Sweep on. To step from a holding value and read the
-      peak, use a protocol.
+      time course each, read as chosen below. Play runs it with the toolbar’s Sweep on. To step from a holding value and read
+      the peak, use a protocol.
     </p>
 
     <div v-if="sweep" class="sweep-card" data-testid="sim-sweep-parameter">
@@ -65,8 +65,32 @@
           />
         </div>
       </div>
+      <div class="sweep-field">
+        <label :id="`${id}-readout`">Reading <span class="sweep-hint-inline">of each time course, between Start and End</span></label>
+        <SelectButton
+          :model-value="readout"
+          :options="READOUTS"
+          option-label="label"
+          option-value="id"
+          :allow-empty="false"
+          size="small"
+          :aria-labelledby="`${id}-readout`"
+          data-testid="sim-sweep-readout"
+          @update:model-value="(value) => update({ readout: value })"
+        >
+          <template #option="{ option }"><span :title="option.description">{{ option.label }}</span></template>
+        </SelectButton>
+      </div>
+      <p v-if="cost" class="sweep-hint" data-testid="sim-sweep-cost">{{ cost }}</p>
       <Message v-if="problem" severity="warn" size="small">{{ problem }}</Message>
-      <Message v-else severity="secondary" size="small">
+      <Message v-else-if="isLong" severity="warn" size="small" data-testid="sim-sweep-long">
+        That’s a lot of time courses: fewer points, or a larger point interval, make the sweep quicker.
+      </Message>
+      <Message v-if="hasHiddenTransient" severity="secondary" size="small" data-testid="sim-sweep-transient">
+        Each time course starts at the initial time, before the plots’ Start, so a {{ readoutLabel }} in the first moments
+        isn’t read. To read the peak after a step from a holding value, use a protocol.
+      </Message>
+      <Message v-if="!problem" severity="secondary" size="small">
         Web OpenCOR can’t run sweeps, so an export solves or simulates the model once, at the parameter’s own value.
       </Message>
     </div>
@@ -112,13 +136,16 @@ import Button from 'primevue/button'
 import InputNumber from 'primevue/inputnumber'
 import Menu from 'primevue/menu'
 import Message from 'primevue/message'
+import SelectButton from 'primevue/selectbutton'
 
 import VariablePathPicker from './VariablePathPicker.vue'
 import { resolveBoundaryValues } from '../../services/export/boundaryValues'
-import { createSweep, findSweepProblem, isSweepableEntry, MAX_SWEEP_POINTS, sweepLabel } from '../../services/simulation/sweep'
+import { createSweep, findSweepProblem, isSweepableEntry, MAX_SWEEP_POINTS, sweepLabel, sweepReadout } from '../../services/simulation/sweep'
+import { READOUTS } from '../../services/simulation/sweepReadouts'
 import { buildVariableIndex } from '../../services/simulation/variableIndex'
 import { useLibraryStore } from '../../stores/libraryStore'
 import { useSimulationResultsStore } from '../../stores/simulationResultsStore'
+import { useSimulationSettingsStore } from '../../stores/simulationSettingsStore'
 import { FLOW_IDS } from '../../utils/constants'
 
 const props = defineProps({
@@ -135,6 +162,34 @@ const id = useId()
 
 const label = computed(() => (sweep.value ? sweepLabel(sweep.value) : ''))
 const problem = computed(() => (sweep.value ? findSweepProblem(sweep.value) : null))
+const settingsStore = useSimulationSettingsStore()
+
+const readout = computed(() => sweepReadout(sweep.value))
+const readoutLabel = computed(() => READOUTS.find(({ id }) => id === readout.value).label.toLowerCase())
+// The last run's model, once known: without ODEs, each value is solved once rather than run as a time course.
+const isSteadyState = computed(() => !!resultsStore.results?.isSteadyState)
+// Past this many time courses, the sweep says it will be slow.
+const LONG_SWEEP_RUNS = 200
+const isLong = computed(() => !isSteadyState.value && Number.isInteger(sweep.value?.points) && sweep.value.points > LONG_SWEEP_RUNS)
+
+// How many solves or time courses the sweep runs, and about how long they take, going by the last run's.
+const cost = computed(() => {
+  const points = sweep.value?.points
+  if (!Number.isInteger(points) || points < 2) return null
+  const runs = `${points} ${isSteadyState.value ? 'solves' : 'time courses'}`
+  const results = resultsStore.results
+  const solves = results?.isSweep ? results.voi.values.length : 1
+  const perSolveMs = results && !results.isStopped && solves ? results.elapsedMs / solves : null
+  if (!perSolveMs || results.isSteadyState !== isSteadyState.value) return `${runs}.`
+  const seconds = (perSolveMs * points) / 1000
+  return `${runs}, ${seconds < 1 ? 'under a second' : `about ${seconds < 90 ? `${Math.round(seconds)} s` : `${Math.round(seconds / 60)} min`}`}.`
+})
+
+// A time course that starts before the plots do, to settle, can't be read in its first moments, where a peak may be.
+const hasHiddenTransient = computed(() => {
+  const { initialPoint, startingPoint } = settingsStore.simulationSettings
+  return !isSteadyState.value && readout.value !== 'end' && initialPoint < startingPoint
+})
 
 const pickerEl = ref(null)
 // The search opens from the Sweep a parameter button or the sweep's menu, never on its own.
@@ -181,9 +236,9 @@ function sweepEntry(entry) {
 }
 
 /**
- * Changes the sweep's range.
+ * Changes the sweep's range, or its reading.
  *
- * @param {{from?: number, to?: number, points?: number}} patch
+ * @param {{from?: number, to?: number, points?: number, readout?: string}} patch
  */
 function update(patch) {
   sweep.value = { ...sweep.value, ...patch }
@@ -216,6 +271,10 @@ const menuItems = [
   margin: 0;
   font-size: 0.75rem;
   color: var(--p-text-muted-color);
+}
+
+.sweep-hint-inline {
+  font-weight: 400;
 }
 
 .sweep-card {

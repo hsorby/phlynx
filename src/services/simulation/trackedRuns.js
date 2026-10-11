@@ -164,9 +164,11 @@ export function describeRunInputs(overrides, definitions, globalComponent) {
 
 /**
  * Names what a run's charts are plotted against, so runs against different things aren't drawn together:
- * a model's VoI, one solve of a model without one, or a sweep of one of its parameters.
+ * a model's VoI, one solve of a model without one, or a sweep of one of its parameters, with what it read from each
+ * time course, as an end and a min of one variable aren't the same quantity.
  *
- * @param {{isSteadyState?: boolean, isSweep?: boolean, sweepLabel?: string}} results
+ * @param {{isSteadyState?: boolean, isSweep?: boolean, sweepLabel?: string, readout?: string}} results
  * @returns {string}
  */
-export const runAxisKind = (results) => (results.isSweep ? `sweep:${results.sweepLabel}` : results.isSteadyState ? 'steady' : 'voi')
+export const runAxisKind = (results) =>
+  results.isSweep ? `sweep:${results.sweepLabel}${results.readout ? `:${results.readout}` : ''}` : results.isSteadyState ? 'steady' : 'voi'
