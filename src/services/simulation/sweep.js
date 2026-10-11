@@ -6,19 +6,58 @@
 import { pickDefaultValue } from './parameterSliders'
 import { mappingKey } from './variableMapping'
 
-// The row types a sweep can vary: what the parameter pane gives a value, or a boundary condition's own value.
-const SWEEPABLE_TYPES = new Set(['constant', 'global_constant', 'boundary_condition'])
+// The row types a sweep can vary: what the parameter pane gives a value. A boundary condition's own value
+// counts too, but only while nothing connected supplies one (see isSweepableRow).
+const SWEEPABLE_TYPES = new Set(['constant', 'global_constant'])
 
 export const DEFAULT_SWEEP_POINTS = 51
 export const MAX_SWEEP_POINTS = 1000
 
 /**
- * Checks whether a row can be swept.
+ * Checks whether a row can be swept: a constant, a global constant, or a boundary condition nothing else
+ * supplies, whose own value the model then uses.
  *
  * @param {Object} row
+ * @param {string} nodeId
+ * @param {Set<string>} unsupplied - `nodeId::name` of the boundary conditions nothing supplies (see
+ *   resolveBoundaryValues).
  * @returns {boolean}
  */
-export const isSweepableRow = (row) => Boolean(row?.name) && SWEEPABLE_TYPES.has(row.type)
+export function isSweepableRow(row, nodeId, unsupplied) {
+  if (!row?.name) return false
+  if (row.type === 'boundary_condition') return unsupplied.has(mappingKey(nodeId, row.name))
+  return SWEEPABLE_TYPES.has(row.type)
+}
+
+/**
+ * Checks whether a variable search entry can be swept, for the sweep's picker. Besides isSweepableRow, it
+ * leaves out the parameter already swept and, once a run has mapped it, anything libOpenCOR doesn't report as
+ * a constant: a computed constant, or a value a connection supplies in that run.
+ *
+ * @param {Object} entry - From buildVariableIndex, given the last run's mapping.
+ * @param {Object} options
+ * @param {Set<string>} options.unsupplied - See isSweepableRow.
+ * @param {Map<string, {kind: string}>|null} [options.variables] - The last run's variables, with their kinds.
+ * @param {Object|null} [options.sweep] - The current sweep.
+ * @returns {boolean}
+ */
+export function isSweepableEntry(entry, { unsupplied, variables = null, sweep = null }) {
+  if (!isSweepableRow({ name: entry.rowName, type: entry.kind }, entry.nodeId, unsupplied)) return false
+  if (sweep && isSwept(entry, sweep)) return false
+  const reported = entry.reportedName && variables?.get(entry.reportedName)
+  return !reported || reported.kind === 'constant'
+}
+
+/**
+ * Checks whether a search entry is the parameter a sweep varies. A global constant is one parameter, whichever
+ * instance named it.
+ *
+ * @param {Object} entry
+ * @param {Object} sweep
+ * @returns {boolean}
+ */
+const isSwept = (entry, sweep) =>
+  sweep.type === 'global_constant' ? entry.kind === 'global_constant' && entry.rowName === sweep.parameterName : entry.key === sweep.key
 
 /**
  * Builds a sweep of a node's row, over half its value either side, or 0 to 1 when it has none.

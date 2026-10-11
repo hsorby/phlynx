@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createSweep,
   findSweepProblem,
+  isSweepableEntry,
   isSweepableRow,
   MAX_SWEEP_POINTS,
   resolveSweepTarget,
@@ -14,8 +15,40 @@ const node = (id, name, variables) => ({ id, data: { name, variables } })
 
 describe('isSweepableRow', () => {
   it('sweeps what has a value of its own, not what the model computes', () => {
-    for (const type of ['constant', 'global_constant', 'boundary_condition']) expect(isSweepableRow({ name: 'x', type }), type).toBe(true)
-    expect(isSweepableRow({ name: 'x', type: 'variable' })).toBe(false)
+    for (const type of ['constant', 'global_constant']) expect(isSweepableRow({ name: 'x', type }, 'n1', new Set()), type).toBe(true)
+    expect(isSweepableRow({ name: 'x', type: 'variable' }, 'n1', new Set())).toBe(false)
+  })
+
+  it('sweeps a boundary condition only while nothing connected supplies it', () => {
+    const row = { name: 'V', type: 'boundary_condition' }
+    expect(isSweepableRow(row, 'n1', new Set(['n1::V']))).toBe(true)
+    expect(isSweepableRow(row, 'n1', new Set())).toBe(false)
+  })
+})
+
+describe('isSweepableEntry', () => {
+  const entry = (overrides) => ({ key: 'n1::g', nodeId: 'n1', rowName: 'g', kind: 'constant', reportedName: null, ...overrides })
+  const unsupplied = new Set()
+
+  it('leaves out the parameter already swept', () => {
+    expect(isSweepableEntry(entry(), { unsupplied, sweep: { key: 'n1::g', type: 'constant', parameterName: 'g' } })).toBe(false)
+    expect(isSweepableEntry(entry(), { unsupplied, sweep: { key: 'n1::k', type: 'constant', parameterName: 'k' } })).toBe(true)
+  })
+
+  it('leaves out a global constant already swept, from whichever instance', () => {
+    const global = entry({ key: 'global::T', nodeId: 'n2', rowName: 'T', kind: 'global_constant' })
+    expect(isSweepableEntry(global, { unsupplied, sweep: { key: 'n1::T', type: 'global_constant', parameterName: 'T' } })).toBe(false)
+  })
+
+  it('leaves out what the last run computed', () => {
+    const variables = new Map([
+      ['cell/g', { kind: 'computedConstant' }],
+      ['cell/k', { kind: 'constant' }],
+    ])
+    expect(isSweepableEntry(entry({ reportedName: 'cell/g' }), { unsupplied, variables })).toBe(false)
+    expect(isSweepableEntry(entry({ reportedName: 'cell/k' }), { unsupplied, variables })).toBe(true)
+    // Not in the last run: the row type decides.
+    expect(isSweepableEntry(entry(), { unsupplied, variables })).toBe(true)
   })
 })
 

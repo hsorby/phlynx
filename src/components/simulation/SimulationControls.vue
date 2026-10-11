@@ -45,6 +45,8 @@
       />
     </template>
 
+    <SweepEditor v-else-if="view === 'sweep'" :sweep="settingsStore.simulationSettings.sweep ?? null" :nodes="nodes" @update:sweep="setSweep" />
+
     <RunList v-else-if="view === 'runs'" />
 
     <SliderList
@@ -60,8 +62,9 @@
 
 <script setup>
 /**
- * What gets plotted and tried out, across the whole model: plots and the variables on them, or parameter
- * sliders, each added from one search over every `instance/variable` path, or the runs kept to compare.
+ * What gets plotted and tried out, across the whole model: plots and the variables on them, parameter
+ * sliders or a parameter sweep, each added from one search over every `instance/variable` path, or the runs
+ * kept to compare.
  */
 import { computed, ref, watch } from 'vue'
 
@@ -71,6 +74,7 @@ import SelectButton from 'primevue/selectbutton'
 import PlotListEditor from './PlotListEditor.vue'
 import RunList from './RunList.vue'
 import SliderList from './SliderList.vue'
+import SweepEditor from './SweepEditor.vue'
 import VariablePathPicker from './VariablePathPicker.vue'
 import { sliderValueKey } from '../../services/simulation/parameterSliders'
 import { plotVariable, resolveGroups } from '../../services/simulation/plotSelections'
@@ -114,6 +118,7 @@ const sliderKeys = computed(() => new Set(sliderDefinitions.value.map((definitio
 const views = computed(() => [
   { label: `Plots (${plottedCount.value})`, value: 'plots' },
   { label: `Sliders (${sliderKeys.value.size})`, value: 'sliders' },
+  { label: `Sweep (${settingsStore.simulationSettings.sweep ? 1 : 0})`, value: 'sweep' },
   { label: `Runs (${resultsStore.trackedRuns.length})`, value: 'runs' },
 ])
 
@@ -183,6 +188,15 @@ function plotEntry(entry) {
     const name = resolveGroups(plotConfig).find((plot) => plot.id === plotId)?.name
     showPlotNote(`${entry.name} (${found.row.units || 'no units'}) went on ${name}: a plot shows one unit.`)
   }
+}
+
+/**
+ * Sets the sweep, or stops sweeping with null.
+ *
+ * @param {Object|null} sweep
+ */
+function setSweep(sweep) {
+  settingsStore.setSimulationSettings({ ...settingsStore.simulationSettings, sweep })
 }
 
 /** Puts the cursor in the search box, for a plot's add button. */

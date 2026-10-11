@@ -100,11 +100,13 @@ class TestLoadViaUrl(unittest.TestCase):
             expect(page.get_by_role("main")).to_contain_text("soma_SN")
             page.get_by_role("button", name="Configure simulation settings").click()
             dialog = page.get_by_role("dialog", name="Simulation Settings")
-            # The archive's plot and slider come in, as the settings show them on one page.
+            # The archive's plot, slider and time course come in, each on its own tab.
             expect(dialog.get_by_role("region", name="Plot 1", exact=True)).to_contain_text("axon_SN/V")
+            dialog.get_by_role("tab", name="Sliders & sweep").click()
             expect(page.get_by_test_id("param-min-C")).to_have_value("9");
             expect(page.get_by_test_id("param-default-C")).to_have_value("10");
             expect(page.get_by_test_id("param-max-C")).to_have_value("11");
+            dialog.get_by_role("tab", name="Solver").click()
             expect(page.get_by_test_id("sim-initial-point")).to_have_value("0 s");
             expect(page.get_by_test_id("sim-starting-point")).to_have_value("0 s");
             expect(page.get_by_test_id("sim-ending-point")).to_have_value("20 s");

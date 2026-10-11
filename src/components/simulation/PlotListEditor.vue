@@ -271,6 +271,7 @@ function addNewPlot() {
   const { plotConfig, id } = addPlot(props.plotConfig)
   emitConfig(plotConfig)
   targetPlotId.value = id
+  emit('add-here')
 }
 
 /**
