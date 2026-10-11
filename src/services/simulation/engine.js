@@ -306,37 +306,50 @@ export function createSimulationSession({ module: loc, cellml }) {
     }
 
     /**
-     * Solves a model once per point: once, for an algebraic model run on its own, or once per value of a sweep. Each
-     * point gives every variable one value; a sweep's values become the results' VOI, so its results read like a time
-     * course over them.
+     * Solves a model once per point: once, for an algebraic model run on its own, or once per value of a sweep, and
+     * of its family's parameter, the sweep's values for each of the family's in turn. Each point gives every variable
+     * one value; a sweep's values become the results' VOI, so its results read like a time course over them, a curve
+     * after another for a family.
      *
      * @param {Array} runChanges
-     * @param {{component: string, variable: string, values: number[]}|null} runSweep
+     * @param {{component: string, variable: string, values: number[], family?: Object}|null} runSweep - With a
+     *   `family`, `{component, variable, values}`, of the parameter that varies from curve to curve.
      * @param {Function} solveOne - Solves the point the instance has, given its task and the share of the run the
      *   point is: `{values}`, each variable's `{kind, unit, value}` by name, or `{failure}`, why it failed; null when
      *   stopped part way.
      * @returns {Promise<Object>} As a run's results, `isSweep` set for a sweep.
      */
     async function solvePoints(runChanges, runSweep, solveOne) {
-      const isTarget = (change) => change.component === runSweep?.component && change.variable === runSweep?.variable
-      const points = runSweep ? runSweep.values : [null]
+      const family = runSweep?.family ?? null
+      const targets = [runSweep, family].filter(Boolean)
+      const isTarget = (change) => targets.some(({ component, variable }) => change.component === component && change.variable === variable)
+      const inner = runSweep ? runSweep.values : [null]
+      const outer = family ? family.values : [null]
+      // Every point: the family's value, and the sweep's.
+      const points = outer.flatMap((familyValue) => inner.map((value) => ({ familyValue, value })))
+      const nameOf = ({ component, variable }) => `${component}/${variable}`
       const columns = new Map()
       const issues = new Map()
       let solved = 0
       let elapsedMs = 0
 
-      /** The results of the points solved so far. */
+      /** The results of the points solved so far: a family's curves one after another, the last perhaps part way. */
       const collect = () => {
         const variables = new Map([...columns].map(([name, { kind, unit, values }]) => [name, { kind, unit, values: values.slice(0, solved) }]))
         const voi = runSweep
-          ? { name: `${runSweep.component}/${runSweep.variable}`, unit: columns.get(`${runSweep.component}/${runSweep.variable}`)?.unit ?? '', values: Float64Array.from(points.slice(0, solved)) }
+          ? { name: nameOf(runSweep), unit: columns.get(nameOf(runSweep))?.unit ?? '', values: Float64Array.from(inner.slice(0, Math.min(solved, inner.length))) }
           : { name: '', unit: '', values: new Float64Array() }
-        return { voi, variables, isSteadyState, isSweep: !!runSweep }
+        const reached = family && { name: nameOf(family), unit: columns.get(nameOf(family))?.unit ?? '', values: outer.slice(0, Math.ceil(solved / inner.length)) }
+        return { voi, variables, isSteadyState, isSweep: !!runSweep, ...(reached && { family: reached }) }
       }
 
-      for (const value of points) {
+      for (const { familyValue, value } of points) {
         if (isStopped) break
-        applyChanges(value === null ? runChanges : [...runChanges.filter((change) => !isTarget(change)), { component: runSweep.component, variable: runSweep.variable, value }])
+        const swept = [
+          ...(family ? [{ component: family.component, variable: family.variable, value: familyValue }] : []),
+          ...(runSweep ? [{ component: runSweep.component, variable: runSweep.variable, value }] : []),
+        ]
+        applyChanges(runSweep ? [...runChanges.filter((change) => !isTarget(change)), ...swept] : runChanges)
         instance = document.instantiate()
         let point = null
         try {
@@ -361,7 +374,7 @@ export function createSimulationSession({ module: loc, cellml }) {
         // A point stopped part way may not have converged, or reached its end, so its values aren't kept.
         if (!point || isStopped) break
         if (point.failure) {
-          const at = runSweep ? ` at ${runSweep.component}/${runSweep.variable} = ${value}` : ''
+          const at = runSweep ? ` at ${swept.map((change) => `${nameOf(change)} = ${change.value}`).join(', ')}` : ''
           throw new SimulationError(`${point.failure.message.replace(/\.$/, '')}${at}.`, point.failure.issues, solved > 1 ? collect() : null)
         }
         for (const [name, { kind, unit, value: pointValue }] of point.values) {

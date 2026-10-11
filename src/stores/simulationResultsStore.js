@@ -141,6 +141,7 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
     if (!results.value) return 'Run the simulation first'
     if (!['done', 'stopped'].includes(status.value)) return 'The last run didn’t finish'
     if (protocolResults.value) return 'A protocol run can’t be tracked: show all its experiments to compare them'
+    if (results.value.family) return 'A sweep with curves can’t be tracked: it compares its curves already'
     if (trackedRuns.value.length >= MAX_TRACKED_RUNS) return `Up to ${MAX_TRACKED_RUNS} runs can be tracked: stop tracking one to track another`
     return null
   })

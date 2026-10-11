@@ -6,7 +6,7 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { analyzeMathXml } from '../../../src/services/math/analyzeMath.js'
 import { reconcileRows } from '../../../src/services/math/reconcileRows.js'
 import { createSimulationSession } from '../../../src/services/simulation/engine.js'
-import { createSweep, resolveSweepTarget, sweepValues } from '../../../src/services/simulation/sweep.js'
+import { createFamily, createSweep, familyValues, resolveSweepTarget, splitFamily, sweepValues } from '../../../src/services/simulation/sweep.js'
 import { buildVariableMapping } from '../../../src/services/simulation/variableMapping.js'
 import { useLibraryStore } from '../../../src/stores/libraryStore.js'
 import { extractVoiAndParametersFromModel, generateFlattenedModel } from '../../../src/utils/cellml.js'
@@ -237,6 +237,33 @@ describe('variables of integration and algebraic systems in the flattened model'
 
       const peaks = await session.run({ settings, sweep: { ...target, values: sweepValues(sweep), readout: 'max' } }).promise
       expect([...peaks.variables.get('decay/q').values]).toEqual([2, 2, 2])
+    } finally {
+      session.dispose()
+    }
+  }, 60000)
+
+  it('sweeps an algebraic system in libOpenCOR once per value of a second parameter, a curve each', async () => {
+    const node = buildNode('lever', ALGEBRAIC_XML, { a: '3', t: '2' })
+    const cellml = await flatten([node])
+    const session = createSimulationSession({ module: libOpenCOR, cellml })
+    try {
+      const described = session.describe()
+      const mapping = buildVariableMapping({ libcellml, cellml, nodes: [node], results: described })
+      const rowOf = (name) => node.data.variables.find((row) => row.name === name)
+      const sweep = { ...createSweep(node, rowOf('t'), () => null), from: 0, to: 2, points: 3 }
+      const family = { ...createFamily(node, rowOf('a'), () => null), values: [2, 1] }
+      const resolve = (target) => resolveSweepTarget({ sweep: target, nodes: [node], mapping, variables: described.variables })
+
+      const results = await session.run({
+        settings: {},
+        sweep: { ...resolve(sweep), values: sweepValues(sweep), family: { ...resolve(family), values: familyValues(family) } },
+      }).promise
+      expect(results.family.values).toEqual([1, 2])
+      const curves = splitFamily(results).family.curves.map(({ value, variables }) => [value, [...variables.get('lever/y').values]])
+      expect(curves).toEqual([
+        [1, [0, 1, 2]],
+        [2, [0, 2, 4]],
+      ])
     } finally {
       session.dispose()
     }

@@ -68,6 +68,12 @@ describe('simulationResultsStore tracked runs', () => {
     expect(store.isLiveRunVisible).toBe(true)
   })
 
+  it('leaves a sweep with curves untracked', () => {
+    finish(null, makeResults({ isSweep: true, family: { name: 'a/b', unit: '', values: [1, 2], curves: [] } }))
+    expect(store.trackBlocker).toMatch(/curves/)
+    expect(store.trackRun()).toBeNull()
+  })
+
   it('says why the shown run can’t be tracked, as trackRun decides', () => {
     const blockers = []
     const expectAgreement = () => {

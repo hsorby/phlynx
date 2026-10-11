@@ -109,5 +109,6 @@ describe('runAxisKind', () => {
     expect(runAxisKind({ isSteadyState: true })).toBe('steady')
     expect(runAxisKind({ isSweep: true, isSteadyState: true, sweepLabel: 'a/k' })).toBe('sweep:a/k')
     expect(runAxisKind({ isSweep: true, sweepLabel: 'a/k', readout: 'min' })).not.toBe(runAxisKind({ isSweep: true, sweepLabel: 'a/k', readout: 'end' }))
+    expect(runAxisKind({ isSweep: true, sweepLabel: 'a/k', familyLabel: 'a/Ko' })).not.toBe(runAxisKind({ isSweep: true, sweepLabel: 'a/k' }))
   })
 })

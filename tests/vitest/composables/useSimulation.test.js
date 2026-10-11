@@ -63,7 +63,7 @@ vi.mock('../../../src/services/simulation/scopedModel', async (importOriginal) =
 }))
 vi.mock('../../../src/services/simulation/variableMapping', () => ({
   mappingKey: (nodeId, name) => `${nodeId}::${name}`,
-  buildVariableMapping: () => new Map([['a::x', 'a/x'], ['a::k', 'instance_parameters/k']]),
+  buildVariableMapping: () => new Map([['a::x', 'a/x'], ['a::k', 'instance_parameters/k'], ['a::g', 'instance_parameters/g']]),
   mapInspectionModules: () => [],
 }))
 // A test may hold libcellml back, to act while a run's results are being mapped.
@@ -190,6 +190,43 @@ describe('useSimulation', () => {
       run(['a'])
       await settle()
       expect(engine.runs[0].options.sweep).toEqual({ ...TARGET, readout: 'min' })
+    })
+
+    it('sweeps once per value of its family’s parameter, and splits the results into curves', async () => {
+      nodes.value = [createNode('a', [{ name: 'x', type: 'variable' }, { name: 'k', type: 'constant', value: '2' }, { name: 'g', type: 'constant', value: '1' }])]
+      const family = { key: 'a::g', nodeId: 'a', nodeName: 'a', parameterName: 'g', type: 'constant', values: [5, 1] }
+      useSimulationSettingsStore().setSimulationSettings({ ...useSimulationSettingsStore().simulationSettings, sweep: { ...SWEEP, family } })
+      engine.isSteadyState = true
+      engine.variables = new Map([['a/x', { kind: 'algebraic' }], ['instance_parameters/k', { kind: 'constant' }], ['instance_parameters/g', { kind: 'constant' }]])
+      const { run } = useSimulation()
+
+      const done = run(['a'])
+      await settle()
+      expect(engine.runs[0].options.sweep).toEqual({ ...TARGET, family: { component: 'instance_parameters', variable: 'g', values: [1, 5] } })
+      engine.runs[0].finish({
+        ...swept,
+        isSteadyState: true,
+        variables: new Map([['a/x', { kind: 'algebraic', unit: '', values: Float64Array.of(1, 2, 3, 4, 5, 6) }]]),
+        family: { name: 'instance_parameters/g', unit: '', values: [1, 5] },
+      })
+      await done
+
+      expect(store.results).toMatchObject({ sweepLabel: 'a/k', familyLabel: 'a/g' })
+      expect(store.results.family.curves.map(({ value, variables }) => [value, [...variables.get('a/x').values]])).toEqual([
+        [1, [1, 2, 3]],
+        [5, [4, 5, 6]],
+      ])
+    })
+
+    it('explains a family of something the model computes', async () => {
+      const family = { key: 'a::x', nodeId: 'a', nodeName: 'a', parameterName: 'x', type: 'constant', values: [1] }
+      useSimulationSettingsStore().setSimulationSettings({ ...useSimulationSettingsStore().simulationSettings, sweep: { ...SWEEP, family } })
+      engine.variables = new Map([['a/x', { kind: 'algebraic' }], ['instance_parameters/k', { kind: 'constant' }]])
+      const { run } = useSimulation()
+
+      await run(['a'])
+
+      expect(store.error.message).toMatch(/a\/x is computed by the model, or supplied through a connection, so it can’t be varied across curves/)
     })
 
     it('runs once, without the sweep, outside sweep mode', async () => {

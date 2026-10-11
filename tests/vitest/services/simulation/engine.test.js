@@ -389,6 +389,65 @@ describe('startSimulation', () => {
 
   const SWEEP = { component: 'c', variable: 'a', values: [1, 2, 3] }
 
+  /**
+   * Builds a fake model without ODEs whose c/y is c/a plus ten times c/b, a sweep's family's parameter.
+   *
+   * @returns {Object} As createFakeLibOpenCOR.
+   */
+  function createFamilyFake() {
+    const fake = createFakeLibOpenCOR({ voiName: '', steadyState: true, stateCount: 0 })
+    fake.task.voi = new Float64Array()
+    const valueOf = (name) => Number(fake.model.changes.find((change) => change.variableName === name).newValue)
+    Object.assign(fake.task, {
+      constantCount: 2,
+      constantName: (i) => ['c/a', 'c/b'][i],
+      constantUnit: (i) => ['volt', 'mM'][i],
+      constant: (i) => new Float64Array([valueOf(['a', 'b'][i])]),
+      computedConstantCount: 1,
+      computedConstantName: () => 'c/y',
+      computedConstantUnit: () => 'metre',
+      computedConstant: () => new Float64Array([valueOf('a') + 10 * valueOf('b')]),
+    })
+    return fake
+  }
+
+  it('sweeps once per value of a family’s parameter, a curve after another', async () => {
+    const fake = createFamilyFake()
+    const onProgress = vi.fn()
+    const session = createSimulationSession({ module: fake.loc, cellml: '<model/>' })
+    const changes = [{ component: 'c', variable: 'b', value: 99 }, { component: 'c', variable: 'k', value: 1 }]
+    const sweep = { ...SWEEP, family: { component: 'c', variable: 'b', values: [1, 2] } }
+
+    const result = await session.run({ settings: SETTINGS, changes, sweep, onProgress }).promise
+    session.dispose()
+
+    expect(result).toMatchObject({ isSweep: true, isStopped: false })
+    expect(result.voi).toEqual({ name: 'c/a', unit: 'volt', values: new Float64Array([1, 2, 3]) })
+    expect(result.family).toEqual({ name: 'c/b', unit: 'mM', values: [1, 2] })
+    expect([...result.variables.get('c/y').values]).toEqual([11, 12, 13, 21, 22, 23])
+    // Both swept values replace a slider's, and the other changes stay.
+    expect(fake.model.changes.map((change) => [change.variableName, change.newValue])).toEqual([['k', '1'], ['b', '2'], ['a', '3']])
+    expect(onProgress.mock.calls.at(-1)[0]).toBe(1)
+    expect(onProgress.mock.calls[2][0]).toBe(0.5)
+  })
+
+  it('keeps the curves a failed family solved, naming both values it failed at', async () => {
+    const fake = createFamilyFake()
+    let runs = 0
+    Object.defineProperty(fake.instance, 'hasErrors', { get: () => runs >= 5 })
+    fake.instance.startRun = vi.fn(() => (runs++, true))
+    const session = createSimulationSession({ module: fake.loc, cellml: '<model/>' })
+    const sweep = { ...SWEEP, family: { component: 'c', variable: 'b', values: [1, 2] } }
+
+    const error = await session.run({ settings: SETTINGS, sweep }).promise.catch((caught) => caught)
+    session.dispose()
+
+    expect(error.message).toBe('The model could not be solved at c/b = 2, c/a = 2.')
+    expect([...error.partialResults.voi.values]).toEqual([1, 2, 3])
+    expect(error.partialResults.family.values).toEqual([1, 2])
+    expect([...error.partialResults.variables.get('c/y').values]).toEqual([11, 12, 13, 21])
+  })
+
   it('drops the point a sweep was stopped during, and reports it stopped', async () => {
     const fake = createSweepFake()
     const start = fake.instance.startRun.getMockImplementation()

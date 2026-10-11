@@ -14,6 +14,10 @@ const SWEEPABLE_TYPES = new Set(['constant', 'global_constant'])
 
 export const DEFAULT_SWEEP_POINTS = 51
 export const MAX_SWEEP_POINTS = 1000
+// A family draws a curve per value, each in a colour of its own.
+export const MAX_FAMILY_VALUES = 8
+// Solves, or time courses, a sweep and its family run at most.
+export const MAX_SWEEP_RUNS = 2000
 
 /**
  * Checks whether a row can be swept: a constant, a global constant, or a boundary condition nothing else
@@ -33,8 +37,8 @@ export function isSweepableRow(row, nodeId, unsupplied) {
 
 /**
  * Checks whether a variable search entry can be swept, for the sweep's picker. Besides isSweepableRow, it
- * leaves out the parameter already swept and, once a run has mapped it, anything libOpenCOR doesn't report as
- * a constant: a computed constant, or a value a connection supplies in that run.
+ * leaves out the parameters already swept, and its family's, and once a run has mapped it, anything libOpenCOR
+ * doesn't report as a constant: a computed constant, or a value a connection supplies in that run.
  *
  * @param {Object} entry - From buildVariableIndex, given the last run's mapping.
  * @param {Object} options
@@ -45,17 +49,17 @@ export function isSweepableRow(row, nodeId, unsupplied) {
  */
 export function isSweepableEntry(entry, { unsupplied, variables = null, sweep = null }) {
   if (!isSweepableRow({ name: entry.rowName, type: entry.kind }, entry.nodeId, unsupplied)) return false
-  if (sweep && isSwept(entry, sweep)) return false
+  if (sweep && (isSwept(entry, sweep) || (sweep.family && isSwept(entry, sweep.family)))) return false
   const reported = entry.reportedName && variables?.get(entry.reportedName)
   return !reported || reported.kind === 'constant'
 }
 
 /**
- * Checks whether a search entry is the parameter a sweep varies. A global constant is one parameter, whichever
- * instance named it.
+ * Checks whether a search entry is the parameter a sweep, or its family, varies. A global constant is one
+ * parameter, whichever instance named it.
  *
  * @param {Object} entry
- * @param {Object} sweep
+ * @param {Object} sweep - The sweep, or its family.
  * @returns {boolean}
  */
 const isSwept = (entry, sweep) =>
@@ -96,12 +100,54 @@ export function createSweep(node, row, getGlobalConstant) {
 export const sweepReadout = (sweep) => (READOUTS.some(({ id }) => id === sweep?.readout) ? sweep.readout : DEFAULT_READOUT)
 
 /**
+ * Builds a family of a node's row: the sweep's curve once per value, from just the row's own value.
+ *
+ * @param {Object} node
+ * @param {Object} row
+ * @param {Function} getGlobalConstant - libraryStore.getGlobalConstant.
+ * @returns {{key: string, nodeId: string, nodeName: string, parameterName: string, units: string, type: string,
+ *   values: number[]}}
+ */
+export function createFamily(node, row, getGlobalConstant) {
+  const value = pickDefaultValue(row, getGlobalConstant)
+  return {
+    key: mappingKey(node.id, row.name),
+    nodeId: node.id,
+    nodeName: node.data.name,
+    parameterName: row.name,
+    units: row.units || '',
+    type: row.type,
+    values: Number.isFinite(value) ? [value] : [],
+  }
+}
+
+/**
+ * Lists a family's values once each, from the least up, as its curves are drawn.
+ *
+ * @param {{values: number[]}} family
+ * @returns {number[]}
+ */
+export const familyValues = (family) => [...new Set(family.values)].sort((a, b) => a - b)
+
+/**
  * Names a sweep's parameter as the variable search does.
  *
  * @param {Object} sweep
  * @returns {string}
  */
 export const sweepLabel = (sweep) => `${sweep.nodeName}/${sweep.parameterName}`
+
+/**
+ * Tells whether a sweep and its family vary one parameter.
+ *
+ * @param {Object} sweep
+ * @param {Object} family
+ * @returns {boolean}
+ */
+const isSameParameter = (sweep, family) =>
+  sweep.type === 'global_constant' || family.type === 'global_constant'
+    ? sweep.type === family.type && sweep.parameterName === family.parameterName
+    : sweep.key === family.key
 
 /**
  * Says what stops a sweep from running, if anything.
@@ -117,6 +163,16 @@ export function findSweepProblem(sweep) {
   if (!Number.isInteger(points) || points < 2 || points > MAX_SWEEP_POINTS) {
     return `The sweep needs from 2 to ${MAX_SWEEP_POINTS} points.`
   }
+  const { family } = sweep
+  if (!family) return null
+  if (!family.parameterName) return 'Choose a parameter for the curves.'
+  if (isSameParameter(sweep, family)) return `The curves need a parameter other than the swept ${sweepLabel(sweep)}.`
+  if (!Array.isArray(family.values) || !family.values.length || !family.values.every((value) => typeof value === 'number' && Number.isFinite(value))) {
+    return `The curves need a value of ${sweepLabel(family)} each.`
+  }
+  const curves = familyValues(family).length
+  if (curves > MAX_FAMILY_VALUES) return `The curves can take up to ${MAX_FAMILY_VALUES} values of ${sweepLabel(family)}.`
+  if (curves * points > MAX_SWEEP_RUNS) return `${curves} curves of ${points} points are ${curves * points} runs: the sweep can run up to ${MAX_SWEEP_RUNS}.`
   return null
 }
 
@@ -133,28 +189,52 @@ export function sweepValues({ from, to, points }) {
 }
 
 /**
+ * Splits a family's results into a curve per value of its parameter, each over the sweep's values. A curve cut short,
+ * by a stop or a failure, has no value past the point it reached. The results' own variables are the first curve's, so
+ * what doesn't draw curves still reads one sweep.
+ *
+ * @param {Object} results - A sweep's, with a `family` from the engine: `{name, unit, values}`, its variables a curve
+ *   after another.
+ * @returns {Object} The results, `family.curves` being `[{value, variables}]`.
+ */
+export function splitFamily(results) {
+  if (!results?.family || results.family.curves) return results
+  const length = results.voi.values.length
+  const curves = results.family.values.map((value, i) => {
+    const variables = new Map()
+    for (const [name, series] of results.variables) {
+      const values = series.values.subarray(i * length, (i + 1) * length)
+      variables.set(name, { ...series, values: values.length === length ? values : Array.from({ length }, (_, j) => (j < values.length ? values[j] : null)) })
+    }
+    return { value, variables }
+  })
+  return { ...results, variables: curves[0]?.variables ?? results.variables, family: { ...results.family, curves } }
+}
+
+/**
  * Finds the variable libOpenCOR reports a sweep's parameter under, which a run can change.
  *
  * @param {Object} options
- * @param {Object} options.sweep
+ * @param {Object} options.sweep - The sweep, or its family.
+ * @param {string} [options.role] - What it varies, for messages: 'swept' or, for a family, 'varied across curves'.
  * @param {Array<Object>} options.nodes - The scope's nodes.
  * @param {Map<string, string>} options.mapping - `nodeId::name` to the name libOpenCOR reports.
  * @param {Map<string, {kind: string}>} options.variables - The model's variables, with their kinds.
  * @returns {{component: string, variable: string}|{problem: string}}
  */
-export function resolveSweepTarget({ sweep, nodes, mapping, variables }) {
+export function resolveSweepTarget({ sweep, role = 'swept', nodes, mapping, variables }) {
   const label = sweepLabel(sweep)
   // A global constant is one variable however many instances use it, so any of them names it.
   const node =
     sweep.type === 'global_constant'
       ? nodes.find((candidate) => candidate.data?.variables?.some((row) => row.name === sweep.parameterName && row.type === 'global_constant'))
       : nodes.find((candidate) => candidate.id === sweep.nodeId)
-  if (!node) return { problem: `${label} isn’t in the simulated instances, so it can’t be swept.` }
+  if (!node) return { problem: `${label} isn’t in the simulated instances, so it can’t be ${role}.` }
 
   const reported = mapping.get(mappingKey(node.id, sweep.parameterName))
-  if (!reported) return { problem: `${label} isn’t in the model, so it can’t be swept.` }
+  if (!reported) return { problem: `${label} isn’t in the model, so it can’t be ${role}.` }
   if (variables.get(reported)?.kind !== 'constant') {
-    return { problem: `${label} is computed by the model, or supplied through a connection, so it can’t be swept. Sweep a parameter instead.` }
+    return { problem: `${label} is computed by the model, or supplied through a connection, so it can’t be ${role}. ${role === 'swept' ? 'Sweep' : 'Choose'} a parameter instead.` }
   }
   const separator = reported.indexOf('/')
   return { component: reported.slice(0, separator), variable: reported.slice(separator + 1) }

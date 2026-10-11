@@ -16,7 +16,7 @@ import {
 import { NO_CLOCK, addProtocolClock, addProtocolDrivers } from '../services/simulation/protocolDriverModel'
 import { listFeatureOperands, resolveFeatureOperands } from '../services/simulation/protocolFeatures'
 import { clampSolverSettings, prepareProtocolRun } from '../services/simulation/protocolRun'
-import { findSweepProblem, resolveSweepTarget, sweepLabel, sweepReadout, sweepValues } from '../services/simulation/sweep'
+import { familyValues, findSweepProblem, resolveSweepTarget, splitFamily, sweepLabel, sweepReadout, sweepValues } from '../services/simulation/sweep'
 import { buildVariableMapping, mapInspectionModules } from '../services/simulation/variableMapping'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
 import { useLibraryStore } from '../stores/libraryStore'
@@ -60,6 +60,18 @@ export const isRerunningKeptModel = () => !!currentRun && isCurrentRunKept
  * @returns {number}
  */
 export const getRunToken = () => runToken
+
+/**
+ * Names a sweep's results as the variable search names its parameters, and splits a family's into its curves.
+ *
+ * @param {Object} results - A sweep's, finished or cut short.
+ * @param {Object} sweep - The sweep it ran (simulationSettings.sweep).
+ * @returns {Object}
+ */
+function labelSweepResults(results, sweep) {
+  const labelled = { ...results, sweepLabel: sweepLabel(sweep) }
+  return results.family && sweep.family ? splitFamily({ ...labelled, familyLabel: sweepLabel(sweep.family) }) : labelled
+}
 
 /** Forgets the model the worker keeps, so the next run flattens afresh. For a workspace cleared or replaced. */
 export function forgetSimulationSession() {
@@ -165,10 +177,19 @@ export function useSimulation() {
       if (!isSweepRun) return null
       const problem = findSweepProblem(settings.sweep)
       if (problem) throw new SimulationError(problem)
-      const target = resolveSweepTarget({ sweep: settings.sweep, nodes: scope.nodes, mapping: source.mapping, variables: source.variables })
+      const found = { nodes: scope.nodes, mapping: source.mapping, variables: source.variables }
+      const target = resolveSweepTarget({ sweep: settings.sweep, ...found })
       if (target.problem) throw new SimulationError(target.problem)
-      // A model without ODEs has no time course to read.
-      return { ...target, values: sweepValues(settings.sweep), ...(!source.isSteadyState && { readout: sweepReadout(settings.sweep) }) }
+      const { family } = settings.sweep
+      const familyTarget = family && resolveSweepTarget({ sweep: family, role: 'varied across curves', ...found })
+      if (familyTarget?.problem) throw new SimulationError(familyTarget.problem)
+      return {
+        ...target,
+        values: sweepValues(settings.sweep),
+        // A model without ODEs has no time course to read.
+        ...(!source.isSteadyState && { readout: sweepReadout(settings.sweep) }),
+        ...(familyTarget && { family: { ...familyTarget, values: familyValues(family) } }),
+      }
     }
 
     // Reusing the kept model, if its scope and everything it was flattened from are unchanged.
@@ -274,12 +295,12 @@ export function useSimulation() {
           if (token !== runToken) return
         }
       }
-      if (results.isSweep) results = { ...results, sweepLabel: sweepLabel(settings.sweep) }
+      if (results.isSweep) results = labelSweepResults(results, settings.sweep)
       store.finishRun({ results, mapping: mapped.mapping, signature, inspectionOutputs: mapped.inspectionOutputs, inputs: { settings, overrides } })
     } catch (error) {
       if (token === runToken) {
         const source = changes ? kept : built
-        const partialResults = error.partialResults?.isSweep ? { ...error.partialResults, sweepLabel: sweepLabel(settings.sweep) } : error.partialResults
+        const partialResults = error.partialResults?.isSweep ? labelSweepResults(error.partialResults, settings.sweep) : error.partialResults
         const partial = partialResults && source && (await mapPartialResults(source, scope, partialResults))
         if (token === runToken) store.failRun('error', { message: error.message, issues: error.issues ?? [] }, partial)
       }
