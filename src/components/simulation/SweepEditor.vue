@@ -134,7 +134,7 @@
     <div v-if="isAdding" ref="pickerEl" class="sweep-picker">
       <VariablePathPicker
         :index="index"
-        :filter="(entry) => isSweepableEntry(entry, { unsupplied, variables: resultsStore.results?.variables, sweep })"
+        :filter="(entry) => isSweepableEntry(entry, { unsupplied, ignored, variables: resultsStore.results?.variables, sweep })"
         :describe="describeSweepable"
         :placeholder="pickingFor === 'family' ? 'Vary a parameter across curves…' : sweep ? 'Sweep another parameter…' : 'Sweep a parameter…'"
         :aria-label="pickingFor === 'family' ? 'Choose a parameter for the curves' : 'Choose a parameter to sweep'"
@@ -243,7 +243,9 @@ const index = computed(() =>
   isAdding.value ? buildVariableIndex(props.nodes, { scopeNodeIds: resultsStore.scopeNodeIds, mapping: resultsStore.mapping }) : []
 )
 // The boundary conditions nothing connected supplies, whose own values a sweep can vary.
-const unsupplied = computed(() => (isAdding.value ? resolveBoundaryValues(props.nodes, edges.value).unsupplied : new Set()))
+const boundaryValues = computed(() => (isAdding.value ? resolveBoundaryValues(props.nodes, edges.value) : null))
+const unsupplied = computed(() => boundaryValues.value?.unsupplied ?? new Set())
+const ignored = computed(() => boundaryValues.value?.ignored ?? new Map())
 
 /**
  * Notes whether a parameter was in the last run, and what the model makes the same as it.

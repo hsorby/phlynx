@@ -30,6 +30,12 @@ describe('isSweepableRow', () => {
     expect(isSweepableRow(row, 'n1', new Set(['n1::V']))).toBe(true)
     expect(isSweepableRow(row, 'n1', new Set())).toBe(false)
   })
+
+  it("doesn't sweep a value a connection supplies instead", () => {
+    const ignored = new Map([['n1', new Set(['k'])]])
+    expect(isSweepableRow({ name: 'k', type: 'constant' }, 'n1', new Set(), ignored)).toBe(false)
+    expect(isSweepableRow({ name: 'k', type: 'constant' }, 'n2', new Set(), ignored)).toBe(true)
+  })
 })
 
 describe('isSweepableEntry', () => {

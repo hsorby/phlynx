@@ -149,9 +149,10 @@ function resolveWholeBoundaryValues(scope) {
 }
 
 /**
- * Checks a scope before it is flattened. Missing values, conflicts and incomplete nodes stop the build;
- * lost Sum terms, trimmed inspection modules, boundary conditions falling back to their own value and
- * boundary conditions set to 0 for want of one are warnings, since the scope still builds.
+ * Checks a scope before it is flattened. Missing values, conflicts, incomplete nodes and boundary conditions
+ * coupled only to each other in the whole model stop the build; lost Sum terms, trimmed inspection modules,
+ * boundary conditions falling back to their own value and boundary conditions set to 0 for want of one are
+ * warnings, since the scope still builds.
  *
  * @param {ReturnType<typeof resolveScope>} scope
  * @param {Object} libraryStore - Provides availableMath and getGlobalConstant(name).
@@ -183,6 +184,14 @@ export function checkScope(scope, libraryStore) {
     const scoped = resolveBoundaryValues(scope.nodes, scope.internalEdges)
     conflicts = [...scoped.conflicts, ...findCouplingConflicts(scope)]
     const whole = resolveWholeBoundaryValues(scope)
+
+    // Boundary conditions coupled only to each other in the whole model, which export rejects too.
+    const wholeBcOnly = new Set((whole?.bcOnly ?? []).flatMap(({ keys }) => keys))
+    for (const { keys, label } of scoped.bcOnly) {
+      if (keys.every((key) => wholeBcOnly.has(key))) {
+        errors.push(`Boundary conditions connected only to each other, so nothing computes them: ${label}.`)
+      }
+    }
 
     for (const node of scope.nodes) {
       const nodeName = node.data?.name ?? node.id
@@ -283,7 +292,9 @@ export function applyParameterOverrides(scope, libraryStore, { rows = new Map(),
 export function buildScopedModel(scope, libraryStore, options = {}) {
   if (!scope.nodes.length) throw new Error('Select at least one instance to simulate.')
   const nodes = zeroUnsuppliedBoundaries(scope.nodes, scope.internalEdges)
-  return generateFlattenedModel(nodes, scope.internalEdges, libraryStore, scope.inspectionModules, options)
+  // Boundary conditions the cut leaves coupled only to each other use their own value; checkScope stops those
+  // coupled so in the whole model.
+  return generateFlattenedModel(nodes, scope.internalEdges, libraryStore, scope.inspectionModules, { allowBcOnly: true, ...options })
 }
 
 /**
