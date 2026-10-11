@@ -5,7 +5,7 @@ import {
   PHLYNX_PROJECT_VERSION,
   PHLYNX_PROJECT_IDENTIFIER,
 } from '../utils/constants'
-import { normalisePorts, normaliseVariables } from '../utils/config'
+import { normalisePorts, normaliseVariables, parseMathRef } from '../utils/config'
 import { buildGhostHandles, findMostCentralGhostHandle } from '../utils/handles'
 import { isBlank, isNumericLiteral } from '../utils/variables'
 import { analyzeMathXml } from './math/analyzeMath'
@@ -63,13 +63,16 @@ function convertPorts(oldData) {
   }))
 }
 
-function convertHandles(oldData, uidMap) {
+// Legacy port uids are only unique within a node: a copied node keeps its original's.
+const portKey = (nodeId, uid) => `${nodeId}:${uid}`
+
+function convertHandles(oldNodeId, oldData, uidMap) {
   const migratedHandles = buildGhostHandles()
   for (const port of oldData.ports) {
     const oldUid = port.uid
     const centralGhost = findMostCentralGhostHandle(port.side, migratedHandles)
     if (!centralGhost) return
-    uidMap[oldUid] = centralGhost.uid
+    uidMap[portKey(oldNodeId, oldUid)] = centralGhost.uid
     const handle = migratedHandles.find((h) => h.uid === centralGhost.uid)
     if (handle) {
       handle.variant = HANDLE_VARIANT.DEFAULT
@@ -79,7 +82,7 @@ function convertHandles(oldData, uidMap) {
   return migratedHandles
 }
 
-function convertNode(node, newId, globalConstantNames, paramLookup, uidMap) {
+function convertNode(node, newId, globalConstantNames, paramLookup, uidMap, moduleRefByConfig) {
   const oldData = node.data || {}
   const nodeName = oldData.name
 
@@ -91,10 +94,12 @@ function convertNode(node, newId, globalConstantNames, paramLookup, uidMap) {
   const newData = {
     name: nodeName,
     mathRef: `${sourceFile}:${componentName}`,
-    moduleRef: `${moduleType}:${bcType}`,
+    // Legacy nodes don't keep their module's type, so it is found from the config they were made from.
+    moduleRef:
+      moduleRefByConfig.get(legacyConfigKey(sourceFile, componentName, oldData.configIndex)) ?? `${moduleType}:${bcType}`,
     variables: mergeVariables(oldData, nodeName, globalConstantNames, paramLookup),
     ports: convertPorts(oldData),
-    handles: convertHandles(oldData, uidMap),
+    handles: convertHandles(node.id, oldData, uidMap),
   }
   // The MVP's node colour category; the colour theme now maps it to a colour.
   if (oldData.domainType) newData.domainType = oldData.domainType
@@ -134,7 +139,7 @@ function convertEdge(edge, idMap, uidMap) {
     newTarget = newTarget || oldTarget
   }
 
-  function remapHandle(h, label) {
+  function remapHandle(h, label, oldNodeId) {
     if (!h) return null
     let oldUid = h
     if (!h.startsWith('port_')) {
@@ -143,7 +148,7 @@ function convertEdge(edge, idMap, uidMap) {
       oldUid = h.slice(5)
     }
 
-    let newUid = uidMap[oldUid]
+    let newUid = uidMap[portKey(oldNodeId, oldUid)]
     if (!newUid) {
       console.warn(
         `Edge '${edge.id}': ${label} uid '${oldUid}' not found among converted node handles; keeping original uid.`
@@ -164,8 +169,8 @@ function convertEdge(edge, idMap, uidMap) {
     type: edge.type,
     source: newSource,
     target: newTarget,
-    sourceHandle: remapHandle(edge.sourceHandle, 'sourceHandle'),
-    targetHandle: remapHandle(edge.targetHandle, 'targetHandle'),
+    sourceHandle: remapHandle(edge.sourceHandle, 'sourceHandle', oldSource),
+    targetHandle: remapHandle(edge.targetHandle, 'targetHandle', oldTarget),
     data: { couplings: newCouplings },
     label: edge.label || '',
     markerEnd: edge.markerEnd,
@@ -250,22 +255,55 @@ function extractComponentsToMathRefs(availableModules) {
   return newAvailableMath
 }
 
+// Names a legacy module's config by the module it belongs to and its place among that module's configs.
+const legacyConfigKey = (sourceFile, componentName, configIndex) => `${sourceFile}:${componentName}#${configIndex}`
+
+/**
+ * Gives a legacy module a ref no other math holds. MVP user modules all kept the template's
+ * `new_module:phlynx`, and a user copy of a library module kept the library's ref.
+ *
+ * @param {string} moduleRef - The ref the legacy config names.
+ * @param {string} mathRef - The math the module uses.
+ * @param {Object} modulesByRef - Modules taken so far, by moduleRef.
+ * @returns {string} The legacy ref when it is free or names the same math, else `<component>:default`.
+ */
+function uniqueModuleRef(moduleRef, mathRef, modulesByRef) {
+  const isFree = (ref) => !modulesByRef[ref] || modulesByRef[ref].mathRef === mathRef
+  if (isFree(moduleRef)) return moduleRef
+
+  // As libraryStore.createModuleForMath names a module made for new math.
+  const base = `${parseMathRef(mathRef).componentName}:default`
+  let ref = base
+  for (let i = 2; !isFree(ref); i++) ref = `${base}_${i}`
+  return ref
+}
+
+/**
+ * Turns the configs of legacy modules into library modules.
+ *
+ * @param {Array} availableModules - The legacy store's module collections.
+ * @returns {{ modules: Object, moduleRefByConfig: Map<string, string> }} The modules by moduleRef,
+ *   and the moduleRef made for each config, keyed `<sourceFile>:<componentName>#<configIndex>`.
+ */
 function extractModulesToModuleRefs(availableModules) {
   const newAvailableModules = {}
-  if (!availableModules) return newAvailableModules
+  const moduleRefByConfig = new Map()
+  if (!availableModules) return { modules: newAvailableModules, moduleRefByConfig }
 
   for (const collection of availableModules) {
     const modulesList = collection.modules
     for (const modules of modulesList) {
       if (!modules.configs) continue
-      modules.configs.forEach((config) => {
+      modules.configs.forEach((config, configIndex) => {
         const moduleType = config.vessel_type
         const moduleSubtype = config.BC_type
         const componentFile = config.module_file
         const componentName = config.module_type
 
-        const moduleRef = `${moduleType}:${moduleSubtype}`
         const mathRef = `${componentFile}:${componentName}`
+        const moduleRef = uniqueModuleRef(`${moduleType}:${moduleSubtype}`, mathRef, newAvailableModules)
+        moduleRefByConfig.set(legacyConfigKey(modules.sourceFile, modules.componentName, configIndex), moduleRef)
+        if (newAvailableModules[moduleRef]) return
 
         newAvailableModules[moduleRef] = {
           moduleRef,
@@ -276,10 +314,10 @@ function extractModulesToModuleRefs(availableModules) {
       })
     }
   }
-  return newAvailableModules
+  return { modules: newAvailableModules, moduleRefByConfig }
 }
 
-function convertStore(oldStore, globalConstantNames) {
+function convertStore(oldStore, globalConstantNames, newAvailableModules) {
   const availableParameters = oldStore.availableParameters || []
 
   const newUnits = oldStore.availableUnits.map((u) => ({
@@ -288,7 +326,6 @@ function convertStore(oldStore, globalConstantNames) {
   }))
 
   const newAvailableMath = extractComponentsToMathRefs(oldStore.availableModules)
-  const newAvailableModules = extractModulesToModuleRefs(oldStore.availableModules)
 
   const newAvailableCollections = {}
   Object.values(newAvailableModules).forEach((mod) => {
@@ -572,7 +609,10 @@ function migrateLegacyTo1_0_0(doc) {
 
   const uidMap = {}
 
-  const newNodes = oldNodes.map((n) => convertNode(n, idMap[n.id], globalConstantNames, paramLookup, uidMap))
+  const { modules, moduleRefByConfig } = extractModulesToModuleRefs(oldStore.availableModules)
+  const newNodes = oldNodes.map((n) =>
+    convertNode(n, idMap[n.id], globalConstantNames, paramLookup, uidMap, moduleRefByConfig)
+  )
 
   const newEdges = oldEdges.map((e) => convertEdge(e, idMap, uidMap))
 
@@ -588,7 +628,7 @@ function migrateLegacyTo1_0_0(doc) {
     id: PHLYNX_PROJECT_IDENTIFIER,
     version: '1.0.0',
     flow: newFlow,
-    store: convertStore(oldStore, globalConstantNames),
+    store: convertStore(oldStore, globalConstantNames, modules),
     simulation: {
       simulationSettings: { ...SETTINGS_FOR_FILES_WITHOUT_ANY },
       plotConfig: {},
