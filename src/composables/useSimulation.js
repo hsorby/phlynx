@@ -214,7 +214,7 @@ export function useSimulation() {
         }
       }
       if (results.isSweep) results = { ...results, sweepLabel: sweepLabel(settings.sweep) }
-      store.finishRun({ results, mapping: mapped.mapping, signature, inspectionOutputs: mapped.inspectionOutputs })
+      store.finishRun({ results, mapping: mapped.mapping, signature, inspectionOutputs: mapped.inspectionOutputs, inputs: { settings, overrides } })
     } catch (error) {
       if (token === runToken) {
         const source = changes ? kept : built
