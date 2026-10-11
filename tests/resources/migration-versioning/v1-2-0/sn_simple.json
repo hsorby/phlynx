@@ -44697,7 +44697,31 @@
       "solver": "CVODE",
       "timeStep": 0,
       "tolerance": 1e-7,
-      "maxSteps": 500
+      "maxSteps": 500,
+      "sweep": {
+        "key": "dndnode_0::Ko",
+        "nodeId": "dndnode_0",
+        "nodeName": "soma_SN",
+        "parameterName": "Ko",
+        "units": "millimolar",
+        "type": "constant",
+        "from": 2.25,
+        "to": 6.75,
+        "points": 21,
+        "readout": "min",
+        "family": {
+          "key": "dndnode_0::Nao",
+          "nodeId": "dndnode_0",
+          "nodeName": "soma_SN",
+          "parameterName": "Nao",
+          "units": "millimolar",
+          "type": "constant",
+          "values": [
+            145,
+            72.5
+          ]
+        }
+      }
     },
     "plotConfig": {},
     "parameterScanConfig": {}

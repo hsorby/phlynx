@@ -18,11 +18,11 @@
   >
     <div class="results-toolbar">
       <p class="results-summary">{{ summary }}</p>
-      <!-- As the toolbar's protocol button does, switching runs at once. -->
+      <!-- As the toolbar's protocol and sweep buttons do, switching runs at once. -->
       <SelectButton
-        v-if="protocolStore.hasProtocol || protocolStore.source?.parseError"
-        :model-value="protocolStore.isProtocolMode"
-        :options="RUN_MODES"
+        v-if="runModes.length > 1"
+        :model-value="runMode"
+        :options="runModes"
         option-label="label"
         option-value="value"
         :allow-empty="false"
@@ -134,6 +134,8 @@ import SimulationPlot from './SimulationPlot.vue'
 import { useProtocolSedmlExport } from '../../composables/useProtocolSedmlExport'
 import { buildResultsCsv, collectResultColumns, composeChartsImage } from '../../services/simulation/resultsExport'
 import { useProtocolStore } from '../../stores/protocolStore'
+import { useSimulationResultsStore } from '../../stores/simulationResultsStore'
+import { useSimulationSettingsStore } from '../../stores/simulationSettingsStore'
 import { legacyDownload } from '../../utils/save'
 
 const FILE_NAME = 'simulation-results'
@@ -157,18 +159,24 @@ const emit = defineEmits(['change', 'play'])
 const protocolStore = useProtocolStore()
 // Disabled, with why, while PhLynx can't plan the run.
 const { reason: sedmlReason, canExport: canExportSedml, isExporting: isExportingSedml, exportZip: exportSedml } = useProtocolSedmlExport()
-const RUN_MODES = [
-  { label: 'Time course', value: false },
-  { label: 'Protocol', value: true },
-]
+const resultsStore = useSimulationResultsStore()
+const settingsStore = useSimulationSettingsStore()
+// What play can run: the time course, and the protocol or the sweep when the workspace has one.
+const runModes = computed(() => [
+  { label: 'Time course', value: 'run' },
+  ...(protocolStore.hasProtocol || protocolStore.source?.parseError ? [{ label: 'Protocol', value: 'protocol' }] : []),
+  ...(settingsStore.simulationSettings.sweep ? [{ label: 'Sweep', value: 'sweep' }] : []),
+])
+const runMode = computed(() => (protocolStore.isProtocolMode ? 'protocol' : resultsStore.isSweepMode ? 'sweep' : 'run'))
 
 /**
- * Switches play between the time course and the protocol, and runs it.
+ * Switches what play runs, one mode at a time, and runs it.
  *
- * @param {boolean} isProtocolMode
+ * @param {'run'|'protocol'|'sweep'} mode
  */
-function switchRunMode(isProtocolMode) {
-  protocolStore.isProtocolMode = isProtocolMode
+function switchRunMode(mode) {
+  protocolStore.isProtocolMode = mode === 'protocol'
+  resultsStore.isSweepMode = mode === 'sweep'
   emit('play')
 }
 

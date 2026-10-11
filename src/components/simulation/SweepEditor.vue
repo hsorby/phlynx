@@ -1,6 +1,10 @@
 <template>
   <section class="sweep-editor" aria-label="Parameter sweep">
-    <p class="sweep-hint">For a model without differential equations: solve it at each value of one parameter, and plot against it.</p>
+    <p class="sweep-hint">
+      Run the model at each value of one parameter, and plot against it: solved once each, or with differential equations, a
+      time course each, read as chosen below. Play runs it with the toolbar’s Sweep on. To step from a holding value and read
+      the peak, use a protocol.
+    </p>
 
     <div v-if="sweep" class="sweep-card" data-testid="sim-sweep-parameter">
       <div class="sweep-head">
@@ -61,12 +65,66 @@
           />
         </div>
       </div>
+      <div v-if="sweep.family" class="sweep-family" data-testid="sim-sweep-family">
+        <div class="sweep-head">
+          <span class="sweep-label" :title="familyLabel">
+            <span class="sweep-hint-inline">A curve for each value of </span><span class="sweep-component">{{ sweep.family.nodeName }}/</span
+            ><span class="sweep-name">{{ sweep.family.parameterName }}</span>
+          </span>
+          <span v-if="sweep.family.units" class="sweep-units">{{ sweep.family.units }}</span>
+          <Button
+            icon="pi pi-ellipsis-h"
+            text
+            rounded
+            size="small"
+            severity="secondary"
+            :aria-label="`More for the ${sweep.family.parameterName} curves`"
+            aria-haspopup="true"
+            @click="(event) => familyMenu.toggle(event)"
+          />
+        </div>
+        <div class="sweep-field">
+          <label :for="`${id}-family-values`">Values <span class="sweep-hint-inline">separated by commas</span></label>
+          <InputText
+            v-model="familyText"
+            :id="`${id}-family-values`"
+            data-testid="sim-sweep-family-values"
+            :invalid="!!familyError"
+            size="small"
+            fluid
+            @change="commitFamilyValues"
+            @keydown.enter="commitFamilyValues"
+          />
+          <small v-if="familyError" class="sweep-error" role="alert">{{ familyError }}</small>
+        </div>
+      </div>
+      <div class="sweep-field">
+        <label :id="`${id}-readout`">Reading <span class="sweep-hint-inline">of each time course, between Start and End</span></label>
+        <SelectButton
+          :model-value="readout"
+          :options="READOUTS"
+          option-label="label"
+          option-value="id"
+          :allow-empty="false"
+          size="small"
+          :aria-labelledby="`${id}-readout`"
+          data-testid="sim-sweep-readout"
+          @update:model-value="(value) => update({ readout: value })"
+        >
+          <template #option="{ option }"><span :title="option.description">{{ option.label }}</span></template>
+        </SelectButton>
+      </div>
+      <p v-if="cost" class="sweep-hint" data-testid="sim-sweep-cost">{{ cost }}</p>
       <Message v-if="problem" severity="warn" size="small">{{ problem }}</Message>
-      <Message v-else-if="hasTimeCourse" severity="secondary" size="small" data-testid="sim-sweep-ode-note">
-        The last run had differential equations, so it ran its time course instead. Sweeps are for models without them.
+      <Message v-else-if="isLong" severity="warn" size="small" data-testid="sim-sweep-long">
+        That’s a lot of time courses: fewer points, or a larger point interval, make the sweep quicker.
       </Message>
-      <Message v-else severity="secondary" size="small">
-        Web OpenCOR can’t run sweeps, so an export solves the model once, at the parameter’s own value.
+      <Message v-if="hasHiddenTransient" severity="secondary" size="small" data-testid="sim-sweep-transient">
+        Each time course starts at the initial time, before the plots’ Start, so a {{ readoutLabel }} in the first moments
+        isn’t read. To read the peak after a step from a holding value, use a protocol.
+      </Message>
+      <Message v-if="!problem" severity="secondary" size="small">
+        Web OpenCOR can’t run sweeps, so an export solves or simulates the model once, at the parameter’s own value.
       </Message>
     </div>
 
@@ -78,8 +136,8 @@
         :index="index"
         :filter="(entry) => isSweepableEntry(entry, { unsupplied, variables: resultsStore.results?.variables, sweep })"
         :describe="describeSweepable"
-        :placeholder="sweep ? 'Sweep another parameter…' : 'Sweep a parameter…'"
-        aria-label="Choose a parameter to sweep"
+        :placeholder="pickingFor === 'family' ? 'Vary a parameter across curves…' : sweep ? 'Sweep another parameter…' : 'Sweep a parameter…'"
+        :aria-label="pickingFor === 'family' ? 'Choose a parameter for the curves' : 'Choose a parameter to sweep'"
         @pick="sweepEntry"
       />
       <Button
@@ -95,29 +153,35 @@
     <Button v-else-if="!sweep" label="Sweep a parameter" icon="pi pi-plus" text size="small" class="sweep-add-button" @click="startAdding" />
 
     <Menu ref="menu" :model="menuItems" popup />
+    <Menu ref="familyMenu" :model="familyMenuItems" popup />
   </section>
 </template>
 
 <script setup>
 /**
  * The parameter sweep: one at a time, added from a search over the parameters a run can vary, with the
- * range it is solved over. Used by the Simulation tab, which saves each change, and by Simulation Settings,
+ * range it is solved over, what it reads from each time course, and perhaps a second parameter, a curve for each of
+ * its values. Used by the Simulation tab, which saves each change, and by Simulation Settings,
  * which keeps it as a draft.
  */
-import { computed, nextTick, ref, useId } from 'vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 
 import Button from 'primevue/button'
 import InputNumber from 'primevue/inputnumber'
 import Menu from 'primevue/menu'
+import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
+import SelectButton from 'primevue/selectbutton'
 
 import VariablePathPicker from './VariablePathPicker.vue'
 import { resolveBoundaryValues } from '../../services/export/boundaryValues'
-import { createSweep, findSweepProblem, isSweepableEntry, MAX_SWEEP_POINTS, sweepLabel } from '../../services/simulation/sweep'
+import { createFamily, createSweep, familyValues, findSweepProblem, isSweepableEntry, MAX_SWEEP_POINTS, sweepLabel, sweepReadout } from '../../services/simulation/sweep'
+import { READOUTS } from '../../services/simulation/sweepReadouts'
 import { buildVariableIndex } from '../../services/simulation/variableIndex'
 import { useLibraryStore } from '../../stores/libraryStore'
 import { useSimulationResultsStore } from '../../stores/simulationResultsStore'
+import { useSimulationSettingsStore } from '../../stores/simulationSettingsStore'
 import { FLOW_IDS } from '../../utils/constants'
 
 const props = defineProps({
@@ -133,16 +197,46 @@ const { edges } = useVueFlow(FLOW_IDS.MAIN)
 const id = useId()
 
 const label = computed(() => (sweep.value ? sweepLabel(sweep.value) : ''))
+const familyLabel = computed(() => (sweep.value?.family ? sweepLabel(sweep.value.family) : ''))
+// How many curves the family draws: one for a sweep without one.
+const curveCount = computed(() => (sweep.value?.family ? Math.max(1, familyValues(sweep.value.family).length) : 1))
 const problem = computed(() => (sweep.value ? findSweepProblem(sweep.value) : null))
-// The last run solved a time course, so it ignored the sweep.
-const hasTimeCourse = computed(() => {
+const settingsStore = useSimulationSettingsStore()
+
+const readout = computed(() => sweepReadout(sweep.value))
+const readoutLabel = computed(() => READOUTS.find(({ id }) => id === readout.value).label.toLowerCase())
+// The last run's model, once known: without ODEs, each value is solved once rather than run as a time course.
+const isSteadyState = computed(() => !!resultsStore.results?.isSteadyState)
+// Past this many time courses, the sweep says it will be slow.
+const LONG_SWEEP_RUNS = 200
+const isLong = computed(() => !isSteadyState.value && Number.isInteger(sweep.value?.points) && sweep.value.points * curveCount.value > LONG_SWEEP_RUNS)
+
+// How many solves or time courses the sweep runs, and about how long they take, going by the last run's.
+const cost = computed(() => {
+  const points = sweep.value?.points
+  if (!Number.isInteger(points) || points < 2) return null
+  const total = points * curveCount.value
+  const count = curveCount.value > 1 ? `${points} × ${curveCount.value} = ${total}` : String(total)
+  const runs = `${count} ${isSteadyState.value ? 'solves' : 'time courses'}`
   const results = resultsStore.results
-  return !!results && !results.isSteadyState && !results.isSweep
+  const solves = results?.isSweep ? results.voi.values.length * (results.family?.values.length ?? 1) : 1
+  const perSolveMs = results && !results.isStopped && solves ? results.elapsedMs / solves : null
+  if (!perSolveMs || results.isSteadyState !== isSteadyState.value) return `${runs}.`
+  const seconds = (perSolveMs * total) / 1000
+  return `${runs}, ${seconds < 1 ? 'under a second' : `about ${seconds < 90 ? `${Math.round(seconds)} s` : `${Math.round(seconds / 60)} min`}`}.`
+})
+
+// A time course that starts before the plots do, to settle, can't be read in its first moments, where a peak may be.
+const hasHiddenTransient = computed(() => {
+  const { initialPoint, startingPoint } = settingsStore.simulationSettings
+  return !isSteadyState.value && readout.value !== 'end' && initialPoint < startingPoint
 })
 
 const pickerEl = ref(null)
-// The search opens from the Sweep a parameter button or the sweep's menu, never on its own.
+// The search opens from the Sweep a parameter button or a menu, never on its own.
 const isAdding = ref(false)
+// What a pick sets: the swept parameter, or the one its curves vary.
+const pickingFor = ref('sweep')
 
 // Given the last run's mapping, so the picker can leave out what that run computed (see isSweepableEntry).
 const index = computed(() =>
@@ -164,15 +258,21 @@ function describeSweepable(entry) {
   return notes.length ? notes.join(' · ') : null
 }
 
-/** Shows the sweep search and puts the cursor in it. */
-async function startAdding() {
+/**
+ * Shows the search and puts the cursor in it.
+ *
+ * @param {'sweep'|'family'} [target] - What the pick sets.
+ */
+async function startAdding(target = 'sweep') {
+  pickingFor.value = target
   isAdding.value = true
   await nextTick()
   pickerEl.value?.querySelector('input')?.focus()
 }
 
 /**
- * Sweeps a picked parameter, over a range around its value.
+ * Sweeps a picked parameter, over a range around its value, keeping the sweep's reading and curves; or varies it
+ * across the curves, from its own value.
  *
  * @param {Object} entry - From the variable index.
  */
@@ -180,22 +280,53 @@ function sweepEntry(entry) {
   const node = props.nodes.find((candidate) => candidate.id === entry.nodeId)
   const row = node?.data?.variables?.find((candidate) => candidate.name === entry.rowName)
   if (!node || !row) return
-  sweep.value = createSweep(node, row, libraryStore.getGlobalConstant)
+  if (pickingFor.value === 'family') update({ family: createFamily(node, row, libraryStore.getGlobalConstant) })
+  else {
+    const { readout: kept, family } = sweep.value ?? {}
+    sweep.value = { ...createSweep(node, row, libraryStore.getGlobalConstant), ...(kept && { readout: kept }), ...(family && { family }) }
+  }
   isAdding.value = false
 }
 
+// The curves' values as typed, until they read as numbers.
+const familyText = ref('')
+const familyError = ref(null)
+// Watched by content, as each save copies the values: a change elsewhere in the sweep keeps what is being typed.
+watch(
+  () => (sweep.value?.family?.values ?? []).join(', '),
+  (text) => {
+    familyText.value = text
+    familyError.value = null
+  },
+  { immediate: true }
+)
+
+/** Reads the typed values as the curves', or says which isn't a number, keeping the curves as they were. */
+function commitFamilyValues() {
+  const tokens = familyText.value.split(/[\s,;]+/).filter(Boolean)
+  const bad = tokens.find((token) => !Number.isFinite(Number(token)))
+  if (bad) {
+    familyError.value = `${bad} isn’t a number.`
+    return
+  }
+  familyError.value = null
+  const values = tokens.map(Number)
+  if (values.join() !== (sweep.value.family.values ?? []).join()) update({ family: { ...sweep.value.family, values } })
+}
+
 /**
- * Changes the sweep's range.
+ * Changes the sweep's range, its reading, or its curves.
  *
- * @param {{from?: number, to?: number, points?: number}} patch
+ * @param {{from?: number, to?: number, points?: number, readout?: string, family?: Object}} patch
  */
 function update(patch) {
   sweep.value = { ...sweep.value, ...patch }
 }
 
 const menu = ref(null)
-const menuItems = [
-  { label: 'Change parameter…', icon: 'pi pi-search', command: () => startAdding() },
+const menuItems = computed(() => [
+  { label: 'Change parameter…', icon: 'pi pi-search', command: () => startAdding('sweep') },
+  ...(sweep.value?.family ? [] : [{ label: 'Add a curve for each value of…', icon: 'pi pi-clone', command: () => startAdding('family') }]),
   { separator: true },
   {
     label: 'Stop sweeping',
@@ -203,6 +334,20 @@ const menuItems = [
     command: () => {
       sweep.value = null
       isAdding.value = false
+    },
+  },
+])
+
+const familyMenu = ref(null)
+const familyMenuItems = [
+  { label: 'Change parameter…', icon: 'pi pi-search', command: () => startAdding('family') },
+  { separator: true },
+  {
+    label: 'Draw one curve',
+    icon: 'pi pi-trash',
+    command: () => {
+      const { family: _family, ...rest } = sweep.value
+      sweep.value = rest
     },
   },
 ]
@@ -220,6 +365,23 @@ const menuItems = [
   margin: 0;
   font-size: 0.75rem;
   color: var(--p-text-muted-color);
+}
+
+.sweep-hint-inline {
+  font-weight: 400;
+}
+
+.sweep-family {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 8px;
+  border-left: 2px solid var(--p-content-border-color);
+}
+
+.sweep-error {
+  font-size: 0.75rem;
+  color: var(--p-red-500);
 }
 
 .sweep-card {

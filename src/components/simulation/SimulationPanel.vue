@@ -118,6 +118,7 @@ import { useSimulationCharts } from '../../composables/useSimulationCharts'
 import { useSelectionAutoRun } from '../../composables/useSelectionAutoRun'
 import { useSliderReruns } from '../../composables/useSliderReruns'
 import { libopencor } from '../../services/simulation/libopencorLoader'
+import { READOUTS } from '../../services/simulation/sweepReadouts'
 import { useSimulationResultsStore } from '../../stores/simulationResultsStore'
 import { useSimulationSettingsStore } from '../../stores/simulationSettingsStore'
 import { FLOW_IDS } from '../../utils/constants'
@@ -142,7 +143,8 @@ const selectedNodeIds = computed(() => getSelectedNodes.value.map((node) => node
 const scopeNodes = computed(() =>
   store.scopeNodeIds ? nodes.value.filter((node) => store.scopeNodeIds.includes(node.id)) : nodes.value
 )
-// Without ODEs there is no time course: the model is solved once, or once per value of a sweep.
+// Without ODEs there is no time course: the model is solved once, or once per value of a sweep. With them, a sweep runs
+// a time course per value, and reads each one.
 const isSteadyState = computed(() => !!store.results?.isSteadyState)
 const isSweep = computed(() => !!store.results?.isSweep)
 const scopeSummary = computed(() => {
@@ -156,20 +158,34 @@ const scopeSummary = computed(() => {
 const stoppedAt = computed(() => {
   const voi = store.results?.voi
   if (!voi?.values.length) return 'the start'
-  const value = `${voi.values.at(-1).toPrecision(4)} ${voi.unit}`.trim()
+  const format = (point, unit) => `${point.toPrecision(4)} ${unit}`.trim()
+  const family = store.results.family
+  if (isSweep.value && family?.curves?.length) {
+    // The last curve reached, as far as it got.
+    const last = family.curves.at(-1)
+    const first = last.variables.values().next().value?.values ?? []
+    const reached = Array.from(first).filter((point) => point != null).length
+    const at = reached ? `, ${store.results.sweepLabel} = ${format(voi.values[reached - 1], voi.unit)}` : ''
+    return `${store.results.familyLabel} = ${format(last.value, family.unit)}${at}`
+  }
+  const value = format(voi.values.at(-1), voi.unit)
   return isSweep.value ? `${store.results.sweepLabel} = ${value}` : value
 })
 
-// A solve that starts before the plots do, to let the model settle, says so.
+// A solve that starts before the plots do, to let the model settle, says so; a sweep plots against its parameter.
 const settleNote = computed(() => {
   const { initialPoint, startingPoint } = simulationSettingsStore.simulationSettings
-  return !isSteadyState.value && initialPoint < startingPoint ? ` from ${initialPoint} s, plotted from ${startingPoint} s` : ''
+  return !isSteadyState.value && !isSweep.value && initialPoint < startingPoint ? ` from ${initialPoint} s, plotted from ${startingPoint} s` : ''
 })
 const sweepNote = computed(() => {
   const values = store.results?.voi?.values
   if (!isSweep.value || !values?.length) return ''
   const unit = store.results.voi.unit ? ` ${store.results.voi.unit}` : ''
-  return ` at ${values.length} values of ${store.results.sweepLabel}, from ${values[0]} to ${values.at(-1)}${unit}`
+  const at = ` at ${values.length} values of ${store.results.sweepLabel}, from ${values[0]} to ${values.at(-1)}${unit}`
+  const curves = store.results.family?.values.length
+  const family = curves ? `${at}, a curve for each of ${curves} values of ${store.results.familyLabel}` : at
+  const readout = READOUTS.find(({ id }) => id === store.results.readout)
+  return readout ? `${family}, reading the ${readout.label.toLowerCase()} of each time course` : family
 })
 const resultsSummary = computed(() => {
   if (isSweep.value && store.status === 'done') return `${scopeSummary.value}${sweepNote.value}.`

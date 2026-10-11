@@ -304,6 +304,72 @@ describe('startSimulation', () => {
   })
 
   /**
+   * Builds a fake model with an ODE whose c/x runs through 0, -k, 2k, k, then k/2, k being its swept constant c/k.
+   *
+   * @returns {Object} As createFakeLibOpenCOR.
+   */
+  function createCourseSweepFake() {
+    const fake = createFakeLibOpenCOR()
+    const swept = () => Number(fake.model.changes.find((change) => change.variableName === 'k').newValue)
+    Object.assign(fake.task, {
+      state: () => Float64Array.from([0, -1, 2, 1, 0.5], (factor) => factor * swept()),
+      constantCount: 1,
+      constantName: () => 'c/k',
+      constantUnit: () => 'per_second',
+      constant: () => new Float64Array(5).fill(swept()),
+    })
+    return fake
+  }
+
+  it.each([
+    ['end', [0.5, 1, 1.5]],
+    ['min', [-1, -2, -3]],
+    ['max', [2, 4, 6]],
+    ['peak', [2, 4, 6]],
+  ])('sweeps a constant of a model with ODEs, reading the %s of a time course per value', async (readout, expected) => {
+    const fake = createCourseSweepFake()
+    const onProgress = vi.fn()
+
+    const session = createSimulationSession({ module: fake.loc, cellml: '<model/>' })
+    const sweep = { component: 'c', variable: 'k', values: [1, 2, 3], readout }
+    const result = await session.run({ settings: SETTINGS, sweep, onProgress }).promise
+    session.dispose()
+
+    expect(result).toMatchObject({ isSteadyState: false, isSweep: true, isStopped: false, readout })
+    expect(result.voi).toEqual({ name: 'c/k', unit: 'per_second', values: new Float64Array([1, 2, 3]) })
+    expect([...result.variables.get('c/x').values]).toEqual(expected)
+    // Each time course's progress counts for its share of the sweep.
+    expect(onProgress.mock.calls.map(([value]) => value)).toEqual(expect.arrayContaining([0.5 / 3, 1 / 3, 1]))
+    expect(fake.simulation).toMatchObject({ outputStartTime: SETTINGS.startingPoint, outputEndTime: SETTINGS.endingPoint })
+  })
+
+  it('reads a time course’s end when the sweep names no reading', async () => {
+    const fake = createCourseSweepFake()
+    const session = createSimulationSession({ module: fake.loc, cellml: '<model/>' })
+    const result = await session.run({ settings: SETTINGS, sweep: { component: 'c', variable: 'k', values: [2, 4] } }).promise
+    session.dispose()
+
+    expect(result.readout).toBe('end')
+    expect([...result.variables.get('c/x').values]).toEqual([1, 2])
+  })
+
+  it('keeps what a failed sweep of a model with ODEs read, naming the value it failed at', async () => {
+    const fake = createCourseSweepFake()
+    let runs = 0
+    Object.defineProperty(fake.instance, 'hasErrors', { get: () => runs >= 3 })
+    fake.instance.startRun = vi.fn(() => (runs++, true))
+    const session = createSimulationSession({ module: fake.loc, cellml: '<model/>' })
+    const sweep = { component: 'c', variable: 'k', values: [1, 2, 3], readout: 'min' }
+
+    const error = await session.run({ settings: SETTINGS, sweep }).promise.catch((caught) => caught)
+    session.dispose()
+
+    expect(error.message).toBe('The simulation failed at c/k = 3.')
+    expect(error.partialResults).toMatchObject({ isSweep: true, isSteadyState: false, readout: 'min' })
+    expect([...error.partialResults.variables.get('c/x').values]).toEqual([-1, -2])
+  })
+
+  /**
    * Builds a fake model without ODEs whose c/y is twice its swept constant c/a.
    *
    * @returns {Object} As createFakeLibOpenCOR.
@@ -322,6 +388,65 @@ describe('startSimulation', () => {
   }
 
   const SWEEP = { component: 'c', variable: 'a', values: [1, 2, 3] }
+
+  /**
+   * Builds a fake model without ODEs whose c/y is c/a plus ten times c/b, a sweep's family's parameter.
+   *
+   * @returns {Object} As createFakeLibOpenCOR.
+   */
+  function createFamilyFake() {
+    const fake = createFakeLibOpenCOR({ voiName: '', steadyState: true, stateCount: 0 })
+    fake.task.voi = new Float64Array()
+    const valueOf = (name) => Number(fake.model.changes.find((change) => change.variableName === name).newValue)
+    Object.assign(fake.task, {
+      constantCount: 2,
+      constantName: (i) => ['c/a', 'c/b'][i],
+      constantUnit: (i) => ['volt', 'mM'][i],
+      constant: (i) => new Float64Array([valueOf(['a', 'b'][i])]),
+      computedConstantCount: 1,
+      computedConstantName: () => 'c/y',
+      computedConstantUnit: () => 'metre',
+      computedConstant: () => new Float64Array([valueOf('a') + 10 * valueOf('b')]),
+    })
+    return fake
+  }
+
+  it('sweeps once per value of a family’s parameter, a curve after another', async () => {
+    const fake = createFamilyFake()
+    const onProgress = vi.fn()
+    const session = createSimulationSession({ module: fake.loc, cellml: '<model/>' })
+    const changes = [{ component: 'c', variable: 'b', value: 99 }, { component: 'c', variable: 'k', value: 1 }]
+    const sweep = { ...SWEEP, family: { component: 'c', variable: 'b', values: [1, 2] } }
+
+    const result = await session.run({ settings: SETTINGS, changes, sweep, onProgress }).promise
+    session.dispose()
+
+    expect(result).toMatchObject({ isSweep: true, isStopped: false })
+    expect(result.voi).toEqual({ name: 'c/a', unit: 'volt', values: new Float64Array([1, 2, 3]) })
+    expect(result.family).toEqual({ name: 'c/b', unit: 'mM', values: [1, 2] })
+    expect([...result.variables.get('c/y').values]).toEqual([11, 12, 13, 21, 22, 23])
+    // Both swept values replace a slider's, and the other changes stay.
+    expect(fake.model.changes.map((change) => [change.variableName, change.newValue])).toEqual([['k', '1'], ['b', '2'], ['a', '3']])
+    expect(onProgress.mock.calls.at(-1)[0]).toBe(1)
+    expect(onProgress.mock.calls[2][0]).toBe(0.5)
+  })
+
+  it('keeps the curves a failed family solved, naming both values it failed at', async () => {
+    const fake = createFamilyFake()
+    let runs = 0
+    Object.defineProperty(fake.instance, 'hasErrors', { get: () => runs >= 5 })
+    fake.instance.startRun = vi.fn(() => (runs++, true))
+    const session = createSimulationSession({ module: fake.loc, cellml: '<model/>' })
+    const sweep = { ...SWEEP, family: { component: 'c', variable: 'b', values: [1, 2] } }
+
+    const error = await session.run({ settings: SETTINGS, sweep }).promise.catch((caught) => caught)
+    session.dispose()
+
+    expect(error.message).toBe('The model could not be solved at c/b = 2, c/a = 2.')
+    expect([...error.partialResults.voi.values]).toEqual([1, 2, 3])
+    expect(error.partialResults.family.values).toEqual([1, 2])
+    expect([...error.partialResults.variables.get('c/y').values]).toEqual([11, 12, 13, 21])
+  })
 
   it('drops the point a sweep was stopped during, and reports it stopped', async () => {
     const fake = createSweepFake()

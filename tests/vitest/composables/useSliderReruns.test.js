@@ -96,4 +96,16 @@ describe('useSliderReruns', () => {
     await settle()
     expect(simulation.runs).toHaveLength(1)
   })
+
+  it('leaves a sweep of a model with ODEs out of date rather than rerunning its time courses', () => {
+    const { rerunForSliders } = useSliderReruns()
+    store.results = { isSweep: true, isSteadyState: false }
+    rerunForSliders()
+    expect(simulation.runs).toHaveLength(0)
+
+    // A sweep of a model without ODEs solves quickly, so it follows the slider.
+    store.results = { isSweep: true, isSteadyState: true }
+    rerunForSliders()
+    expect(simulation.runs).toHaveLength(1)
+  })
 })

@@ -7,7 +7,8 @@
           <template v-if="slider.label"><span class="slider-name">{{ slider.label }}</span></template>
           <template v-else><span class="slider-component">{{ slider.componentLabel }}/</span><span class="slider-name">{{ slider.parameterName }}</span></template>
         </span>
-        <span class="slider-value" :class="{ 'slider-value--changed': slider.isChanged && !protocolStore.areSlidersOff }">
+        <span v-if="slider.isSwept" class="slider-swept" title="The sweep sets this parameter at each of its values">swept</span>
+        <span v-else class="slider-value" :class="{ 'slider-value--changed': slider.isChanged && !protocolStore.areSlidersOff }">
           {{ formatValue(slider.value) }} {{ slider.units }}
         </span>
         <Button
@@ -29,9 +30,9 @@
         :step="slider.positionStep"
         :aria-label="`${slider.parameterName} value`"
         :aria-valuetext="`${formatValue(slider.value)} ${slider.units}`"
-        :disabled="protocolStore.areSlidersOff"
-        :tabindex="protocolStore.areSlidersOff ? -1 : 0"
-        :pt="{ handle: { 'aria-disabled': protocolStore.areSlidersOff } }"
+        :disabled="isOff(slider)"
+        :tabindex="isOff(slider) ? -1 : 0"
+        :pt="{ handle: { 'aria-disabled': isOff(slider) } }"
         class="slider-control"
         @update:model-value="(position) => setValue(slider, fromPosition(slider, position))"
       />
@@ -199,6 +200,29 @@ function inScope(definition) {
   return props.scopeNodeIds.includes(definition.nodeId)
 }
 
+/**
+ * Tells whether play sweeps a slider's parameter, or varies it across the sweep's curves: a global constant is one
+ * parameter, whichever instance named it.
+ *
+ * @param {Object} definition
+ * @returns {boolean}
+ */
+function isSwept(definition) {
+  const sweep = settingsStore.simulationSettings.sweep
+  if (!resultsStore.isSweepMode || protocolStore.isActive || !sweep) return false
+  const matches = (target) =>
+    target.type === 'global_constant' ? definition.type === 'global_constant' && definition.parameterName === target.parameterName : definition.key === target.key
+  return matches(sweep) || (!!sweep.family && matches(sweep.family))
+}
+
+/**
+ * Tells whether a slider can't be moved: while the protocol runs, or while the sweep sets its parameter.
+ *
+ * @param {{isSwept: boolean}} slider
+ * @returns {boolean}
+ */
+const isOff = (slider) => protocolStore.areSlidersOff || slider.isSwept
+
 // Each definition with its row, or none when the row is gone or can no longer slide.
 const resolved = computed(() =>
   definitions.value.map((definition) => {
@@ -240,6 +264,8 @@ const sliders = computed(() => {
       // Unchanged, a slider shows the model's value as runs use it.
       value: override ?? pickDefaultValue(row, libraryStore.getGlobalConstant),
       isChanged: override !== undefined,
+      // The sweep sets its parameter at each of its values, in place of the slider's.
+      isSwept: isSwept(definition),
     })
   }
   return [...byValue.values()].filter((slider) => slider.inScope)
@@ -354,7 +380,7 @@ const formatValue = (value) => (Number.isFinite(value) ? Number(value.toPrecisio
  */
 function setValue(slider, value) {
   // The handle still takes keys when disabled.
-  if (protocolStore.areSlidersOff || (value !== null && value === slider.value)) return
+  if (isOff(slider) || (value !== null && value === slider.value)) return
   resultsStore.setSliderValue(slider.valueKey, value)
   scheduleRerun()
 }
@@ -534,6 +560,13 @@ function openRange(slider) {
 .slider-value--changed {
   color: var(--p-primary-color);
   font-weight: 600;
+}
+
+.slider-swept {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--p-text-muted-color);
 }
 
 .slider-control {

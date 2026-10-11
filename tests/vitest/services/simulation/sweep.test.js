@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  createFamily,
   createSweep,
+  familyValues,
   findSweepProblem,
   isSweepableEntry,
   isSweepableRow,
+  MAX_FAMILY_VALUES,
   MAX_SWEEP_POINTS,
+  MAX_SWEEP_RUNS,
   resolveSweepTarget,
+  splitFamily,
   sweepLabel,
+  sweepReadout,
   sweepValues,
 } from '../../../../src/services/simulation/sweep.js'
 
@@ -33,6 +39,11 @@ describe('isSweepableEntry', () => {
   it('leaves out the parameter already swept', () => {
     expect(isSweepableEntry(entry(), { unsupplied, sweep: { key: 'n1::g', type: 'constant', parameterName: 'g' } })).toBe(false)
     expect(isSweepableEntry(entry(), { unsupplied, sweep: { key: 'n1::k', type: 'constant', parameterName: 'k' } })).toBe(true)
+  })
+
+  it('leaves out the parameter the sweep’s curves vary', () => {
+    const sweep = { key: 'n1::k', type: 'constant', parameterName: 'k', family: { key: 'n1::g', type: 'constant', parameterName: 'g' } }
+    expect(isSweepableEntry(entry(), { unsupplied, sweep })).toBe(false)
   })
 
   it('leaves out a global constant already swept, from whichever instance', () => {
@@ -81,6 +92,77 @@ describe('findSweepProblem', () => {
   ])('stops %j', (candidate, message) => {
     expect(findSweepProblem(candidate)).toMatch(message)
   })
+
+  describe('with curves', () => {
+    const family = { key: 'n1::Ko', nodeName: 'cell', parameterName: 'Ko', type: 'constant', values: [2, 5.4, 10] }
+    const swept = { ...sweep, key: 'n1::V', nodeName: 'cell', type: 'constant', family }
+
+    it('passes curves of another parameter, each at a value', () => {
+      expect(findSweepProblem(swept)).toBeNull()
+    })
+
+    it.each([
+      [{ ...family, parameterName: '' }, /choose a parameter for the curves/i],
+      [{ ...family, key: 'n1::V', parameterName: 'V' }, /other than the swept cell\/V/],
+      [{ ...family, values: [] }, /a value of cell\/Ko each/],
+      [{ ...family, values: [1, Number.NaN] }, /a value of cell\/Ko each/],
+      [{ ...family, values: Array.from({ length: MAX_FAMILY_VALUES + 1 }, (_, i) => i) }, /up to 8 values/],
+    ])('stops curves %j', (candidate, message) => {
+      expect(findSweepProblem({ ...swept, family: candidate })).toMatch(message)
+    })
+
+    it('stops more runs than a sweep can take', () => {
+      const values = Array.from({ length: MAX_FAMILY_VALUES }, (_, i) => i)
+      expect(findSweepProblem({ ...swept, points: MAX_SWEEP_POINTS, family: { ...family, values } })).toMatch(new RegExp(`up to ${MAX_SWEEP_RUNS}`))
+    })
+  })
+})
+
+describe('createFamily', () => {
+  it('varies a row from just its own value, which more join', () => {
+    const cell = node('n1', 'cell', [{ name: 'Ko', type: 'constant', units: 'mM', value: '5.4' }])
+    expect(createFamily(cell, cell.data.variables[0], () => null)).toEqual({
+      key: 'n1::Ko',
+      nodeId: 'n1',
+      nodeName: 'cell',
+      parameterName: 'Ko',
+      units: 'mM',
+      type: 'constant',
+      values: [5.4],
+    })
+  })
+
+  it('lists its values once each, from the least up', () => {
+    expect(familyValues({ values: [10, 2, 5.4, 2] })).toEqual([2, 5.4, 10])
+  })
+})
+
+describe('splitFamily', () => {
+  const results = (values, familyValues) => ({
+    voi: { name: 'c/a', unit: '', values: Float64Array.of(1, 2, 3) },
+    variables: new Map([['c/y', { kind: 'algebraic', unit: 'm', values: Float64Array.from(values) }]]),
+    family: { name: 'c/b', unit: 'mM', values: familyValues },
+  })
+
+  it('gives a curve per value of the family’s parameter, the first as the results’ own', () => {
+    const split = splitFamily(results([11, 12, 13, 21, 22, 23], [1, 2]))
+    expect(split.family.curves.map(({ value, variables }) => [value, [...variables.get('c/y').values]])).toEqual([
+      [1, [11, 12, 13]],
+      [2, [21, 22, 23]],
+    ])
+    expect([...split.variables.get('c/y').values]).toEqual([11, 12, 13])
+    expect(split.variables.get('c/y')).toMatchObject({ kind: 'algebraic', unit: 'm' })
+  })
+
+  it('leaves a curve cut short without values past the point it reached', () => {
+    const split = splitFamily(results([11, 12, 13, 21], [1, 2]))
+    expect(split.family.curves[1].variables.get('c/y').values).toEqual([21, null, null])
+  })
+
+  it('leaves a sweep without curves as it is', () => {
+    const plain = { voi: { values: new Float64Array() }, variables: new Map() }
+    expect(splitFamily(plain)).toBe(plain)
+  })
 })
 
 describe('sweepValues', () => {
@@ -122,8 +204,24 @@ describe('resolveSweepTarget', () => {
     })
   })
 
+  it('explains what a family’s curves can’t vary', () => {
+    const family = { nodeId: 'n1', nodeName: 'cell', parameterName: 'I', type: 'constant' }
+    expect(resolveSweepTarget({ sweep: family, role: 'varied across curves', nodes, mapping, variables }).problem).toMatch(
+      /so it can’t be varied across curves\. Choose a parameter instead/
+    )
+  })
+
   it('explains what can’t be swept', () => {
     expect(resolve({ nodeId: 'n1', nodeName: 'cell', parameterName: 'I', type: 'constant' }).problem).toMatch(/computed by the model/)
     expect(resolve({ nodeId: 'n2', nodeName: 'other', parameterName: 'V', type: 'constant' }).problem).toMatch(/isn’t in the simulated instances/)
+  })
+})
+
+describe('sweepReadout', () => {
+  it('reads the sweep’s own reading, or the end for one saved without a reading it knows', () => {
+    expect(sweepReadout({ readout: 'min' })).toBe('min')
+    expect(sweepReadout({})).toBe('end')
+    expect(sweepReadout({ readout: 'mean' })).toBe('end')
+    expect(sweepReadout(null)).toBe('end')
   })
 })

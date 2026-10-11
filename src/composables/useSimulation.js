@@ -16,7 +16,7 @@ import {
 import { NO_CLOCK, addProtocolClock, addProtocolDrivers } from '../services/simulation/protocolDriverModel'
 import { listFeatureOperands, resolveFeatureOperands } from '../services/simulation/protocolFeatures'
 import { clampSolverSettings, prepareProtocolRun } from '../services/simulation/protocolRun'
-import { findSweepProblem, resolveSweepTarget, sweepLabel, sweepValues } from '../services/simulation/sweep'
+import { familyValues, findSweepProblem, resolveSweepTarget, splitFamily, sweepLabel, sweepReadout, sweepValues } from '../services/simulation/sweep'
 import { buildVariableMapping, mapInspectionModules } from '../services/simulation/variableMapping'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
 import { useLibraryStore } from '../stores/libraryStore'
@@ -61,6 +61,18 @@ export const isRerunningKeptModel = () => !!currentRun && isCurrentRunKept
  */
 export const getRunToken = () => runToken
 
+/**
+ * Names a sweep's results as the variable search names its parameters, and splits a family's into its curves.
+ *
+ * @param {Object} results - A sweep's, finished or cut short.
+ * @param {Object} sweep - The sweep it ran (simulationSettings.sweep).
+ * @returns {Object}
+ */
+function labelSweepResults(results, sweep) {
+  const labelled = { ...results, sweepLabel: sweepLabel(sweep) }
+  return results.family && sweep.family ? splitFamily({ ...labelled, familyLabel: sweepLabel(sweep.family) }) : labelled
+}
+
 /** Forgets the model the worker keeps, so the next run flattens afresh. For a workspace cleared or replaced. */
 export function forgetSimulationSession() {
   session = null
@@ -89,7 +101,8 @@ export function useSimulation() {
   const resolveCurrentScope = (nodeIds) => resolveScope(nodeIds, nodes.value, edges.value, inspectionModuleStore.modules)
 
   /**
-   * Signs a run's inputs: its scope, the simulation settings, the slider values and any protocol it runs.
+   * Signs a run's inputs: its scope, the simulation settings, the slider values, any protocol it runs, and whether it
+   * sweeps.
    *
    * @param {ReturnType<typeof resolveScope>} scope
    * @returns {string}
@@ -100,7 +113,16 @@ export function useSimulation() {
       JSON.stringify(simulationSettingsStore.simulationSettings),
       JSON.stringify([[...overrides.rows], [...overrides.globals]]),
       protocolStore.signature,
+      isSweeping() ? 'sweep' : '',
     ].join(':')
+
+  /**
+   * Tells whether play runs the sweep: in sweep mode, with a sweep set, and the protocol off.
+   *
+   * @param {boolean} [isProtocolRun]
+   * @returns {boolean}
+   */
+  const isSweeping = (isProtocolRun = protocolStore.isActive) => !isProtocolRun && store.isSweepMode && !!simulationSettingsStore.simulationSettings.sweep
 
   /**
    * Selects the slider values a run tries out, for the sliders still defined: none while the sliders are off, as a
@@ -119,8 +141,8 @@ export function useSimulation() {
    * slider values has changed since the model the simulator keeps was flattened, it reruns that model with
    * the new values; otherwise it checks the scope, flattens it with the sliders' values and runs it. With the
    * protocol on, it runs the protocol's experiments on the model as it is instead, without the sliders' values (see
-   * runProtocolOn). A pre-flight with errors stops it before it runs. A model without ODEs, given a sweep, is
-   * otherwise solved once per value of the swept parameter.
+   * runProtocolOn). A pre-flight with errors stops it before it runs. In sweep mode, the model is instead solved
+   * once per value of the swept parameter, or with ODEs, its time course run once per value.
    *
    * @param {string[]|null} [nodeIds] - The nodes to simulate, or null for every node.
    * @returns {Promise<void>}
@@ -141,22 +163,33 @@ export function useSimulation() {
     const structure = [buildScopeSignature(scope, libraryStore), ...(drivers.length ? [protocolStore.driverSignature] : [])].join(':')
     const overrides = selectRunOverrides(isProtocolRun)
     const settings = { ...simulationSettingsStore.simulationSettings }
+    const isSweepRun = isSweeping(isProtocolRun)
     const signature = signRun(scope, overrides)
 
     /**
-     * Gets the sweep a kept model runs: none for a model with ODEs, or without a sweep set.
+     * Gets the sweep a kept model runs: none outside sweep mode.
      *
      * @param {Object} source - The kept model (see mapResults).
      * @returns {{component: string, variable: string, values: number[]}|null}
      * @throws {SimulationError} When the sweep can't run.
      */
     const sweepFor = (source) => {
-      if (!settings.sweep || !source.isSteadyState) return null
+      if (!isSweepRun) return null
       const problem = findSweepProblem(settings.sweep)
       if (problem) throw new SimulationError(problem)
-      const target = resolveSweepTarget({ sweep: settings.sweep, nodes: scope.nodes, mapping: source.mapping, variables: source.variables })
+      const found = { nodes: scope.nodes, mapping: source.mapping, variables: source.variables }
+      const target = resolveSweepTarget({ sweep: settings.sweep, ...found })
       if (target.problem) throw new SimulationError(target.problem)
-      return { ...target, values: sweepValues(settings.sweep) }
+      const { family } = settings.sweep
+      const familyTarget = family && resolveSweepTarget({ sweep: family, role: 'varied across curves', ...found })
+      if (familyTarget?.problem) throw new SimulationError(familyTarget.problem)
+      return {
+        ...target,
+        values: sweepValues(settings.sweep),
+        // A model without ODEs has no time course to read.
+        ...(!source.isSteadyState && { readout: sweepReadout(settings.sweep) }),
+        ...(familyTarget && { family: { ...familyTarget, values: familyValues(family) } }),
+      }
     }
 
     // Reusing the kept model, if its scope and everything it was flattened from are unchanged.
@@ -238,12 +271,14 @@ export function useSimulation() {
           flattenedWith: { rows: new Set(overrides.rows.keys()), globals: new Set(overrides.globals.keys()) },
         }
         session = null
-        // With a sweep to follow, this run only maps the model, so finishing it isn't the end of the run.
-        const mapOnProgress = settings.sweep ? (progress) => progress < 1 && onProgress(progress) : onProgress
-        currentRun = simulator.startSimulation({ cellml, key: built.key, settings, onProgress: mapOnProgress })
-        results = await currentRun.promise
-        // Until a sweep starts there is no run to stop, so Stop abandons this one.
-        currentRun = null
+        if (isSweepRun) {
+          // A sweep needs only the model's variables, to find the swept parameter in it, before it runs. Until it
+          // starts there is no run to stop, so Stop abandons it.
+          results = await simulator.describeModel({ cellml, key: built.key })
+        } else {
+          currentRun = simulator.startSimulation({ cellml, key: built.key, settings, onProgress })
+          results = await currentRun.promise
+        }
       }
       if (token !== runToken) return
 
@@ -252,7 +287,7 @@ export function useSimulation() {
         if (token !== runToken) return
         // A run stopped early may not have read its model, so only a finished one is kept.
         if (!results.isStopped) session = mapped
-        // A sweep needs the swept parameter's name in the model, known only once a run is mapped.
+        // A sweep needs the swept parameter's name in the model, known only once the model is mapped.
         const sweep = !results.isStopped && sweepFor(mapped)
         if (sweep) {
           currentRun = simulator.startSimulation({ key: mapped.key, settings, sweep, onProgress })
@@ -260,12 +295,12 @@ export function useSimulation() {
           if (token !== runToken) return
         }
       }
-      if (results.isSweep) results = { ...results, sweepLabel: sweepLabel(settings.sweep) }
+      if (results.isSweep) results = labelSweepResults(results, settings.sweep)
       store.finishRun({ results, mapping: mapped.mapping, signature, inspectionOutputs: mapped.inspectionOutputs, inputs: { settings, overrides } })
     } catch (error) {
       if (token === runToken) {
         const source = changes ? kept : built
-        const partialResults = error.partialResults?.isSweep ? { ...error.partialResults, sweepLabel: sweepLabel(settings.sweep) } : error.partialResults
+        const partialResults = error.partialResults?.isSweep ? labelSweepResults(error.partialResults, settings.sweep) : error.partialResults
         const partial = partialResults && source && (await mapPartialResults(source, scope, partialResults))
         if (token === runToken) store.failRun('error', { message: error.message, issues: error.issues ?? [] }, partial)
       }

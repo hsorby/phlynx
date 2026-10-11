@@ -3,6 +3,7 @@
  * app gets plain results.
  */
 import { buildAlgorithm, buildUniformTimeCourse, findSolverSettingsProblem, resolveSolverSettings } from './sedParameters'
+import { DEFAULT_READOUT, reduceSeries } from './sweepReadouts'
 
 // Above this, a run's results risk exhausting WebAssembly's 4 GB of memory.
 export const MAX_RESULT_BYTES = 1.5 * 1024 ** 3
@@ -276,68 +277,89 @@ export function createSimulationSession({ module: loc, cellml }) {
    *   segments have: `{initialTime, outputStartTime, outputEndTime, numberOfSteps}`.
    * @param {Array<{component: string, variable: string, value: number}>} [options.changes] - Values to run
    *   with in place of the model's, by the names libOpenCOR reports; each must be a constant or a state.
-   * @param {{component: string, variable: string, values: number[]}|null} [options.sweep] - For a model without
-   *   ODEs: a constant, by the name libOpenCOR reports, to solve the model at each of the values of.
+   * @param {{component: string, variable: string, values: number[], readout?: string}|null} [options.sweep] - A
+   *   constant, by the name libOpenCOR reports, to solve the model at each of the values of: once each for a model
+   *   without ODEs, or one time course each for a model with them, reduced to its `readout` (see sweepReadouts.js;
+   *   'end' by default).
    * @param {Function} [options.onProgress] - Called with the progress, from 0 to 1.
    * @returns {{promise: Promise<Object>, stop: Function}} `promise` resolves with `{ voi, variables, issues,
    *   elapsedMs, isStopped, isSteadyState, isSweep }` or rejects with a SimulationError; `stop` ends the run early,
    *   keeping what it has. A steady state has one value per variable and an empty VOI; a sweep, one value per
-   *   swept value, which are its VOI.
+   *   swept value, which are its VOI, and for a model with ODEs, the `readout` it took.
    */
   function run({ settings, timeCourse: givenTimeCourse = null, changes = [], sweep = null, onProgress = () => {} }) {
     let instance = null
     let isStopped = false
 
     /**
-     * Solves an algebraic model: once, or once per value of a sweep. Each solve gives every variable one
-     * value; a sweep's values become the results' VOI, so its results read like a time course over them.
+     * Runs an instance to its end, polling as it goes.
+     *
+     * @param {Function} [onPoll] - Called with the instance's progress, from 0 to 1, at each poll.
+     * @returns {Promise<number>} The time the run took, in milliseconds.
+     */
+    async function runInstance(onPoll = () => {}) {
+      for (let poll = 0; instance.status.value === RUNNING; poll++) {
+        onPoll(instance.progress)
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVALS_MS[Math.min(poll, POLL_INTERVALS_MS.length - 1)]))
+      }
+      return instance.waitForRun()
+    }
+
+    /**
+     * Solves a model once per point: once, for an algebraic model run on its own, or once per value of a sweep, and
+     * of its family's parameter, the sweep's values for each of the family's in turn. Each point gives every variable
+     * one value; a sweep's values become the results' VOI, so its results read like a time course over them, a curve
+     * after another for a family.
      *
      * @param {Array} runChanges
-     * @param {{component: string, variable: string, values: number[]}|null} runSweep
-     * @returns {Promise<Object>} As a run's results, with `isSteadyState` set, and `isSweep` for a sweep.
+     * @param {{component: string, variable: string, values: number[], family?: Object}|null} runSweep - With a
+     *   `family`, `{component, variable, values}`, of the parameter that varies from curve to curve.
+     * @param {Function} solveOne - Solves the point the instance has, given its task and the share of the run the
+     *   point is: `{values}`, each variable's `{kind, unit, value}` by name, or `{failure}`, why it failed; null when
+     *   stopped part way.
+     * @returns {Promise<Object>} As a run's results, `isSweep` set for a sweep.
      */
-    async function solveSteadyState(runChanges, runSweep) {
-      const isTarget = (change) => change.component === runSweep?.component && change.variable === runSweep?.variable
-      const points = runSweep ? runSweep.values : [null]
+    async function solvePoints(runChanges, runSweep, solveOne) {
+      const family = runSweep?.family ?? null
+      const targets = [runSweep, family].filter(Boolean)
+      const isTarget = (change) => targets.some(({ component, variable }) => change.component === component && change.variable === variable)
+      const inner = runSweep ? runSweep.values : [null]
+      const outer = family ? family.values : [null]
+      // Every point: the family's value, and the sweep's.
+      const points = outer.flatMap((familyValue) => inner.map((value) => ({ familyValue, value })))
+      const nameOf = ({ component, variable }) => `${component}/${variable}`
       const columns = new Map()
+      const issues = new Map()
       let solved = 0
       let elapsedMs = 0
-      let issues = []
 
-      /** The results of the points solved so far. */
+      /** The results of the points solved so far: a family's curves one after another, the last perhaps part way. */
       const collect = () => {
         const variables = new Map([...columns].map(([name, { kind, unit, values }]) => [name, { kind, unit, values: values.slice(0, solved) }]))
         const voi = runSweep
-          ? { name: `${runSweep.component}/${runSweep.variable}`, unit: columns.get(`${runSweep.component}/${runSweep.variable}`)?.unit ?? '', values: Float64Array.from(points.slice(0, solved)) }
+          ? { name: nameOf(runSweep), unit: columns.get(nameOf(runSweep))?.unit ?? '', values: Float64Array.from(inner.slice(0, Math.min(solved, inner.length))) }
           : { name: '', unit: '', values: new Float64Array() }
-        return { voi, variables }
+        const reached = family && { name: nameOf(family), unit: columns.get(nameOf(family))?.unit ?? '', values: outer.slice(0, Math.ceil(solved / inner.length)) }
+        return { voi, variables, isSteadyState, isSweep: !!runSweep, ...(reached && { family: reached }) }
       }
 
-      for (const value of points) {
+      for (const { familyValue, value } of points) {
         if (isStopped) break
-        applyChanges(value === null ? runChanges : [...runChanges.filter((change) => !isTarget(change)), { component: runSweep.component, variable: runSweep.variable, value }])
+        const swept = [
+          ...(family ? [{ component: family.component, variable: family.variable, value: familyValue }] : []),
+          ...(runSweep ? [{ component: runSweep.component, variable: runSweep.variable, value }] : []),
+        ]
+        applyChanges(runSweep ? [...runChanges.filter((change) => !isTarget(change)), ...swept] : runChanges)
         instance = document.instantiate()
+        let point = null
         try {
-          throwOnErrors(instance, 'The model could not be solved.')
+          throwOnErrors(instance, isSteadyState ? 'The model could not be solved.' : 'The model could not be simulated.')
           const task = instance.task(0)
           try {
-            if (!instance.startRun()) throw new SimulationError('The model could not be solved.', readIssues(instance))
-            for (let poll = 0; instance.status.value === RUNNING; poll++) {
-              await new Promise((resolve) => setTimeout(resolve, POLL_INTERVALS_MS[Math.min(poll, POLL_INTERVALS_MS.length - 1)]))
-            }
-            elapsedMs += instance.waitForRun()
-            // A solve stopped part way may not have converged, so its values aren't kept.
-            if (isStopped) break
-            if (instance.hasErrors) {
-              const at = runSweep ? ` at ${runSweep.component}/${runSweep.variable} = ${value}` : ''
-              const partial = solved > 1 ? { ...collect(), isSteadyState, isSweep: !!runSweep } : null
-              throw new SimulationError(`The model could not be solved${at}.`, readIssues(instance), partial)
-            }
-            for (const [variableName, { kind, unit, values }] of readResults(task, null, 1).variables) {
-              if (!columns.has(variableName)) columns.set(variableName, { kind, unit, values: new Float64Array(points.length) })
-              columns.get(variableName).values[solved] = values[0]
-            }
-            issues = readIssues(instance)
+            const startedAt = solved / points.length
+            point = await solveOne(task, (progress) => onProgress(startedAt + progress / points.length))
+            elapsedMs += point?.elapsedMs ?? 0
+            for (const issue of readIssues(instance)) issues.set(`${issue.type}:${issue.description}`, issue)
           } finally {
             task?.delete()
           }
@@ -349,12 +371,67 @@ export function createSimulationSession({ module: loc, cellml }) {
           instance.delete()
           instance = null
         }
+        // A point stopped part way may not have converged, or reached its end, so its values aren't kept.
+        if (!point || isStopped) break
+        if (point.failure) {
+          const at = runSweep ? ` at ${swept.map((change) => `${nameOf(change)} = ${change.value}`).join(', ')}` : ''
+          // The points solved before it may have said something too.
+          const failureIssues = [...issues.values(), ...point.failure.issues.filter((issue) => !issues.has(`${issue.type}:${issue.description}`))]
+          throw new SimulationError(`${point.failure.message.replace(/\.$/, '')}${at}.`, failureIssues, solved > 1 ? collect() : null)
+        }
+        for (const [name, { kind, unit, value: pointValue }] of point.values) {
+          if (!columns.has(name)) columns.set(name, { kind, unit, values: new Float64Array(points.length) })
+          columns.get(name).values[solved] = pointValue
+        }
         solved++
         onProgress(solved / points.length)
       }
 
-      return { ...collect(), issues, elapsedMs, isStopped: solved < points.length, isSteadyState, isSweep: !!runSweep }
+      return { ...collect(), issues: [...issues.values()], elapsedMs, isStopped: solved < points.length }
     }
+
+    /**
+     * Solves an algebraic model's point: its one value of each variable.
+     *
+     * @param {Object} task - The instance's task.
+     * @returns {Promise<Object|null>} As solvePoints' solveOne.
+     */
+    async function solveAlgebraicPoint(task) {
+      if (!instance.startRun()) return { failure: { message: 'The model could not be solved.', issues: readIssues(instance) } }
+      const elapsedMs = await runInstance()
+      if (isStopped) return null
+      if (instance.hasErrors) return { failure: { message: 'The model could not be solved.', issues: readIssues(instance) } }
+      const values = new Map([...readResults(task, null, 1).variables].map(([name, { kind, unit, values: pointValues }]) => [name, { kind, unit, value: pointValues[0] }]))
+      return { values, elapsedMs }
+    }
+
+    /**
+     * Builds the point solver of a sweep of a model with ODEs: each point runs the settings' time course from the
+     * model's initial values, and takes one reading of each variable from it.
+     *
+     * @param {string} readout - One of sweepReadouts' READOUTS.
+     * @param {number} numberOfSteps - The time course's.
+     * @returns {Function} As solvePoints' solveOne.
+     */
+    const createCoursePointSolver = (readout, numberOfSteps) =>
+      async function solveCoursePoint(task, onPointProgress) {
+        if (!task?.voiName) throw new SimulationError('The model has no differential equation, so there is nothing to simulate over time.')
+        // Each time course is held whole while it runs, though only its readings are kept.
+        const bytes = estimateResultBytes(task, numberOfSteps)
+        if (bytes > MAX_RESULT_BYTES) {
+          throw new SimulationError(`Each time course would need ${(bytes / 1024 ** 3).toFixed(1)} GB of memory. Use fewer points (a larger point interval).`)
+        }
+        if (!instance.startRun()) return { failure: { message: 'The simulation could not start.', issues: readIssues(instance) } }
+        const elapsedMs = await runInstance(onPointProgress)
+        if (isStopped) return null
+        if (instance.hasErrors) return { failure: { message: describeRunFailure(instance, settings), issues: readIssues(instance) } }
+        const length = task.voi.length
+        const values = new Map()
+        for (const { kind, count, name, unit, values: series } of VARIABLE_KINDS) {
+          for (let i = 0; i < task[count]; i++) values.set(task[name](i), { kind, unit: task[unit](i), value: reduceSeries(task[series](i), length, readout) })
+        }
+        return { values, elapsedMs }
+      }
 
     const promise = (async () => {
       // Start after returning, so the caller has `stop` before the first progress report.
@@ -363,7 +440,21 @@ export function createSimulationSession({ module: loc, cellml }) {
       const runHandles = []
       const keepForRun = (handle) => (handle && runHandles.push(handle), handle)
       try {
-        if (isSteadyState) return await solveSteadyState(changes, sweep)
+        if (isSteadyState) return await solvePoints(changes, sweep, solveAlgebraicPoint)
+        if (sweep) {
+          // Every point runs the same time course and solver, which each instance copies from the simulation.
+          checkSettings(settings)
+          const timeCourse = buildUniformTimeCourse(settings)
+          Object.assign(simulation, timeCourse)
+          applySolver(loc, simulation, settings, keepForRun)
+          const readout = sweep.readout ?? DEFAULT_READOUT
+          try {
+            return { ...(await solvePoints(changes, sweep, createCoursePointSolver(readout, timeCourse.numberOfSteps))), readout }
+          } catch (error) {
+            if (error.partialResults) error.partialResults = { ...error.partialResults, readout }
+            throw error
+          }
+        }
 
         if (givenTimeCourse) {
           checkTimeCourse(givenTimeCourse)

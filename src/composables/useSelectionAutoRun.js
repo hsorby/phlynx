@@ -51,6 +51,8 @@ export function useSelectionAutoRun({ isActive = () => true } = {}) {
     const ids = selectedIds.value
     const shown = store.scopeNodeIds ? [...store.scopeNodeIds].sort() : null
     if (!ids.length || JSON.stringify(ids) === JSON.stringify(shown)) return
+    // A sweep of a model with ODEs runs a time course per point, too slow to follow the selection: play runs it.
+    if (store.results?.isSweep && !store.results.isSteadyState) return
     run(ids)
   }
 

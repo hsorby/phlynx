@@ -13,7 +13,7 @@ import { buildObsDataCharts } from '../services/simulation/protocolPlotGroups'
 import { findProtocolTarget } from '../services/simulation/protocolTargets'
 import { INSPECTION_COMPONENT, isInspectionNodeId, readInspectionOutputId } from '../services/simulation/variableIndex'
 import { SERIES_COLOURS, assignSeriesSlots, chunkSeries } from '../services/simulation/seriesSlots'
-import { alignVoi, displayVoi, runDash, runLabel } from '../services/simulation/trackedRuns'
+import { alignVoi, displayVoi, formatPlotValue, runDash, runLabel } from '../services/simulation/trackedRuns'
 import { readNodeSeries } from '../services/simulation/variableMapping'
 import { useAppSettings } from './useAppSettings'
 import { ALL_EXPERIMENTS, useProtocolStore } from '../stores/protocolStore'
@@ -143,6 +143,8 @@ export function useSimulationCharts(scopeNodes, { hasInputs = false } = {}) {
       // A model without ODEs is solved once: one value per variable, and no VoI to plot them against.
       isSteadyState: !!store.results?.isSteadyState && !isSweep,
       isSweep,
+      // What a sweep of a model with ODEs read from each time course (see sweepReadouts.js).
+      readout: (isSweep && store.results.readout) || null,
     }
   })
 
@@ -260,6 +262,23 @@ export function useSimulationCharts(scopeNodes, { hasInputs = false } = {}) {
   function collectSeries() {
     const live = { results: store.results, mapping: store.mapping, inspectionOutputs: store.inspectionOutputs, isProtocolRun: !!store.protocolResults }
     const shared = overlay.value
+    const family = store.results?.family
+    if (!shared && family?.curves?.length) {
+      const unit = family.unit && family.unit !== 'dimensionless' ? ` ${family.unit}` : ''
+      // A curve per value of the family's parameter, each named for its value.
+      return family.curves.flatMap((curve, i) => {
+        const run = { ...live, results: { ...store.results, variables: curve.variables } }
+        return collectSeriesOf(run).map((series) => ({
+          ...series,
+          key: `${series.key}@f${i}`,
+          variableKey: series.key,
+          variableLabel: series.label,
+          curve: i,
+          curveRun: run,
+          label: `${store.results.familyLabel ?? family.name} = ${formatPlotValue(curve.value)}${unit}`,
+        }))
+      })
+    }
     if (!shared) return collectSeriesOf(live)
     return shared.experiments.flatMap((results, e) =>
       collectSeriesOf({ ...live, results }).map((series) => ({
@@ -325,7 +344,8 @@ export function useSimulationCharts(scopeNodes, { hasInputs = false } = {}) {
       .sort((a, b) => (plotOrder.get(a.series.plot) ?? groups.length) - (plotOrder.get(b.series.plot) ?? groups.length) || a.index - b.index)
       .map(({ series }) => series)
     for (const series of ordered) {
-      const id = `${series.plot}#${series.unit}`
+      // A family's curves of each variable make a chart of their own, coloured by the family's value.
+      const id = `${series.plot}#${series.unit}${series.variableKey ? `#${series.variableKey}` : ''}`
       if (!byPlotAndUnit.has(id)) byPlotAndUnit.set(id, { plot: series.plot, unit: series.unit, series: [] })
       byPlotAndUnit.get(id).series.push(series)
     }
@@ -341,14 +361,16 @@ export function useSimulationCharts(scopeNodes, { hasInputs = false } = {}) {
     const chartsPerPlot = new Map()
     for (const [, { plot, series }] of byPlotAndUnit) chartsPerPlot.set(plot, (chartsPerPlot.get(plot) ?? 0) + chunkSeries(series).length)
     const unitsPerPlot = new Map()
-    for (const [, { plot }] of byPlotAndUnit) unitsPerPlot.set(plot, (unitsPerPlot.get(plot) ?? 0) + 1)
+    for (const [, { plot, unit }] of byPlotAndUnit) unitsPerPlot.set(plot, (unitsPerPlot.get(plot) ?? new Set()).add(unit))
     for (const [id, { plot, unit, series }] of byPlotAndUnit) {
       const chunks = chunkSeries(series)
       chunks.forEach((group, index) => {
         const plotName = plotNames.get(plot) ?? 'Ungrouped'
-        const parts = [unitsPerPlot.get(plot) > 1 ? unit : null, chunks.length > 1 ? String(index + 1) : null].filter(Boolean)
-        const slots = assignSeriesSlots(previousSlots, group.map((item) => item.key))
-        slots.forEach((slot, key) => nextSlots.set(key, slot))
+        const parts = [unitsPerPlot.get(plot).size > 1 ? unit : null, chunks.length > 1 ? String(index + 1) : null].filter(Boolean)
+        const isFamily = group[0].curve != null
+        // A family's colour says which value of its parameter a curve is, the same on every chart.
+        const slots = isFamily ? new Map(group.map((item) => [item.key, item.curve % SERIES_SLOT_COUNT])) : assignSeriesSlots(previousSlots, group.map((item) => item.key))
+        if (!isFamily) slots.forEach((slot, key) => nextSlots.set(key, slot))
         // One variable over every experiment: named once in the title, its lines by experiment, each experiment in
         // its own colour on every chart.
         const isOneVariable = overlay.value && new Set(group.map((item) => item.variableLabel)).size === 1
@@ -358,7 +380,7 @@ export function useSimulationCharts(scopeNodes, { hasInputs = false } = {}) {
             slots.set(item.key, item.experiment % SERIES_SLOT_COUNT)
           }
         }
-        const named = isOneVariable ? [{ ...group[0], label: group[0].variableLabel }] : group
+        const named = isOneVariable || isFamily ? [{ ...group[0], label: group[0].variableLabel }] : group
         const title = titleFor(named, plotName)
         // A phase plot's lines each go against their own run's x values, as they needn't share points.
         const phaseX = plotXAxes.get(plot) ?? null
@@ -389,6 +411,8 @@ export function useSimulationCharts(scopeNodes, { hasInputs = false } = {}) {
               label: item.label,
               variableLabel: item.variableLabel ?? item.label,
               values: phaseX ? item.values : align(live, item.values),
+              // A family's curve, on a phase plot, against its own values of the plot's x variable.
+              ...(phaseX && item.curveRun && { xValues: readPlotX(phaseGroup.xAxis, item.curveRun)?.values ?? phaseX.values }),
               slot: slots.get(item.key),
               run: null,
               // Every experiment of a protocol shown at once: which one the line is.
@@ -413,7 +437,10 @@ export function useSimulationCharts(scopeNodes, { hasInputs = false } = {}) {
         })
       })
     }
-    store.setSeriesSlots(new Map([...previousSlots, ...nextSlots]))
+    const slotsKept = new Map([...previousSlots, ...nextSlots])
+    // A variable drawn as a family's curves has no one colour, as the plot list's swatches would show it.
+    for (const series of ordered) if (series.variableKey) slotsKept.delete(series.variableKey)
+    store.setSeriesSlots(slotsKept)
     return result
   })
 

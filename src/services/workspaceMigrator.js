@@ -372,6 +372,12 @@ function convertStore(oldStore, globalConstantNames, newAvailableModules) {
  *   a plot, with variableName the module's name; older files have none.
  *   A parameterScanConfig selection may have a `label` (a CUFLynx params_for_id `name_for_plotting`,
  *   round-tripped through it); older files have none, and the UI falls back to `nodeName/parameterName`.
+ *   simulation.simulationSettings may have a `sweep` (services/simulation/sweep.js): the parameter
+ *   `{key, nodeId, nodeName, parameterName, units, type}` is solved, or with ODEs run, at `points` values
+ *   from `from` to `to`, and for a model with ODEs each time course is read as `readout` ('end', 'min',
+ *   'max' or 'peak'; missing means 'end'). Its `family`, when it has one, is a second parameter
+ *   `{key, nodeId, nodeName, parameterName, units, type}` and the `values` it takes, a curve each.
+ *   Older files have none. Whether play sweeps is the session's choice, not saved.
  */
 const LEGACY_VERSION = 'legacy'
 

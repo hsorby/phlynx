@@ -18,7 +18,8 @@ const recentRunMs = []
 
 /**
  * Reruns the scope with the slider values, or queues the newest values behind the run going. Nothing reruns while
- * the sliders are off, as their values don't reach the protocol's runs.
+ * the sliders are off, as their values don't reach the protocol's runs, nor for a sweep of a model with ODEs, a
+ * time course per point being too slow to follow a slider: its results show as out of date, for play to rerun.
  *
  * @param {Object} store - simulationResultsStore.
  * @param {Function} run - useSimulation's run.
@@ -26,6 +27,10 @@ const recentRunMs = []
  */
 function rerunForSliders(store, run, protocolStore) {
   if (protocolStore.areSlidersOff) {
+    isSliderRerunWaiting = false
+    return
+  }
+  if (store.results?.isSweep && !store.results.isSteadyState) {
     isSliderRerunWaiting = false
     return
   }

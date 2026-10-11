@@ -55,6 +55,23 @@
       />
     </template>
 
+    <!-- Plays the sweep set in the Sweep view rather than one run, as the protocol button plays the protocol. -->
+    <Button
+      v-if="sweep"
+      icon="pi pi-chart-line"
+      text
+      rounded
+      size="small"
+      class="toolbar-sweep"
+      data-testid="sim-sweep-mode"
+      :severity="resultsStore.isSweepMode ? 'primary' : 'secondary'"
+      :aria-pressed="resultsStore.isSweepMode"
+      :label="resultsStore.isSweepMode ? 'Sweep' : undefined"
+      aria-label="Run the sweep"
+      v-tooltip.bottom="sweepHint"
+      @click="toggleSweep"
+    />
+
     <span class="toolbar-spacer"></span>
     <Button
       icon="pi pi-clone"
@@ -106,10 +123,10 @@
 <script setup>
 /**
  * The Simulation tab's controls: play or stop, whether play runs the selection or the whole model, whether it
- * runs the workspace's protocol and which experiment is shown, and buttons for the larger view, the protocol and the
+ * runs the workspace's protocol or the sweep, and which experiment is shown, and buttons for the larger view, the protocol and the
  * simulation settings.
  */
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 
 import Button from 'primevue/button'
 import ToggleSwitch from 'primevue/toggleswitch'
@@ -117,7 +134,10 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import { useFloatingViewer } from '../../composables/useFloatingViewer'
 import { useProtocolDialog } from '../../composables/useProtocolDialog'
 import { useSimSettingsDialog } from '../../composables/useSimSettingsDialog'
+import { findSweepProblem, sweepLabel } from '../../services/simulation/sweep'
 import { useProtocolStore } from '../../stores/protocolStore'
+import { useSimulationResultsStore } from '../../stores/simulationResultsStore'
+import { useSimulationSettingsStore } from '../../stores/simulationSettingsStore'
 
 const scopeMode = defineModel('scopeMode', { type: String, default: 'model' })
 const props = defineProps({
@@ -140,12 +160,34 @@ const emit = defineEmits(['play', 'stop', 'expand'])
 const { open: openSimSettings } = useSimSettingsDialog()
 const { open: openProtocolDialog } = useProtocolDialog()
 const protocolStore = useProtocolStore()
+const resultsStore = useSimulationResultsStore()
+const settingsStore = useSimulationSettingsStore()
 
 const experimentCount = computed(() => protocolStore.view?.experiments.length ?? 0)
 
 /** Switches play between the protocol and the time course, running at once as switching the scope does. */
 function toggleProtocol() {
   protocolStore.isProtocolMode = !protocolStore.isProtocolMode
+  // One mode at a time: the protocol runs the model as it is, with nothing swept.
+  if (protocolStore.isProtocolMode) resultsStore.isSweepMode = false
+  if (canPlay.value && !props.isRunning) emit('play')
+}
+
+const sweep = computed(() => settingsStore.simulationSettings.sweep ?? null)
+// With the sweep removed, from whichever view, play runs once again, and a later sweep starts off.
+watch(sweep, (current) => {
+  if (!current) resultsStore.isSweepMode = false
+})
+const sweepHint = computed(() => {
+  const problem = findSweepProblem(sweep.value)
+  if (resultsStore.isSweepMode) return `Sweeping ${sweepLabel(sweep.value)}: switch back to one run${problem ? `. ${problem}` : ''}`
+  return problem ? `Run the sweep. ${problem}` : `Run the sweep of ${sweepLabel(sweep.value)}`
+})
+
+/** Switches play between the sweep and one run, running at once as switching the protocol does. */
+function toggleSweep() {
+  resultsStore.isSweepMode = !resultsStore.isSweepMode
+  if (resultsStore.isSweepMode) protocolStore.isProtocolMode = false
   if (canPlay.value && !props.isRunning) emit('play')
 }
 
@@ -206,14 +248,16 @@ const playHint = computed(() => props.blockedReason ?? (props.isLoading ? 'Loadi
   font-size: 0.7rem;
 }
 
-.toolbar-protocol {
+.toolbar-protocol,
+.toolbar-sweep {
   flex-shrink: 0;
 }
 
 
-/* Too narrow: the protocol button without its label. */
+/* Too narrow: the protocol and sweep buttons without their labels. */
 @container (max-width: 300px) {
-  .toolbar-protocol :deep(.p-button-label) {
+  .toolbar-protocol :deep(.p-button-label),
+  .toolbar-sweep :deep(.p-button-label) {
     display: none;
   }
 }
