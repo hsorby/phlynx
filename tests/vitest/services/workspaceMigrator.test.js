@@ -6,6 +6,7 @@ import { analyzeMathXml } from '../../../src/services/math/analyzeMath'
 import { detectVersion, migrateWorkspace, separateNodeParameters } from '../../../src/services/workspaceMigrator'
 import { PHLYNX_PROJECT_VERSION } from '../../../src/utils/constants'
 import { ensureLibCellmlReady } from '../helpers/libcellml-bootstrap.js'
+import { legacyWorkspace } from '../helpers/legacyWorkspace.js'
 
 const MATH_REF = 'file:decay'
 const XML = `<model xmlns="http://www.cellml.org/cellml/2.0#" name="decay">
@@ -262,6 +263,49 @@ describe('detectVersion', () => {
     expect(detectVersion({ version: '1.1.0' })).toBe('1.1.0')
     expect(detectVersion({ info: { format_version: '1.0.0', project: 'Phlynx-Project' } })).toBe('1.0.0')
     expect(detectVersion({ flow: {}, store: {} })).toBe('legacy')
+  })
+})
+
+describe('migrateWorkspace over legacy modules', () => {
+  let store
+  let nodes
+  beforeAll(async () => {
+    await ensureLibCellmlReady()
+    ;({ store, flow: { nodes } } = migrateWorkspace(legacyWorkspace()))
+  })
+  const mathRefOf = (moduleRef) => new Map(store.availableModules).get(moduleRef)?.mathRef
+
+  it('gives each legacy module its own library module', () => {
+    expect(Object.fromEntries(store.availableModules.map(([moduleRef, module]) => [moduleRef, module.mathRef]))).toEqual({
+      'new_module:phlynx': 'template_modules.cellml:new_module',
+      'artery:pp': 'vessel_modules.cellml:vessel',
+      'artery:vp': 'vessel_modules.cellml:vessel',
+      'GLUT2:default': 'User_Modules.cellml:GLUT2',
+      'NKA:default': 'User_Modules.cellml:NKA',
+      'vessel:default': 'User_Modules.cellml:vessel',
+    })
+  })
+
+  it('lists every module in its math\'s collection', () => {
+    expect(new Map(store.availableCollections)).toEqual(
+      new Map([
+        ['template_modules.cellml:new_module', ['new_module:phlynx']],
+        ['vessel_modules.cellml:vessel', ['artery:pp', 'artery:vp']],
+        ['User_Modules.cellml:GLUT2', ['GLUT2:default']],
+        ['User_Modules.cellml:NKA', ['NKA:default']],
+        ['User_Modules.cellml:vessel', ['vessel:default']],
+      ])
+    )
+  })
+
+  it('points each node at the module made from its config', () => {
+    expect(nodes.map(({ data }) => [data.name, data.moduleRef])).toEqual([
+      ['GLUT2_1', 'GLUT2:default'],
+      ['NKA_1', 'NKA:default'],
+      ['vessel_user', 'vessel:default'],
+      ['vessel_library', 'artery:vp'],
+    ])
+    for (const { data } of nodes) expect(mathRefOf(data.moduleRef)).toBe(data.mathRef)
   })
 })
 
