@@ -485,6 +485,8 @@
   <SimulationFloatingViewer :nodes="nodes" />
   <SimSettingsDialog v-model="simSettingsDialog.visible" :section="simSettingsDialog.section" :nodes="nodes" />
 
+  <ProtocolDialog v-model="protocolDialog.visible" :nodes="nodes" />
+
   <SettingsDialog v-model="settingsDialogVisible" />
 
   <ImportDialog
@@ -542,6 +544,8 @@ import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
 import { useOmexStore } from '../stores/omexStore'
 
 import { importOmexFile, extractOmexArchive } from '../services/import/omex'
+import { findParamsForIdExtra, parseParamsForId, resolveParamsForIdRows } from '../services/simulation/paramsForId'
+import { putSlider } from '../services/simulation/parameterSliders'
 
 import useDragAndDrop from '../composables/useDnD'
 import { useHandleManagement } from '../composables/useHandleManagement'
@@ -566,6 +570,7 @@ import ModuleReplacementDialog from '../components/ModuleReplacementDialog.vue'
 import SaveDialog from '../components/SaveDialog.vue'
 import MacroBuilderDialog from '../components/MacroBuilderDialog.vue'
 import SimSettingsDialog from '../components/SimSettingsDialog.vue'
+import ProtocolDialog from '../components/ProtocolDialog.vue'
 import SimulationFloatingViewer from '../components/simulation/SimulationFloatingViewer.vue'
 import EdgeConnectionDialog from '../components/EdgeConnectionDialog.vue'
 import SettingsDialog from '../components/SettingsDialog.vue'
@@ -588,6 +593,7 @@ import { migrateWorkspace, separateNodeParameters } from '../services/workspaceM
 import { buildWorkspaceFile } from '../services/workspaceFile'
 import { useSimulation } from '../composables/useSimulation'
 import { useSimSettingsDialog } from '../composables/useSimSettingsDialog'
+import { useProtocolDialog } from '../composables/useProtocolDialog'
 import { useFloatingViewer } from '../composables/useFloatingViewer'
 import { scopeFlowObject } from '../services/simulation/scopedModel'
 import { relayoutNodes } from '../services/layouts/physics'
@@ -717,6 +723,7 @@ const dialogVisible = computed(() => {
     replacementDialogVisible.value ||
     macroBuilderDialogVisible.value ||
     simSettingsDialog.visible ||
+    protocolDialog.visible ||
     settingsDialogVisible.value ||
     edgeConnectionDialogVisible.value ||
     instanceEditorDialogVisible.value ||
@@ -977,6 +984,7 @@ const exportDialogVisible = ref(false)
 const replacementDialogVisible = ref(false)
 const macroBuilderDialogVisible = ref(false)
 const { state: simSettingsDialog, open: openSimSettingsDialog } = useSimSettingsDialog()
+const { state: protocolDialog } = useProtocolDialog()
 const settingsDialogVisible = ref(false)
 const edgeConnectionDialogVisible = ref(false)
 const inspectionModuleDialogVisible = ref(false)
@@ -2029,6 +2037,27 @@ async function processImportedOmexArchive(archivePayload, result, fileName) {
   await nextTick(fitView(fitViewParams.value))
 
   const preservedExtras = archiveEntries.filter(({ location }) => !criticalLocations.includes(location))
+
+  const paramsForIdExtra = findParamsForIdExtra(preservedExtras)
+  if (paramsForIdExtra) {
+    try {
+      const rows = parseParamsForId(paramsForIdExtra.entry.payload)
+      const { selections, warnings } = resolveParamsForIdRows(rows, nodes.value, libraryStore.getGlobalConstant)
+      if (selections.length) {
+        let scanConfig = simulationSettingsStore.parameterScanConfig
+        for (const selection of selections) scanConfig = putSlider(scanConfig, selection)
+        simulationSettingsStore.setParameterScanConfig(scanConfig)
+      }
+      if (warnings.length) {
+        notify.warning({
+          title: 'params_for_id.csv',
+          message: `${selections.length} slider(s) imported. ${warnings.join(' ')}`,
+        })
+      }
+    } catch (error) {
+      notify.warning({ title: 'params_for_id.csv', message: error.message })
+    }
+  }
 
   omexStore.setHash(cyrb53(snapshotFlowState()))
   omexStore.setArchive({

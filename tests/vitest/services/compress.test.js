@@ -234,6 +234,7 @@ describe('generateOmexArchive', () => {
       'document.sedml',
       'flow-snapshot.json',
       'manifest.xml',
+      'params_for_id.csv',
       'simulation.json',
       'test-model.cellml',
     ])
@@ -312,5 +313,9 @@ describe('generateOmexArchive', () => {
         name: 'parameters/gNa',
       },
     ])
+
+    const paramsForIdCsv = await archive.file('params_for_id.csv').async('string')
+    expect(paramsForIdCsv).toContain('membrane,gNa,const,0.1,10,')
+    expect(manifestXml).toContain('<content location="params_for_id.csv" format="text/csv"/>')
   })
 })
