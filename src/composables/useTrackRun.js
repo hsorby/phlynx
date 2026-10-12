@@ -1,5 +1,5 @@
 /**
- * Tracking the shown run, from wherever it is offered (the Runs list, the floating viewer): whether it can be
+ * Tracking the shown run, from wherever it is offered (the simulation toolbar, the floating viewer): whether it can be
  * tracked, and tracking it with the slider values it ran with.
  */
 import { computed } from 'vue'

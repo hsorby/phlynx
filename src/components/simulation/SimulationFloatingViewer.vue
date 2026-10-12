@@ -93,7 +93,7 @@
           @mousedown.stop
           @click="showSliders = !showSliders"
         />
-        <!-- Keeps the shown run's lines on the plot, as the Runs list in the Simulation tab does. -->
+        <!-- Keeps the shown run's lines on the plot, as the Simulation tab's toolbar does. -->
         <Button
           icon="pi pi-bookmark"
           text
