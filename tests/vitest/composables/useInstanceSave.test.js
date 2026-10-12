@@ -294,6 +294,17 @@ describe('useInstanceSave', () => {
       expect(findNode('b').data.moduleRef).toBe(GROWTH_MODULE_REF)
     })
 
+    it('moves only the siblings on the edited node\'s module to the new one', async () => {
+      findNode('b').data.moduleRef = 'decay:fast'
+      await saveInstanceEdit(fork())
+      expect(findNode('a').data.moduleRef).toBe(GROWTH_MODULE_REF)
+      expect(findNode('b').data).toMatchObject({ mathRef: GROWTH_REF, moduleRef: 'decay:fast' })
+
+      await history.undo()
+      expect(findNode('b').data).toMatchObject({ mathRef: DECAY_REF, moduleRef: 'decay:fast' })
+      expect(library.availableModules.has(GROWTH_MODULE_REF)).toBe(false)
+    })
+
     it('keeps the module an undo would remove while another node uses it', async () => {
       await saveInstanceEdit(fork())
       const other = createNode('c')

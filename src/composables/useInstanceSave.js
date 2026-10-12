@@ -145,9 +145,16 @@ export function useInstanceSave(flowId = FLOW_IDS.MAIN) {
     const moduleRef = isNewModule ? libraryStore.createModuleForMath(mathRef, detachReactivity({ ports, variables })) : null
 
     // Without its own module, a node would keep its old one's ref, which export keys configs by.
+    // Only siblings on the edited node's old module share its ports, so only they move to the new one.
+    const previousModuleRef = findNode(id)?.data.moduleRef
     const moduleFields = moduleRef ? { moduleRef } : {}
     updateNodeData(id, { name, variables, ports, mathRef, ...moduleFields })
-    if (updateAll) siblings.forEach((siblingId) => updateNodeData(siblingId, { mathRef, ...moduleFields }))
+    if (updateAll) {
+      siblings.forEach((siblingId) => {
+        const isSameModule = findNode(siblingId)?.data.moduleRef === previousModuleRef
+        updateNodeData(siblingId, { mathRef, ...(isSameModule ? moduleFields : {}) })
+      })
+    }
 
     // The edited node's rows are already reconciled by the editor. Every other node on this math is
     // rebuilt here, ticked or not, since an overwrite in place changes their math too.
