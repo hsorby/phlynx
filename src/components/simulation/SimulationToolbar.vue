@@ -83,8 +83,10 @@
         severity="secondary"
         :disabled="!!trackBlocker"
         aria-label="Track this run"
+        :aria-describedby="trackBlocker ? trackBlockerId : undefined"
         @click="track"
       />
+      <span v-if="trackBlocker" :id="trackBlockerId" class="visually-hidden">{{ trackBlocker }}</span>
     </span>
     <Button
       icon="pi pi-window-minimize"
@@ -139,7 +141,7 @@
  * runs the workspace's protocol or the sweep, and which experiment is shown, and buttons to track the run, float or
  * enlarge the results, and open the protocol and the simulation settings.
  */
-import { computed, watch } from 'vue'
+import { computed, useId, watch } from 'vue'
 
 import Button from 'primevue/button'
 import ToggleSwitch from 'primevue/toggleswitch'
@@ -209,6 +211,8 @@ function toggleSweep() {
 
 const { state: floatingViewer, toggle: toggleFloatingViewer } = useFloatingViewer()
 const { trackBlocker, track } = useTrackRun()
+// The tooltip saying why tracking is blocked shows only on hover, so screen readers are told it too.
+const trackBlockerId = useId()
 
 const isWholeModel = computed({
   get: () => scopeMode.value === 'model',
@@ -284,8 +288,18 @@ const playHint = computed(() => props.blockedReason ?? (props.isLoading ? 'Loadi
 }
 
 .toolbar-track {
+  position: relative;
   display: inline-flex;
   flex-shrink: 0;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 /* A filled circle a little larger than the other buttons, as the toolbar's main action. */

@@ -76,6 +76,27 @@ describe('SimulationToolbar track run', () => {
     wrapper.unmount()
   })
 
+  it('says why it can’t track the run, in its tooltip and to screen readers', async () => {
+    const store = useSimulationResultsStore()
+    const wrapper = mountToolbar()
+    expect(wrapper.find('.toolbar-track').attributes('data-tooltip')).toBe('Run the simulation first')
+    const describedBy = findTrack(wrapper).attributes('aria-describedby')
+    expect(wrapper.find(`[id="${describedBy}"]`).text()).toBe('Run the simulation first')
+
+    store.startRun(null)
+    store.finishRun({
+      results: { voi: { name: 'm/t', unit: 'second', values: new Float64Array([0, 1]) }, variables: new Map(), isStopped: false },
+      mapping: new Map(),
+      signature: 's',
+      inspectionOutputs: [],
+      inputs: { settings: {}, overrides: null },
+    })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.toolbar-track').attributes('data-tooltip')).toBe('Track this run: keep its lines on the charts')
+    expect(findTrack(wrapper).attributes('aria-describedby')).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('tracks the shown run', async () => {
     const store = useSimulationResultsStore()
     store.startRun(null)
