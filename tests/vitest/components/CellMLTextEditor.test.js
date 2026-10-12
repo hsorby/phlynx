@@ -2,7 +2,8 @@
 import { nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import PrimeVue from 'primevue/config'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { EditorView } from '@codemirror/view'
 import { CellMLTextParser } from 'cellml-text-editor'
 
 import CellMLTextEditor from '../../../src/components/CellMLTextEditor.vue'
@@ -23,7 +24,10 @@ const DEFINITIONS = [
 ]
 
 let wrapper
-afterEach(() => wrapper?.unmount())
+afterEach(() => {
+  wrapper?.unmount()
+  vi.restoreAllMocks()
+})
 
 /** Mounts the editor (Simple Mode unless told otherwise) and waits for its `init` report. */
 async function mountEditor(xml, props = {}) {
@@ -112,5 +116,20 @@ describe('CellMLTextEditor', () => {
     await nextTick()
     expect(changes().at(-1).text).toMatch(/var x: [^\n]*; \/\/ length/)
     expect(changes().at(-1).text).toContain('// Copy')
+  })
+
+  it('reports a variable clicked in the text, and nothing for a function or a double click', async () => {
+    await mountEditor(modelWith('<apply><plus/><ci>x</ci><apply><sin/><ci>x</ci></apply></apply>'))
+    const text = changes()[0].text
+    // Without layout, each character is 10px wide, at the position the click's x names.
+    vi.spyOn(EditorView.prototype, 'posAtCoords').mockImplementation(({ x }) => Math.floor(x / 10))
+    vi.spyOn(EditorView.prototype, 'coordsAtPos').mockImplementation((position) => ({ left: position * 10, right: position * 10, top: 0, bottom: 10 }))
+    const clickAt = (position, init = {}) =>
+      wrapper.find('.cm-content').element.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0, detail: 1, clientX: position * 10 + 2, ...init }))
+
+    clickAt(text.indexOf('x'))
+    clickAt(text.indexOf('sin'))
+    clickAt(text.indexOf('x'), { detail: 2 })
+    expect(wrapper.emitted('variable-click')).toEqual([['x']])
   })
 })
