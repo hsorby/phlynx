@@ -608,9 +608,11 @@ describe('useMathSession', () => {
     const CAMP = { name: 'cAMP', units: 'dimensionless', value: '0.01', type: 'constant', data_reference: 'user_defined' }
     const simpleText = new CellMLTextGenerator({ simplified: true }).generate(UNUSED_XML)
     const declares = (name) => session.currentModel.value.includes(`name="${name}"`)
+    let onInit
 
     beforeEach(async () => {
-      session = useMathSession({ history, editorRef, ports, plotVariables })
+      onInit = vi.fn()
+      session = useMathSession({ history, editorRef, ports, plotVariables, onInit })
       editorRef.value = fakeEditor(session)
       editorRef.value.lastXml = UNUSED_XML
       useLibraryStore().addMath(UNUSED_REF, UNUSED_XML)
@@ -651,6 +653,17 @@ describe('useMathSession', () => {
       const names = session.parameterRows.value.map((row) => row.name)
       expect(names).toContain('extra')
       expect(names).not.toContain('cAMP')
+    })
+
+    it('tells onInit once, after the first init since the load', async () => {
+      await editorRef.value.report('init', simpleText, true)
+      expect(onInit).toHaveBeenCalledTimes(1)
+      await editorRef.value.report('init', simpleText, true) // another editor mounted
+      expect(onInit).toHaveBeenCalledTimes(1)
+
+      await session.load({ mathRef: UNUSED_REF, rows: [{ ...CAMP }], managed: true })
+      await editorRef.value.report('init', 'not cellml', true)
+      expect(onInit).toHaveBeenCalledTimes(2)
     })
   })
 

@@ -625,7 +625,13 @@ const mathEditorRef = ref(null)
 const parameterTableRef = ref(null)
 
 // The math, its analysis and the parameter rows.
-const session = useMathSession({ history, editorRef: mathEditorRef, ports: editablePorts, plotVariables: trackedNames })
+const session = useMathSession({
+  history,
+  editorRef: mathEditorRef,
+  ports: editablePorts,
+  plotVariables: trackedNames,
+  onInit: rebaselineEditorState,
+})
 const {
   isManaged,
   currentModel,
@@ -954,6 +960,15 @@ const signEditorState = () =>
   })
 // The signature as loaded, so edits to values, the name or the ports count as unsaved.
 const savedEditorState = ref('')
+
+/**
+ * Moves the baseline to the state once the editor's first view of the math is applied, so anything
+ * that view changes in the rows or ports (e.g. a variable it no longer declares) never shows as an
+ * unsaved edit on open. The load sets the baseline first, in case no editor mounts.
+ */
+function rebaselineEditorState() {
+  if (!loading.value) savedEditorState.value = signEditorState()
+}
 
 // Edits a run wouldn't see, since runs use the saved instance.
 const hasUnsavedEdits = computed(

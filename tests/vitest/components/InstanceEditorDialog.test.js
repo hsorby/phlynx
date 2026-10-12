@@ -270,6 +270,22 @@ describe('InstanceEditorDialog Plot tab', () => {
     return wrapper.findComponent({ name: 'SimulationPanel' })
   }
 
+  it('keeps a declared variable no equation uses, and shows no save note on open', async () => {
+    const withCamp = XML.replace('<variable name="k"', '<variable name="cAMP" units="dimensionless"/>\n    <variable name="k"')
+    useLibraryStore().addMath(MATH_REF, withCamp)
+    const cAMP = { name: 'cAMP', units: 'dimensionless', value: '0.01', type: 'constant' }
+    mountDialog({ defaultTab: 'plot', variables: [cAMP] })
+    const editor = await open()
+    expect(editor.vm.$attrs['keep-variables']).toEqual(['cAMP'])
+
+    // Even an editor whose first view drops the row doesn't show the opened instance as edited.
+    await report(editor, 'init', XML)
+    expect(wrapper.find('.plot-tab-note').exists()).toBe(false)
+
+    await report(editor, 'edit', EDITED_XML)
+    expect(wrapper.find('.plot-tab-note').exists()).toBe(true)
+  })
+
   it('simulates the instance from its Plot tab', async () => {
     const workbench = await openPlotTab()
     expect(workbench.props('instanceId')).toBe('a')
