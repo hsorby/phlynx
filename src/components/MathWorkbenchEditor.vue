@@ -34,6 +34,7 @@ import 'katex/dist/katex.min.css'
 
 import { buildModelFromEquations, extractEquationsMathML } from '../services/math/mathmlModel'
 import { renameCiInMathML } from '../services/math/carryRenames'
+import { MATH_EDIT_DEBOUNCE_MS } from '../utils/constants'
 
 const props = defineProps({
   modelValue: {
@@ -52,14 +53,14 @@ const props = defineProps({
 
 /**
  * Emits `change` with `{ source, format, text, valid, xml }`, the contract useMathSession expects.
- * `source` is 'init' on mount, 'edit' once a line is committed, or 'external' after a prop change.
+ * `source` is 'init' on mount, 'edit' once typing pauses or a line is committed, or 'external' after
+ * a prop change.
  * `text` is the lines' Content MathML.
  */
 const emit = defineEmits(['change', 'save', 'undo', 'redo'])
 
 /** What this editor's text is written in, so the session can tell its text from another editor's. */
 const FORMAT = 'mathml'
-const DEBOUNCE_MS = 500
 const BLOCKED_MESSAGE = "The Math Editor can't edit this component. Use the CellML Text tab."
 
 const workbenchRef = ref(null)
@@ -73,8 +74,10 @@ let lastXml = props.modelValue
 let debouncer = null
 let pendingSource = 'external'
 let lastDefinitionsKey = ''
-// Edits are reported once the workbench commits the line, not while it is being typed.
+// Edits are reported once typing pauses with every line complete, or when the workbench commits
+// the line; each report is one undo step.
 let hasPendingEdit = false
+let editTimer = null
 
 // Math the workbench couldn't import would be lost on save, so the whole component is locked.
 const isBlocked = computed(() => importProblems.value.length > 0)
@@ -90,6 +93,16 @@ const variableUnits = computed(() =>
 )
 
 const definitionsKey = () => JSON.stringify(props.variableDefinitions)
+
+/** Whether every line with math in it is a complete equation, so it can be built. */
+const linesComplete = () => lines.every((line) => !line.mathml || line.complete)
+
+function clearEditTimer() {
+  if (editTimer) {
+    clearTimeout(editTimer)
+    editTimer = null
+  }
+}
 
 /** This editor's text: the lines' Content MathML. */
 const linesText = () =>
@@ -117,6 +130,7 @@ function run(source, { silent = false } = {}) {
   if (!silent) {
     if (hasPendingEdit && source === 'external') source = 'edit'
     hasPendingEdit = false
+    clearEditTimer()
   }
   pendingSource = 'external'
   lastDefinitionsKey = definitionsKey()
@@ -158,7 +172,21 @@ function run(source, { silent = false } = {}) {
 function schedule(source) {
   if (debouncer) clearTimeout(debouncer)
   pendingSource = source
-  debouncer = setTimeout(() => run(pendingSource), DEBOUNCE_MS)
+  debouncer = setTimeout(() => {
+    // A prop change mid-equation would report the half-typed line as an invalid edit, so it only
+    // updates the build; the edit reports it, with the new props, once the line is complete.
+    const silent = pendingSource === 'external' && hasPendingEdit && !linesComplete()
+    run(pendingSource, { silent })
+  }, MATH_EDIT_DEBOUNCE_MS)
+}
+
+/** Reports the pending edit once typing pauses, unless a line is still incomplete. */
+function scheduleEdit() {
+  clearEditTimer()
+  editTimer = setTimeout(() => {
+    editTimer = null
+    if (hasPendingEdit && !isBlocked.value && linesComplete()) run('edit')
+  }, MATH_EDIT_DEBOUNCE_MS)
 }
 
 /** Reports any uncommitted edit or scheduled prop change now. */
@@ -168,8 +196,8 @@ function flush() {
 }
 
 /**
- * Keeps the latest lines. Edits wait for the workbench to commit the line, except deleting a line,
- * which is done at once and never commits one. Loads are reported by whoever called setMathML.
+ * Keeps the latest lines. Edits are reported once typing pauses or the workbench commits the line,
+ * except deleting a line, which is reported at once. Loads are reported by whoever called setMathML.
  *
  * @param {Array} nextLines - The workbench's EquationLine list.
  * @param {{ source: 'load'|'edit' }} info
@@ -181,11 +209,13 @@ function handleEquationsChange(nextLines, info) {
   if (info?.source !== 'edit') return
   hasPendingEdit = true
   if (removedLine) run('edit')
+  else scheduleEdit()
 }
 
 /**
- * Reports the edit once the workbench commits a line: on Enter, a new line, moving to another line,
- * leaving the editor, or a paste. It only commits lines whose math changed.
+ * Reports the edit without waiting for the pause once the workbench commits a line: on Enter, a new
+ * line, moving to another line, leaving the editor, or a paste. It only commits lines whose math
+ * changed, and reports incomplete lines as edits that don't parse.
  */
 function handleLineCommit() {
   if (hasPendingEdit) run('edit')
@@ -216,6 +246,7 @@ async function loadMathML(mathml) {
     clearTimeout(debouncer)
     debouncer = null
   }
+  clearEditTimer()
   hasPendingEdit = false
   const result = workbenchRef.value?.setMathML(mathml)
   importProblems.value = result?.problems ?? []
@@ -310,6 +341,7 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleWindowKeyDown)
   if (debouncer) clearTimeout(debouncer)
+  clearEditTimer()
 })
 </script>
 

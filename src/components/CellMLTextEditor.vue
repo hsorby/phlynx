@@ -129,6 +129,8 @@ import {
   renameIdentifier,
 } from 'cellml-text-editor'
 
+import { MATH_EDIT_DEBOUNCE_MS } from '../utils/constants'
+
 const katexPromise = import('katex')
 
 const props = defineProps({
@@ -163,8 +165,6 @@ const FORMAT = 'cellml-text'
  * `source` is 'init' on mount, 'edit' for typing, or 'external' after a prop change.
  */
 const emit = defineEmits(['update:simple', 'update:componentName', 'change', 'save', 'undo', 'redo'])
-
-const DEBOUNCE_MS = 500
 
 const isSimple = computed({
   get: () => props.simple,
@@ -527,7 +527,7 @@ function schedule(source) {
   if (debouncer && pendingSource === 'edit') source = 'edit'
   if (debouncer) clearTimeout(debouncer)
   pendingSource = source
-  debouncer = setTimeout(() => run(pendingSource), DEBOUNCE_MS)
+  debouncer = setTimeout(() => run(pendingSource), MATH_EDIT_DEBOUNCE_MS)
 }
 
 function flush() {
