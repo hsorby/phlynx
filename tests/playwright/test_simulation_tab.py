@@ -1198,6 +1198,12 @@ class TestSimulationTab(unittest.TestCase):
             name.click()
             expect(dialog.locator(".simulation-plot .plot-title")).to_have_text("soma_SN/V_sensed")
             expect(dialog.get_by_role("tab", name="Plot (1)")).to_be_visible()
+
+            # A single-letter name isn't wrapped as a name, but its letter still plots it.
+            letter = dialog.locator("[data-atom]:not([data-name] [data-atom])").filter(has_text=re.compile(r"^V$")).first
+            letter.scroll_into_view_if_needed()
+            letter.click()
+            expect(dialog.locator(".simulation-plot .plot-title")).to_have_text("soma_SN/V")
             # ----------- END ------------
 
             context.close()
