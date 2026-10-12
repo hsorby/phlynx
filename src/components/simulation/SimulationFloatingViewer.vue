@@ -93,7 +93,7 @@
           @mousedown.stop
           @click="showSliders = !showSliders"
         />
-        <!-- Keeps the shown run's lines on the plot, as the Runs list in the Simulation tab does. -->
+        <!-- Keeps the shown run's lines on the plot, as the Simulation tab's toolbar does. -->
         <Button
           icon="pi pi-bookmark"
           text
@@ -195,7 +195,7 @@
               :note="chart.note"
               :series="chart.series"
               :references="chart.references"
-              :height="chartHeight"
+              fill
             />
           </template>
           <div v-else class="viewer-empty">
@@ -453,7 +453,8 @@ watch(chartEl, (element) => {
 })
 onBeforeUnmount(() => resizeObserver?.disconnect())
 
-// The plot's heading takes about 24px besides the drawing, which includes its axes.
+// A feature plot's heading takes about 24px besides the drawing, which includes its axes; simulation plots fill
+// the space themselves.
 const CHART_CHROME_PX = 24
 const chartHeight = computed(() =>
   Math.max(120, Math.round(chartAreaHeight.value / Math.max(1, shownCharts.value.length) - CHART_CHROME_PX))
@@ -601,6 +602,7 @@ function pinWhereShown() {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  gap: 8px;
 }
 
 

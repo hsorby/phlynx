@@ -401,8 +401,8 @@ class TestSimulationTab(unittest.TestCase):
             page.wait_for_function(f"{RESULTS_STORE}.status === 'done'", timeout=120000)
 
             page.get_by_role("button", name=re.compile(r"^Runs \(0\)")).click()
-            expect(page.get_by_text("Track a run to keep its lines on the charts")).to_be_visible()
-            page.get_by_role("button", name="Track run").click()
+            expect(page.get_by_text("Track a run from the toolbar to keep its lines on the charts")).to_be_visible()
+            page.get_by_role("button", name="Track this run", exact=True).click()
             expect(page.get_by_role("button", name=re.compile(r"^Runs \(1\)"))).to_be_visible()
             expect(page.get_by_text("Run #1")).to_be_visible()
             # The chart says which run each line is from: the live run solid, the tracked run dashed.
@@ -433,11 +433,16 @@ class TestSimulationTab(unittest.TestCase):
             page.get_by_role("button", name=re.compile(r"^Runs \(1\)")).click()
             expect(page.locator(".run-item").nth(1)).to_contain_text("The model’s values")
             expect(page.locator(".run-item").nth(0)).to_contain_text("soma_SN/Cm = 31.8 picoF")
-            page.get_by_role("button", name="Hide run #1").click()
+            # A tracked run named in the list goes by its name on the chart.
+            page.locator(".run-name--editable").click()
+            page.get_by_role("textbox", name="Run name").fill("Small Cm")
+            page.keyboard.press("Enter")
+            expect(run_key).to_have_text(["Live", "Small Cm"])
+            page.get_by_role("button", name="Hide Small Cm", exact=True).click()
             expect(run_key).to_have_count(0)
-            page.get_by_role("button", name="Show run #1").click()
-            expect(run_key).to_have_text(["Live", "#1"])
-            page.get_by_role("button", name="Stop tracking run #1").click()
+            page.get_by_role("button", name="Show Small Cm", exact=True).click()
+            expect(run_key).to_have_text(["Live", "Small Cm"])
+            page.get_by_role("button", name="Stop tracking Small Cm", exact=True).click()
             expect(page.get_by_role("button", name=re.compile(r"^Runs \(0\)"))).to_be_visible()
             expect(run_key).to_have_count(0)
             # ----------- END ------------
@@ -1143,12 +1148,11 @@ class TestSimulationTab(unittest.TestCase):
 
             add_slider(page, "soma_SN/g_Na")
 
+            # Floating the results closes the sidebar, leaving the viewer up, and its sliders still rerun the model.
             page.get_by_role("button", name="Float the results over the canvas").click()
             viewer = page.locator(".simulation-floating-viewer")
             expect(viewer.locator(".simulation-plot .plot-title")).to_have_text("soma_SN/V")
-
-            # Closing the sidebar leaves the viewer up, and its sliders still rerun the model.
-            page.locator(".resizable-context-panel .aside-collapse-toggle").click()
+            expect(page.locator(".context-aside--collapsed")).to_have_count(1)
             expect(viewer).to_be_visible()
             # Showing the sliders makes the window taller rather than squeezing the plot.
             height_before = viewer.bounding_box()["height"]

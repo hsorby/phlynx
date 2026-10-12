@@ -2332,8 +2332,10 @@ function handleCreateInspectionModule(payload) {
 
 const contextMenuRef = ref(null)
 const contextSidebarRef = ref(null)
-// The floating viewer's way back to the Simulation tab.
-useFloatingViewer().setTabOpener(() => contextSidebarRef.value?.showTab('sim'))
+// The floating viewer's way back to the Simulation tab, and out of the canvas's way.
+const floatingViewer = useFloatingViewer()
+floatingViewer.setTabOpener(() => contextSidebarRef.value?.showTab('sim'))
+floatingViewer.setSidebarCollapser(() => contextSidebarRef.value?.collapse())
 const { run: runSimulation } = useSimulation()
 const simulationResultsStore = useSimulationResultsStore()
 

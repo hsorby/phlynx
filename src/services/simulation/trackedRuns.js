@@ -28,13 +28,23 @@ export const TRACKED_RUN_ALPHA = 0.6
 export const runDash = (number) => RUN_DASHES[(number - 1) % RUN_DASHES.length]
 
 /**
+ * Names a tracked run, by the name it was given or else its number.
+ *
+ * @param {number} number
+ * @param {string|null} [name]
+ * @returns {string} The name, or `Run #n`.
+ */
+export const runName = (number, name = null) => name || `Run #${number}`
+
+/**
  * Names a tracked run's line after its variable's.
  *
  * @param {string} label
  * @param {number} number
+ * @param {string|null} [name] - The run's own name, in place of its number.
  * @returns {string}
  */
-export const runLabel = (label, number) => `${label} [#${number}]`
+export const runLabel = (label, number, name = null) => `${label} [${name || `#${number}`}]`
 
 /**
  * Formats a value to 5 significant figures, as the charts' readout and the runs list show values.

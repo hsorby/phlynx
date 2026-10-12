@@ -67,11 +67,23 @@ describe('useSimulationCharts with tracked runs', () => {
     expect(chart.series.map((series) => series.label)).toEqual(['cell/V [#1]', 'cell/w [#1]', 'cell/V', 'cell/w'])
     const [trackedV, , liveV] = chart.series
     expect(trackedV.slot).toBe(liveV.slot)
-    expect(trackedV.run).toEqual({ number: 1, dash: runDash(1) })
+    expect(trackedV.run).toEqual({ number: 1, name: null, dash: runDash(1) })
+    expect(trackedV.liveKey).toBe(liveV.key)
     expect(liveV.run).toBeNull()
     expect(Array.from(trackedV.values)).toEqual([0, 1])
     expect(Array.from(liveV.values)).toEqual([10, 11])
     expect(chart.titleParts.map((part) => part.slot)).toEqual([chart.series[2].slot, chart.series[3].slot])
+    expect(chart.titleParts.map((part) => part.key)).toEqual([chart.series[2].key, chart.series[3].key])
+  })
+
+  it('names a tracked run’s lines by the name it was given', () => {
+    const { charts } = useSimulationCharts(NODES)
+    finish(makeResults([0, 1], 0))
+    const run = store.trackRun()
+    store.renameTrackedRun(run.id, 'Low gain')
+    const [trackedV] = charts.value[0].series
+    expect(trackedV.label).toBe('cell/V [Low gain]')
+    expect(trackedV.run.name).toBe('Low gain')
   })
 
   it('leaves out hidden runs, and the live run when it is hidden', () => {
@@ -170,7 +182,7 @@ describe('useSimulationCharts with tracked runs', () => {
       ])
       expect(w.series.map(({ slot }) => slot)).toEqual([0, 1])
       expect(Array.from(v.series[1].values)).toEqual([11, 12, 13])
-      expect(v.titleParts).toEqual([{ component: 'cell', name: 'V', slot: 0 }])
+      expect(v.titleParts).toEqual([{ component: 'cell', name: 'V', key: v.series[0].key, slot: 0 }])
       // The plot list shows no one colour for a variable drawn as curves.
       expect(store.getSeriesSlots().has('a::V')).toBe(false)
     })

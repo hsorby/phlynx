@@ -152,23 +152,133 @@ describe('SimulationPlot: reference lines', () => {
     expect(wrapper.vm.snapshot().legend.at(-1)).toMatchObject({ label: 'V recorded (obs)', isDashed: false, isPoint: true })
   })
 
-  it('shows a hidden line again once tracked runs take its name’s place in the title', async () => {
+  it('keeps a variable hidden once runs are tracked, hiding its tracked lines with its live one', async () => {
     const live = [
       { key: 'a::x', label: 'a/x', variableLabel: 'a/x', slot: 0, values: [1, 2, 3, 4], run: null },
       { key: 'a::y', label: 'a/y', variableLabel: 'a/y', slot: 1, values: [4, 3, 2, 1], run: null },
     ]
     const titleParts = [
-      { component: 'a', name: 'x', slot: 0 },
-      { component: 'a', name: 'y', slot: 1 },
+      { component: 'a', name: 'x', key: 'a::x', slot: 0 },
+      { component: 'a', name: 'y', key: 'a::y', slot: 1 },
     ]
     wrapper = mount(SimulationPlot, { props: { title: 'a/x, a/y', titleParts, unit: 'm', x: X, series: live }, attachTo: document.body })
     await wrapper.findAll('.plot-title .plot-key-toggle')[0].trigger('click')
     expect(wrapper.find('.plot-title .plot-key-toggle').classes()).toContain('is-hidden')
 
-    const tracked = live.map((item) => ({ ...item, key: `run_1::${item.key}`, label: `${item.label} #1`, run: { number: 1, dash: [4, 4] } }))
+    const trackedBy = (number) =>
+      live.map((item) => ({ ...item, key: `run_${number}::${item.key}`, liveKey: item.key, label: `${item.label} [#${number}]`, run: { number, name: null, dash: [4, 4] } }))
+    await wrapper.setProps({ series: [...trackedBy(1), ...live] })
+    const toggles = wrapper.findAll('.plot-title .plot-key-toggle')
+    expect(toggles).toHaveLength(2)
+    expect(toggles[0].classes()).toContain('is-hidden')
+    expect(charts.at(-1).options.series.slice(1).map((series) => series.show)).toEqual([false, true, false, true])
+
+    // Another run tracked, its line of the hidden variable hidden as it's drawn.
+    await wrapper.setProps({ series: [...trackedBy(1), ...trackedBy(2), ...live] })
+    expect(charts.at(-1).options.series.slice(1).map((series) => series.show)).toEqual([false, true, false, true, false, true])
+
+    // Showing the variable again shows each of its lines.
+    const setSeries = vi.spyOn(charts.at(-1), 'setSeries')
+    await wrapper.findAll('.plot-title .plot-key-toggle')[0].trigger('click')
+    expect(setSeries.mock.calls).toEqual([
+      [1, { show: true }],
+      [3, { show: true }],
+      [5, { show: true }],
+    ])
+  })
+
+  it('leaves a variable hidden while runs are tracked out of the image’s title', async () => {
+    const live = [
+      { key: 'a::x', label: 'a/x', variableLabel: 'a/x', slot: 0, values: [1, 2, 3, 4], run: null },
+      { key: 'a::y', label: 'a/y', variableLabel: 'a/y', slot: 1, values: [4, 3, 2, 1], run: null },
+    ]
+    const tracked = live.map((item) => ({ ...item, key: `run_1::${item.key}`, liveKey: item.key, label: `${item.label} [#1]`, run: { number: 1, name: null, dash: [4, 4] } }))
+    const titleParts = [
+      { component: 'a', name: 'x', key: 'a::x', slot: 0 },
+      { component: 'a', name: 'y', key: 'a::y', slot: 1 },
+    ]
+    wrapper = mount(SimulationPlot, { props: { title: 'a/x, a/y', titleParts, unit: 'm', x: X, series: [...tracked, ...live] }, attachTo: document.body })
+    await wrapper.findAll('.plot-title .plot-key-toggle')[1].trigger('click')
+    const snapshot = wrapper.vm.snapshot()
+    expect(snapshot.title).toBe('a/x (m)')
+    expect(snapshot.legend.map(({ label }) => label)).toEqual(['a/x', 'a/x [#1]'])
+  })
+
+  it('keeps a hidden variable hidden while the chart has no lines, as hiding every run leaves it', async () => {
+    const live = [
+      { key: 'a::x', label: 'a/x', variableLabel: 'a/x', slot: 0, values: [1, 2, 3, 4], run: null },
+      { key: 'a::y', label: 'a/y', variableLabel: 'a/y', slot: 1, values: [4, 3, 2, 1], run: null },
+    ]
+    const tracked = live.map((item) => ({ ...item, key: `run_1::${item.key}`, liveKey: item.key, label: `${item.label} [#1]`, run: { number: 1, name: null, dash: [4, 4] } }))
+    const titleParts = [
+      { component: 'a', name: 'x', key: 'a::x', slot: 0 },
+      { component: 'a', name: 'y', key: 'a::y', slot: 1 },
+    ]
+    wrapper = mount(SimulationPlot, { props: { title: 'a/x, a/y', titleParts, unit: 'm', x: X, series: tracked }, attachTo: document.body })
+    await wrapper.findAll('.plot-title .plot-key-toggle')[0].trigger('click')
+    await wrapper.setProps({ series: [] })
+    await wrapper.setProps({ series: tracked })
+    expect(wrapper.findAll('.plot-title .plot-key-toggle')[0].classes()).toContain('is-hidden')
+    expect(charts.at(-1).options.series.slice(1).map((series) => series.show)).toEqual([false, true])
+  })
+
+  it('keys each variable once, with the runs keyed apart, when the title doesn’t name the lines', async () => {
+    const live = [
+      { key: 'a::x', label: 'a/x', variableLabel: 'a/x', slot: 0, values: [1, 2, 3, 4], run: null },
+      { key: 'a::y', label: 'a/y', variableLabel: 'a/y', slot: 1, values: [4, 3, 2, 1], run: null },
+    ]
+    const tracked = live.map((item) => ({ ...item, key: `run_1::${item.key}`, liveKey: item.key, label: `${item.label} [Low]`, run: { number: 1, name: 'Low', dash: [4, 4] } }))
+    wrapper = mount(SimulationPlot, { props: { title: 'Plot (2 variables)', unit: 'm', x: X, series: [...tracked, ...live] }, attachTo: document.body })
+    const keys = wrapper.findAll('.plot-key:not([aria-label]) .plot-key-toggle')
+    expect(keys.map((key) => key.text())).toEqual(['a/x', 'a/y'])
+    expect(wrapper.find('.plot-key[aria-label="Runs"]').text()).toContain('Low')
+
+    await keys[1].trigger('click')
+    expect(charts.at(-1).options.series.length).toBe(5)
+    await wrapper.setProps({ series: [...live, ...tracked] })
+    expect(charts.at(-1).options.series.slice(1).map((series) => series.show)).toEqual([true, false, true, false])
+  })
+
+  it('hides a run’s lines by clicking it in the Runs key, leaving the variables’ toggles as they are', async () => {
+    const live = [
+      { key: 'a::x', label: 'a/x', variableLabel: 'a/x', slot: 0, values: [1, 2, 3, 4], run: null },
+      { key: 'a::y', label: 'a/y', variableLabel: 'a/y', slot: 1, values: [4, 3, 2, 1], run: null },
+    ]
+    const tracked = live.map((item) => ({ ...item, key: `run_1::${item.key}`, liveKey: item.key, label: `${item.label} [Low]`, run: { number: 1, name: 'Low', dash: [4, 4] } }))
+    wrapper = mount(SimulationPlot, { props: { title: 'Plot (2 variables)', unit: 'm', x: X, series: [...live, ...tracked] }, attachTo: document.body })
+    const runs = wrapper.findAll('.plot-key[aria-label="Runs"] .plot-key-toggle')
+    expect(runs.map((run) => run.text())).toEqual(['Live', 'Low'])
+    const setSeries = vi.spyOn(charts.at(-1), 'setSeries')
+
+    await runs[1].trigger('click')
+    expect(setSeries.mock.calls).toEqual([
+      [3, { show: false }],
+      [4, { show: false }],
+    ])
+    expect(runs[1].attributes('aria-pressed')).toBe('false')
+    expect(runs[1].attributes('title')).toBe('Show Low')
+    expect(wrapper.findAll('.plot-key:not([aria-label]) .plot-key-toggle').every((key) => key.attributes('aria-pressed') === 'true')).toBe(true)
+    expect(wrapper.vm.snapshot().legend.map((item) => item.label)).toEqual(['a/x', 'a/y'])
+
+    // A redraw keeps the run hidden.
     await wrapper.setProps({ series: [...tracked, ...live] })
-    expect(wrapper.findAll('.plot-title .plot-key-toggle')).toHaveLength(0)
-    expect(charts.at(-1).options.series.slice(1).map((series) => series.show)).toEqual([true, true, true, true])
+    expect(charts.at(-1).options.series.slice(1).map((series) => series.show)).toEqual([false, false, true, true])
+  })
+
+  it('sizes a filling chart’s drawing to the space under its heading, not to its height', () => {
+    const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function () {
+      return this.classList.contains('plot-chart') ? 250 : 0
+    })
+    try {
+      wrapper = mount(SimulationPlot, { props: { title: 'Plot', unit: 'm', x: X, series: SERIES, height: 300, fill: true } })
+      expect(charts.at(-1).options.height).toBe(250)
+      expect(wrapper.find('.simulation-plot').classes()).toContain('is-fill')
+    } finally {
+      clientHeight.mockRestore()
+    }
+    wrapper.unmount()
+    wrapper = mount(SimulationPlot, { props: { title: 'Plot', unit: 'm', x: X, series: SERIES, height: 300 } })
+    expect(charts.at(-1).options.height).toBe(300)
   })
 
   it('names each experiment’s line in the readout, with every experiment shown at once', async () => {

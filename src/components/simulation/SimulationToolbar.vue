@@ -73,8 +73,23 @@
     />
 
     <span class="toolbar-spacer"></span>
+    <!-- A span carries the tooltip, as a disabled button shows none. -->
+    <span class="toolbar-track" v-tooltip.bottom="trackBlocker ?? 'Track this run: keep its lines on the charts'">
+      <Button
+        icon="pi pi-bookmark"
+        text
+        rounded
+        size="small"
+        severity="secondary"
+        :disabled="!!trackBlocker"
+        aria-label="Track this run"
+        :aria-describedby="trackBlocker ? trackBlockerId : undefined"
+        @click="track"
+      />
+      <span v-if="trackBlocker" :id="trackBlockerId" class="visually-hidden">{{ trackBlocker }}</span>
+    </span>
     <Button
-      icon="pi pi-clone"
+      icon="pi pi-window-minimize"
       text
       rounded
       size="small"
@@ -82,7 +97,7 @@
       :aria-pressed="floatingViewer.visible"
       aria-label="Float the results over the canvas"
       v-tooltip.bottom="floatingViewer.visible ? 'Close the floating viewer' : 'Float over the canvas'"
-      @click="toggleFloatingViewer"
+      @click="toggleFloatingViewer({ isCollapsingSidebar: isInSidebar })"
     />
     <Button
       icon="pi pi-window-maximize"
@@ -123,10 +138,10 @@
 <script setup>
 /**
  * The Simulation tab's controls: play or stop, whether play runs the selection or the whole model, whether it
- * runs the workspace's protocol or the sweep, and which experiment is shown, and buttons for the larger view, the protocol and the
- * simulation settings.
+ * runs the workspace's protocol or the sweep, and which experiment is shown, and buttons to track the run, float or
+ * enlarge the results, and open the protocol and the simulation settings.
  */
-import { computed, watch } from 'vue'
+import { computed, useId, watch } from 'vue'
 
 import Button from 'primevue/button'
 import ToggleSwitch from 'primevue/toggleswitch'
@@ -134,6 +149,7 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import { useFloatingViewer } from '../../composables/useFloatingViewer'
 import { useProtocolDialog } from '../../composables/useProtocolDialog'
 import { useSimSettingsDialog } from '../../composables/useSimSettingsDialog'
+import { useTrackRun } from '../../composables/useTrackRun'
 import { findSweepProblem, sweepLabel } from '../../services/simulation/sweep'
 import { useProtocolStore } from '../../stores/protocolStore'
 import { useSimulationResultsStore } from '../../stores/simulationResultsStore'
@@ -154,6 +170,8 @@ const props = defineProps({
   // The shown results are out of date, so play would update them.
   isOutdated: { type: Boolean, default: false },
   canExpand: { type: Boolean, default: false },
+  // The toolbar is the sidebar's, so floating the results hides the sidebar to give the canvas room.
+  isInSidebar: { type: Boolean, default: false },
 })
 const emit = defineEmits(['play', 'stop', 'expand'])
 
@@ -192,6 +210,9 @@ function toggleSweep() {
 }
 
 const { state: floatingViewer, toggle: toggleFloatingViewer } = useFloatingViewer()
+const { trackBlocker, track } = useTrackRun()
+// The tooltip saying why tracking is blocked shows only on hover, so screen readers are told it too.
+const trackBlockerId = useId()
 
 const isWholeModel = computed({
   get: () => scopeMode.value === 'model',
@@ -264,6 +285,21 @@ const playHint = computed(() => props.blockedReason ?? (props.isLoading ? 'Loadi
 
 .toolbar-spacer {
   flex: 1;
+}
+
+.toolbar-track {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 /* A filled circle a little larger than the other buttons, as the toolbar's main action. */

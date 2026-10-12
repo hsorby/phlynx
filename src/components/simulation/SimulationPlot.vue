@@ -1,22 +1,22 @@
 <template>
-  <figure class="simulation-plot">
+  <figure class="simulation-plot" :class="{ 'is-fill': fill }">
     <figcaption class="plot-head">
       <span class="plot-title">
         <template v-if="titleParts">
           <template v-for="(part, index) in titleParts" :key="index"
             ><span v-if="index" class="plot-title-separator">, </span
             ><!-- A span rather than a button, so the title's ellipsis can cut a long name rather than drop it whole. --><span
-              v-if="titleNamesLines && series[index]"
+              v-if="titleToggles[index]"
               role="button"
               tabindex="0"
               class="plot-key-toggle"
-              :class="{ 'is-hidden': isHidden(series[index]) }"
-              :aria-pressed="!isHidden(series[index])"
-              :title="toggleHint(series[index])"
-              @click="toggleSeries(series[index])"
-              @keydown.enter.prevent="toggleSeries(series[index])"
-              @keydown.space.prevent="toggleSeries(series[index])"
-              ><span class="plot-key-swatch plot-title-swatch" :style="{ background: colourOf(series[index]) }" aria-hidden="true"></span
+              :class="{ 'is-hidden': isHidden(titleToggles[index]) }"
+              :aria-pressed="!isHidden(titleToggles[index])"
+              :title="toggleHint(titleToggles[index])"
+              @click="toggleSeries(titleToggles[index])"
+              @keydown.enter.prevent="toggleSeries(titleToggles[index])"
+              @keydown.space.prevent="toggleSeries(titleToggles[index])"
+              ><span class="plot-key-swatch plot-title-swatch" :style="{ background: colourOf(titleToggles[index]) }" aria-hidden="true"></span
               ><span v-if="part.component" class="plot-title-component">{{ part.component }}/</span><span>{{ part.name }}</span></span
             ><template v-else
               ><span v-if="titleParts.length > 1 && part.slot !== undefined" class="plot-key-swatch plot-title-swatch" :style="{ background: colourOf(part) }" aria-hidden="true"></span
@@ -56,11 +56,21 @@
         </button>
       </li>
     </ul>
-    <!-- With the title naming the lines, which runs they are from: the live run solid, tracked runs dashed. -->
-    <ul v-if="runKey.length && titleParts && !x.isSteadyState" class="plot-key" aria-label="Runs">
+    <!-- With tracked runs, the title or key names the variables, and this which runs the lines are from: the live run
+      solid, tracked runs dashed. -->
+    <ul v-if="runKey.length && !x.isSteadyState" class="plot-key" aria-label="Runs">
       <li v-for="item in runKey" :key="item.number">
-        <RunSwatch v-if="item.dash" :colour="chrome.text" :dash="item.dash" /><span v-else class="plot-key-swatch" :style="{ background: chrome.text }" aria-hidden="true"></span
-        >{{ item.label }}
+        <button
+          type="button"
+          class="plot-key-toggle"
+          :class="{ 'is-hidden': isHidden(item) }"
+          :aria-pressed="!isHidden(item)"
+          :title="toggleHint(item)"
+          @click="toggleSeries(item)"
+        >
+          <RunSwatch v-if="item.dash" :colour="chrome.text" :dash="item.dash" /><span v-else class="plot-key-swatch" :style="{ background: chrome.text }" aria-hidden="true"></span
+          >{{ item.label }}
+        </button>
       </li>
     </ul>
     <!-- A steady state has one value per variable and no time to plot them against. -->
@@ -77,7 +87,7 @@
       <!-- The values under the cursor, beside it, as plotly's hover does, in place of a legend line. -->
       <div v-if="readout" class="plot-readout" :style="{ left: `${readout.left}px`, top: `${readout.top}px` }" aria-hidden="true">
         <div class="plot-readout-time">{{ readout.time }}</div>
-        <div v-for="row in readout.rows.filter((row) => !hiddenKeys.has(row.key))" :key="row.key" class="plot-readout-row">
+        <div v-for="row in readout.rows.filter((row) => !row.hiddenBy.some((key) => hiddenKeys.has(key)))" :key="row.key" class="plot-readout-row">
           <RunSwatch v-if="row.dash" :colour="row.colour" :dash="row.dash" />
           <span v-else class="plot-key-swatch" :style="{ background: row.colour }"></span>
           <span v-if="row.label" class="plot-readout-label">{{ row.label }}</span>
@@ -118,14 +128,17 @@ const props = defineProps({
   // run's own x-axis.
   x: { type: Object, required: true },
   // [{ key, label, variableLabel, slot, values, run, xValues, runValues, isStepped? }], run being a tracked run's
-  // `{ number, dash }`, or null for the live run. On a phase plot, xValues and runValues are the series' own
-  // x values and run x-axis values, as a tracked run's differ from the live run's.
+  // `{ number, name, dash }`, or null for the live run, and a tracked run's liveKey the live run's line of its variable.
+  // On a phase plot, xValues and runValues are the series' own x values and run x-axis values, as a tracked run's differ
+  // from the live run's.
   series: { type: Array, required: true },
   // Lines across a window or up the chart, in values, as protocolPlotGroups builds them: [{ key, label, role, slot,
   // orientation, from, to, value }], `role` 'obs' (dashed) or 'calc' (solid); or a recorded series' `points`
   // ([{ x, y }]), orientation 'points'.
   references: { type: Array, default: () => [] },
   height: { type: Number, default: 220 },
+  // Fills the height its container gives it, the drawing taking what its heading and keys leave, in place of `height`.
+  fill: { type: Boolean, default: false },
   // Charts with the same key show their cursors at the same time.
   syncKey: { type: String, default: null },
   // Names the chart, so it keeps its zoom when rebuilt.
@@ -171,32 +184,93 @@ const readoutNote = computed(() => {
  */
 const xUnit = () => (props.x.unit && props.x.unit !== 'dimensionless' ? shortUnit(props.x.unit) : '')
 
+// The least height of a filling chart's drawing, to stay readable in a small window.
+const MIN_FILL_HEIGHT_PX = 120
+
+/**
+ * Gets the drawing's height: `height`, or a filling chart's the space left under its heading and keys.
+ *
+ * @returns {number} Pixels.
+ */
+const plotHeight = () => (props.fill ? Math.max(MIN_FILL_HEIGHT_PX, Math.floor(chartEl.value?.clientHeight ?? 0)) : props.height)
+
 const chartEl = ref(null)
 const { isDarkMode } = useColorScheme()
 const readout = ref(null)
-// The keys of the series hidden by clicking them in the title or key, kept across redraws.
+// The keys of the lines hidden by clicking them in the title or key, kept across redraws: a tracked run's line goes by
+// its live run's key, so its variable's toggle hides both, and a run's key in the Runs key hides every line of it.
 const hiddenKeys = ref(new Set())
+
+/**
+ * Gets the key a line is hidden by: the live run's line of its variable, for a tracked run's.
+ *
+ * @param {{key: string, liveKey?: string}} item
+ * @returns {string}
+ */
+const lineKeyOf = (item) => item.liveKey ?? item.key
 
 /**
  * Tells whether a series is hidden.
  *
- * @param {{key: string}} item
+ * @param {{key: string, liveKey?: string}} item
  * @returns {boolean}
  */
-const isHidden = (item) => hiddenKeys.value.has(item.key)
+const isHidden = (item) => hiddenKeys.value.has(lineKeyOf(item))
+
+/**
+ * Gets the key a run's lines are hidden by, the live run's being 0.
+ *
+ * @param {number} number - The run's number.
+ * @returns {string}
+ */
+const runToggleKey = (number) => `run:${number}`
+
+/**
+ * Gets the keys that hide a series' line: its variable's and its run's.
+ *
+ * @param {{key: string, liveKey?: string, run: {number: number}|null}} series
+ * @returns {string[]}
+ */
+const hiddenKeysOf = (series) => [lineKeyOf(series), runToggleKey(series.run?.number ?? 0)]
+
+/**
+ * Tells whether a series' line is hidden, by its variable or by its run.
+ *
+ * @param {{key: string, liveKey?: string, run: {number: number}|null}} series
+ * @returns {boolean}
+ */
+const isLineHidden = (series) => hiddenKeysOf(series).some((key) => hiddenKeys.value.has(key))
 
 const hasRuns = computed(() => props.series.some((item) => item.run))
-// Whether the title names each line, and so carries their toggles; otherwise the key under it does. With tracked
-// runs, the title names the variables, and the run key which runs the lines are from. A steady state lists its values,
-// with no lines to hide.
+// Whether the title names each line, and so carries their toggles; otherwise the key under it does. A steady state
+// lists its values, with no lines to hide.
 const titleNamesLines = computed(
   () => !hasRuns.value && !props.x.isSteadyState && props.series.length > 1 && props.titleParts?.length === props.series.length
 )
-// What the key lists: the lines, unless the title names them or there's one with nothing beside it, then the
-// reference lines. A steady state lists its values instead.
+// With tracked runs, the variables the lines show, each toggling its live and tracked lines together.
+const runVariables = computed(() => {
+  if (!hasRuns.value) return []
+  const variables = new Map()
+  for (const item of readoutOrder.value) {
+    const key = lineKeyOf(item)
+    if (!variables.has(key)) variables.set(key, { key, label: item.variableLabel ?? item.label, slot: item.slot })
+  }
+  return [...variables.values()]
+})
+// The toggle for each part of the title, or none: its line, or with tracked runs, its variable's lines.
+const titleToggles = computed(() => {
+  if (!props.titleParts) return []
+  if (!hasRuns.value) return titleNamesLines.value ? props.titleParts.map((_, index) => props.series[index] ?? null) : []
+  if (props.x.isSteadyState || props.titleParts.length < 2) return []
+  const byKey = new Map(runVariables.value.map((variable) => [variable.key, variable]))
+  return props.titleParts.map((part) => byKey.get(part.key) ?? null)
+})
+// What the key lists: the lines (with tracked runs, their variables), unless the title names them or there's one with
+// nothing beside it, then the reference lines. A steady state lists its values instead.
 const keyed = computed(() => {
   if (props.x.isSteadyState) return []
-  const listsLines = !titleNamesLines.value && !(hasRuns.value && props.titleParts) && (props.series.length > 1 || props.references.length)
+  if (hasRuns.value) return [...(!props.titleParts && runVariables.value.length > 1 ? runVariables.value : []), ...props.references]
+  const listsLines = !titleNamesLines.value && (props.series.length > 1 || props.references.length)
   return [...(listsLines ? props.series : []), ...props.references]
 })
 
@@ -209,14 +283,17 @@ const keyed = computed(() => {
 const toggleHint = (item) => `${isHidden(item) ? 'Show' : 'Hide'} ${item.label}${item.role && !item.points ? `: ${formatValue(item.value)}` : ''}`
 
 /**
- * Shows or hides a series' line, or a reference line, refitting the values to the lines left; the x range stays.
+ * Shows or hides a series' line, with tracked runs every line of its variable or of a run, or a reference line,
+ * refitting the values to the lines left; the x range stays.
  *
- * @param {{key: string, role?: string}} item
+ * @param {{key: string, liveKey?: string, role?: string}} item
  */
 function toggleSeries(item) {
+  const key = lineKeyOf(item)
+  const wasHidden = props.series.map(isLineHidden)
   const hidden = new Set(hiddenKeys.value)
-  if (hidden.has(item.key)) hidden.delete(item.key)
-  else hidden.add(item.key)
+  if (hidden.has(key)) hidden.delete(key)
+  else hidden.add(key)
   hiddenKeys.value = hidden
   if (item.role) {
     // The values' range takes in the reference lines shown, the zoom kept.
@@ -227,8 +304,10 @@ function toggleSeries(item) {
     isUpdatingData = false
     return
   }
-  const index = props.series.findIndex((series) => series.key === item.key)
-  if (plot && index >= 0) plot.setSeries(index + 1, { show: !hidden.has(item.key) })
+  if (!plot) return
+  props.series.forEach((series, index) => {
+    if (isLineHidden(series) !== wasHidden[index]) plot.setSeries(index + 1, { show: wasHidden[index] })
+  })
 }
 
 /**
@@ -252,10 +331,12 @@ const chrome = computed(() => CHROME[isDarkMode.value ? 'dark' : 'light'])
 // The runs the lines are from, once tracked runs are shown.
 const runKey = computed(() => {
   const runs = new Map()
-  for (const item of props.series) if (item.run) runs.set(item.run.number, { number: item.run.number, label: `#${item.run.number}`, dash: item.run.dash })
+  for (const item of props.series) {
+    if (item.run) runs.set(item.run.number, { key: runToggleKey(item.run.number), number: item.run.number, label: item.run.name || `#${item.run.number}`, dash: item.run.dash })
+  }
   if (!runs.size) return []
   const key = [...runs.values()].sort((a, b) => a.number - b.number)
-  return props.series.some((item) => !item.run) ? [{ number: 0, label: 'Live', dash: null }, ...key] : key
+  return props.series.some((item) => !item.run) ? [{ key: runToggleKey(0), number: 0, label: 'Live', dash: null }, ...key] : key
 })
 
 // How many variables the lines show, however many runs or experiments they are from.
@@ -266,11 +347,11 @@ const variableCount = computed(() => new Set(props.series.map((item) => item.var
  * variable so a long name cut short still says which run it is. Without tracked runs, lines of one variable
  * (every experiment of a protocol at once) go by their own names.
  *
- * @param {{label: string, variableLabel?: string, run: {number: number}|null}} item
+ * @param {{label: string, variableLabel?: string, run: {number: number, name?: string|null}|null}} item
  * @returns {{label: string|null, run: string|null}}
  */
 function readoutNames(item) {
-  const run = hasRuns.value ? (item.run ? `#${item.run.number}` : 'Live') : null
+  const run = hasRuns.value ? (item.run ? item.run.name || `#${item.run.number}` : 'Live') : null
   // One of every experiment of a protocol shown at once, named for its experiment.
   if (item.experiment != null) return { label: item.label, run }
   if (variableCount.value > 1) return { label: item.variableLabel ?? item.label, run }
@@ -366,7 +447,7 @@ function updateReadout(chart) {
   readout.value = {
     ...placeReadout(chart, left),
     time: `${formatValue(chart.data[0][idx])}${xUnit() ? ` ${xUnit()}` : ''}${findSegmentLabel(chart.data[0][idx])}`,
-    rows: readoutOrder.value.map((item) => ({ key: item.key, ...readoutNames(item), colour: colourOf(item), dash: item.run?.dash ?? null, value: formatValue(item.values[idx]) })),
+    rows: readoutOrder.value.map((item) => ({ key: item.key, hiddenBy: hiddenKeysOf(item), ...readoutNames(item), colour: colourOf(item), dash: item.run?.dash ?? null, value: formatValue(item.values[idx]) })),
   }
 }
 
@@ -455,7 +536,7 @@ function updatePhaseReadout(chart) {
   const { left, top, idxs } = chart.cursor
   const found = props.series
     .map((item, i) => ({ item, idx: idxs?.[i + 1] }))
-    .filter(({ item, idx }) => idx != null && !isHidden(item))
+    .filter(({ item, idx }) => idx != null && !isLineHidden(item))
     .map((point) => {
       const pointLeft = chart.valToPos(xValuesOf(point.item)[point.idx], 'x')
       const pointTop = chart.valToPos(point.item.values[point.idx], 'y')
@@ -476,7 +557,7 @@ function updatePhaseReadout(chart) {
     time: `${name(props.x.label)} ${formatValue(xValuesOf(nearest.item)[nearest.idx])}${xUnit() ? ` ${xUnit()}` : ''}${when}`,
     rows: found
       .sort((a, b) => (a.item.run?.number ?? 0) - (b.item.run?.number ?? 0))
-      .map(({ item, idx }) => ({ key: item.key, ...readoutNames(item), colour: colourOf(item), dash: item.run?.dash ?? null, value: formatValue(item.values[idx]) })),
+      .map(({ item, idx }) => ({ key: item.key, hiddenBy: hiddenKeysOf(item), ...readoutNames(item), colour: colourOf(item), dash: item.run?.dash ?? null, value: formatValue(item.values[idx]) })),
   }
 }
 
@@ -532,7 +613,7 @@ const ariaLabel = computed(() => {
  */
 const lineStyle = (series, theme) => ({
   label: series.label,
-  show: !isHidden(series),
+  show: !isLineHidden(series),
   stroke: series.run ? fadeColour(SERIES_COLOURS[theme][series.slot]) : SERIES_COLOURS[theme][series.slot],
   width: series.run ? 1.5 : 2,
   ...(series.run && { dash: series.run.dash }),
@@ -566,7 +647,7 @@ function buildOptions(width) {
     return {
       mode: 2,
       width,
-      height: props.height,
+      height: plotHeight(),
       scales: { x: { time: false }, y: {} },
       // uPlot marks each series' point that nearestPhasePoint finds, as its readout shows.
       cursor: { drag: { x: true, y: true }, points: { size: 8 }, dataIdx: nearestPhasePoint },
@@ -589,7 +670,7 @@ function buildOptions(width) {
   }
   return {
     width,
-    height: props.height,
+    height: plotHeight(),
     // A chart with reference lines fits them in too.
     scales: { x: { time: false }, ...(props.references.length && { y: { range: rangeY } }) },
     // Synced charts plot different series, so hiding one mustn't hide its namesake by position elsewhere.
@@ -645,11 +726,12 @@ function joinInOrder(chart, seriesIndex) {
 
 /**
  * Forgets hidden series that no name on the chart can show again: those no longer plotted, every line when one is
- * left, and the lines once tracked runs, or a steady state's list of values, take their names' place.
+ * left, and the lines once a steady state's list of values takes their names' place. A chart left with no lines, as
+ * hiding every run gives, keeps them for when a run is shown again.
  */
 function pruneHidden() {
-  if (!hiddenKeys.value.size) return
-  const keys = new Set([...(titleNamesLines.value ? props.series.map((series) => series.key) : []), ...keyed.value.map((item) => item.key)])
+  if (!hiddenKeys.value.size || !props.series.length) return
+  const keys = new Set([...titleToggles.value, ...keyed.value, ...runKey.value].filter(Boolean).map(lineKeyOf))
   const hidden = new Set([...hiddenKeys.value].filter((key) => keys.has(key)))
   if (hidden.size !== hiddenKeys.value.size) hiddenKeys.value = hidden
 }
@@ -678,7 +760,8 @@ onMounted(() => {
   draw()
   resizeObserver = new ResizeObserver(([entry]) => {
     const width = Math.floor(entry.contentRect.width)
-    if (plot && width > 0 && width !== plot.width) plot.setSize({ width, height: props.height })
+    const height = plotHeight()
+    if (plot && width > 0 && (width !== plot.width || height !== plot.height)) plot.setSize({ width, height })
   })
   if (chartEl.value) resizeObserver.observe(chartEl.value)
 })
@@ -713,8 +796,26 @@ watch(
 )
 watch(
   () => props.height,
-  (height) => plot?.setSize({ width: plot.width, height })
+  (height) => {
+    if (!props.fill) plot?.setSize({ width: plot.width, height })
+  }
 )
+
+/**
+ * Gets the chart's name for an image of it, leaving out the variables hidden from its title.
+ *
+ * @param {Array<Object>} shown - The series drawn.
+ * @returns {string}
+ */
+function shownTitle(shown) {
+  if (titleNamesLines.value) return shown.length ? shown.map((series) => series.label).join(', ') : props.title
+  if (!hasRuns.value || !titleToggles.value.some(Boolean)) return props.title
+  const names = props.titleParts
+    .map((part, index) => ({ part, toggle: titleToggles.value[index] }))
+    .filter(({ toggle }) => !toggle || !isHidden(toggle))
+    .map(({ part, toggle }) => toggle?.label ?? (part.component ? `${part.component}/${part.name}` : part.name))
+  return names.length ? names.join(', ') : props.title
+}
 
 defineExpose({
   /**
@@ -728,8 +829,8 @@ defineExpose({
     if (!plot) return null
     const colours = SERIES_COLOURS[isDarkMode.value ? 'dark' : 'light']
     // Hidden lines aren't drawn, so the image's title and legend leave them out too.
-    const shown = readoutOrder.value.filter((series) => !isHidden(series))
-    const name = titleNamesLines.value && shown.length ? shown.map((series) => series.label).join(', ') : props.title
+    const shown = readoutOrder.value.filter((series) => !isLineHidden(series))
+    const name = shownTitle(shown)
     // The unit is in the heading, not on the canvas, so the image's title carries it.
     const title = `${name}${againstLabel.value ? ` vs ${againstLabel.value}${readoutNote.value}` : ''}${props.unit ? ` (${props.unit})` : ''}`
     const references = props.references.filter((item) => !isHidden(item))
@@ -924,6 +1025,22 @@ watch(
 .plot-chart {
   width: 100%;
   min-width: 0;
+}
+
+/* A filling chart's drawing takes the height its heading and keys leave, sized to it rather than sizing it. */
+.simulation-plot.is-fill {
+  flex: 1;
+  min-height: 0;
+}
+
+.is-fill .plot-area {
+  flex: 1;
+  min-height: 120px;
+}
+
+.is-fill .plot-chart {
+  position: absolute;
+  inset: 0;
 }
 
 .plot-readout {
