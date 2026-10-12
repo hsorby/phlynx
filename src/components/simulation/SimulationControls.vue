@@ -16,13 +16,15 @@
         <VariablePathPicker
           ref="plotPicker"
           :index="index"
-          :filter="(entry) => entry.plottable"
+          :filter="isAddable"
           :describe="describePlottable"
-          placeholder="Add a variable…"
+          :placeholder="addPlaceholder"
+          :empty-message="addEmptyMessage"
           aria-label="Add a variable to plot"
           @pick="plotEntry"
         />
         <Select
+          v-if="!isSinglePlot"
           v-model="targetPlotId"
           :options="plotOptions"
           option-label="name"
@@ -35,12 +37,14 @@
       <p v-if="plotNote" class="controls-note" role="status">{{ plotNote }}</p>
       <PlotListEditor
         v-model:target-plot-id="targetPlotId"
-        :plot-config="settingsStore.plotConfig"
+        :plot-config="shownPlotConfig"
+        :is-single-plot="isSinglePlot"
+        :is-plottable="isPlottable"
         :nodes="nodes"
         :index="index"
         :scope-node-ids="scopeNodeIds"
         :series-slots="resultsStore.getSeriesSlots()"
-        @update:plot-config="settingsStore.setPlotConfig"
+        @update:plot-config="setPlotConfig"
         @add-here="focusPicker"
       />
     </template>
@@ -64,7 +68,7 @@
 /**
  * What gets plotted and tried out, across the whole model: plots and the variables on them, parameter
  * sliders or a parameter sweep, each added from one search over every `instance/variable` path, or the runs
- * kept to compare.
+ * kept to compare. Given a plot config of its own, it edits that single plot rather than the workspace's plots.
  */
 import { computed, ref, watch } from 'vue'
 
@@ -77,7 +81,7 @@ import SliderList from './SliderList.vue'
 import SweepEditor from './SweepEditor.vue'
 import VariablePathPicker from './VariablePathPicker.vue'
 import { sliderValueKey } from '../../services/simulation/parameterSliders'
-import { plotVariable, resolveGroups } from '../../services/simulation/plotSelections'
+import { addPlotSelection, getPlotUnits, plotVariable, resolveGroups } from '../../services/simulation/plotSelections'
 import { buildVariableIndex, resolvePlotTarget } from '../../services/simulation/variableIndex'
 import { useInspectionModuleStore } from '../../stores/inspectionModuleStore'
 import { useSimulationResultsStore } from '../../stores/simulationResultsStore'
@@ -90,9 +94,15 @@ const props = defineProps({
   scopeNodeIds: { type: Array, default: null },
   // Makes a change that keeps the shown results true (see useSimulation).
   keepCurrent: { type: Function, default: (change) => change() },
+  // A view's own single plot, edited in place of the workspace's plots, or null for the workspace's.
+  plotConfig: { type: Object, default: null },
+  // The one instance whose variables can be plotted, or null for any.
+  plotNodeId: { type: String, default: null },
+  // Adding to the view's own plot offers only variables in the units it already shows.
+  isUnitFiltered: { type: Boolean, default: false },
 })
-// A slider moved, so the scope wants running again.
-const emit = defineEmits(['change'])
+// `change`: a slider moved, so the scope wants running again.
+const emit = defineEmits(['change', 'update:plotConfig'])
 
 const resultsStore = useSimulationResultsStore()
 const inspectionStore = useInspectionModuleStore()
@@ -111,8 +121,10 @@ const index = computed(() =>
     inspectionOutputs: resultsStore.results ? resultsStore.inspectionOutputs : null,
   })
 )
-const plotOptions = computed(() => resolveGroups(settingsStore.plotConfig))
-const plottedCount = computed(() => settingsStore.plotConfig?.selections?.length ?? 0)
+const isSinglePlot = computed(() => !!props.plotConfig)
+const shownPlotConfig = computed(() => props.plotConfig ?? settingsStore.plotConfig)
+const plotOptions = computed(() => resolveGroups(shownPlotConfig.value))
+const plottedCount = computed(() => shownPlotConfig.value?.selections?.length ?? 0)
 const sliderDefinitions = computed(() => settingsStore.parameterScanConfig?.selections ?? [])
 const sliderKeys = computed(() => new Set(sliderDefinitions.value.map((definition) => sliderValueKey(definition))))
 const views = computed(() => [
@@ -133,7 +145,47 @@ watch(
 )
 
 const plotNames = computed(() => new Map(plotOptions.value.map((plot) => [plot.id, plot.name])))
-const plottedGroups = computed(() => new Map((settingsStore.plotConfig?.selections ?? []).map((selection) => [selection.key, selection.groupId])))
+const plottedGroups = computed(() => new Map((shownPlotConfig.value?.selections ?? []).map((selection) => [selection.key, selection.groupId])))
+
+/**
+ * Sets the plots shown: the view's own, or the workspace's.
+ *
+ * @param {Object} plotConfig
+ */
+function setPlotConfig(plotConfig) {
+  if (isSinglePlot.value) emit('update:plotConfig', plotConfig)
+  else settingsStore.setPlotConfig(plotConfig)
+}
+
+/**
+ * Checks whether the search offers an entry to plot.
+ *
+ * @param {Object} entry
+ * @returns {boolean}
+ */
+function isPlottable(entry) {
+  return entry.plottable && (!props.plotNodeId || entry.nodeId === props.plotNodeId)
+}
+
+// The units the view's own plot shows, when adding to it offers only those; empty offers any.
+const filteredUnits = computed(() => {
+  if (!props.isUnitFiltered || !isSinglePlot.value) return new Set()
+  return getPlotUnits(props.plotConfig, plotOptions.value[0]?.id)
+})
+const filteredUnitsLabel = computed(() => [...filteredUnits.value].map((units) => units || 'no units').join(' or '))
+const addPlaceholder = computed(() => (filteredUnits.value.size ? `Add a variable in ${filteredUnitsLabel.value}…` : 'Add a variable…'))
+const addEmptyMessage = computed(() => (filteredUnits.value.size ? `No variable in ${filteredUnitsLabel.value} matches.` : 'No variable matches.'))
+
+/**
+ * Checks whether the search offers an entry to add: a plottable one, in the plot's units while it is filtered
+ * by them. Plotting against a variable stays open to any units.
+ *
+ * @param {Object} entry
+ * @returns {boolean}
+ */
+function isAddable(entry) {
+  return isPlottable(entry) && (!filteredUnits.value.size || filteredUnits.value.has(entry.units || ''))
+}
 
 /**
  * Notes where a variable is plotted and what it is the same as.
@@ -176,13 +228,17 @@ function showPlotNote(text) {
 
 /**
  * Plots a picked variable on the target plot, moving it there if it is on another. A plot holds one unit,
- * so a variable in other units goes to a plot in its units, or a new one.
+ * so a variable in other units goes to a plot in its units, or a new one; a single plot takes every unit.
  *
  * @param {Object} entry
  */
 function plotEntry(entry) {
   const found = resolveEntry(entry)
   if (!found) return
+  if (isSinglePlot.value) {
+    setPlotConfig(addPlotSelection(props.plotConfig, found.node, found.row, plotOptions.value[0].id))
+    return
+  }
   const { plotConfig, plotId } = plotVariable(settingsStore.plotConfig, found.node, found.row, targetPlotId.value)
   settingsStore.setPlotConfig(plotConfig)
   if (plotId !== targetPlotId.value) {

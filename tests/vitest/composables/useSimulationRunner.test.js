@@ -88,10 +88,14 @@ describe('useSimulationRunner', () => {
     expect(runner.isOutdated.value).toBe(false)
   })
 
-  it('runs an instance editor’s instance on its own', () => {
+  it('runs the whole model from an instance editor, or its instance on its own when switched to it', () => {
     const runner = setUpRunner({ instanceId: 'b' })
     expect(runner.blockedReason.value).toBeNull()
+    expect(runner.statusLine.value.text).toBe('Press play to simulate the whole model or this instance.')
     runner.play()
-    expect(run).toHaveBeenCalledWith(['b'])
+    expect(run).toHaveBeenCalledWith(null)
+
+    runner.scopeMode.value = 'selection'
+    expect(run).toHaveBeenLastCalledWith(['b'])
   })
 })

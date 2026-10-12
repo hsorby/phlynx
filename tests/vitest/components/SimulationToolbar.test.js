@@ -171,3 +171,16 @@ describe('SimulationToolbar placement', () => {
     wrapper.unmount()
   })
 })
+
+describe('SimulationToolbar slot', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('puts a view’s own controls right after the scope switch', () => {
+    const wrapper = mount(SimulationToolbar, {
+      global: { plugins: [PrimeVue], directives: { tooltip } },
+      slots: { default: '<span class="own-control">Mine</span>' },
+    })
+    expect(wrapper.find('.toolbar-scope').element.nextElementSibling.classList.contains('own-control')).toBe(true)
+    wrapper.unmount()
+  })
+})

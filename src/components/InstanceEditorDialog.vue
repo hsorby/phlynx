@@ -105,6 +105,7 @@
             :keep-variables="keptVariables"
             @update:component-name="onEditorComponentName"
             @change="handleEditorChange"
+            @variable-click="plotClickedVariable"
             @save="handleSave"
             @undo="handleEditorUndo"
             @redo="handleEditorRedo"
@@ -387,7 +388,33 @@
                 <Button label="Save to include your edits" link size="small" class="plot-tab-save" @click="handleSave({ keepOpen: true })" />
               </Message>
               <!-- Kept mounted through an Apply's reload, so its choices, such as the whole model, last. -->
-              <SimulationPanel v-if="activeTab === 'plot'" :instance-id="id" class="plot-tab-workbench" />
+              <SimulationPanel
+                v-if="activeTab === 'plot'"
+                ref="simulationPanelRef"
+                v-model:plot-config="editorPlotConfig"
+                :instance-id="id"
+                :is-unit-filtered="!isAutoUpdate"
+                class="plot-tab-workbench"
+              >
+                <template #toolbar>
+                  <label
+                    class="plot-tab-auto-label"
+                    v-tooltip.bottom="'Click a variable in the CellML Text to plot it alone. Off, adding offers only the plot\'s units.'"
+                  >
+                    <ToggleSwitch
+                      v-model="isAutoUpdate"
+                      :disabled="editorKind !== 'text'"
+                      class="plot-tab-auto-switch"
+                      aria-label="Auto-update: plot a variable clicked in the math"
+                    />
+                    <span class="plot-tab-auto-text">Auto-update</span>
+                  </label>
+                  <span v-if="plotNotice" class="plot-tab-auto-notice" role="status" :title="plotNotice">{{ plotNotice }}</span>
+                  <span v-else-if="editorKind !== 'text'" class="plot-tab-auto-notice" title="Click-to-plot works in the CellML Text">
+                    Click-to-plot works in the CellML Text
+                  </span>
+                </template>
+              </SimulationPanel>
             </TabPanel>
           </TabPanels>
         </Tabs>
@@ -487,6 +514,7 @@ import TabList from 'primevue/tablist'
 import TabPanel from 'primevue/tabpanel'
 import TabPanels from 'primevue/tabpanels'
 import Tabs from 'primevue/tabs'
+import ToggleSwitch from 'primevue/toggleswitch'
 
 import CellMLTextEditor from './CellMLTextEditor.vue'
 import MathWorkbenchEditor from './MathWorkbenchEditor.vue'
@@ -511,7 +539,14 @@ import { useAppSettings } from '../composables/useAppSettings'
 
 import { isInitialisable } from '../services/math/variableKinds'
 import { resolveBoundaryValues } from '../services/export/boundaryValues'
-import { getNodePlotEntries } from '../services/simulation/plotSelections'
+import {
+  createSinglePlotConfig,
+  getNodePlotEntries,
+  isPlottableRow,
+  renamePlotVariables,
+  replacePlotSelections,
+  resolvePlotConfig,
+} from '../services/simulation/plotSelections'
 
 import { isEmpty, syncInitialiserUnits } from '../utils/variables'
 import { getUnknownUnitsNotice, isValueMissing } from '../utils/parameterRows'
@@ -1013,8 +1048,82 @@ const issueFilter = useIssueFilter({
   availableKeys: computed(() => issueChips.value.map((chip) => chip.key)),
 })
 
-/** How many of the instance's variables are plotted. */
-const plottedCount = computed(() => getNodePlotEntries(simulationSettingsStore.plotConfig, props.id).length)
+// The Plot tab's own single plot, made afresh on each open and never saved.
+const editorPlotConfig = ref(createSinglePlotConfig())
+// Whether clicking a variable in the math plots it.
+const isAutoUpdate = ref(true)
+const simulationPanelRef = ref(null)
+// Says why a clicked variable wasn't plotted.
+const plotNotice = ref('')
+let plotNoticeTimer = null
+
+/** How many variables the Plot tab's plot shows. */
+const plottedCount = computed(() => editorPlotConfig.value.selections?.length ?? 0)
+
+/**
+ * Gets the names of the instance's variables the Plot tab's plot shows or plots against.
+ *
+ * @returns {Array<string>}
+ */
+function getEditorPlotNames() {
+  const axisNames = (editorPlotConfig.value.groups ?? [])
+    .map((group) => group.xAxis)
+    .filter((xAxis) => xAxis?.nodeId === props.id)
+    .map((xAxis) => xAxis.variableName)
+  return [...getNodePlotEntries(editorPlotConfig.value, props.id).map(({ name }) => name), ...axisNames]
+}
+
+// Variables joining the Plot tab's plot are followed through the math's renames too, so an Apply keeps them.
+watch(getEditorPlotNames, (names) => {
+  const tracked = new Set(trackedNames.value.map(({ savedName }) => savedName))
+  const added = [...new Set(names)].filter((name) => !tracked.has(name))
+  if (added.length) trackedNames.value = [...trackedNames.value, ...added.map((name) => ({ name, savedName: name }))]
+})
+
+/**
+ * Gives a plot under the names a save gave the instance's variables, without those it no longer has.
+ *
+ * @param {Object} plotConfig
+ * @returns {Object}
+ */
+function followSavedNames(plotConfig) {
+  const renamed = new Map(trackedNames.value.map(({ savedName, name }) => [savedName, name]))
+  return resolvePlotConfig(renamePlotVariables(plotConfig, props.id, renamed), nodes.value)
+}
+
+/**
+ * Shows a note beside the Auto-update switch for a few seconds.
+ *
+ * @param {string} text
+ */
+function showPlotNotice(text) {
+  plotNotice.value = text
+  clearTimeout(plotNoticeTimer)
+  plotNoticeTimer = setTimeout(() => (plotNotice.value = ''), 5000)
+}
+
+/**
+ * Plots a variable clicked in the math alone, while the Plot tab shows and auto-updates, running the model when
+ * no results of its scope are shown. Runs use the saved instance, so only its variables can be plotted.
+ *
+ * @param {string} name
+ */
+function plotClickedVariable(name) {
+  if (activeTab.value !== 'plot' || rightCollapsed.value || !isAutoUpdate.value) return
+  const node = nodes.value.find((candidate) => candidate.id === props.id)
+  const row = node?.data?.variables?.find((candidate) => candidate.name === name)
+  if (!row) {
+    if (parameterRows.value.some((candidate) => candidate.name === name)) showPlotNotice(`Save to plot ${name}`)
+    return
+  }
+  if (!isPlottableRow(row)) {
+    showPlotNotice(`${name} is set, not computed, so it isn’t plotted`)
+    return
+  }
+  plotNotice.value = ''
+  editorPlotConfig.value = replacePlotSelections(editorPlotConfig.value, node, row)
+  simulationPanelRef.value?.ensureResults()
+}
 
 /**
  * Signs what a run reads from the instance besides its math: its name, rows and ports.
@@ -1089,12 +1198,16 @@ watch(
   () => props.modelValue,
   async (isOpen) => {
     if (!isOpen) {
+      clearTimeout(plotNoticeTimer)
+      plotNotice.value = ''
       isEditorReady.value = false
       isDialogShown.value = false
       history.clear()
       reloadAfterSave = false
       return
     }
+    editorPlotConfig.value = createSinglePlotConfig()
+    isAutoUpdate.value = true
     await loadEditor()
   }
 )
@@ -1137,9 +1250,11 @@ async function loadEditor({ keepTab = false } = {}) {
       : [],
   }))
   indexPortConnections()
+  if (keepTab) editorPlotConfig.value = followSavedNames(editorPlotConfig.value)
   // What the instance plots, so a rename in the math reaches its plots. Only these: tracking every name could
   // see a rename onto a removed variable's name merged away (see useMathSession).
-  trackedNames.value = getNodePlotEntries(simulationSettingsStore.plotConfig, props.id).map(({ name }) => ({ name, savedName: name }))
+  const plottedNames = [...getNodePlotEntries(simulationSettingsStore.plotConfig, props.id).map(({ name }) => name), ...getEditorPlotNames()]
+  trackedNames.value = [...new Set(plottedNames)].map((name) => ({ name, savedName: name }))
 
   // Saved stateRole/initialiser keep pairings the math alone can't reveal, such as shared initialisers.
   const savedRows = props.variables.map((row) => ({
@@ -1967,6 +2082,35 @@ async function handleSave(options) {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* In the run's toolbar, beside the whole model switch. */
+.plot-tab-auto-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  color: var(--p-text-color);
+  cursor: pointer;
+}
+
+/* Measured against the toolbar: too narrow for the label, the switch stands alone, its meaning in the tooltip. */
+@container (max-width: 360px) {
+  .plot-tab-auto-text {
+    display: none;
+  }
+}
+
+/* Shrinks to an ellipsis, its full text in the title, so it never pushes the toolbar's buttons off. */
+.plot-tab-auto-notice {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--p-text-muted-color);
 }
 
 .plot-tab-note {

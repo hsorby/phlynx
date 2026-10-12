@@ -39,6 +39,9 @@
       <span class="toolbar-scope-label">{{ scopeLabel }}</span>
     </label>
 
+    <!-- A view's own controls for the run, such as the instance editor's Auto-update. -->
+    <slot />
+
     <template v-if="protocolStore.hasProtocol || protocolStore.source?.parseError">
       <Button
         icon="pi pi-list-check"
@@ -138,9 +141,9 @@
 
 <script setup>
 /**
- * The Simulation tab's controls: play or stop, whether play runs the selection or the whole model, whether it
- * runs the workspace's protocol or the sweep, and buttons to track the run, float the results or open them on the
- * simulation page, and open the protocol and the simulation settings.
+ * The Simulation tab's controls: play or stop, whether play runs the selection or the whole model, any controls
+ * the view adds in its default slot, whether it runs the workspace's protocol or the sweep, and buttons to track the
+ * run, float the results or open them on the simulation page, and open the protocol and the simulation settings.
  */
 import { computed, useId, watch } from 'vue'
 

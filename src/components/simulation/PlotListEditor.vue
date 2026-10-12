@@ -25,7 +25,7 @@
           <i
             v-if="plot.units.size > 1"
             class="pi pi-exclamation-triangle plot-mixed"
-            v-tooltip.top="'This plot mixes units, so it shows as one chart per unit. Move variables to give each unit its own plot.'"
+            v-tooltip.top="isSinglePlot ? 'This plot mixes units, so it shows as one chart per unit.' : 'This plot mixes units, so it shows as one chart per unit. Move variables to give each unit its own plot.'"
             aria-label="Mixed units"
           ></i>
         </button>
@@ -39,6 +39,7 @@
           @click="addHere(plot)"
         />
         <Button
+          v-if="!isSinglePlot || index"
           icon="pi pi-ellipsis-h"
           text
           rounded
@@ -54,7 +55,7 @@
       <div v-if="choosingXFor === plot.id" class="plot-x">
         <VariablePathPicker
           :index="index"
-          :filter="(entry) => entry.plottable"
+          :filter="isPlottable"
           placeholder="Plot against…"
           :aria-label="`Choose a variable to plot ${plot.name} against`"
           @pick="(entry) => pickXAxis(plot, entry)"
@@ -147,7 +148,7 @@
       </ul>
     </section>
 
-    <Button label="Add plot" icon="pi pi-plus" text size="small" class="plot-add" @click="addNewPlot" />
+    <Button v-if="!isSinglePlot" label="Add plot" icon="pi pi-plus" text size="small" class="plot-add" @click="addNewPlot" />
     <Menu ref="menu" :model="menuItems" popup />
   </div>
 </template>
@@ -196,6 +197,10 @@ const props = defineProps({
   // The variable search's index (see buildVariableIndex), to choose a variable to plot against; without
   // it, plots can't be set against anything but time.
   index: { type: Array, default: null },
+  // One plot only, as the instance editor has: no plots to add, rename, reorder or remove, only what it plots against.
+  isSinglePlot: { type: Boolean, default: false },
+  // Which of the index's entries a plot can be set against.
+  isPlottable: { type: Function, default: (entry) => entry.plottable },
 })
 const emit = defineEmits(['update:plotConfig', 'add-here'])
 
@@ -349,6 +354,18 @@ const menuItems = computed(() => {
   const plot = menuPlot.value
   if (!plot) return []
   const index = plots.value.findIndex((candidate) => candidate.id === plot.id)
+  const xAxisItems = props.index
+    ? [
+        { label: 'Plot against a variable…', icon: 'pi pi-arrows-h', command: () => (choosingXFor.value = plot.id) },
+        {
+          label: 'Plot against time',
+          icon: 'pi pi-clock',
+          disabled: !plot.xAxis,
+          command: () => emitConfig(setPlotXAxis(props.plotConfig, plot.id, null)),
+        },
+      ]
+    : []
+  if (props.isSinglePlot) return xAxisItems
   return [
     { label: 'Rename', icon: 'pi pi-pencil', command: () => startRename(plot) },
     { label: 'Move up', icon: 'pi pi-arrow-up', disabled: index <= 0, command: () => emitConfig(movePlot(props.plotConfig, plot.id, -1)) },
@@ -358,18 +375,7 @@ const menuItems = computed(() => {
       disabled: index >= plots.value.length - 1,
       command: () => emitConfig(movePlot(props.plotConfig, plot.id, 1)),
     },
-    ...(props.index
-      ? [
-          { separator: true },
-          { label: 'Plot against a variable…', icon: 'pi pi-arrows-h', command: () => (choosingXFor.value = plot.id) },
-          {
-            label: 'Plot against time',
-            icon: 'pi pi-clock',
-            disabled: !plot.xAxis,
-            command: () => emitConfig(setPlotXAxis(props.plotConfig, plot.id, null)),
-          },
-        ]
-      : []),
+    ...(xAxisItems.length ? [{ separator: true }, ...xAxisItems] : []),
     { separator: true },
     { label: 'Remove plot', icon: 'pi pi-trash', disabled: plots.value.length <= 1, command: () => removeWithConfirm(plot) },
   ]

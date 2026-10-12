@@ -155,6 +155,37 @@ def plot_variable(page, path, within=None):
     pick_path(page, "Add a variable to plot", path, within)
 
 
+def click_math_variable(page, dialog, name):
+    """Clicks a variable's name where an instance editor's CellML Text solves for it, as in `ode(V, t)`."""
+    point = dialog.locator(".cm-content").evaluate(
+        r"""(content, name) => {
+          const pattern = new RegExp(`\\bode\\(\\s*${name}\\b`)
+          for (const line of content.querySelectorAll('.cm-line')) {
+            const match = pattern.exec(line.textContent)
+            if (!match) continue
+            // The line's text is split across its tokens' text nodes: find the one the name starts in.
+            let offset = match.index + match[0].length - name.length
+            const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT)
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+              if (offset >= node.textContent.length) {
+                offset -= node.textContent.length
+                continue
+              }
+              const range = document.createRange()
+              range.setStart(node, offset)
+              range.setEnd(node, Math.min(offset + name.length, node.textContent.length))
+              const rect = range.getBoundingClientRect()
+              return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+            }
+          }
+          return null
+        }""",
+        name,
+    )
+    assert point is not None, f"No ode({name}, ...) in the CellML Text to click"
+    page.mouse.click(point["x"], point["y"])
+
+
 def add_slider(page, path, within=None):
     """Adds a slider for a parameter by its instance/variable path, from the Sliders view."""
     scope = within or page
@@ -1112,16 +1143,27 @@ class TestSimulationTab(unittest.TestCase):
             page.evaluate(SHORTEN_SIMULATION)
             soma.dblclick()
             page.get_by_role("tab", name=re.compile(r"Plot \(")).click()
+            dialog = page.get_by_role("dialog")
 
-            page.get_by_role("button", name="Simulate this instance").click()
-            expect(page.get_by_text("Simulated 1 instance on their own")).to_be_visible(timeout=120000)
-            plot_variable(page, "soma_SN/V")
-            expect(page.locator(".simulation-plot .plot-title")).to_have_text("soma_SN/V")
+            # The Plot tab runs the whole model, with no floating viewer to open.
+            expect(dialog.get_by_role("button", name="Float the results over the canvas")).to_have_count(0)
+            dialog.get_by_role("button", name="Simulate the whole model").click()
+            expect(dialog.get_by_text("Simulated the whole model")).to_be_visible(timeout=120000)
+            plot_variable(page, "soma_SN/V", within=dialog)
+            expect(dialog.locator(".simulation-plot .plot-title")).to_have_text("soma_SN/V")
+            expect(dialog.get_by_role("tab", name="Plot (1)")).to_be_visible()
+
+            # Clicking a variable in the math plots it in place of what the plot showed.
+            dialog.locator(".plot-variable .remove-button").click()
+            expect(dialog.get_by_role("tab", name="Plot (0)")).to_be_visible()
+            click_math_variable(page, dialog, "V")
+            expect(dialog.locator(".simulation-plot .plot-title")).to_have_text("soma_SN/V")
 
             # Apply saves and keeps the editor open, on the Plot tab.
             page.get_by_role("button", name="Apply").click()
             expect(page.get_by_text("CellML Updated")).to_be_visible()
-            expect(page.get_by_role("button", name="Simulate this instance")).to_be_visible()
+            expect(dialog.get_by_role("button", name="Simulate the whole model")).to_be_visible()
+            expect(dialog.get_by_role("tab", name="Plot (1)")).to_be_visible()
             # ----------- END ------------
 
             context.close()

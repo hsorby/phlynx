@@ -487,3 +487,45 @@ export function plotVariable(plotConfig, node, row, preferredId) {
   }
   return { plotConfig: addPlotSelection(config, node, row, plotId), plotId }
 }
+
+/**
+ * Builds a plot config of one empty plot, as the instance editor's own plot starts.
+ *
+ * @returns {{groups: Array, groupedSelections: Array, selections: Array}}
+ */
+export function createSinglePlotConfig() {
+  return buildPlotConfig(normaliseGroups(), [])
+}
+
+/**
+ * Plots one variable alone, on the config's first plot, in place of every variable plotted before.
+ *
+ * @param {Object} plotConfig
+ * @param {Object} node
+ * @param {Object} row - One of the node's plottable rows.
+ * @returns {Object}
+ */
+export function replacePlotSelections(plotConfig, node, row) {
+  const groups = resolveGroups(plotConfig)
+  return withSelections(plotConfig, groups, [createPlotSelection(node, row, groups[0].id)])
+}
+
+/**
+ * Renames one node's plotted variables, and the variables its plots plot against, keeping each name's first
+ * selection when two end up the same.
+ *
+ * @param {Object} plotConfig
+ * @param {string} nodeId
+ * @param {Map<string, string>} renamed - New names by old name.
+ * @returns {Object} The new plot config.
+ */
+export function renamePlotVariables(plotConfig, nodeId, renamed) {
+  const rename = (reference) => {
+    const name = reference.nodeId === nodeId ? renamed.get(reference.variableName) : undefined
+    return name === undefined ? reference : { ...reference, key: `${nodeId}::${name}`, variableName: name }
+  }
+  const seen = new Set()
+  const selections = (plotConfig?.selections || []).map(rename).filter(({ key }) => !seen.has(key) && seen.add(key))
+  const groups = resolveGroups(plotConfig).map((group) => (group.xAxis ? { ...group, xAxis: rename(group.xAxis) } : group))
+  return withSelections(plotConfig, groups, selections)
+}
