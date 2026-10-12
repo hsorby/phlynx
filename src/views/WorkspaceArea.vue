@@ -515,7 +515,7 @@ export default {
 </script>
 
 <script setup>
-import { computed, inject, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onMounted, ref, watch } from 'vue'
 import { useVueFlow, VueFlow } from '@vue-flow/core'
 import { useRoute } from 'vue-router'
 
@@ -595,6 +595,7 @@ import { useSimulation } from '../composables/useSimulation'
 import { useSimSettingsDialog } from '../composables/useSimSettingsDialog'
 import { useProtocolDialog } from '../composables/useProtocolDialog'
 import { useFloatingViewer } from '../composables/useFloatingViewer'
+import { useActiveDocumentListeners } from '../composables/useActiveDocumentListeners'
 import { scopeFlowObject } from '../services/simulation/scopedModel'
 import { relayoutNodes } from '../services/layouts/physics'
 import { extractSimData as extractSimDataFromSedml } from '../services/import/sedml'
@@ -3176,9 +3177,6 @@ const hydrateCellmlAndDependents = async () => {
 }
 
 onMounted(async () => {
-  document.addEventListener('keydown', handleKeyDown)
-  document.addEventListener('mousemove', onMouseMove)
-
   void hydrateCellmlAndDependents().catch((error) => {
     console.error('Failed to initialize libCellML resources in background:', error)
   })
@@ -3192,10 +3190,8 @@ const onMouseMove = (event) => {
   mousePosition.value = { x: event.clientX, y: event.clientY }
 }
 
-onUnmounted(() => {
-  document.removeEventListener('keydown', handleKeyDown)
-  document.removeEventListener('mousemove', onMouseMove)
-})
+// Canvas shortcuts act only while the canvas shows, not from another page.
+useActiveDocumentListeners({ keydown: handleKeyDown, mousemove: onMouseMove })
 
 watch(
   () => route.path,
