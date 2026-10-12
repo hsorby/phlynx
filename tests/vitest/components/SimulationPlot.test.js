@@ -187,6 +187,41 @@ describe('SimulationPlot: reference lines', () => {
     ])
   })
 
+  it('leaves a variable hidden while runs are tracked out of the image’s title', async () => {
+    const live = [
+      { key: 'a::x', label: 'a/x', variableLabel: 'a/x', slot: 0, values: [1, 2, 3, 4], run: null },
+      { key: 'a::y', label: 'a/y', variableLabel: 'a/y', slot: 1, values: [4, 3, 2, 1], run: null },
+    ]
+    const tracked = live.map((item) => ({ ...item, key: `run_1::${item.key}`, liveKey: item.key, label: `${item.label} [#1]`, run: { number: 1, name: null, dash: [4, 4] } }))
+    const titleParts = [
+      { component: 'a', name: 'x', key: 'a::x', slot: 0 },
+      { component: 'a', name: 'y', key: 'a::y', slot: 1 },
+    ]
+    wrapper = mount(SimulationPlot, { props: { title: 'a/x, a/y', titleParts, unit: 'm', x: X, series: [...tracked, ...live] }, attachTo: document.body })
+    await wrapper.findAll('.plot-title .plot-key-toggle')[1].trigger('click')
+    const snapshot = wrapper.vm.snapshot()
+    expect(snapshot.title).toBe('a/x (m)')
+    expect(snapshot.legend.map(({ label }) => label)).toEqual(['a/x', 'a/x [#1]'])
+  })
+
+  it('keeps a hidden variable hidden while the chart has no lines, as hiding every run leaves it', async () => {
+    const live = [
+      { key: 'a::x', label: 'a/x', variableLabel: 'a/x', slot: 0, values: [1, 2, 3, 4], run: null },
+      { key: 'a::y', label: 'a/y', variableLabel: 'a/y', slot: 1, values: [4, 3, 2, 1], run: null },
+    ]
+    const tracked = live.map((item) => ({ ...item, key: `run_1::${item.key}`, liveKey: item.key, label: `${item.label} [#1]`, run: { number: 1, name: null, dash: [4, 4] } }))
+    const titleParts = [
+      { component: 'a', name: 'x', key: 'a::x', slot: 0 },
+      { component: 'a', name: 'y', key: 'a::y', slot: 1 },
+    ]
+    wrapper = mount(SimulationPlot, { props: { title: 'a/x, a/y', titleParts, unit: 'm', x: X, series: tracked }, attachTo: document.body })
+    await wrapper.findAll('.plot-title .plot-key-toggle')[0].trigger('click')
+    await wrapper.setProps({ series: [] })
+    await wrapper.setProps({ series: tracked })
+    expect(wrapper.findAll('.plot-title .plot-key-toggle')[0].classes()).toContain('is-hidden')
+    expect(charts.at(-1).options.series.slice(1).map((series) => series.show)).toEqual([false, true])
+  })
+
   it('keys each variable once, with the runs keyed apart, when the title doesn’t name the lines', async () => {
     const live = [
       { key: 'a::x', label: 'a/x', variableLabel: 'a/x', slot: 0, values: [1, 2, 3, 4], run: null },

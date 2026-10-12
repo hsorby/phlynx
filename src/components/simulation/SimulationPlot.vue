@@ -678,10 +678,11 @@ function joinInOrder(chart, seriesIndex) {
 
 /**
  * Forgets hidden series that no name on the chart can show again: those no longer plotted, every line when one is
- * left, and the lines once a steady state's list of values takes their names' place.
+ * left, and the lines once a steady state's list of values takes their names' place. A chart left with no lines, as
+ * hiding every run gives, keeps them for when a run is shown again.
  */
 function pruneHidden() {
-  if (!hiddenKeys.value.size) return
+  if (!hiddenKeys.value.size || !props.series.length) return
   const keys = new Set([...titleToggles.value, ...keyed.value].filter(Boolean).map(lineKeyOf))
   const hidden = new Set([...hiddenKeys.value].filter((key) => keys.has(key)))
   if (hidden.size !== hiddenKeys.value.size) hiddenKeys.value = hidden
@@ -749,6 +750,22 @@ watch(
   (height) => plot?.setSize({ width: plot.width, height })
 )
 
+/**
+ * Gets the chart's name for an image of it, leaving out the variables hidden from its title.
+ *
+ * @param {Array<Object>} shown - The series drawn.
+ * @returns {string}
+ */
+function shownTitle(shown) {
+  if (titleNamesLines.value) return shown.length ? shown.map((series) => series.label).join(', ') : props.title
+  if (!hasRuns.value || !titleToggles.value.some(Boolean)) return props.title
+  const names = props.titleParts
+    .map((part, index) => ({ part, toggle: titleToggles.value[index] }))
+    .filter(({ toggle }) => !toggle || !isHidden(toggle))
+    .map(({ part, toggle }) => toggle?.label ?? (part.component ? `${part.component}/${part.name}` : part.name))
+  return names.length ? names.join(', ') : props.title
+}
+
 defineExpose({
   /**
    * Gets the chart as drawn, with the colours of its series, for an image of it.
@@ -762,7 +779,7 @@ defineExpose({
     const colours = SERIES_COLOURS[isDarkMode.value ? 'dark' : 'light']
     // Hidden lines aren't drawn, so the image's title and legend leave them out too.
     const shown = readoutOrder.value.filter((series) => !isHidden(series))
-    const name = titleNamesLines.value && shown.length ? shown.map((series) => series.label).join(', ') : props.title
+    const name = shownTitle(shown)
     // The unit is in the heading, not on the canvas, so the image's title carries it.
     const title = `${name}${againstLabel.value ? ` vs ${againstLabel.value}${readoutNote.value}` : ''}${props.unit ? ` (${props.unit})` : ''}`
     const references = props.references.filter((item) => !isHidden(item))
