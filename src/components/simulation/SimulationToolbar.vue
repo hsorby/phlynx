@@ -29,7 +29,7 @@
       <span v-if="isOutdated && !isRunning" class="toolbar-run-dot" aria-hidden="true"></span>
     </span>
 
-    <label class="toolbar-scope" v-tooltip.bottom="scopeLabel">
+    <label v-if="hasScopeSwitch" class="toolbar-scope" v-tooltip.bottom="scopeLabel">
       <!-- As the light/dark switch does, its handle shows the mode. -->
       <ToggleSwitch v-model="isWholeModel" :aria-label="`Simulate the whole model, not ${partName}`">
         <template #handle="{ checked }">
@@ -170,6 +170,9 @@ const props = defineProps({
   partLabel: { type: String, default: null },
   // The shown results are out of date, so play would update them.
   isOutdated: { type: Boolean, default: false },
+  // Whether it offers play the selection in place of the whole model, which the simulation page, with no canvas to
+  // select from, doesn't.
+  hasScopeSwitch: { type: Boolean, default: true },
   // Whether it offers to float the results over the canvas, which the simulation page, away from the canvas, doesn't.
   hasFloat: { type: Boolean, default: true },
   // Whether it offers to open the simulation page, which the page itself and a modal editor don't.

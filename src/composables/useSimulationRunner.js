@@ -16,11 +16,12 @@ import { FLOW_IDS } from '../utils/constants'
 /**
  * Gives what playing simulations from a view needs.
  *
- * @param {{instanceId?: import('vue').Ref<string|null>|string|null}} [options] - The instance an instance editor
- *   runs on its own, or none for the canvas selection.
+ * @param {{instanceId?: import('vue').Ref<string|null>|string|null, isWholeModelOnly?: boolean}} [options] - The
+ *   instance an instance editor runs on its own, or none for the canvas selection; and whether the view only runs the
+ *   whole model, as the simulation page, with no canvas to select from, does.
  * @returns {Object} The run state, `play`, `stop`, `keepCurrent`, `scopeMode` and `statusLine`.
  */
-export function useSimulationRunner({ instanceId = null } = {}) {
+export function useSimulationRunner({ instanceId = null, isWholeModelOnly = false } = {}) {
   const { nodes, getSelectedNodes } = useVueFlow(FLOW_IDS.MAIN)
   const store = useSimulationResultsStore()
   const simulationSettingsStore = useSimulationSettingsStore()
@@ -89,13 +90,13 @@ export function useSimulationRunner({ instanceId = null } = {}) {
     return `${scopeSummary.value}${settleNote.value}.`
   })
 
-  // Whether play runs the part (the selection, or the edited instance) or the whole model. The sidebar's and the
-  // page's choice lasts for the session; the instance editor's starts on the instance each time.
+  // Whether play runs the part (the selection, or the edited instance) or the whole model. The sidebar's choice lasts
+  // for the session; the instance editor's starts on the instance each time; the page's is always the whole model.
   const editorScopeMode = ref('selection')
   const scopeMode = computed({
-    get: () => (getInstanceId() ? editorScopeMode.value : store.scopeMode),
+    get: () => (isWholeModelOnly ? 'model' : getInstanceId() ? editorScopeMode.value : store.scopeMode),
     set: (mode) => {
-      if (mode === scopeMode.value) return
+      if (isWholeModelOnly || mode === scopeMode.value) return
       if (getInstanceId()) editorScopeMode.value = mode
       else store.scopeMode = mode
       // Flipping the switch runs at once, as the user asked for that scope. Only the flip: picking instances on the
@@ -124,9 +125,12 @@ export function useSimulationRunner({ instanceId = null } = {}) {
       sortedSelectedIds.value.length > 0 &&
       JSON.stringify(sortedSelectedIds.value) !== JSON.stringify(store.scopeNodeIds ? [...store.scopeNodeIds].sort() : null)
   )
-  // In the instance editor, results of another run than this instance on its own, or the whole model.
+  // In the instance editor, results of another run than this instance on its own, or the whole model; on the page,
+  // results of a selection's run, from the sidebar.
   const isOtherRun = computed(() => {
-    if (!getInstanceId() || !store.results) return false
+    if (!store.results) return false
+    if (isWholeModelOnly) return store.scopeNodeIds !== null
+    if (!getInstanceId()) return false
     const expected = scopeMode.value === 'model' ? null : [getInstanceId()]
     return JSON.stringify(store.scopeNodeIds) !== JSON.stringify(expected)
   })
@@ -166,7 +170,8 @@ export function useSimulationRunner({ instanceId = null } = {}) {
       const text = count ? `${resultsSummary.value} ${count} ${count === 1 ? 'warning' : 'warnings'}.` : resultsSummary.value
       return { severity: count ? 'warn' : 'info', icon: count ? 'pi-exclamation-triangle' : null, text, details: warnings }
     }
-    return { severity: 'info', icon: null, text: 'Press play to simulate the whole model or the selected instances.', details: [] }
+    const what = isWholeModelOnly ? 'the whole model' : 'the whole model or the selected instances'
+    return { severity: 'info', icon: null, text: `Press play to simulate ${what}.`, details: [] }
   })
 
   return {

@@ -16,13 +16,12 @@
         <!-- Focused on arrival, so keyboard and screen-reader users start on the page. -->
         <h1 ref="titleEl" class="page-title" tabindex="-1">Simulation</h1>
         <SimulationToolbar
-          v-model:scope-mode="scopeMode"
           class="page-toolbar"
           :is-running="isRunning"
           :is-loading="isLoading"
           :blocked-reason="blockedReason"
-          :selected-count="selectedNodeIds.length"
           :is-outdated="isOutdated"
+          :has-scope-switch="false"
           :has-float="false"
           @play="play"
           @stop="stop"
@@ -219,7 +218,6 @@ const {
   nodes,
   store,
   scopeNodes,
-  selectedNodeIds,
   isRunning,
   isLoading,
   hasScope,
@@ -227,12 +225,11 @@ const {
   blockedReason,
   canPlay,
   isOutdated,
-  scopeMode,
   statusLine,
   play,
   stop,
   keepCurrent,
-} = useSimulationRunner()
+} = useSimulationRunner({ isWholeModelOnly: true })
 const protocolStore = useProtocolStore()
 const settingsStore = useSimulationSettingsStore()
 // Disabled, with why, while PhLynx can't plan the run.

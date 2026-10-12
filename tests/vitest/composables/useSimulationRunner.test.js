@@ -66,6 +66,28 @@ describe('useSimulationRunner', () => {
     expect(run).toHaveBeenCalledWith(null)
   })
 
+  it('runs only the whole model where there is no canvas to select from, the sidebar’s choice left as it is', () => {
+    const runner = setUpRunner({ isWholeModelOnly: true })
+    runner.store.scopeMode = 'selection'
+    expect(runner.scopeMode.value).toBe('model')
+    expect(runner.blockedReason.value).toBeNull()
+    runner.scopeMode.value = 'selection'
+    expect(run).not.toHaveBeenCalled()
+    expect(runner.store.scopeMode).toBe('selection')
+    runner.play()
+    expect(run).toHaveBeenCalledWith(null)
+  })
+
+  it('says a selection’s results, from the sidebar, are another run where only the whole model runs', () => {
+    const runner = setUpRunner({ isWholeModelOnly: true })
+    runner.store.results = { voi: { values: [0], unit: 's' } }
+    runner.store.scopeNodeIds = ['a']
+    expect(runner.isOutdated.value).toBe(true)
+    expect(runner.statusLine.value.text).toBe('These results are from another run · press play to update')
+    runner.store.scopeNodeIds = null
+    expect(runner.isOutdated.value).toBe(false)
+  })
+
   it('runs an instance editor’s instance on its own', () => {
     const runner = setUpRunner({ instanceId: 'b' })
     expect(runner.blockedReason.value).toBeNull()

@@ -78,13 +78,15 @@ describe('SimulationView', () => {
   })
   afterEach(() => vi.unstubAllGlobals())
 
-  it('has the toolbar, without the float button, and the controls beside', async () => {
+  it('has the toolbar, without the float button or the scope switch, and the controls beside', async () => {
     const { wrapper } = await mountPage()
     const labels = wrapper.findAll('button').map((button) => button.attributes('aria-label'))
     expect(labels).toContain('Simulate the whole model')
     expect(labels).toContain('Track this run')
     expect(labels).toContain('Simulation settings')
     expect(labels).not.toContain('Float the results over the canvas')
+    // With no canvas to select from, it runs the whole model, with no switch to the selection.
+    expect(wrapper.find('.toolbar-scope').exists()).toBe(false)
     expect(wrapper.find('.controls-stub').exists()).toBe(true)
     wrapper.unmount()
   })
