@@ -110,7 +110,7 @@
           @click="track"
         />
         <Button
-          icon="pi pi-sign-in"
+          icon="pi pi-window-maximize"
           text
           rounded
           size="small"
