@@ -19,6 +19,8 @@ export const NEW_INSTANCE_MODULE_REF = 'new_module:phlynx'
 export const DEFAULT_CELLML_FILE_NAME = 'model.cellml'
 
 export const TOOLTIP_AUTO_CLOSE = 1200
+// How long the math editors wait after typing stops before reporting the edit.
+export const MATH_EDIT_DEBOUNCE_MS = 500
 export const RESCALE_ASPECT_RATIO = 3
 export const RESCALE_TARGET_SPACING = 1000
 
