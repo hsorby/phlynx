@@ -346,6 +346,23 @@ describe('SimulationPlot: lining up', () => {
     expect(valueAxis(first, ['1'])).toBe(narrow)
   })
 
+  it('zooms the charts it moves with too, unless shift is held, when it zooms alone', () => {
+    wrapper = mountChart()
+    const [chart] = charts
+    const passesOn = (type) => chart.options.cursor.sync.filters.pub(type)
+    const press = (type, shiftKey) => chart.root.dispatchEvent(new MouseEvent(type, { bubbles: true, shiftKey }))
+
+    press('mousedown', false)
+    expect(['mousedown', 'mouseup', 'dblclick', 'mousemove'].map(passesOn)).toEqual([true, true, true, true])
+    press('mousedown', true)
+    // The drag, and its end, stay this chart's; the cursor still moves on the others.
+    expect(['mousedown', 'mouseup', 'mousemove'].map(passesOn)).toEqual([false, false, true])
+    press('dblclick', true)
+    expect(passesOn('dblclick')).toBe(false)
+    press('dblclick', false)
+    expect(passesOn('dblclick')).toBe(true)
+  })
+
   it('keeps its own gutters on its own, and in a phase plot', () => {
     wrapper = mountChart({ syncKey: null })
     others.push(mountChart({ syncKey: null }))

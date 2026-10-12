@@ -535,6 +535,18 @@ function updatePhaseReadout(chart) {
 const STEPPED_PATHS = uPlot.paths.stepped({ align: -1 })
 
 let plot = null
+// Whether the viewer is zooming this chart alone: dragging across it, or double-clicking it, with shift held.
+let isZoomingAlone = false
+// The events a chart passes to the charts it moves with, which zoom (or unzoom) them too.
+const ZOOM_EVENTS = new Set(['mousedown', 'mouseup', 'dblclick'])
+
+/**
+ * Notes whether a press or double-click zooms the chart alone, before the chart acts on it.
+ *
+ * @param {MouseEvent} event
+ */
+const noteZoomAlone = (event) => (isZoomingAlone = event.shiftKey)
+
 // The x range zoomed into, kept across new values and redraws; null when showing the whole run.
 let zoom = getChartZoom(props.zoomKey)
 let isUpdatingData = false
@@ -645,7 +657,12 @@ function buildOptions(width) {
     // A chart with reference lines fits them in too.
     scales: { x: { time: false }, ...(props.references.length && { y: { range: rangeY } }) },
     // Synced charts plot different series, so hiding one mustn't hide its namesake by position elsewhere.
-    cursor: { y: false, points: { size: 8 }, ...(props.syncKey && { sync: { key: props.syncKey, setSeries: false } }) },
+    // Synced charts zoom together; with shift held, a chart zooms alone.
+    cursor: {
+      y: false,
+      points: { size: 8 },
+      ...(props.syncKey && { sync: { key: props.syncKey, setSeries: false, filters: { pub: (type) => !(isZoomingAlone && ZOOM_EVENTS.has(type)) } } }),
+    },
     hooks: { setScale: [recordZoom], setCursor: [updateReadout], drawClear: [drawSegments], draw: [drawReferences] },
     legend: { show: false },
     padding: [8, (chart) => alignGutter('right', padRight(chart)), 0, 0],
@@ -715,6 +732,8 @@ function draw() {
   if (!chartEl.value) return
   isUpdatingData = true
   plot = new uPlot(buildOptions(chartEl.value.clientWidth || 300), buildData(), chartEl.value)
+  // Caught on the way down, so it's known before the chart passes the event on.
+  for (const type of ['mousedown', 'dblclick']) plot.root.addEventListener(type, noteZoomAlone, true)
   restoreZoom()
   isUpdatingData = false
   labelCanvas()
