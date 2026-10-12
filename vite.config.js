@@ -76,7 +76,7 @@ export default defineConfig({
       '@docs': path.resolve(__dirname, './docs'),
     },
     // One copy of protocol-kit's peers, PhLynx's, even when the package is linked from a checkout with its own.
-    dedupe: ['vue', 'primevue', 'papaparse'],
+    dedupe: ['vue', 'primevue', 'papaparse', '@primeuix/utils'],
   },
   server: {
     watch: {
