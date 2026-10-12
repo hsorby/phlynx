@@ -29,6 +29,9 @@ vi.mock('uplot', () => {
     setScale() {}
     setSeries() {}
     setSize() {}
+    redraw(...args) {
+      this.redraws = [...(this.redraws ?? []), args]
+    }
     destroy() {}
   }
   FakePlot.rangeNum = (min, max) => [min, max]
@@ -304,3 +307,52 @@ describe('SimulationPlot: reference lines', () => {
     wrapper.unmount()
   })
 })
+
+describe('SimulationPlot: lining up', () => {
+  const others = []
+  afterEach(() => others.splice(0).forEach((other) => other.unmount()))
+
+  /**
+   * Mounts a chart against time.
+   *
+   * @param {Object} [props]
+   * @returns {import('@vue/test-utils').VueWrapper}
+   */
+  const mountChart = (props = {}) => mount(SimulationPlot, { props: { title: 'Plot', unit: 'm', x: X, series: SERIES, syncKey: 'page', ...props } })
+
+  it('gives charts whose cursors move together the widest value axis and right padding among them', async () => {
+    wrapper = mountChart()
+    others.push(mountChart())
+    const [first, second] = charts
+    const valueAxis = (chart, labels) => chart.options.axes[1].size(chart, labels)
+    const padding = (chart) => chart.options.padding[1](chart)
+    first.axes = [{ _values: ['1'] }]
+    second.axes = [{ _values: ['100000000 s'] }]
+
+    const narrow = valueAxis(first, ['1'])
+    const wide = valueAxis(second, ['-0.000012345'])
+    expect(wide).toBeGreaterThan(narrow)
+    // The narrow one takes the wide one's, and is redrawn to.
+    await wrapper.vm.$nextTick()
+    expect(valueAxis(first, ['1'])).toBe(wide)
+    expect(first.redraws).toContainEqual([false, true])
+    const widePadding = padding(second)
+    expect(widePadding).toBeGreaterThan(12)
+    expect(padding(first)).toBe(widePadding)
+
+    // Once the wide one goes, the narrow one has its own again.
+    others.pop().unmount()
+    await wrapper.vm.$nextTick()
+    expect(valueAxis(first, ['1'])).toBe(narrow)
+  })
+
+  it('keeps its own gutters on its own, and in a phase plot', () => {
+    wrapper = mountChart({ syncKey: null })
+    others.push(mountChart({ syncKey: null }))
+    const [first, second] = charts
+    const own = first.options.axes[1].size(first, ['1'])
+    second.options.axes[1].size(second, ['-0.000012345'])
+    expect(first.options.axes[1].size(first, ['1'])).toBe(own)
+  })
+})
+
