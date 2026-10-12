@@ -207,3 +207,76 @@ describe('ParameterTable values ignored on export', () => {
     expect(wrapper.findAll('input.value-input--ignored')).toHaveLength(1)
   })
 })
+
+describe('ParameterTable connection status', () => {
+  const bc = (name, value = '') => ({ name, units: 'metre', type: 'boundary_condition', value, access: 'access' })
+
+  /** Mounts the table with extra rows and connection statuses, and returns a finder for each row's table row. */
+  async function mountStatus(extraRows, statuses) {
+    mountTable(new Set(['t', 'x', 'k']), { extraRows })
+    await wrapper.setProps({ connectionStatus: new Map(statuses) })
+    await flushPromises()
+    return (name) => wrapper.findAll('tr').find((tr) => tr.find('.cell-static-text').exists() && tr.find('.cell-static-text').text() === name)
+  }
+
+  it('shows where a connected boundary condition takes its value from', async () => {
+    const rowFor = await mountStatus([bc('V')], [['V', { state: 'connected', from: ['axon_SN.V'] }]])
+    const tr = rowFor('V')
+    expect(tr.find('input.p-inputtext').attributes('placeholder')).toBe('from axon_SN.V')
+    expect(tr.find('input.p-inputtext').attributes('title')).toBe('Set by axon_SN.V')
+    expect(tr.find('.connection-flag').attributes('title')).toBe('From axon_SN.V')
+    expect(tr.classes()).not.toContain('parameter-row--unresolved')
+  })
+
+  it('flags a blank boundary condition nothing is connected to', async () => {
+    const rowFor = await mountStatus([bc('V')], [['V', { state: 'missing', from: [] }]])
+    const tr = rowFor('V')
+    expect(tr.find('input.p-inputtext').attributes('placeholder')).toBe('Not connected: value required')
+    expect(tr.classes()).toContain('parameter-row--unresolved')
+    expect(tr.find('.connection-flag').exists()).toBe(false)
+  })
+
+  it('says a boundary condition nothing is connected to uses its own value', async () => {
+    const rowFor = await mountStatus([bc('V', '-60')], [['V', { state: 'own', from: [] }]])
+    const tr = rowFor('V')
+    expect(tr.find('input.p-inputtext').attributes('title')).toBe('Not connected: this value is used')
+    expect(tr.find('.connection-flag').exists()).toBe(false)
+    expect(tr.classes()).not.toContain('parameter-row--unresolved')
+  })
+
+  it('links a computed or state row shared with other instances', async () => {
+    const computed = { name: 'I', units: 'metre', type: 'variable', access: 'access' }
+    const rowFor = await mountStatus([computed], [
+      ['I', { state: 'shares', from: ['b.I', 'c.I'] }],
+      ['x', { state: 'shares', from: ['b.x'] }],
+    ])
+    expect(rowFor('I').find('.connection-flag.pi-link').attributes('title')).toBe('Shared with b.I, c.I')
+    expect(rowFor('x').find('.connection-flag.pi-link').attributes('title')).toBe('Shared with b.x')
+  })
+
+  it('warns about boundary conditions coupled only to each other, or given different values', async () => {
+    const rowFor = await mountStatus([bc('T'), bc('P', '1')], [
+      ['T', { state: 'bcOnly', from: ['b.T'] }],
+      ['P', { state: 'conflict', from: ['b.P'] }],
+    ])
+    expect(rowFor('T').find('.connection-flag.pi-exclamation-triangle').attributes('title')).toContain(
+      'Coupled only to other boundary conditions (b.T)'
+    )
+    expect(rowFor('P').find('.connection-flag.pi-exclamation-triangle').attributes('title')).toBe('Given a different value by b.P')
+  })
+
+  it('labels initialiser options by their connection status', async () => {
+    const rows = mountTable(new Set(['t', 'x', 'k']), { extraRows: [bc('b'), bc('c'), bc('d', '1')] })
+    await wrapper.setProps({
+      variableKinds: new Map([['x', 'state'], ['k', 'constant'], ['b', 'constant'], ['c', 'constant'], ['d', 'constant']]),
+      connectionSupplied: new Set(['b', 'c', 'd']),
+      connectionStatus: new Map([
+        ['b', { state: 'connected', from: ['axon_SN.V'] }],
+        ['c', { state: 'missing', from: [] }],
+        ['d', { state: 'own', from: [] }],
+      ]),
+    })
+    const labels = wrapper.vm.initialiserOptionsFor(rows[0]).map((option) => option.label)
+    expect(labels).toEqual(expect.arrayContaining(['b (from axon_SN.V)', 'c (not connected)', 'd']))
+  })
+})

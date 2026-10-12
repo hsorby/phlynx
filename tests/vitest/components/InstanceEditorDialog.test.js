@@ -384,3 +384,64 @@ describe('InstanceEditorDialog multiport summary', () => {
     expect(save.math).not.toContain('x_out')
   })
 })
+
+describe('InstanceEditorDialog connection status', () => {
+  const kPort = { portType: 'general_ports', label: 'rate', variables: ['k'], multiportType: 'None' }
+  const sourcePort = { portType: 'general_ports', label: 'rate', variables: ['k_src'], multiportType: 'None' }
+  const variables = [
+    { name: 't', units: 'second', type: 'variable', access: 'access' },
+    { name: 'x', units: 'metre', type: 'variable', access: 'access', stateRole: 'state', initialiser: 'x0' },
+    { name: 'x0', units: 'metre', type: 'constant', value: '1', access: 'access' },
+    { name: 'k', units: 'per_second', type: 'boundary_condition', value: '', access: 'access' },
+  ]
+
+  beforeAll(async () => {
+    await ensureLibCellmlReady()
+  })
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    useLibraryStore().addMath(MATH_REF, XML)
+    flowNodes.value = [
+      { id: 'src', data: { name: 'Src', variables: [{ name: 'k_src', units: 'per_second', type: 'variable' }], ports: [sourcePort] } },
+      { id: 'a', data: { name: 'a', variables, ports: [kPort] } },
+    ]
+    flowEdges.value = [{ id: 'src--a', source: 'src', target: 'a', data: { couplings: [{ sourcePort, targetPort: kPort }] } }]
+  })
+
+  afterEach(() => {
+    flowNodes.value = []
+    flowEdges.value = []
+  })
+
+  it('names the supplier of a connected boundary condition, and warns once its port is deleted in the dialog', async () => {
+    mountDialog({ variables, initialPorts: [kPort] })
+    const editor = await open()
+    await report(editor, 'init', XML)
+
+    const kRow = () => wrapper.vm.parameterRows.find((row) => row.name === 'k')
+    expect(kRow().type).toBe('boundary_condition')
+    expect(wrapper.vm.connectionStatus.get('k')).toEqual({ state: 'connected', from: ['Src.k_src'] })
+    expect(wrapper.vm.issueChips.map((chip) => chip.key)).not.toContain('unconnected')
+
+    wrapper.vm.deletePort(0)
+    await flushPromises()
+    expect(wrapper.vm.connectionStatus.get('k')).toEqual({ state: 'missing', from: [] })
+    expect(wrapper.vm.issueChips.find((chip) => chip.key === 'unconnected')?.label).toBe('1 boundary condition not connected')
+
+    kRow().value = '0.5'
+    await flushPromises()
+    expect(wrapper.vm.connectionStatus.get('k')).toEqual({ state: 'own', from: [] })
+    expect(wrapper.vm.issueChips.map((chip) => chip.key)).not.toContain('unconnected')
+  })
+
+  it('says which connection supplies a value export ignores', async () => {
+    const valued = variables.map((row) => (row.name === 'k' ? { ...row, value: '2' } : row))
+    mountDialog({ variables: valued, initialPorts: [kPort] })
+    const editor = await open()
+    await report(editor, 'init', XML)
+
+    expect(wrapper.vm.ignoredNotices.get('k')).toBe('Set by Src.k_src: this value is ignored on export')
+  })
+})

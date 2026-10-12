@@ -202,6 +202,7 @@
                 :variable-kinds="variableKinds"
                 :connection-supplied="connectionSupplied"
                 :ignored-notices="ignoredNotices"
+                :connection-status="connectionStatus"
                 :math-references="mathReferences"
                 :suggest-units="suggestUnitsFor"
               />
@@ -519,6 +520,7 @@ import { waitUntilStable } from '../utils/layout'
 import { notify } from '../utils/notify'
 import { getModelComponentNames, renameLayoutComponent, renameModelComponent } from '../utils/cellml'
 import { findPort } from '../utils/ports'
+import { previewCouplings } from '../utils/edges'
 import {
   isMultiport,
   multiplyVariables,
@@ -874,28 +876,44 @@ function hasTimeVaryingInitialiser(row) {
 }
 
 /**
- * Each row whose value export ignores, as something else supplies its variable, with why. Uses the rows as edited
- * here, against the rest of the canvas.
+ * Where this instance's rows get their values, from resolveBoundaryValues, using the rows and complete ports as
+ * edited here against the rest of the canvas. Couplings are previewed as save would recompute them.
  */
-const ignoredNotices = computed(() => {
+const connection = computed(() => {
   const rows = parameterRows.value
+  const ports = editablePorts.value.filter((port) => !isBlankPort(port) && !isIncompletePort(port))
   const canvasNodes = (nodes.value ?? []).map((node) =>
-    node.id === props.id ? { ...node, data: { ...node.data, variables: rows } } : node
+    node.id === props.id ? { ...node, data: { ...node.data, variables: rows, ports } } : node
+  )
+  const couplings = previewCouplings(props.id, ports, canvasNodes, edges.value ?? [])
+  const canvasEdges = (edges.value ?? []).map((edge) =>
+    couplings.has(edge.id) ? { ...edge, data: { ...edge.data, couplings: couplings.get(edge.id) } } : edge
   )
   let resolved
   try {
-    resolved = resolveBoundaryValues(canvasNodes, edges.value ?? [])
+    resolved = resolveBoundaryValues(canvasNodes, canvasEdges)
   } catch {
-    return new Map() // a malformed multiport, which export reports
+    return { status: new Map(), ignored: new Set(), emptySums: new Set() } // a malformed multiport, which export reports
   }
-  const emptySums = resolved.emptySums.get(props.id)
+  return {
+    status: resolved.status.get(props.id) ?? new Map(),
+    ignored: resolved.ignored.get(props.id) ?? new Set(),
+    emptySums: resolved.emptySums.get(props.id) ?? new Set(),
+  }
+})
+
+/** Each row name to where its value comes from (see resolveBoundaryValues' `status`). */
+const connectionStatus = computed(() => connection.value.status)
+
+/** Each row whose value export ignores, as something else supplies its variable, with why. */
+const ignoredNotices = computed(() => {
+  const { ignored, emptySums, status } = connection.value
   return new Map(
-    [...(resolved.ignored.get(props.id) ?? [])].map((name) => [
-      name,
-      emptySums?.has(name)
-        ? 'Sums its connections, and none are connected: it is 0, and this value is ignored on export'
-        : 'Set by a connection: this value is ignored on export',
-    ])
+    [...ignored].map((name) => {
+      if (emptySums.has(name)) return [name, 'Sums its connections, and none are connected: it is 0, and this value is ignored on export']
+      const from = status.get(name)?.from ?? []
+      return [name, `Set by ${from.length ? from.join(', ') : 'a connection'}: this value is ignored on export`]
+    })
   )
 })
 
@@ -905,6 +923,7 @@ const ISSUE_MATCHERS = {
   unknown: (row) => !!getUnitsNotice(row),
   initialiser: hasTimeVaryingInitialiser,
   ignored: (row) => ignoredNotices.value.has(row.name),
+  unconnected: (row) => connectionStatus.value.get(row.name)?.state === 'missing',
 }
 
 const issueChips = computed(() => {
@@ -917,6 +936,7 @@ const issueChips = computed(() => {
   const unknownUnits = count(ISSUE_MATCHERS.unknown)
   const timeVaryingInitialisers = count(ISSUE_MATCHERS.initialiser)
   const ignoredValues = count(ISSUE_MATCHERS.ignored)
+  const unconnected = count(ISSUE_MATCHERS.unconnected)
 
   const chips = []
   if (missingUnits) {
@@ -935,6 +955,15 @@ const issueChips = computed(() => {
       icon: 'pi-sliders-h',
       count: missingValues,
       label: `${plural(missingValues, 'value')} required`,
+    })
+  }
+  if (unconnected) {
+    chips.push({
+      key: 'unconnected',
+      kind: 'units',
+      icon: 'pi-exclamation-triangle',
+      count: unconnected,
+      label: `${plural(unconnected, 'boundary condition')} not connected`,
     })
   }
   if (timeVaryingInitialisers) {

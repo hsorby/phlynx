@@ -4,7 +4,7 @@ import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { getPortVariables, reconcileRows } from '../services/math/reconcileRows'
 import { getNodeSelections, replaceNodeSelections, setNodePlotVariables } from '../services/simulation/plotSelections'
 import { FLOW_IDS, PROTECTED_MATH_REFS } from '../utils/constants'
-import { resolvePortCouplings } from '../utils/edges'
+import { previewCouplings } from '../utils/edges'
 import { detachReactivity } from '../utils/reactivity'
 import { useNodeDataHistory } from './useNodeDataHistory'
 
@@ -81,36 +81,11 @@ export function useInstanceSave(flowId = FLOW_IDS.MAIN) {
    * @param {string} nodeId
    */
   function recomputeEdgeCouplings(nodeId) {
-    const outgoing = edges.value.filter((e) => e.source === nodeId)
-    outgoing.forEach((edge) => {
-      const sourceNode = findNode(edge.source)
-      const targetNode = findNode(edge.target)
-      if (!sourceNode || !targetNode) return
-
-      const sourceIndex = outgoing.indexOf(edge)
-      const edgesIntoTarget = edges.value.filter((e) => e.target === edge.target)
-      const targetIndex = edgesIntoTarget.indexOf(edge)
-
-      edge.data = {
-        ...edge.data,
-        couplings: resolvePortCouplings(sourceNode.data.ports ?? [], targetNode.data.ports ?? [], sourceIndex, targetIndex),
-      }
-    })
-
-    const incoming = edges.value.filter((e) => e.target === nodeId)
-    incoming.forEach((edge) => {
-      const sourceNode = findNode(edge.source)
-      const targetNode = findNode(edge.target)
-      if (!sourceNode || !targetNode) return
-
-      const edgesFromSource = edges.value.filter((e) => e.source === edge.source)
-      const sourceIndex = edgesFromSource.indexOf(edge)
-      const targetIndex = incoming.indexOf(edge)
-
-      edge.data = {
-        ...edge.data,
-        couplings: resolvePortCouplings(sourceNode.data.ports ?? [], targetNode.data.ports ?? [], sourceIndex, targetIndex),
-      }
+    const node = findNode(nodeId)
+    if (!node) return
+    const couplings = previewCouplings(nodeId, node.data.ports ?? [], nodes.value, edges.value)
+    edges.value.forEach((edge) => {
+      if (couplings.has(edge.id)) edge.data = { ...edge.data, couplings: couplings.get(edge.id) }
     })
   }
 
