@@ -1785,7 +1785,7 @@ const loadConfigData = async (content, filename, { notify: shouldNotify = true }
     if (shouldNotify && added > 0) {
       notify.success({
         title: 'Configurations Loaded',
-        message: `Loaded ${content.length} configurations from ${filename}.`,
+        message: `Loaded ${added} configurations from ${filename}.`,
       })
     } else if (shouldNotify && added === 0) {
       notify.info({

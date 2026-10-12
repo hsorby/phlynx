@@ -5,7 +5,7 @@ import {
   PHLYNX_PROJECT_VERSION,
   PHLYNX_PROJECT_IDENTIFIER,
 } from '../utils/constants'
-import { normalisePorts, normaliseVariables, parseMathRef } from '../utils/config'
+import { normalisePorts, normaliseVariables, uniqueModuleRef } from '../utils/config'
 import { buildGhostHandles, findMostCentralGhostHandle } from '../utils/handles'
 import { isBlank, isNumericLiteral } from '../utils/variables'
 import { analyzeMathXml } from './math/analyzeMath'
@@ -259,26 +259,6 @@ function extractComponentsToMathRefs(availableModules) {
 const legacyConfigKey = (sourceFile, componentName, configIndex) => `${sourceFile}:${componentName}#${configIndex}`
 
 /**
- * Gives a legacy module a ref no other math holds. MVP user modules all kept the template's
- * `new_module:phlynx`, and a user copy of a library module kept the library's ref.
- *
- * @param {string} moduleRef - The ref the legacy config names.
- * @param {string} mathRef - The math the module uses.
- * @param {Object} modulesByRef - Modules taken so far, by moduleRef.
- * @returns {string} The legacy ref when it is free or names the same math, else `<component>:default`.
- */
-function uniqueModuleRef(moduleRef, mathRef, modulesByRef) {
-  const isFree = (ref) => !modulesByRef[ref] || modulesByRef[ref].mathRef === mathRef
-  if (isFree(moduleRef)) return moduleRef
-
-  // As libraryStore.createModuleForMath names a module made for new math.
-  const base = `${parseMathRef(mathRef).componentName}:default`
-  let ref = base
-  for (let i = 2; !isFree(ref); i++) ref = `${base}_${i}`
-  return ref
-}
-
-/**
  * Turns the configs of legacy modules into library modules.
  *
  * @param {Array} availableModules - The legacy store's module collections.
@@ -301,7 +281,7 @@ function extractModulesToModuleRefs(availableModules) {
         const componentName = config.module_type
 
         const mathRef = `${componentFile}:${componentName}`
-        const moduleRef = uniqueModuleRef(`${moduleType}:${moduleSubtype}`, mathRef, newAvailableModules)
+        const moduleRef = uniqueModuleRef(`${moduleType}:${moduleSubtype}`, mathRef, (ref) => newAvailableModules[ref])
         moduleRefByConfig.set(legacyConfigKey(modules.sourceFile, modules.componentName, configIndex), moduleRef)
         if (newAvailableModules[moduleRef]) return
 

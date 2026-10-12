@@ -8,6 +8,7 @@ import { useNodeDataHistory } from '../../../src/composables/useNodeDataHistory.
 import { useFlowHistoryStore } from '../../../src/stores/historyStore.js'
 import { useLibraryStore } from '../../../src/stores/libraryStore.js'
 import { useSimulationSettingsStore } from '../../../src/stores/simulationSettingsStore.js'
+import { NEW_MODULE_FILENAME, NEW_MODULE_REF } from '../../../src/utils/constants.js'
 import { detachReactivity } from '../../../src/utils/reactivity.js'
 import { ensureLibCellmlReady } from '../helpers/libcellml-bootstrap.js'
 
@@ -49,7 +50,7 @@ const DECAY_WITHOUT_K = DECAY_XML.replace('<apply><minus/><ci>k</ci></apply>', '
 const GROWTH_XML = DECAY_XML.replaceAll('decay', 'growth').replace('<apply><minus/><ci>k</ci></apply>', '<ci>k</ci>')
 
 /**
- * Creates a node on the decay math, with port `p` carrying `x` and `k`.
+ * Creates a node on the decay math, from the template module, with port `p` carrying `x` and `k`.
  *
  * @param {string} id
  * @returns {Object}
@@ -60,6 +61,7 @@ function createNode(id) {
     data: {
       name: id,
       mathRef: DECAY_REF,
+      moduleRef: NEW_MODULE_REF,
       variables: [
         { name: 'x', units: 'metre', type: 'variable' },
         { name: 'k', value: '0.5', units: 'per_second', type: 'constant' },
@@ -269,6 +271,70 @@ describe('useInstanceSave', () => {
 
     await history.redo()
     expect(findNode('a').data.mathRef).toBe(GROWTH_REF)
+  })
+
+  describe('new components', () => {
+    const GROWTH_MODULE_REF = 'growth:default'
+
+    it('adds a module for the new math, used by every instance saved, and undo and redo remove and put it back', async () => {
+      await saveInstanceEdit(fork())
+      expect([...library.availableCollections.get(GROWTH_REF)]).toEqual([GROWTH_MODULE_REF])
+      expect(library.availableModules.get(GROWTH_MODULE_REF)).toMatchObject({ mathRef: GROWTH_REF, ports: findNode('a').data.ports })
+      expect(findNode('a').data.moduleRef).toBe(GROWTH_MODULE_REF)
+      expect(findNode('b').data.moduleRef).toBe(GROWTH_MODULE_REF)
+
+      await history.undo()
+      expect(library.availableModules.has(GROWTH_MODULE_REF)).toBe(false)
+      expect(library.availableCollections.has(GROWTH_REF)).toBe(false)
+      expect(findNode('a').data.moduleRef).toBe(NEW_MODULE_REF)
+
+      await history.redo()
+      expect([...library.availableCollections.get(GROWTH_REF)]).toEqual([GROWTH_MODULE_REF])
+      expect(library.availableModules.get(GROWTH_MODULE_REF).isStub).toBeUndefined()
+      expect(findNode('b').data.moduleRef).toBe(GROWTH_MODULE_REF)
+    })
+
+    it('moves only the siblings on the edited node\'s module to the new one', async () => {
+      findNode('b').data.moduleRef = 'decay:fast'
+      await saveInstanceEdit(fork())
+      expect(findNode('a').data.moduleRef).toBe(GROWTH_MODULE_REF)
+      expect(findNode('b').data).toMatchObject({ mathRef: GROWTH_REF, moduleRef: 'decay:fast' })
+
+      await history.undo()
+      expect(findNode('b').data).toMatchObject({ mathRef: DECAY_REF, moduleRef: 'decay:fast' })
+      expect(library.availableModules.has(GROWTH_MODULE_REF)).toBe(false)
+    })
+
+    it('keeps the module an undo would remove while another node uses it', async () => {
+      await saveInstanceEdit(fork())
+      const other = createNode('c')
+      other.data = { ...other.data, mathRef: GROWTH_REF, moduleRef: GROWTH_MODULE_REF }
+      nodes.value = [...nodes.value, other]
+
+      await history.undo()
+      expect(findNode('a').data.moduleRef).toBe(NEW_MODULE_REF)
+      expect(library.availableModules.has(GROWTH_MODULE_REF)).toBe(true)
+    })
+
+    it('gives components saved from the template distinct modules, even when a library module has the name', async () => {
+      library.addModule({ moduleRef: GROWTH_MODULE_REF, mathRef: 'library.cellml:growth', ports: [], variables: [] })
+      const templateGrowth = `${NEW_MODULE_FILENAME}:growth`
+      const templateOther = `${NEW_MODULE_FILENAME}:other`
+
+      await saveInstanceEdit(buildSave({ mathRef: templateGrowth, math: GROWTH_XML }))
+      await saveInstanceEdit(buildSave({ id: 'b', mathRef: templateOther, math: GROWTH_XML.replaceAll('growth', 'other') }))
+      expect(findNode('a').data.moduleRef).toBe('growth:default_2')
+      expect(findNode('b').data.moduleRef).toBe('other:default')
+      expect([...library.availableCollections.get(templateGrowth)]).toEqual(['growth:default_2'])
+      expect([...library.availableCollections.get('library.cellml:growth')]).toEqual([GROWTH_MODULE_REF])
+    })
+
+    it('leaves the module alone when the math already has one', async () => {
+      library.addModule({ moduleRef: 'decay:default', mathRef: DECAY_REF, ports: [], variables: [] })
+      await saveInstanceEdit(buildSave({ math: DECAY_WITHOUT_K }))
+      expect(findNode('a').data.moduleRef).toBe(NEW_MODULE_REF)
+      expect([...library.availableCollections.get(DECAY_REF)]).toEqual(['decay:default'])
+    })
   })
 
   it('updates a shared constant the node already used, and undo puts it back', async () => {
