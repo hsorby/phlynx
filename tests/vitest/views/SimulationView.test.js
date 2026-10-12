@@ -20,9 +20,9 @@ vi.mock('../../../src/composables/useSimulation', async () => {
   const { ref } = await import('vue')
   return { useSimulation: () => ({ run, stop: vi.fn(), keepCurrent: vi.fn(), isStale: ref(false) }) }
 })
-vi.mock('../../../src/composables/useProtocolSedmlExport', async () => {
+vi.mock('../../../src/composables/useSedmlExport', async () => {
   const { ref } = await import('vue')
-  return { useProtocolSedmlExport: () => ({ reason: ref(null), canExport: ref(false), isExporting: ref(false), exportZip: vi.fn() }) }
+  return { useSedmlExport: () => ({ isProtocol: ref(false), reason: ref(null), canExport: ref(false), isExporting: ref(false), exportZip: vi.fn() }) }
 })
 vi.mock('../../../src/services/simulation/libopencorLoader', () => ({ libopencor: { status: 'ready' } }))
 const legacyDownload = vi.hoisted(() => vi.fn())
@@ -96,6 +96,10 @@ describe('SimulationView', () => {
     expect(wrapper.find('.page-empty').text()).toContain('No results yet')
     expect(wrapper.find('button[aria-label="Download the results as CSV"]').attributes('disabled')).toBeDefined()
     expect(wrapper.find('button[aria-label="Download the charts as a PNG image"]').attributes('disabled')).toBeDefined()
+    // Without a protocol, the SED-ML download is there, for the time course.
+    const sedml = wrapper.find('button[aria-label="Download the run as SED-ML"]')
+    expect(sedml.attributes('disabled')).toBeDefined()
+    expect(sedml.element.parentElement.dataset.tooltip).toBe('Download the run as SED-ML, with the model it runs and its plots')
     wrapper.unmount()
   })
 

@@ -864,6 +864,54 @@ describe('useSimulation', () => {
       })
     })
 
+    describe('prepareRunExport', () => {
+      // Earlier tests leave runs going.
+      beforeEach(() => cancelSimulation())
+
+      it('flattens the model as a run does, with the sliders’ values, and reads it without running it', async () => {
+        nodes.value = [createNode('a', [{ name: 'x', type: 'variable' }, { name: 'k', type: 'constant', value: '1' }])]
+        useSimulationSettingsStore().setParameterScanConfig({
+          selections: [{ key: 'a::k', nodeId: 'a', nodeName: 'a', parameterName: 'k', type: 'constant', min: 0, default: 1, max: 2 }],
+        })
+        store.setSliderValue('a::k', 1.5)
+        const { prepareRunExport } = useSimulation()
+
+        const prepared = await prepareRunExport({ nodeIds: null })
+
+        expect(prepared.errors).toEqual([])
+        expect(prepared.cellml).toBe('<model/>')
+        expect(built.scopes[0].nodes[0].data.variables.find((row) => row.name === 'k').value).toBe('1.5')
+        expect(engine.described).toEqual([{ cellml: '<model/>', key: expect.any(Number) }])
+        expect(engine.runs).toEqual([])
+        expect(prepared.variables.get('a/x')).toEqual({ kind: 'state', unit: 'dimensionless' })
+        expect(prepared.voi).toEqual({ name: 'm/t', unit: 'second' })
+        expect(prepared.mapping.get('a::x')).toBe('a/x')
+        expect(prepared.isSteadyState).toBe(false)
+        expect(prepared.settings).toMatchObject({ pointInterval: expect.any(Number) })
+      })
+
+      it('says a model without ODEs is a steady state', async () => {
+        engine.isSteadyState = true
+        const { prepareRunExport } = useSimulation()
+
+        const prepared = await prepareRunExport({ nodeIds: null })
+
+        expect(prepared.isSteadyState).toBe(true)
+      })
+
+      it('refuses while a run is going', async () => {
+        const { run, prepareRunExport } = useSimulation()
+        run(null)
+        await settle()
+
+        const prepared = await prepareRunExport()
+
+        expect(prepared.errors).toEqual(['Wait for the run to finish, or stop it, before exporting it.'])
+        expect(engine.described).toHaveLength(0)
+        cancelSimulation()
+      })
+    })
+
     it('tells the results are out of date once the protocol is turned off', async () => {
       useProtocol(PROTOCOL)
       const { run, isStale } = useSimulation()

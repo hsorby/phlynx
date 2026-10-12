@@ -7,9 +7,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const nodes = ref([])
 vi.mock('@vue-flow/core', async (importOriginal) => ({ ...(await importOriginal()), useVueFlow: () => ({ nodes }) }))
 
-const simulation = vi.hoisted(() => ({ prepareProtocolExport: null }))
+const simulation = vi.hoisted(() => ({ prepareProtocolExport: null, prepareRunExport: null }))
 vi.mock('../../../src/composables/useSimulation', () => ({
-  useSimulation: () => ({ prepareProtocolExport: (...args) => simulation.prepareProtocolExport(...args) }),
+  useSimulation: () => ({
+    prepareProtocolExport: (...args) => simulation.prepareProtocolExport(...args),
+    prepareRunExport: (...args) => simulation.prepareRunExport(...args),
+  }),
 }))
 const builder = vi.hoisted(() => ({ buildProtocolSedml: null }))
 vi.mock('../../../src/services/export/protocolSedml', async (importOriginal) => ({
@@ -25,7 +28,7 @@ vi.mock('../../../src/utils/save', async (importOriginal) => ({
 const notified = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
 vi.mock('../../../src/utils/notify', () => ({ notify: notified }))
 
-const { useProtocolSedmlExport } = await import('../../../src/composables/useProtocolSedmlExport.js')
+const { useSedmlExport } = await import('../../../src/composables/useSedmlExport.js')
 const { ALL_EXPERIMENTS, useProtocolStore } = await import('../../../src/stores/protocolStore.js')
 const { useSessionMetadataStore } = await import('../../../src/stores/sessionMetadataStore.js')
 const { useSimulationResultsStore } = await import('../../../src/stores/simulationResultsStore.js')
@@ -74,10 +77,12 @@ const createPrepared = (overrides = {}) => ({
 
 const node = (id, variables) => ({ id, data: { name: id, variables } })
 
-describe('useProtocolSedmlExport', () => {
+describe('useSedmlExport', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     useProtocolStore().saveDocument(OBS_DATA)
+    // With the protocol on, its run is exported.
+    useProtocolStore().isProtocolMode = true
     nodes.value = [
       node('a', [
         { name: 'x', type: 'variable', units: 'mV' },
@@ -111,7 +116,7 @@ describe('useProtocolSedmlExport', () => {
     const protocolStore = useProtocolStore()
     protocolStore.setActiveExperiment(ALL_EXPERIMENTS)
     protocolStore.isShowingInputs = true
-    const exporter = useProtocolSedmlExport()
+    const exporter = useSedmlExport()
     expect(exporter.reason.value).toBeNull()
 
     const exporting = exporter.exportZip()
@@ -143,7 +148,7 @@ describe('useProtocolSedmlExport', () => {
 
   it("saves nothing when PhLynx can't plan the run, says why, and stays disabled until the protocol changes", async () => {
     simulation.prepareProtocolExport = vi.fn(async () => createPrepared({ errors: ["The protocol sets b/q, which isn't in the model being simulated."] }))
-    const exporter = useProtocolSedmlExport()
+    const exporter = useSedmlExport()
     await exporter.exportZip()
 
     expect(saving.saveWithDialog).not.toHaveBeenCalled()
@@ -161,14 +166,14 @@ describe('useProtocolSedmlExport', () => {
     builder.buildProtocolSedml = vi.fn(() => {
       throw new Error('No variable.')
     })
-    const exporter = useProtocolSedmlExport()
+    const exporter = useSedmlExport()
     await exporter.exportZip()
     expect(saving.saveWithDialog).not.toHaveBeenCalled()
     expect(exporter.reason.value).toBe('PhLynx can’t plan the run: No variable.')
   })
 
   it("is disabled, with why, mid-run, while the protocol has errors, and when the last run couldn't be planned", () => {
-    const exporter = useProtocolSedmlExport()
+    const exporter = useSedmlExport()
     const resultsStore = useSimulationResultsStore()
     resultsStore.startRun(null)
     expect(exporter.reason.value).toBe('Export the run as SED-ML once it finishes')
@@ -183,7 +188,7 @@ describe('useProtocolSedmlExport', () => {
   })
 
   it('does nothing more when the save is cancelled, and reports a failure', async () => {
-    const exporter = useProtocolSedmlExport()
+    const exporter = useSedmlExport()
     saving.getFileHandle = vi.fn(async () => ({ success: false, cancelled: true }))
     await exporter.exportZip()
     expect(simulation.prepareProtocolExport).not.toHaveBeenCalled()
@@ -195,5 +200,124 @@ describe('useProtocolSedmlExport', () => {
     await exporter.exportZip()
     expect(notified.error).toHaveBeenCalledWith({ title: 'Export failed', message: 'No room.' })
     expect(exporter.isExporting.value).toBe(false)
+  })
+
+  describe('without the protocol on', () => {
+    /**
+     * Gives what prepareRunExport gives for node `a`.
+     *
+     * @param {Object} [overrides]
+     * @returns {Object}
+     */
+    const createRun = (overrides = {}) => ({
+      errors: [],
+      settings: { solver: 'CVODE', tolerance: 1e-7, maxSteps: 500, timeStep: 0.01, initialPoint: 0, startingPoint: 0, endingPoint: 1, pointInterval: 0.1 },
+      mapping: new Map([
+        ['a::x', 'a/x'],
+        ['a::t', 'm/t'],
+        ['a::y', 'a/y'],
+      ]),
+      variables: new Map([
+        ['a/x', { kind: 'state', unit: 'mV' }],
+        ['a/y', { kind: 'state', unit: 'mA' }],
+      ]),
+      voi: { name: 'm/t', unit: 'second' },
+      isSteadyState: false,
+      cellml: '<model sliders/>',
+      ...overrides,
+    })
+
+    beforeEach(() => {
+      useProtocolStore().isProtocolMode = false
+      simulation.prepareRunExport = vi.fn(async () => createRun())
+    })
+
+    it('saves the time course’s SED-ML, with the results view’s plots and the model it runs', async () => {
+      useSessionMetadataStore().setLastSaveName('heart.json')
+      nodes.value = [
+        node('a', [
+          { name: 'x', type: 'variable', units: 'mV' },
+          { name: 'y', type: 'variable', units: 'mA' },
+          { name: 't', type: 'variable', units: 'second' },
+        ]),
+      ]
+      // A plot of y against x, as a phase plot is.
+      useSimulationSettingsStore().setPlotConfig({
+        groups: [
+          { id: 'plot-1', name: 'Voltage' },
+          { id: 'plot-2', name: 'Phase', xAxis: { key: 'a::x', nodeId: 'a', nodeName: 'a', variableName: 'x', units: 'mV' } },
+        ],
+        selections: [
+          { key: 'a::x', nodeId: 'a', nodeName: 'a', variableName: 'x', groupId: 'plot-1' },
+          { key: 'a::y', nodeId: 'a', nodeName: 'a', variableName: 'y', groupId: 'plot-2' },
+        ],
+      })
+      const exporter = useSedmlExport()
+      expect(exporter.isProtocol.value).toBe(false)
+      expect(exporter.reason.value).toBeNull()
+
+      const exporting = exporter.exportZip()
+      expect(saving.getFileHandle).toHaveBeenCalledWith('heart_simulation', expect.any(Array), '.zip')
+      await exporting
+
+      expect(simulation.prepareProtocolExport).not.toHaveBeenCalled()
+      // The whole model, as the page's play runs it, whatever the sidebar ran last.
+      expect(simulation.prepareRunExport).toHaveBeenCalledWith({ nodeIds: null })
+      expect(builder.buildProtocolSedml).not.toHaveBeenCalled()
+      const [[blob, , stem]] = saving.saveWithDialog.mock.calls
+      expect(stem).toBe('heart_simulation')
+      const zip = await JSZip.loadAsync(await blob.arrayBuffer())
+      expect(Object.keys(zip.files).sort()).toEqual(['manifest.xml', 'model.cellml', 'simulation.sedml'])
+      expect(await zip.file('model.cellml').async('string')).toBe('<model sliders/>')
+      const sedml = await zip.file('simulation.sedml').async('string')
+      expect(sedml).toContain('<uniformTimeCourse id="sim" initialTime="0" outputStartTime="0" outputEndTime="1" numberOfSteps="10">')
+      expect(sedml).toContain('<plot2D id="plot0" name="Voltage" legend="true">')
+      expect(sedml).toContain('<xAxis type="linear" name="m/t (second)"/>')
+      // The phase plot is against x.
+      expect(sedml).toContain('<plot2D id="plot1" name="Phase" legend="true">')
+      expect(sedml).toContain('<xAxis type="linear" name="a/x (mV)"/>')
+      expect(sedml).toContain('<yAxis type="linear" name="a/y (mA)"/>')
+      expect(notified.success).toHaveBeenCalledWith(expect.objectContaining({ message: 'The run exported as SED-ML.' }))
+    })
+
+    it('plots an inspection module’s output, and against it, by the name the run reports it by', async () => {
+      const output = { id: 'im1', name: 'ratio', units: 'dimensionless', reportedName: 'inspection_modules/ratio' }
+      simulation.prepareRunExport = vi.fn(async () =>
+        createRun({
+          inspectionOutputs: [output],
+          variables: new Map([
+            ['a/x', { kind: 'state', unit: 'mV' }],
+            ['inspection_modules/ratio', { kind: 'algebraic', unit: 'dimensionless' }],
+          ]),
+        })
+      )
+      const reference = { key: 'inspection::im1', nodeId: 'inspection:im1', nodeName: 'inspection_modules', variableName: 'ratio', units: 'dimensionless' }
+      useSimulationSettingsStore().setPlotConfig({
+        groups: [{ id: 'plot-1', name: 'Against the ratio', xAxis: reference }],
+        selections: [
+          { key: 'a::x', nodeId: 'a', nodeName: 'a', variableName: 'x', groupId: 'plot-1' },
+          { ...reference, groupId: 'plot-1' },
+        ],
+      })
+      await useSedmlExport().exportZip()
+
+      const [[blob]] = saving.saveWithDialog.mock.calls
+      const sedml = await (await JSZip.loadAsync(await blob.arrayBuffer())).file('simulation.sedml').async('string')
+      expect(sedml).toContain('<xAxis type="linear" name="inspection_modules/ratio (dimensionless)"/>')
+      expect(sedml).toContain("cellml:variable[@name='ratio']")
+      expect(sedml).toContain('name="inspection_modules/ratio"')
+    })
+
+    it('is disabled, with why, in sweep mode and without instances', () => {
+      const exporter = useSedmlExport()
+      const resultsStore = useSimulationResultsStore()
+      useSimulationSettingsStore().simulationSettings.sweep = { component: 'a', variable: 'k', from: 0, to: 1, count: 3 }
+      resultsStore.isSweepMode = true
+      expect(exporter.reason.value).toBe('A sweep can’t be exported as SED-ML yet: switch back to the time course to export it')
+      resultsStore.isSweepMode = false
+      expect(exporter.reason.value).toBeNull()
+      nodes.value = []
+      expect(exporter.reason.value).toBe('Add instances to export their run as SED-ML')
+    })
   })
 })

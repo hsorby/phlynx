@@ -74,7 +74,7 @@
             @click="downloadPng"
           />
           <!-- Wrapped, so its reason shows while it's disabled. -->
-          <span v-if="protocolStore.hasProtocol" v-tooltip.bottom="sedmlReason ?? 'Download the protocol’s run as SED-ML, with the model it runs'" class="export-button">
+          <span v-tooltip.bottom="sedmlReason ?? sedmlHint" class="export-button">
             <Button
               label="SED-ML"
               icon="pi pi-download"
@@ -82,7 +82,7 @@
               outlined
               :disabled="!canExportSedml"
               :loading="isExportingSedml"
-              aria-label="Download the protocol's run as SED-ML"
+              :aria-label="isSedmlProtocol ? 'Download the protocol\'s run as SED-ML' : 'Download the run as SED-ML'"
               @click="exportSedml"
             />
           </span>
@@ -180,7 +180,7 @@ export default {
 /**
  * The simulation page: the workspace's results across the page, with the toolbar to run them, the charts with their
  * cursors in step, then a protocol run's prediction plots, downloads of the values as CSV, the charts as one PNG and
- * a protocol's run as SED-ML, and beside them what gets plotted and tried out.
+ * the run as SED-ML, and beside them what gets plotted and tried out.
  */
 import { computed, onActivated, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -195,7 +195,7 @@ import SimulationControls from '../components/simulation/SimulationControls.vue'
 import SimulationPlot from '../components/simulation/SimulationPlot.vue'
 import SimulationStatusLine from '../components/simulation/SimulationStatusLine.vue'
 import SimulationToolbar from '../components/simulation/SimulationToolbar.vue'
-import { useProtocolSedmlExport } from '../composables/useProtocolSedmlExport'
+import { useSedmlExport } from '../composables/useSedmlExport'
 import { useResizableAside } from '../composables/useResizableAside'
 import { useSimulationCharts } from '../composables/useSimulationCharts'
 import { useSimulationRunner } from '../composables/useSimulationRunner'
@@ -233,7 +233,10 @@ const {
 const protocolStore = useProtocolStore()
 const settingsStore = useSimulationSettingsStore()
 // Disabled, with why, while PhLynx can't plan the run.
-const { reason: sedmlReason, canExport: canExportSedml, isExporting: isExportingSedml, exportZip: exportSedml } = useProtocolSedmlExport()
+const { isProtocol: isSedmlProtocol, reason: sedmlReason, canExport: canExportSedml, isExporting: isExportingSedml, exportZip: exportSedml } = useSedmlExport()
+const sedmlHint = computed(() =>
+  isSedmlProtocol.value ? 'Download the protocol’s run as SED-ML, with the model it runs' : 'Download the run as SED-ML, with the model it runs and its plots'
+)
 // Slider moves rerun the scope through one shared, lossy queue (see useSliderReruns).
 const { rerunForSliders } = useSliderReruns()
 const { xAxis, charts, predictionPlotCharts } = useSimulationCharts(scopeNodes)
