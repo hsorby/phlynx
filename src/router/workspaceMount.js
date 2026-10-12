@@ -14,15 +14,6 @@ export function setWorkspaceMounted(value) {
 }
 
 /**
- * Says whether the workspace is mounted.
- *
- * @returns {boolean}
- */
-export function isWorkspaceMounted() {
-  return isMounted
-}
-
-/**
  * Sends a visit to a view that needs the workspace to the workspace instead, while the workspace hasn't mounted, as
  * on loading that view's address.
  *

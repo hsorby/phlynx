@@ -18,7 +18,7 @@ import { FLOW_IDS } from '../utils/constants'
  *
  * @param {{instanceId?: import('vue').Ref<string|null>|string|null}} [options] - The instance an instance editor
  *   runs on its own, or none for the canvas selection.
- * @returns {Object} The run state, `play`, `stop`, `keepCurrent`, `scopeMode`, `statusLine` and `resultsSummary`.
+ * @returns {Object} The run state, `play`, `stop`, `keepCurrent`, `scopeMode` and `statusLine`.
  */
 export function useSimulationRunner({ instanceId = null } = {}) {
   const { nodes, getSelectedNodes } = useVueFlow(FLOW_IDS.MAIN)
@@ -182,7 +182,6 @@ export function useSimulationRunner({ instanceId = null } = {}) {
     canPlay,
     isOutdated,
     scopeMode,
-    resultsSummary,
     statusLine,
     play,
     stop,
