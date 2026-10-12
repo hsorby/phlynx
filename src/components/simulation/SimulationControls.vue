@@ -38,6 +38,7 @@
         v-model:target-plot-id="targetPlotId"
         :plot-config="shownPlotConfig"
         :is-single-plot="isSinglePlot"
+        :is-plottable="isPlottable"
         :nodes="nodes"
         :index="index"
         :scope-node-ids="scopeNodeIds"

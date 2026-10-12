@@ -455,6 +455,12 @@ describe('InstanceEditorDialog Plot tab', () => {
       // Removing a variable from the plot.
       await panel.find('button[aria-label="Stop plotting x"]').trigger('click')
       expect(panel.props('plotConfig').selections.map((selection) => selection.key)).toEqual(['a::t'])
+
+      // The plot's menu sets what it plots against, and can't remove it.
+      await panel.find('button[aria-label="More for Plot 1"]').trigger('click')
+      await flushPromises()
+      const menuLabels = [...document.body.querySelectorAll('.p-menu-item-label')].map((label) => label.textContent)
+      expect(menuLabels).toEqual(['Plot against a variable…', 'Plot against time'])
     })
 
     it('runs when clicking a variable finds no current results of its scope, and only then', async () => {
