@@ -11,6 +11,7 @@
         :selected-count="selectedNodeIds.length"
         :is-outdated="isOutdated"
         :is-in-sidebar="!instanceId"
+        :has-float="!instanceId"
         :has-page-link="!instanceId"
         @play="play"
         @stop="stop"
@@ -104,7 +105,7 @@ import { useSelectionAutoRun } from '../../composables/useSelectionAutoRun'
 import { useSliderReruns } from '../../composables/useSliderReruns'
 
 const props = defineProps({
-  // In the instance editor: play runs this instance on its own, or the whole model.
+  // In the instance editor: play runs the whole model, or this instance on its own.
   instanceId: { type: String, default: null },
 })
 

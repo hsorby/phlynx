@@ -1112,16 +1112,19 @@ class TestSimulationTab(unittest.TestCase):
             page.evaluate(SHORTEN_SIMULATION)
             soma.dblclick()
             page.get_by_role("tab", name=re.compile(r"Plot \(")).click()
+            dialog = page.get_by_role("dialog")
 
-            page.get_by_role("button", name="Simulate this instance").click()
-            expect(page.get_by_text("Simulated 1 instance on their own")).to_be_visible(timeout=120000)
+            # The Plot tab runs the whole model, with no floating viewer to open.
+            expect(dialog.get_by_role("button", name="Float the results over the canvas")).to_have_count(0)
+            dialog.get_by_role("button", name="Simulate the whole model").click()
+            expect(dialog.get_by_text("Simulated the whole model")).to_be_visible(timeout=120000)
             plot_variable(page, "soma_SN/V")
             expect(page.locator(".simulation-plot .plot-title")).to_have_text("soma_SN/V")
 
             # Apply saves and keeps the editor open, on the Plot tab.
             page.get_by_role("button", name="Apply").click()
             expect(page.get_by_text("CellML Updated")).to_be_visible()
-            expect(page.get_by_role("button", name="Simulate this instance")).to_be_visible()
+            expect(dialog.get_by_role("button", name="Simulate the whole model")).to_be_visible()
             # ----------- END ------------
 
             context.close()

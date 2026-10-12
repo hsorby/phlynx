@@ -19,7 +19,8 @@ import { FLOW_IDS } from '../utils/constants'
  * @param {{instanceId?: import('vue').Ref<string|null>|string|null, isWholeModelOnly?: boolean}} [options] - The
  *   instance an instance editor runs on its own, or none for the canvas selection; and whether the view only runs the
  *   whole model, as the simulation page, with no canvas to select from, does.
- * @returns {Object} The run state, `play`, `stop`, `keepCurrent`, `scopeMode` and `statusLine`.
+ * @returns {Object} The run state, `play`, `stop`, `keepCurrent`, `scopeMode` and `statusLine`; `isOtherRun` says an
+ *   instance editor shows another scope's results.
  */
 export function useSimulationRunner({ instanceId = null, isWholeModelOnly = false } = {}) {
   const { nodes, getSelectedNodes } = useVueFlow(FLOW_IDS.MAIN)
@@ -91,8 +92,8 @@ export function useSimulationRunner({ instanceId = null, isWholeModelOnly = fals
   })
 
   // Whether play runs the part (the selection, or the edited instance) or the whole model. The sidebar's choice lasts
-  // for the session; the instance editor's starts on the instance each time; the page's is always the whole model.
-  const editorScopeMode = ref('selection')
+  // for the session; the instance editor's starts on the whole model each time; the page's is always the whole model.
+  const editorScopeMode = ref('model')
   const scopeMode = computed({
     get: () => (isWholeModelOnly ? 'model' : getInstanceId() ? editorScopeMode.value : store.scopeMode),
     set: (mode) => {
@@ -170,8 +171,9 @@ export function useSimulationRunner({ instanceId = null, isWholeModelOnly = fals
       const text = count ? `${resultsSummary.value} ${count} ${count === 1 ? 'warning' : 'warnings'}.` : resultsSummary.value
       return { severity: count ? 'warn' : 'info', icon: count ? 'pi-exclamation-triangle' : null, text, details: warnings }
     }
-    const what = isWholeModelOnly ? 'the whole model' : 'the whole model or the selected instances'
-    return { severity: 'info', icon: null, text: `Press play to simulate ${what}.`, details: [] }
+    if (isWholeModelOnly) return { severity: 'info', icon: null, text: 'Press play to simulate the whole model.', details: [] }
+    const part = getInstanceId() ? 'this instance' : 'the selected instances'
+    return { severity: 'info', icon: null, text: `Press play to simulate the whole model or ${part}.`, details: [] }
   })
 
   return {
@@ -186,6 +188,7 @@ export function useSimulationRunner({ instanceId = null, isWholeModelOnly = fals
     blockedReason,
     canPlay,
     isOutdated,
+    isOtherRun,
     scopeMode,
     statusLine,
     play,
