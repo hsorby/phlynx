@@ -401,8 +401,8 @@ class TestSimulationTab(unittest.TestCase):
             page.wait_for_function(f"{RESULTS_STORE}.status === 'done'", timeout=120000)
 
             page.get_by_role("button", name=re.compile(r"^Runs \(0\)")).click()
-            expect(page.get_by_text("Track a run to keep its lines on the charts")).to_be_visible()
-            page.get_by_role("button", name="Track run").click()
+            expect(page.get_by_text("Track a run from the toolbar to keep its lines on the charts")).to_be_visible()
+            page.get_by_role("button", name="Track this run", exact=True).click()
             expect(page.get_by_role("button", name=re.compile(r"^Runs \(1\)"))).to_be_visible()
             expect(page.get_by_text("Run #1")).to_be_visible()
             # The chart says which run each line is from: the live run solid, the tracked run dashed.

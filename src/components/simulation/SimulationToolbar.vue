@@ -73,6 +73,19 @@
     />
 
     <span class="toolbar-spacer"></span>
+    <!-- A span carries the tooltip, as a disabled button shows none. -->
+    <span class="toolbar-track" v-tooltip.bottom="trackBlocker ?? 'Track this run: keep its lines on the charts'">
+      <Button
+        icon="pi pi-bookmark"
+        text
+        rounded
+        size="small"
+        severity="secondary"
+        :disabled="!!trackBlocker"
+        aria-label="Track this run"
+        @click="track"
+      />
+    </span>
     <Button
       icon="pi pi-window-minimize"
       text
@@ -123,8 +136,8 @@
 <script setup>
 /**
  * The Simulation tab's controls: play or stop, whether play runs the selection or the whole model, whether it
- * runs the workspace's protocol or the sweep, and which experiment is shown, and buttons for the larger view, the protocol and the
- * simulation settings.
+ * runs the workspace's protocol or the sweep, and which experiment is shown, and buttons to track the run, float or
+ * enlarge the results, and open the protocol and the simulation settings.
  */
 import { computed, watch } from 'vue'
 
@@ -134,6 +147,7 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import { useFloatingViewer } from '../../composables/useFloatingViewer'
 import { useProtocolDialog } from '../../composables/useProtocolDialog'
 import { useSimSettingsDialog } from '../../composables/useSimSettingsDialog'
+import { useTrackRun } from '../../composables/useTrackRun'
 import { findSweepProblem, sweepLabel } from '../../services/simulation/sweep'
 import { useProtocolStore } from '../../stores/protocolStore'
 import { useSimulationResultsStore } from '../../stores/simulationResultsStore'
@@ -192,6 +206,7 @@ function toggleSweep() {
 }
 
 const { state: floatingViewer, toggle: toggleFloatingViewer } = useFloatingViewer()
+const { trackBlocker, track } = useTrackRun()
 
 const isWholeModel = computed({
   get: () => scopeMode.value === 'model',
@@ -264,6 +279,11 @@ const playHint = computed(() => props.blockedReason ?? (props.isLoading ? 'Loadi
 
 .toolbar-spacer {
   flex: 1;
+}
+
+.toolbar-track {
+  display: inline-flex;
+  flex-shrink: 0;
 }
 
 /* A filled circle a little larger than the other buttons, as the toolbar's main action. */

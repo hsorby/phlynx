@@ -1,7 +1,6 @@
 <template>
   <section class="run-list" aria-label="Tracked runs">
     <div class="run-actions">
-      <Button label="Track run" icon="pi pi-bookmark" size="small" :disabled="!!trackBlocker" :title="trackBlocker ?? 'Keep this run’s lines on the charts'" @click="track" />
       <Button
         label="Remove all"
         icon="pi pi-trash"
@@ -62,16 +61,15 @@
     </ul>
 
     <p v-if="!store.trackedRuns.length" class="run-empty">
-      Track a run to keep its lines on the charts, dashed, while you try other slider values. Up to {{ MAX_TRACKED_RUNS }} runs can be tracked.
+      Track a run from the toolbar to keep its lines on the charts, dashed, while you try other slider values. Up to {{ MAX_TRACKED_RUNS }} runs can be tracked.
     </p>
   </section>
 </template>
 
 <script setup>
 /**
- * The tracked runs, as web OpenCOR lists them: track the shown run to keep its lines on the charts, then show,
- * hide or stop tracking it, or hide the live run to compare tracked runs alone. Each run says the slider
- * values it tried out.
+ * The tracked runs, as web OpenCOR lists them: show, hide or stop tracking each run tracked from the toolbar, or
+ * hide the live run to compare tracked runs alone. Each run says the slider values it tried out.
  */
 import { computed } from 'vue'
 
@@ -83,9 +81,7 @@ import { formatPlotValue as formatValue, MAX_TRACKED_RUNS, runDash } from '../..
 import { useSimulationResultsStore } from '../../stores/simulationResultsStore'
 
 const store = useSimulationResultsStore()
-const { liveInputs, trackBlocker, track } = useTrackRun()
-
-
+const { liveInputs } = useTrackRun()
 /**
  * Says what slider values a run tried out.
  *

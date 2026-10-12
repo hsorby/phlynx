@@ -54,3 +54,34 @@ describe('SimulationToolbar sweep mode', () => {
     wrapper.unmount()
   })
 })
+
+describe('SimulationToolbar track run', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  const findTrack = (wrapper) => wrapper.find('button[aria-label="Track this run"]')
+
+  it('sits beside the float button, and is disabled until a run can be tracked', () => {
+    const wrapper = mountToolbar()
+    const labels = wrapper.findAll('button').map((button) => button.attributes('aria-label'))
+    expect(labels.indexOf('Float the results over the canvas')).toBe(labels.indexOf('Track this run') + 1)
+    expect(findTrack(wrapper).attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
+
+  it('tracks the shown run', async () => {
+    const store = useSimulationResultsStore()
+    store.startRun(null)
+    store.finishRun({
+      results: { voi: { name: 'm/t', unit: 'second', values: new Float64Array([0, 1]) }, variables: new Map(), isStopped: false },
+      mapping: new Map(),
+      signature: 's',
+      inspectionOutputs: [],
+      inputs: { settings: {}, overrides: null },
+    })
+    const wrapper = mountToolbar()
+
+    await findTrack(wrapper).trigger('click')
+    expect(store.trackedRuns.map((run) => run.number)).toEqual([1])
+    wrapper.unmount()
+  })
+})
