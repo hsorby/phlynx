@@ -239,6 +239,32 @@ describe('SimulationPlot: reference lines', () => {
     expect(charts.at(-1).options.series.slice(1).map((series) => series.show)).toEqual([true, false, true, false])
   })
 
+  it('hides a run’s lines by clicking it in the Runs key, leaving the variables’ toggles as they are', async () => {
+    const live = [
+      { key: 'a::x', label: 'a/x', variableLabel: 'a/x', slot: 0, values: [1, 2, 3, 4], run: null },
+      { key: 'a::y', label: 'a/y', variableLabel: 'a/y', slot: 1, values: [4, 3, 2, 1], run: null },
+    ]
+    const tracked = live.map((item) => ({ ...item, key: `run_1::${item.key}`, liveKey: item.key, label: `${item.label} [Low]`, run: { number: 1, name: 'Low', dash: [4, 4] } }))
+    wrapper = mount(SimulationPlot, { props: { title: 'Plot (2 variables)', unit: 'm', x: X, series: [...live, ...tracked] }, attachTo: document.body })
+    const runs = wrapper.findAll('.plot-key[aria-label="Runs"] .plot-key-toggle')
+    expect(runs.map((run) => run.text())).toEqual(['Live', 'Low'])
+    const setSeries = vi.spyOn(charts.at(-1), 'setSeries')
+
+    await runs[1].trigger('click')
+    expect(setSeries.mock.calls).toEqual([
+      [3, { show: false }],
+      [4, { show: false }],
+    ])
+    expect(runs[1].attributes('aria-pressed')).toBe('false')
+    expect(runs[1].attributes('title')).toBe('Show Low')
+    expect(wrapper.findAll('.plot-key:not([aria-label]) .plot-key-toggle').every((key) => key.attributes('aria-pressed') === 'true')).toBe(true)
+    expect(wrapper.vm.snapshot().legend.map((item) => item.label)).toEqual(['a/x', 'a/y'])
+
+    // A redraw keeps the run hidden.
+    await wrapper.setProps({ series: [...tracked, ...live] })
+    expect(charts.at(-1).options.series.slice(1).map((series) => series.show)).toEqual([false, false, true, true])
+  })
+
   it('sizes a filling chart’s drawing to the space under its heading, not to its height', () => {
     const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function () {
       return this.classList.contains('plot-chart') ? 250 : 0

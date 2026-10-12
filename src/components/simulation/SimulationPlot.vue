@@ -60,8 +60,17 @@
       solid, tracked runs dashed. -->
     <ul v-if="runKey.length && !x.isSteadyState" class="plot-key" aria-label="Runs">
       <li v-for="item in runKey" :key="item.number">
-        <RunSwatch v-if="item.dash" :colour="chrome.text" :dash="item.dash" /><span v-else class="plot-key-swatch" :style="{ background: chrome.text }" aria-hidden="true"></span
-        >{{ item.label }}
+        <button
+          type="button"
+          class="plot-key-toggle"
+          :class="{ 'is-hidden': isHidden(item) }"
+          :aria-pressed="!isHidden(item)"
+          :title="toggleHint(item)"
+          @click="toggleSeries(item)"
+        >
+          <RunSwatch v-if="item.dash" :colour="chrome.text" :dash="item.dash" /><span v-else class="plot-key-swatch" :style="{ background: chrome.text }" aria-hidden="true"></span
+          >{{ item.label }}
+        </button>
       </li>
     </ul>
     <!-- A steady state has one value per variable and no time to plot them against. -->
@@ -78,7 +87,7 @@
       <!-- The values under the cursor, beside it, as plotly's hover does, in place of a legend line. -->
       <div v-if="readout" class="plot-readout" :style="{ left: `${readout.left}px`, top: `${readout.top}px` }" aria-hidden="true">
         <div class="plot-readout-time">{{ readout.time }}</div>
-        <div v-for="row in readout.rows.filter((row) => !hiddenKeys.has(row.lineKey))" :key="row.key" class="plot-readout-row">
+        <div v-for="row in readout.rows.filter((row) => !row.hiddenBy.some((key) => hiddenKeys.has(key)))" :key="row.key" class="plot-readout-row">
           <RunSwatch v-if="row.dash" :colour="row.colour" :dash="row.dash" />
           <span v-else class="plot-key-swatch" :style="{ background: row.colour }"></span>
           <span v-if="row.label" class="plot-readout-label">{{ row.label }}</span>
@@ -189,7 +198,7 @@ const chartEl = ref(null)
 const { isDarkMode } = useColorScheme()
 const readout = ref(null)
 // The keys of the lines hidden by clicking them in the title or key, kept across redraws: a tracked run's line goes by
-// its live run's key, so its variable's toggle hides both.
+// its live run's key, so its variable's toggle hides both, and a run's key in the Runs key hides every line of it.
 const hiddenKeys = ref(new Set())
 
 /**
@@ -207,6 +216,30 @@ const lineKeyOf = (item) => item.liveKey ?? item.key
  * @returns {boolean}
  */
 const isHidden = (item) => hiddenKeys.value.has(lineKeyOf(item))
+
+/**
+ * Gets the key a run's lines are hidden by, the live run's being 0.
+ *
+ * @param {number} number - The run's number.
+ * @returns {string}
+ */
+const runToggleKey = (number) => `run:${number}`
+
+/**
+ * Gets the keys that hide a series' line: its variable's and its run's.
+ *
+ * @param {{key: string, liveKey?: string, run: {number: number}|null}} series
+ * @returns {string[]}
+ */
+const hiddenKeysOf = (series) => [lineKeyOf(series), runToggleKey(series.run?.number ?? 0)]
+
+/**
+ * Tells whether a series' line is hidden, by its variable or by its run.
+ *
+ * @param {{key: string, liveKey?: string, run: {number: number}|null}} series
+ * @returns {boolean}
+ */
+const isLineHidden = (series) => hiddenKeysOf(series).some((key) => hiddenKeys.value.has(key))
 
 const hasRuns = computed(() => props.series.some((item) => item.run))
 // Whether the title names each line, and so carries their toggles; otherwise the key under it does. A steady state
@@ -250,13 +283,14 @@ const keyed = computed(() => {
 const toggleHint = (item) => `${isHidden(item) ? 'Show' : 'Hide'} ${item.label}${item.role && !item.points ? `: ${formatValue(item.value)}` : ''}`
 
 /**
- * Shows or hides a series' line, with tracked runs every line of its variable, or a reference line, refitting the
- * values to the lines left; the x range stays.
+ * Shows or hides a series' line, with tracked runs every line of its variable or of a run, or a reference line,
+ * refitting the values to the lines left; the x range stays.
  *
  * @param {{key: string, liveKey?: string, role?: string}} item
  */
 function toggleSeries(item) {
   const key = lineKeyOf(item)
+  const wasHidden = props.series.map(isLineHidden)
   const hidden = new Set(hiddenKeys.value)
   if (hidden.has(key)) hidden.delete(key)
   else hidden.add(key)
@@ -272,7 +306,7 @@ function toggleSeries(item) {
   }
   if (!plot) return
   props.series.forEach((series, index) => {
-    if (lineKeyOf(series) === key) plot.setSeries(index + 1, { show: !hidden.has(key) })
+    if (isLineHidden(series) !== wasHidden[index]) plot.setSeries(index + 1, { show: wasHidden[index] })
   })
 }
 
@@ -297,10 +331,12 @@ const chrome = computed(() => CHROME[isDarkMode.value ? 'dark' : 'light'])
 // The runs the lines are from, once tracked runs are shown.
 const runKey = computed(() => {
   const runs = new Map()
-  for (const item of props.series) if (item.run) runs.set(item.run.number, { number: item.run.number, label: item.run.name || `#${item.run.number}`, dash: item.run.dash })
+  for (const item of props.series) {
+    if (item.run) runs.set(item.run.number, { key: runToggleKey(item.run.number), number: item.run.number, label: item.run.name || `#${item.run.number}`, dash: item.run.dash })
+  }
   if (!runs.size) return []
   const key = [...runs.values()].sort((a, b) => a.number - b.number)
-  return props.series.some((item) => !item.run) ? [{ number: 0, label: 'Live', dash: null }, ...key] : key
+  return props.series.some((item) => !item.run) ? [{ key: runToggleKey(0), number: 0, label: 'Live', dash: null }, ...key] : key
 })
 
 // How many variables the lines show, however many runs or experiments they are from.
@@ -411,7 +447,7 @@ function updateReadout(chart) {
   readout.value = {
     ...placeReadout(chart, left),
     time: `${formatValue(chart.data[0][idx])}${xUnit() ? ` ${xUnit()}` : ''}${findSegmentLabel(chart.data[0][idx])}`,
-    rows: readoutOrder.value.map((item) => ({ key: item.key, lineKey: lineKeyOf(item), ...readoutNames(item), colour: colourOf(item), dash: item.run?.dash ?? null, value: formatValue(item.values[idx]) })),
+    rows: readoutOrder.value.map((item) => ({ key: item.key, hiddenBy: hiddenKeysOf(item), ...readoutNames(item), colour: colourOf(item), dash: item.run?.dash ?? null, value: formatValue(item.values[idx]) })),
   }
 }
 
@@ -500,7 +536,7 @@ function updatePhaseReadout(chart) {
   const { left, top, idxs } = chart.cursor
   const found = props.series
     .map((item, i) => ({ item, idx: idxs?.[i + 1] }))
-    .filter(({ item, idx }) => idx != null && !isHidden(item))
+    .filter(({ item, idx }) => idx != null && !isLineHidden(item))
     .map((point) => {
       const pointLeft = chart.valToPos(xValuesOf(point.item)[point.idx], 'x')
       const pointTop = chart.valToPos(point.item.values[point.idx], 'y')
@@ -521,7 +557,7 @@ function updatePhaseReadout(chart) {
     time: `${name(props.x.label)} ${formatValue(xValuesOf(nearest.item)[nearest.idx])}${xUnit() ? ` ${xUnit()}` : ''}${when}`,
     rows: found
       .sort((a, b) => (a.item.run?.number ?? 0) - (b.item.run?.number ?? 0))
-      .map(({ item, idx }) => ({ key: item.key, lineKey: lineKeyOf(item), ...readoutNames(item), colour: colourOf(item), dash: item.run?.dash ?? null, value: formatValue(item.values[idx]) })),
+      .map(({ item, idx }) => ({ key: item.key, hiddenBy: hiddenKeysOf(item), ...readoutNames(item), colour: colourOf(item), dash: item.run?.dash ?? null, value: formatValue(item.values[idx]) })),
   }
 }
 
@@ -577,7 +613,7 @@ const ariaLabel = computed(() => {
  */
 const lineStyle = (series, theme) => ({
   label: series.label,
-  show: !isHidden(series),
+  show: !isLineHidden(series),
   stroke: series.run ? fadeColour(SERIES_COLOURS[theme][series.slot]) : SERIES_COLOURS[theme][series.slot],
   width: series.run ? 1.5 : 2,
   ...(series.run && { dash: series.run.dash }),
@@ -695,7 +731,7 @@ function joinInOrder(chart, seriesIndex) {
  */
 function pruneHidden() {
   if (!hiddenKeys.value.size || !props.series.length) return
-  const keys = new Set([...titleToggles.value, ...keyed.value].filter(Boolean).map(lineKeyOf))
+  const keys = new Set([...titleToggles.value, ...keyed.value, ...runKey.value].filter(Boolean).map(lineKeyOf))
   const hidden = new Set([...hiddenKeys.value].filter((key) => keys.has(key)))
   if (hidden.size !== hiddenKeys.value.size) hiddenKeys.value = hidden
 }
@@ -793,7 +829,7 @@ defineExpose({
     if (!plot) return null
     const colours = SERIES_COLOURS[isDarkMode.value ? 'dark' : 'light']
     // Hidden lines aren't drawn, so the image's title and legend leave them out too.
-    const shown = readoutOrder.value.filter((series) => !isHidden(series))
+    const shown = readoutOrder.value.filter((series) => !isLineHidden(series))
     const name = shownTitle(shown)
     // The unit is in the heading, not on the canvas, so the image's title carries it.
     const title = `${name}${againstLabel.value ? ` vs ${againstLabel.value}${readoutNote.value}` : ''}${props.unit ? ` (${props.unit})` : ''}`
