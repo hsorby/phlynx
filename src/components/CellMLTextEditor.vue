@@ -424,10 +424,20 @@ function findClickedVariable(event, view) {
   return variable.name
 }
 
+// A click waits this long for a second, so double-clicking a name to select it doesn't report it.
+const VARIABLE_CLICK_DELAY_MS = 300
+let variableClickTimer = null
+
 const variableClickHandler = EditorView.domEventHandlers({
   click: (event, view) => {
+    clearTimeout(variableClickTimer)
+    variableClickTimer = null
     const name = findClickedVariable(event, view)
-    if (name) emit('variable-click', name)
+    if (!name) return false
+    variableClickTimer = setTimeout(() => {
+      variableClickTimer = null
+      if (view.state.selection.main.empty) emit('variable-click', name)
+    }, VARIABLE_CLICK_DELAY_MS)
     return false
   },
 })
@@ -694,6 +704,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (debouncer) clearTimeout(debouncer)
+  clearTimeout(variableClickTimer)
   if (observer) observer.disconnect()
   if (resizeObserver) resizeObserver.disconnect()
   if (resizeRaf) cancelAnimationFrame(resizeRaf)
