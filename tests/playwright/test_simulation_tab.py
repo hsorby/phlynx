@@ -1169,6 +1169,40 @@ class TestSimulationTab(unittest.TestCase):
             context.close()
             browser.close()
 
+    def test_instance_editor_plots_a_variable_clicked_in_the_math_editor(self):
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=HEADLESS_MODE)
+
+            context = browser.new_context(viewport={"width": 1600, "height": 1000})
+            context.add_init_script(OPT_IN_TO_ISOLATION)
+            page = context.new_page()
+            with open(os.path.join(RESOURCE_PATH, "workspace-json.base64")) as f:
+                workspace_json = f.read().strip()
+            page.goto(BASE_URL + f"?open=workspace_json#{workspace_json}", wait_until="commit")
+
+            # ---------- START -----------
+            soma = page.get_by_text("SN_somacell_modules.cellmlsoma_SN")
+            soma.wait_for(timeout=APP_MOUNT_TIMEOUT)
+            page.wait_for_function("window.crossOriginIsolated === true", timeout=APP_MOUNT_TIMEOUT)
+            page.evaluate(SHORTEN_SIMULATION)
+            soma.dblclick()
+            dialog = page.get_by_role("dialog")
+            dialog.get_by_role("tab", name="Math Editor").click()
+            dialog.get_by_role("tab", name=re.compile(r"Plot \(")).click()
+            dialog.get_by_role("button", name="Simulate the whole model").click()
+            expect(dialog.get_by_text("Simulated the whole model")).to_be_visible(timeout=120000)
+
+            # A typeset name in the Math Editor plots the variable it names.
+            name = dialog.locator("[data-name]").filter(has_text=re.compile(r"^Vsensed")).first
+            name.scroll_into_view_if_needed()
+            name.click()
+            expect(dialog.locator(".simulation-plot .plot-title")).to_have_text("soma_SN/V_sensed")
+            expect(dialog.get_by_role("tab", name="Plot (1)")).to_be_visible()
+            # ----------- END ------------
+
+            context.close()
+            browser.close()
+
     def test_floating_viewer_stays_over_the_canvas_with_the_sidebar_closed(self):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=HEADLESS_MODE)

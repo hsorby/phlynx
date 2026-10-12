@@ -83,7 +83,7 @@
     "vue-codemirror": "^6.1.1",
     "vue-router": "^4.6.4",
     "vue3-libcellml.js": "^0.7.1",
-    "vue3-math-editor": "^0.3.3"
+    "vue3-math-editor": "^0.3.4"
   },
   "devDependencies": {
     "@hsorby/changelog": "^3.0.3",
