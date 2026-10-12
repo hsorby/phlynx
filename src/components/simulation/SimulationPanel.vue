@@ -16,7 +16,9 @@
         @play="play"
         @stop="stop"
         @open-page="openSimulationPage"
-      />
+      >
+        <slot name="toolbar" />
+      </SimulationToolbar>
       <!-- Always there, so the bar showing and hiding never moves what is below it. -->
       <div class="panel-progress-slot">
         <ProgressBar
@@ -76,6 +78,7 @@
           :keep-current="keepCurrent"
           :plot-config="plotConfig"
           :plot-node-id="plotConfig ? instanceId : null"
+          :is-unit-filtered="isUnitFiltered"
           @change="rerunForSliders"
           @update:plot-config="(next) => emit('update:plotConfig', next)"
         />
@@ -88,7 +91,7 @@
 /**
  * The context sidebar's Simulation tab: runs scoped simulations and plots the chosen variables of one of
  * the simulated instances. The instance editor's Plot tab gives it a single plot of its own, of its instance's
- * variables, in place of the workspace's plots.
+ * variables, in place of the workspace's plots, and its `toolbar` slot adds controls to the run's row.
  */
 import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, ref, toRef } from 'vue'
 import { useRouter } from 'vue-router'
@@ -113,6 +116,8 @@ const props = defineProps({
   instanceId: { type: String, default: null },
   // A single plot of the view's own, never saved, shown in place of the workspace's plots.
   plotConfig: { type: Object, default: null },
+  // Adding to the view's own plot offers only variables in the units it already shows.
+  isUnitFiltered: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:plotConfig'])
 

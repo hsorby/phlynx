@@ -387,27 +387,34 @@
                 Runs use the saved instance.
                 <Button label="Save to include your edits" link size="small" class="plot-tab-save" @click="handleSave({ keepOpen: true })" />
               </Message>
-              <div class="plot-tab-auto">
-                <label class="plot-tab-auto-label" v-tooltip.bottom="'Click a variable in the CellML Text to plot it alone'">
-                  <ToggleSwitch
-                    v-model="isAutoUpdate"
-                    :disabled="editorKind !== 'text'"
-                    class="plot-tab-auto-switch"
-                    aria-label="Auto-update: plot a variable clicked in the math"
-                  />
-                  Auto-update
-                </label>
-                <span v-if="plotNotice" class="plot-tab-auto-notice" role="status">{{ plotNotice }}</span>
-                <span v-else-if="editorKind !== 'text'" class="plot-tab-auto-notice">Click-to-plot works in the CellML Text</span>
-              </div>
               <!-- Kept mounted through an Apply's reload, so its choices, such as the whole model, last. -->
               <SimulationPanel
                 v-if="activeTab === 'plot'"
                 ref="simulationPanelRef"
                 v-model:plot-config="editorPlotConfig"
                 :instance-id="id"
+                :is-unit-filtered="!isAutoUpdate"
                 class="plot-tab-workbench"
-              />
+              >
+                <template #toolbar>
+                  <label
+                    class="plot-tab-auto-label"
+                    v-tooltip.bottom="'Click a variable in the CellML Text to plot it alone. Off, adding offers only the plot\'s units.'"
+                  >
+                    <ToggleSwitch
+                      v-model="isAutoUpdate"
+                      :disabled="editorKind !== 'text'"
+                      class="plot-tab-auto-switch"
+                      aria-label="Auto-update: plot a variable clicked in the math"
+                    />
+                    <span class="plot-tab-auto-text">Auto-update</span>
+                  </label>
+                  <span v-if="plotNotice" class="plot-tab-auto-notice" role="status" :title="plotNotice">{{ plotNotice }}</span>
+                  <span v-else-if="editorKind !== 'text'" class="plot-tab-auto-notice" title="Click-to-plot works in the CellML Text">
+                    Click-to-plot works in the CellML Text
+                  </span>
+                </template>
+              </SimulationPanel>
             </TabPanel>
           </TabPanels>
         </Tabs>
@@ -2077,24 +2084,29 @@ async function handleSave(options) {
   gap: 8px;
 }
 
-.plot-tab-auto {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-  min-width: 0;
-  font-size: 0.8125rem;
-}
-
+/* In the run's toolbar, beside the whole model switch. */
 .plot-tab-auto-label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+  font-size: 0.8125rem;
+  color: var(--p-text-color);
   cursor: pointer;
 }
 
+/* Measured against the toolbar: too narrow for the label, the switch stands alone, its meaning in the tooltip. */
+@container (max-width: 360px) {
+  .plot-tab-auto-text {
+    display: none;
+  }
+}
+
+/* Shrinks to an ellipsis, its full text in the title, so it never pushes the toolbar's buttons off. */
 .plot-tab-auto-notice {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 0.8125rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

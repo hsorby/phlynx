@@ -28,7 +28,7 @@
         <span class="path-note">{{ describe(option) ?? (option.inScope ? '\u00a0' : 'Not in the last run') }}</span>
       </div>
     </template>
-    <template #empty>No variable matches.</template>
+    <template #empty>{{ emptyMessage }}</template>
   </AutoComplete>
 </template>
 
@@ -54,6 +54,8 @@ const props = defineProps({
   describe: { type: Function, default: () => null },
   placeholder: { type: String, default: 'Search variables…' },
   ariaLabel: { type: String, default: 'Search variables' },
+  // Shown when no entry matches the search.
+  emptyMessage: { type: String, default: 'No variable matches.' },
 })
 const emit = defineEmits(['pick'])
 

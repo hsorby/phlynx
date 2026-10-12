@@ -84,11 +84,11 @@ const ensureResults = vi.fn()
 /** Stands in for SimulationPanel: the test reads the props the dialog gives it. */
 const SimulationPanelStub = defineComponent({
   name: 'SimulationPanel',
-  props: ['instanceId', 'plotConfig'],
+  props: ['instanceId', 'plotConfig', 'isUnitFiltered'],
   emits: ['update:plotConfig'],
-  setup(_, { expose }) {
+  setup(_, { expose, slots }) {
     expose({ ensureResults })
-    return () => h('div', { class: 'simulation-panel-stub' })
+    return () => h('div', { class: 'simulation-panel-stub' }, slots.toolbar?.())
   },
 })
 
@@ -390,17 +390,33 @@ describe('InstanceEditorDialog Plot tab', () => {
 
     it('plots nothing clicked with Auto-update off, or with another tab shown', async () => {
       await openPlotTab()
-      wrapper.find('.plot-tab-auto').findComponent({ name: 'ToggleSwitch' }).vm.$emit('update:modelValue', false)
+      wrapper.find('.plot-tab-auto-label').findComponent({ name: 'ToggleSwitch' }).vm.$emit('update:modelValue', false)
       await clickVariable('x')
       expect(plottedKeys()).toEqual([])
 
-      wrapper.find('.plot-tab-auto').findComponent({ name: 'ToggleSwitch' }).vm.$emit('update:modelValue', true)
+      wrapper.find('.plot-tab-auto-label').findComponent({ name: 'ToggleSwitch' }).vm.$emit('update:modelValue', true)
       wrapper.vm.showTab('parameters')
       await clickVariable('x')
       wrapper.vm.showTab('plot')
       await flushPromises()
       expect(plottedKeys()).toEqual([])
       expect(ensureResults).not.toHaveBeenCalled()
+    })
+
+    it('puts Auto-update in the run’s toolbar, and filters the plot’s picker by units while it is off', async () => {
+      mountDialog({ defaultTab: 'plot' }, { isPanelReal: true })
+      const editor = await open()
+      await report(editor, 'init', XML)
+      await flushPromises()
+      const panel = wrapper.findComponent({ name: 'SimulationPanel' })
+      // Its own span, so a narrow toolbar can hide it and leave the switch.
+      expect(panel.find('[role="toolbar"] .plot-tab-auto-label .plot-tab-auto-text').text()).toBe('Auto-update')
+      expect(panel.props('isUnitFiltered')).toBe(false)
+
+      wrapper.find('.plot-tab-auto-label').findComponent({ name: 'ToggleSwitch' }).vm.$emit('update:modelValue', false)
+      await flushPromises()
+      expect(panel.props('isUnitFiltered')).toBe(true)
+      expect(panel.findComponent({ name: 'SimulationControls' }).props('isUnitFiltered')).toBe(true)
     })
 
     it('asks for a save to plot a variable the saved instance doesn’t have, and plots no constant', async () => {
@@ -526,7 +542,7 @@ describe('InstanceEditorDialog Plot tab', () => {
       window.localStorage.setItem('instanceEditorDialog.editorKind', 'math')
       try {
         await openPlotTab()
-        expect(wrapper.find('.plot-tab-auto').findComponent({ name: 'ToggleSwitch' }).props('disabled')).toBe(true)
+        expect(wrapper.find('.plot-tab-auto-label').findComponent({ name: 'ToggleSwitch' }).props('disabled')).toBe(true)
         expect(wrapper.find('.plot-tab-auto-notice').text()).toBe('Click-to-plot works in the CellML Text')
       } finally {
         window.localStorage.clear()
