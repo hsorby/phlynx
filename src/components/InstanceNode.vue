@@ -45,14 +45,17 @@
 
       <!-- Node Title Block -->
       <div class="instance-name">
-        <button
+        <!-- Not a <button>: the SVG export leaves buttons out, and the name must be drawn. -->
+        <span
           v-if="!isEditing"
-          type="button"
+          role="button"
+          tabindex="0"
           class="name-text"
           :aria-label="`Rename ${data.name}`"
           @click="onNameClick"
           @keydown.enter.prevent="startEditing"
-        >{{ data.name }}</button>
+          @keydown.space.prevent="startEditing"
+        >{{ data.name }}</span>
         <SanitisedInput
           v-else
           ref="nameInputRef"

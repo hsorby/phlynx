@@ -6,6 +6,7 @@ import PrimeVue from 'primevue/config'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useFlowHistoryStore } from '../../../src/stores/historyStore.js'
+import { SVG_EXCLUDE_SELECTOR } from '../../../src/services/export/svg.js'
 
 const nodes = ref([])
 const notifyError = vi.hoisted(() => vi.fn())
@@ -51,7 +52,7 @@ function mountNode() {
   })
 }
 
-const nameButton = () => wrapper.find('button.name-text')
+const nameButton = () => wrapper.find('.name-text')
 const nameInput = () => wrapper.find('.instance-name input')
 
 describe('InstanceNode', () => {
@@ -74,6 +75,12 @@ describe('InstanceNode', () => {
     mountNode()
     expect(nameButton().text()).toBe('soma')
     expect(nameButton().attributes('aria-label')).toBe('Rename soma')
+    expect(nameButton().attributes('role')).toBe('button')
+  })
+
+  it('keeps the name in the SVG export', () => {
+    mountNode()
+    expect(nameButton().element.closest(SVG_EXCLUDE_SELECTOR)).toBeNull()
   })
 
   it('starts renaming a moment after a single click', async () => {
