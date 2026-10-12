@@ -2,21 +2,29 @@
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import SimulationToolbar from '../../../src/components/simulation/SimulationToolbar.vue'
+import { useFloatingViewer } from '../../../src/composables/useFloatingViewer.js'
 import { useProtocolStore } from '../../../src/stores/protocolStore.js'
 import { useSimulationResultsStore } from '../../../src/stores/simulationResultsStore.js'
 import { useSimulationSettingsStore } from '../../../src/stores/simulationSettingsStore.js'
 
 const SWEEP = { key: 'a::k', nodeId: 'a', nodeName: 'a', parameterName: 'k', type: 'constant', from: 1, to: 3, points: 3 }
 
+// Keeps each tooltip's text on its element, for the tests to read.
+const tooltip = {
+  mounted: (el, binding) => (el.dataset.tooltip = binding.value),
+  updated: (el, binding) => (el.dataset.tooltip = binding.value),
+}
+
 /**
  * Mounts the toolbar.
  *
+ * @param {Object} [props]
  * @returns {import('@vue/test-utils').VueWrapper}
  */
-const mountToolbar = () => mount(SimulationToolbar, { global: { plugins: [PrimeVue], directives: { tooltip: {} } } })
+const mountToolbar = (props = {}) => mount(SimulationToolbar, { props, global: { plugins: [PrimeVue], directives: { tooltip } } })
 
 describe('SimulationToolbar sweep mode', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -82,6 +90,40 @@ describe('SimulationToolbar track run', () => {
 
     await findTrack(wrapper).trigger('click')
     expect(store.trackedRuns.map((run) => run.number)).toEqual([1])
+    wrapper.unmount()
+  })
+})
+
+describe('SimulationToolbar float', () => {
+  const viewer = useFloatingViewer()
+  const collapse = vi.fn()
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    viewer.setSidebarCollapser(collapse)
+  })
+
+  afterEach(() => {
+    viewer.state.visible = false
+    viewer.setSidebarCollapser(() => {})
+    collapse.mockClear()
+  })
+
+  const findFloat = (wrapper) => wrapper.find('button[aria-label="Float the results over the canvas"]')
+
+  it('hides the sidebar as the sidebar’s results float', async () => {
+    const wrapper = mountToolbar({ isInSidebar: true })
+    await findFloat(wrapper).trigger('click')
+    expect(viewer.state.visible).toBe(true)
+    expect(collapse).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('leaves the sidebar open as an instance editor’s results float', async () => {
+    const wrapper = mountToolbar()
+    await findFloat(wrapper).trigger('click')
+    expect(viewer.state.visible).toBe(true)
+    expect(collapse).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 })

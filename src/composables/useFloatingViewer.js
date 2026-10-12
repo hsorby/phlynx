@@ -18,10 +18,15 @@ let collapseSidebar = () => {}
 export function useFloatingViewer() {
   return {
     state,
-    /** Shows the viewer, hiding the sidebar, or hides it, leaving the sidebar as it is. */
-    toggle: () => {
+    /**
+     * Shows the viewer, or hides it, leaving the sidebar as it is.
+     *
+     * @param {{isCollapsingSidebar?: boolean}} [options] - Whether showing it hides the sidebar, as floating the
+     *   sidebar's own results does.
+     */
+    toggle: ({ isCollapsingSidebar = true } = {}) => {
       state.visible = !state.visible
-      if (state.visible) collapseSidebar()
+      if (state.visible && isCollapsingSidebar) collapseSidebar()
     },
     /** Closes the viewer and shows the Simulation tab, opening the sidebar if need be. */
     returnToTab: () => {

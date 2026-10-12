@@ -24,6 +24,15 @@ describe('useFloatingViewer', () => {
     expect(collapse).toHaveBeenCalledTimes(1)
   })
 
+  it('leaves the sidebar open when floating results from outside it', () => {
+    const collapse = vi.fn()
+    viewer.setSidebarCollapser(collapse)
+
+    viewer.toggle({ isCollapsingSidebar: false })
+    expect(viewer.state.visible).toBe(true)
+    expect(collapse).not.toHaveBeenCalled()
+  })
+
   it('returns to the Simulation tab, closing the viewer', () => {
     const openTab = vi.fn()
     const collapse = vi.fn()

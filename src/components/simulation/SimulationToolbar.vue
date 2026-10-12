@@ -95,7 +95,7 @@
       :aria-pressed="floatingViewer.visible"
       aria-label="Float the results over the canvas"
       v-tooltip.bottom="floatingViewer.visible ? 'Close the floating viewer' : 'Float over the canvas'"
-      @click="toggleFloatingViewer"
+      @click="toggleFloatingViewer({ isCollapsingSidebar: isInSidebar })"
     />
     <Button
       icon="pi pi-window-maximize"
@@ -168,6 +168,8 @@ const props = defineProps({
   // The shown results are out of date, so play would update them.
   isOutdated: { type: Boolean, default: false },
   canExpand: { type: Boolean, default: false },
+  // The toolbar is the sidebar's, so floating the results hides the sidebar to give the canvas room.
+  isInSidebar: { type: Boolean, default: false },
 })
 const emit = defineEmits(['play', 'stop', 'expand'])
 

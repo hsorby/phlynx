@@ -11,6 +11,7 @@
         :selected-count="selectedNodeIds.length"
         :is-outdated="isOutdated"
         :can-expand="charts.length > 0 || predictionPlotCharts.length > 0"
+        :is-in-sidebar="!instanceId"
         @play="play"
         @stop="stop"
         @expand="isResultsDialogOpen = true"
