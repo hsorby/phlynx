@@ -590,7 +590,7 @@ import SimulationSettingsIcon from '../components/icons/SimulationSettingsIcon.v
 import { useScreenshot } from '../services/useScreenshot'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
 import { migrateWorkspace, separateNodeParameters } from '../services/workspaceMigrator'
-import { buildWorkspaceFile } from '../services/workspaceFile'
+import { buildWorkspaceFile, loadWorkspaceFile } from '../services/workspaceFile'
 import { useSimulation } from '../composables/useSimulation'
 import { useSimSettingsDialog } from '../composables/useSimSettingsDialog'
 import { useProtocolDialog } from '../composables/useProtocolDialog'
@@ -609,7 +609,7 @@ import { useColorScheme } from '../composables/useColorScheme'
 import { useAppSettings } from '../composables/useAppSettings'
 import { useNodeThemeStore } from '../stores/nodeThemeStore'
 import { categoryColour } from '../utils/nodeThemes'
-import { readFileAsText, cyrb53 } from '../utils/misc'
+import { readFileAsText, cyrb53, takeInputFile } from '../utils/misc'
 import { buildGhostHandles, normaliseHandleSlots } from '../utils/handles'
 import { bindLibCellML, processCellMLData, loadParametersFromCellML } from '../utils/cellml'
 import {
@@ -2744,26 +2744,16 @@ async function applyWorkspaceState(loadedState, { source = 'json' } = {}) {
 }
 
 /**
- * Reads a JSON file and restores the application state.
+ * Reads a JSON file and restores the application state. Clears the file input, so re-picking the
+ * same file loads it again.
  */
-function handleLoadWorkspace(event) {
-  const file = event.target?.files?.[0] || event.raw || event
+async function handleLoadWorkspace(event) {
+  const file = event?.target ? takeInputFile(event) : event?.raw || event
   if (!file) return
 
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    let loadedState
-    try {
-      loadedState = JSON.parse(e.target.result)
-    } catch (error) {
-      notify.error({ title: 'Failed to read workflow', message: `${error.message}` })
-      return
-    }
-    applyWorkspaceState(loadedState, { source: 'json' })
-      .then(() => sessionMetadataStore.setLastSaveName(stripExtension(file.name)))
-      .catch((error) => notify.error({ title: 'Failed to load workflow', message: `${error.message}` }))
+  if (await loadWorkspaceFile(file, (state) => applyWorkspaceState(state, { source: 'json' }))) {
+    sessionMetadataStore.setLastSaveName(stripExtension(file.name))
   }
-  reader.readAsText(file)
 }
 
 const urlLoaders = createUrlLoaders({ applyWorkspaceState, importOmexFile, processImportedOmexArchive })
