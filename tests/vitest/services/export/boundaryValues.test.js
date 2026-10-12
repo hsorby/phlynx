@@ -1,6 +1,9 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { resolveBoundaryValues } from '../../../../src/services/export/boundaryValues.js'
+import { previewCouplings } from '../../../../src/utils/edges.js'
 
 const node = (id, variables, ports = []) => ({ id, data: { name: id, variables, ports } })
 const row = (name, type, value = '', units = 'mM') => ({ name, type, value, units })
@@ -240,6 +243,81 @@ describe('resolveBoundaryValues', () => {
       ]
       const edges = [edge('a', 'b', port(['T']), port(['T'])), edge('b', 'c', port(['T']), port(['T']))]
       expect(resolveBoundaryValues(nodes, edges).bcOnly).toEqual([])
+    })
+  })
+
+  describe('status', () => {
+    const statusOf = (nodes, edges, nodeId, name) => resolveBoundaryValues(nodes, edges).status.get(nodeId)?.get(name)
+
+    it('names the computed variable a boundary condition takes its value from, and shares the computed one', () => {
+      const nodes = [node('src', [row('P', 'variable')]), node('v', [row('P', 'boundary_condition', '100')])]
+      const edges = [edge('src', 'v', port(['P']), port(['P']))]
+      expect(statusOf(nodes, edges, 'v', 'P')).toEqual({ state: 'connected', from: ['src.P'] })
+      expect(statusOf(nodes, edges, 'src', 'P')).toEqual({ state: 'shares', from: ['v.P'] })
+    })
+
+    it('names the constant that sets a boundary condition', () => {
+      const nodes = [node('c', [row('P', 'constant', '5')]), node('v', [row('P', 'boundary_condition')])]
+      const edges = [edge('c', 'v', port(['P']), port(['P']))]
+      expect(statusOf(nodes, edges, 'v', 'P')).toEqual({ state: 'connected', from: ['c.P'] })
+      expect(statusOf(nodes, edges, 'c', 'P')).toEqual({ state: 'shares', from: ['v.P'] })
+    })
+
+    it('names what a generated component computes a variable from', () => {
+      const nodes = [node('src', [row('q', 'variable')]), node('dst', [row('q_in', 'boundary_condition')])]
+      const edges = [edge('src', 'dst', port(['q'], 'Multiply'), port(['q_in']))]
+      expect(statusOf(nodes, edges, 'dst', 'q_in')).toEqual({ state: 'connected', from: ['src.q'] })
+    })
+
+    it('marks a lone boundary condition own with a value and missing without one', () => {
+      expect(statusOf([node('a', [row('P', 'boundary_condition', '1')])], [], 'a', 'P')).toEqual({ state: 'own', from: [] })
+      expect(statusOf([node('a', [row('P', 'boundary_condition')])], [], 'a', 'P')).toEqual({ state: 'missing', from: [] })
+    })
+
+    it('marks boundary conditions coupled only to each other, and those given different values', () => {
+      const nodes = [node('a', [row('T', 'boundary_condition', '310')]), node('b', [row('T', 'boundary_condition')])]
+      const edges = [edge('a', 'b', port(['T']), port(['T']))]
+      expect(statusOf(nodes, edges, 'b', 'T')).toEqual({ state: 'bcOnly', from: ['a.T'] })
+
+      const clashing = [node('a', [row('T', 'boundary_condition', '310')]), node('b', [row('T', 'boundary_condition', '300')])]
+      expect(statusOf(clashing, edges, 'a', 'T')).toEqual({ state: 'conflict', from: ['b.T'] })
+    })
+
+    it('gives an uncoupled constant or computed variable, and an empty sum, no status', () => {
+      const nodes = [node('a', [row('k', 'constant', '1'), row('x', 'variable'), row('s', 'boundary_condition')], [port(['s'], 'Sum')])]
+      expect(resolveBoundaryValues(nodes, []).status.size).toBe(0)
+    })
+
+    describe('on the SN simple workspace', () => {
+      const file = path.resolve(process.cwd(), 'tests/resources/migration-versioning/v1-2-0/sn_simple.json')
+      const loadFlow = () => JSON.parse(fs.readFileSync(file, 'utf8')).flow
+      const VARICOSITY = 'dndnode_2'
+
+      /** Drops var_SN's membrane voltage port and recouples its edges, as the instance editor previews it. */
+      function withoutVoltagePort({ nodes, edges }) {
+        const varicosity = nodes.find((candidate) => candidate.id === VARICOSITY)
+        const ports = varicosity.data.ports.filter((candidate) => candidate.label !== 'membrane_voltage')
+        varicosity.data.ports = ports
+        const couplings = previewCouplings(VARICOSITY, ports, nodes, edges)
+        return edges.map((candidate) =>
+          couplings.has(candidate.id) ? { ...candidate, data: { ...candidate.data, couplings: couplings.get(candidate.id) } } : candidate
+        )
+      }
+
+      it('takes var_SN.V from axon_SN.V', () => {
+        const { nodes, edges } = loadFlow()
+        expect(statusOf(nodes, edges, VARICOSITY, 'V')).toEqual({ state: 'connected', from: ['axon_SN.V'] })
+        expect(statusOf(nodes, edges, 'dndnode_1', 'V')).toEqual({ state: 'shares', from: ['var_SN.V'] })
+      })
+
+      it('marks var_SN.V missing once its port is deleted, and own once given a value', () => {
+        const flow = loadFlow()
+        const edges = withoutVoltagePort(flow)
+        expect(statusOf(flow.nodes, edges, VARICOSITY, 'V')).toEqual({ state: 'missing', from: [] })
+
+        flow.nodes.find((candidate) => candidate.id === VARICOSITY).data.variables.find((variable) => variable.name === 'V').value = '-60'
+        expect(statusOf(flow.nodes, edges, VARICOSITY, 'V')).toEqual({ state: 'own', from: [] })
+      })
     })
   })
 })
