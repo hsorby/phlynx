@@ -396,6 +396,8 @@ export function useSimulationCharts(scopeNodes, { hasInputs = false } = {}) {
                     key: `${run.id}::${item.key}`,
                     label: runLabel(item.label, run.number, run.name),
                     variableLabel: item.label,
+                    // The live run's line of the same variable, so hiding the variable hides both.
+                    liveKey: item.key,
                     values: phaseX ? values.get(item.key) : align(run.voiValues, values.get(item.key)),
                     ...(phaseX && { xValues: runX.values, runValues: run.voiValues }),
                     slot: slots.get(item.key),
@@ -425,7 +427,7 @@ export function useSimulationCharts(scopeNodes, { hasInputs = false } = {}) {
           plotId: plot,
           ...title,
           // Each variable's colour, for the title to show it.
-          titleParts: title.titleParts?.map((part, partIndex) => ({ ...part, slot: slots.get(named[partIndex].key) })) ?? null,
+          titleParts: title.titleParts?.map((part, partIndex) => ({ ...part, key: named[partIndex].key, slot: slots.get(named[partIndex].key) })) ?? null,
           // The plot's name, with what tells its charts apart when it makes several.
           plotLabel: chartsPerPlot.get(plot) > 1 && parts.length ? `${plotName} (${parts.join(', ')})` : plotName,
           unit,

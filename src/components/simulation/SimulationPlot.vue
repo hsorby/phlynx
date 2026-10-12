@@ -6,17 +6,17 @@
           <template v-for="(part, index) in titleParts" :key="index"
             ><span v-if="index" class="plot-title-separator">, </span
             ><!-- A span rather than a button, so the title's ellipsis can cut a long name rather than drop it whole. --><span
-              v-if="titleNamesLines && series[index]"
+              v-if="titleToggles[index]"
               role="button"
               tabindex="0"
               class="plot-key-toggle"
-              :class="{ 'is-hidden': isHidden(series[index]) }"
-              :aria-pressed="!isHidden(series[index])"
-              :title="toggleHint(series[index])"
-              @click="toggleSeries(series[index])"
-              @keydown.enter.prevent="toggleSeries(series[index])"
-              @keydown.space.prevent="toggleSeries(series[index])"
-              ><span class="plot-key-swatch plot-title-swatch" :style="{ background: colourOf(series[index]) }" aria-hidden="true"></span
+              :class="{ 'is-hidden': isHidden(titleToggles[index]) }"
+              :aria-pressed="!isHidden(titleToggles[index])"
+              :title="toggleHint(titleToggles[index])"
+              @click="toggleSeries(titleToggles[index])"
+              @keydown.enter.prevent="toggleSeries(titleToggles[index])"
+              @keydown.space.prevent="toggleSeries(titleToggles[index])"
+              ><span class="plot-key-swatch plot-title-swatch" :style="{ background: colourOf(titleToggles[index]) }" aria-hidden="true"></span
               ><span v-if="part.component" class="plot-title-component">{{ part.component }}/</span><span>{{ part.name }}</span></span
             ><template v-else
               ><span v-if="titleParts.length > 1 && part.slot !== undefined" class="plot-key-swatch plot-title-swatch" :style="{ background: colourOf(part) }" aria-hidden="true"></span
@@ -56,8 +56,9 @@
         </button>
       </li>
     </ul>
-    <!-- With the title naming the lines, which runs they are from: the live run solid, tracked runs dashed. -->
-    <ul v-if="runKey.length && titleParts && !x.isSteadyState" class="plot-key" aria-label="Runs">
+    <!-- With tracked runs, the title or key names the variables, and this which runs the lines are from: the live run
+      solid, tracked runs dashed. -->
+    <ul v-if="runKey.length && !x.isSteadyState" class="plot-key" aria-label="Runs">
       <li v-for="item in runKey" :key="item.number">
         <RunSwatch v-if="item.dash" :colour="chrome.text" :dash="item.dash" /><span v-else class="plot-key-swatch" :style="{ background: chrome.text }" aria-hidden="true"></span
         >{{ item.label }}
@@ -77,7 +78,7 @@
       <!-- The values under the cursor, beside it, as plotly's hover does, in place of a legend line. -->
       <div v-if="readout" class="plot-readout" :style="{ left: `${readout.left}px`, top: `${readout.top}px` }" aria-hidden="true">
         <div class="plot-readout-time">{{ readout.time }}</div>
-        <div v-for="row in readout.rows.filter((row) => !hiddenKeys.has(row.key))" :key="row.key" class="plot-readout-row">
+        <div v-for="row in readout.rows.filter((row) => !hiddenKeys.has(row.lineKey))" :key="row.key" class="plot-readout-row">
           <RunSwatch v-if="row.dash" :colour="row.colour" :dash="row.dash" />
           <span v-else class="plot-key-swatch" :style="{ background: row.colour }"></span>
           <span v-if="row.label" class="plot-readout-label">{{ row.label }}</span>
@@ -118,8 +119,9 @@ const props = defineProps({
   // run's own x-axis.
   x: { type: Object, required: true },
   // [{ key, label, variableLabel, slot, values, run, xValues, runValues, isStepped? }], run being a tracked run's
-  // `{ number, name, dash }`, or null for the live run. On a phase plot, xValues and runValues are the series' own
-  // x values and run x-axis values, as a tracked run's differ from the live run's.
+  // `{ number, name, dash }`, or null for the live run, and a tracked run's liveKey the live run's line of its variable.
+  // On a phase plot, xValues and runValues are the series' own x values and run x-axis values, as a tracked run's differ
+  // from the live run's.
   series: { type: Array, required: true },
   // Lines across a window or up the chart, in values, as protocolPlotGroups builds them: [{ key, label, role, slot,
   // orientation, from, to, value }], `role` 'obs' (dashed) or 'calc' (solid); or a recorded series' `points`
@@ -174,29 +176,56 @@ const xUnit = () => (props.x.unit && props.x.unit !== 'dimensionless' ? shortUni
 const chartEl = ref(null)
 const { isDarkMode } = useColorScheme()
 const readout = ref(null)
-// The keys of the series hidden by clicking them in the title or key, kept across redraws.
+// The keys of the lines hidden by clicking them in the title or key, kept across redraws: a tracked run's line goes by
+// its live run's key, so its variable's toggle hides both.
 const hiddenKeys = ref(new Set())
+
+/**
+ * Gets the key a line is hidden by: the live run's line of its variable, for a tracked run's.
+ *
+ * @param {{key: string, liveKey?: string}} item
+ * @returns {string}
+ */
+const lineKeyOf = (item) => item.liveKey ?? item.key
 
 /**
  * Tells whether a series is hidden.
  *
- * @param {{key: string}} item
+ * @param {{key: string, liveKey?: string}} item
  * @returns {boolean}
  */
-const isHidden = (item) => hiddenKeys.value.has(item.key)
+const isHidden = (item) => hiddenKeys.value.has(lineKeyOf(item))
 
 const hasRuns = computed(() => props.series.some((item) => item.run))
-// Whether the title names each line, and so carries their toggles; otherwise the key under it does. With tracked
-// runs, the title names the variables, and the run key which runs the lines are from. A steady state lists its values,
-// with no lines to hide.
+// Whether the title names each line, and so carries their toggles; otherwise the key under it does. A steady state
+// lists its values, with no lines to hide.
 const titleNamesLines = computed(
   () => !hasRuns.value && !props.x.isSteadyState && props.series.length > 1 && props.titleParts?.length === props.series.length
 )
-// What the key lists: the lines, unless the title names them or there's one with nothing beside it, then the
-// reference lines. A steady state lists its values instead.
+// With tracked runs, the variables the lines show, each toggling its live and tracked lines together.
+const runVariables = computed(() => {
+  if (!hasRuns.value) return []
+  const variables = new Map()
+  for (const item of readoutOrder.value) {
+    const key = lineKeyOf(item)
+    if (!variables.has(key)) variables.set(key, { key, label: item.variableLabel ?? item.label, slot: item.slot })
+  }
+  return [...variables.values()]
+})
+// The toggle for each part of the title, or none: its line, or with tracked runs, its variable's lines.
+const titleToggles = computed(() => {
+  if (!props.titleParts) return []
+  if (!hasRuns.value) return titleNamesLines.value ? props.titleParts.map((_, index) => props.series[index] ?? null) : []
+  if (props.x.isSteadyState || props.titleParts.length < 2) return []
+  const byKey = new Map(runVariables.value.map((variable) => [variable.key, variable]))
+  return props.titleParts.map((part) => byKey.get(part.key) ?? null)
+})
+// What the key lists: the lines (with tracked runs, their variables), unless the title names them or there's one with
+// nothing beside it, then the reference lines. A steady state lists its values instead.
 const keyed = computed(() => {
   if (props.x.isSteadyState) return []
-  const listsLines = !titleNamesLines.value && !(hasRuns.value && props.titleParts) && (props.series.length > 1 || props.references.length)
+  if (hasRuns.value) return [...(!props.titleParts && runVariables.value.length > 1 ? runVariables.value : []), ...props.references]
+  const listsLines = !titleNamesLines.value && (props.series.length > 1 || props.references.length)
   return [...(listsLines ? props.series : []), ...props.references]
 })
 
@@ -209,14 +238,16 @@ const keyed = computed(() => {
 const toggleHint = (item) => `${isHidden(item) ? 'Show' : 'Hide'} ${item.label}${item.role && !item.points ? `: ${formatValue(item.value)}` : ''}`
 
 /**
- * Shows or hides a series' line, or a reference line, refitting the values to the lines left; the x range stays.
+ * Shows or hides a series' line, with tracked runs every line of its variable, or a reference line, refitting the
+ * values to the lines left; the x range stays.
  *
- * @param {{key: string, role?: string}} item
+ * @param {{key: string, liveKey?: string, role?: string}} item
  */
 function toggleSeries(item) {
+  const key = lineKeyOf(item)
   const hidden = new Set(hiddenKeys.value)
-  if (hidden.has(item.key)) hidden.delete(item.key)
-  else hidden.add(item.key)
+  if (hidden.has(key)) hidden.delete(key)
+  else hidden.add(key)
   hiddenKeys.value = hidden
   if (item.role) {
     // The values' range takes in the reference lines shown, the zoom kept.
@@ -227,8 +258,10 @@ function toggleSeries(item) {
     isUpdatingData = false
     return
   }
-  const index = props.series.findIndex((series) => series.key === item.key)
-  if (plot && index >= 0) plot.setSeries(index + 1, { show: !hidden.has(item.key) })
+  if (!plot) return
+  props.series.forEach((series, index) => {
+    if (lineKeyOf(series) === key) plot.setSeries(index + 1, { show: !hidden.has(key) })
+  })
 }
 
 /**
@@ -366,7 +399,7 @@ function updateReadout(chart) {
   readout.value = {
     ...placeReadout(chart, left),
     time: `${formatValue(chart.data[0][idx])}${xUnit() ? ` ${xUnit()}` : ''}${findSegmentLabel(chart.data[0][idx])}`,
-    rows: readoutOrder.value.map((item) => ({ key: item.key, ...readoutNames(item), colour: colourOf(item), dash: item.run?.dash ?? null, value: formatValue(item.values[idx]) })),
+    rows: readoutOrder.value.map((item) => ({ key: item.key, lineKey: lineKeyOf(item), ...readoutNames(item), colour: colourOf(item), dash: item.run?.dash ?? null, value: formatValue(item.values[idx]) })),
   }
 }
 
@@ -476,7 +509,7 @@ function updatePhaseReadout(chart) {
     time: `${name(props.x.label)} ${formatValue(xValuesOf(nearest.item)[nearest.idx])}${xUnit() ? ` ${xUnit()}` : ''}${when}`,
     rows: found
       .sort((a, b) => (a.item.run?.number ?? 0) - (b.item.run?.number ?? 0))
-      .map(({ item, idx }) => ({ key: item.key, ...readoutNames(item), colour: colourOf(item), dash: item.run?.dash ?? null, value: formatValue(item.values[idx]) })),
+      .map(({ item, idx }) => ({ key: item.key, lineKey: lineKeyOf(item), ...readoutNames(item), colour: colourOf(item), dash: item.run?.dash ?? null, value: formatValue(item.values[idx]) })),
   }
 }
 
@@ -645,11 +678,11 @@ function joinInOrder(chart, seriesIndex) {
 
 /**
  * Forgets hidden series that no name on the chart can show again: those no longer plotted, every line when one is
- * left, and the lines once tracked runs, or a steady state's list of values, take their names' place.
+ * left, and the lines once a steady state's list of values takes their names' place.
  */
 function pruneHidden() {
   if (!hiddenKeys.value.size) return
-  const keys = new Set([...(titleNamesLines.value ? props.series.map((series) => series.key) : []), ...keyed.value.map((item) => item.key)])
+  const keys = new Set([...titleToggles.value, ...keyed.value].filter(Boolean).map(lineKeyOf))
   const hidden = new Set([...hiddenKeys.value].filter((key) => keys.has(key)))
   if (hidden.size !== hiddenKeys.value.size) hiddenKeys.value = hidden
 }
