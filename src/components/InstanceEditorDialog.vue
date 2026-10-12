@@ -630,6 +630,7 @@ const session = useMathSession({
   editorRef: mathEditorRef,
   ports: editablePorts,
   plotVariables: trackedNames,
+  beforeInit: () => signEditorState() === savedEditorState.value,
   onInit: rebaselineEditorState,
 })
 const {
@@ -964,10 +965,13 @@ const savedEditorState = ref('')
 /**
  * Moves the baseline to the state once the editor's first view of the math is applied, so anything
  * that view changes in the rows or ports (e.g. a variable it no longer declares) never shows as an
- * unsaved edit on open. The load sets the baseline first, in case no editor mounts.
+ * unsaved edit on open. The load sets the baseline first, in case no editor mounts. An edit made before the
+ * editor mounted keeps the old baseline, so it still counts as unsaved.
+ *
+ * @param {boolean} [wasUnchanged=true] - Whether the state still matched the baseline just before that view.
  */
-function rebaselineEditorState() {
-  if (!loading.value) savedEditorState.value = signEditorState()
+function rebaselineEditorState(wasUnchanged = true) {
+  if (!loading.value && wasUnchanged) savedEditorState.value = signEditorState()
 }
 
 // Edits a run wouldn't see, since runs use the saved instance.

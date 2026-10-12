@@ -61,10 +61,12 @@ function isSameLayout(layout, otherLayout) {
  * @param {import('vue').Ref} options.editorRef - The mounted math editor.
  * @param {import('vue').Ref<Array>} options.ports - Editable ports; variables removed from the math are removed from them, and renamed ones renamed.
  * @param {import('vue').Ref<Array<{name: string}>>} [options.plotVariables] - Variables chosen for plotting; renamed ones are renamed.
+ * @param {Function} [options.beforeInit] - Called just before the first editor's `init` after a load is applied;
+ *   its result is passed to onInit.
  * @param {Function} [options.onInit] - Called once the first editor's `init` after a load has been applied.
  * @returns {Object} Session state, queries and actions.
  */
-export function useMathSession({ history, editorRef, ports, plotVariables = null, onInit = null }) {
+export function useMathSession({ history, editorRef, ports, plotVariables = null, beforeInit = null, onInit = null }) {
   const store = useLibraryStore()
 
   const isManaged = ref(true) // Simple Mode: the table owns the declarations
@@ -285,15 +287,17 @@ export function useMathSession({ history, editorRef, ports, plotVariables = null
   }
 
   /**
-   * Applies one editor change, then tells onInit if it was the first `init` since the load.
+   * Applies one editor change, then tells onInit if it was the first `init` since the load (with what beforeInit
+   * gave just before it).
    *
    * @param {Object} change - The editor's `change` payload.
    * @returns {Promise<void>}
    */
   async function processEditorChange(change) {
     const isFirstInit = change.source === 'init' && !hasInitialised
+    const before = isFirstInit ? beforeInit?.() : undefined
     await applyEditorChange(change)
-    if (isFirstInit) onInit?.()
+    if (isFirstInit) onInit?.(before)
   }
 
   /**

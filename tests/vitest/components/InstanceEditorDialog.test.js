@@ -286,6 +286,18 @@ describe('InstanceEditorDialog Plot tab', () => {
     expect(wrapper.find('.plot-tab-note').exists()).toBe(true)
   })
 
+  it('still shows a value edited before the editor mounts as unsaved', async () => {
+    const withCamp = XML.replace('<variable name="k"', '<variable name="cAMP" units="dimensionless"/>\n    <variable name="k"')
+    useLibraryStore().addMath(MATH_REF, withCamp)
+    mountDialog({ defaultTab: 'plot', variables: [{ name: 'cAMP', units: 'dimensionless', value: '0.01', type: 'constant' }] })
+    const editor = await open()
+
+    // An edit made in the table before the editor's first view of the math is applied.
+    wrapper.vm.parameterRows.find((row) => row.name === 'cAMP').value = '0.5'
+    await report(editor, 'init', withCamp)
+    expect(wrapper.find('.plot-tab-note').exists()).toBe(true)
+  })
+
   it('simulates the instance from its Plot tab', async () => {
     const workbench = await openPlotTab()
     expect(workbench.props('instanceId')).toBe('a')
