@@ -914,8 +914,16 @@ function connectVariables(model, sourceComp, srcVariable, targetComp, tgtVariabl
  * @param {object} [options]
  * @param {boolean} [options.check=true] - Validates and analyses the result, throwing on errors. Most of the
  *   time on large models; a simulator that checks the model itself can skip it.
+ * @param {boolean} [options.allowBcOnly=false] - Builds boundary conditions coupled only to each other from their own
+ *   values, for a scope that cut them off from what computes them, rather than throwing.
  */
-export function generateFlattenedModel(nodes, edges, libraryStore, inspectionModules = [], { check = true } = {}) {
+export function generateFlattenedModel(
+  nodes,
+  edges,
+  libraryStore,
+  inspectionModules = [],
+  { check = true, allowBcOnly = false } = {}
+) {
   const appVersion = __APP_VERSION__ || '0.0.0'
 
   // Initialize core objects
@@ -1014,12 +1022,21 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
 
     // A boundary condition's value is used only when nothing in its coupled group supplies one.
     const boundaryValues = resolveBoundaryValues(nodes, edges)
+    // As in circulatory_autogen, nothing gives such a group a value. A scope that cuts it off from what computes it
+    // falls back to their own values (see checkScope).
+    if (boundaryValues.bcOnly.length && !allowBcOnly) {
+      const groups = boundaryValues.bcOnly.map(({ label }) => label).join('; ')
+      throw new Error(`Boundary conditions connected only to each other, so nothing computes them: ${groups}.`)
+    }
     if (boundaryValues.conflicts.length) {
       throw new Error(`Conflicting boundary values: ${boundaryValues.conflicts.join('; ')}.`)
     }
-    // Such a boundary condition is set like a constant.
+    // A value something else supplies is dropped (see resolveBoundaryValues).
+    const isIgnored = (nodeId, v) => !!boundaryValues.ignored.get(nodeId)?.has(v.name)
+    // A supplied boundary condition is set like a constant.
     const isSetAsConstant = (nodeId, v) =>
-      v.type === 'constant' || (v.type === 'boundary_condition' && !!boundaryValues.supplied.get(nodeId)?.has(v.name))
+      (v.type === 'constant' && !isIgnored(nodeId, v)) ||
+      (v.type === 'boundary_condition' && !!boundaryValues.supplied.get(nodeId)?.has(v.name))
 
     // Count how many nodes use each constant variable name
     const constantNameRefCount = new Map()
@@ -1080,7 +1097,15 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
         const unitsName = units.name()
 
         const nodeVariable = node.data.variables.find((v) => v.name === variable.name())
-        if (nodeVariable) {
+        if (nodeVariable && isIgnored(node.id, nodeVariable)) {
+          const value =
+            nodeVariable.type === 'global_constant' ? libraryStore.getGlobalConstant(variable.name())?.value : nodeVariable.value
+          // A connected boundary condition's value is a fallback, and an empty Sum warns below.
+          const isEmptySum = !!boundaryValues.emptySums.get(node.id)?.has(nodeVariable.name)
+          if (nodeVariable.type !== 'boundary_condition' && !isEmptySum) {
+            console.warn(`"${node.data.name}" variable "${variable.name()}" is set by a connection; ignoring its parameter value ${value}.`)
+          }
+        } else if (nodeVariable) {
           if (nodeVariable.type === 'global_constant') {
             const v = libraryStore.getGlobalConstant(variable.name())
             if (!isEmpty(v?.value)) {
@@ -1197,11 +1222,14 @@ export function generateFlattenedModel(nodes, edges, libraryStore, inspectionMod
       }
     }
 
-    // A Sum variable with nothing connected and no value of its own sums over nothing: it is 0.
+    // A Sum variable with nothing connected sums over nothing: it is 0, whatever its value (as in circulatory_autogen).
     for (const [nodeId, varNames] of boundaryValues.emptySums) {
       const component = nodeComponentMap.get(nodeId)
+      const rows = nodes.find((node) => node.id === nodeId)?.data.variables ?? []
       for (const varName of varNames) {
-        console.warn(`"${component.name()}" variable "${varName}" sums over its connections, but none are connected; setting it to 0.`)
+        const value = rows.find((row) => row.name === varName)?.value
+        const ignoring = isEmpty(value) ? '' : ` ignoring its value ${value} and`
+        console.warn(`"${component.name()}" variable "${varName}" sums over its connections, but none are connected;${ignoring} setting it to 0.`)
         addSumTerm(component, varName)
       }
     }

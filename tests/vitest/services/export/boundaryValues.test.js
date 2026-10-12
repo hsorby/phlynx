@@ -15,22 +15,26 @@ const namesFor = (map, nodeId) => [...(map.get(nodeId) ?? [])]
 
 describe('resolveBoundaryValues', () => {
   it('uses the value of a boundary condition nothing is connected to', () => {
-    const { supplied, missing } = resolveBoundaryValues([node('a', [row('P', 'boundary_condition', '100')])], [])
+    const { supplied, missing, bcOnly } = resolveBoundaryValues([node('a', [row('P', 'boundary_condition', '100')])], [])
     expect(namesFor(supplied, 'a')).toEqual(['P'])
     expect(missing.size).toBe(0)
+    expect(bcOnly).toEqual([])
   })
 
   it('ignores the value when a connected module computes the variable', () => {
     const nodes = [node('src', [row('P', 'variable')]), node('v', [row('P', 'boundary_condition', '100')])]
-    const { supplied, missing } = resolveBoundaryValues(nodes, [edge('src', 'v', port(['P']), port(['P']))])
+    const { supplied, missing, ignored } = resolveBoundaryValues(nodes, [edge('src', 'v', port(['P']), port(['P']))])
     expect(supplied.size).toBe(0)
     expect(missing.size).toBe(0)
+    expect(namesFor(ignored, 'v')).toEqual(['P'])
   })
 
   it('ignores the value when a connected constant already sets it', () => {
     const nodes = [node('c', [row('P', 'constant', '5')]), node('v', [row('P', 'boundary_condition', '100')])]
-    const { supplied } = resolveBoundaryValues(nodes, [edge('c', 'v', port(['P']), port(['P']))])
+    const { supplied, ignored } = resolveBoundaryValues(nodes, [edge('c', 'v', port(['P']), port(['P']))])
     expect(supplied.size).toBe(0)
+    expect(namesFor(ignored, 'v')).toEqual(['P'])
+    expect(ignored.has('c')).toBe(false)
   })
 
   it('sets one member of a group of boundary conditions from the one that has a value', () => {
@@ -43,10 +47,14 @@ describe('resolveBoundaryValues', () => {
       edge('env', 'cell1', port(['Na_o']), port(['Na_o'])),
       edge('env', 'cell2', port(['Na_o']), port(['Na_o'])),
     ]
-    const { supplied, missing } = resolveBoundaryValues(nodes, edges)
+    const { supplied, missing, bcOnly } = resolveBoundaryValues(nodes, edges)
     expect(namesFor(supplied, 'env')).toEqual(['Na_o'])
     expect(supplied.has('cell1') || supplied.has('cell2')).toBe(false)
     expect(missing.size).toBe(0)
+    // Export rejects such a group; a scope that cuts one off falls back to the value.
+    expect(bcOnly).toEqual([
+      { keys: ['env::Na_o', 'cell1::Na_o', 'cell2::Na_o'], label: 'env.Na_o, cell1.Na_o, cell2.Na_o' },
+    ])
   })
 
   it('sets only one member when several give the same value', () => {
@@ -127,21 +135,31 @@ describe('resolveBoundaryValues', () => {
     expect(namesFor(emptySums, 'b')).toEqual(['total'])
   })
 
-  it('uses the value of a Sum variable nothing is connected to', () => {
+  it('sets a Sum variable nothing is connected to to 0, ignoring its value', () => {
     const nodes = [node('a', [row('total', 'boundary_condition', '4')], [port(['total'], 'Sum')])]
-    const { supplied, emptySums } = resolveBoundaryValues(nodes, [])
-    expect(namesFor(supplied, 'a')).toEqual(['total'])
-    expect(emptySums.size).toBe(0)
+    const { supplied, emptySums, ignored } = resolveBoundaryValues(nodes, [])
+    expect(supplied.size).toBe(0)
+    expect(namesFor(emptySums, 'a')).toEqual(['total'])
+    expect(namesFor(ignored, 'a')).toEqual(['total'])
   })
 
-  it('leaves a Sum variable nothing is connected to alone when another coupling supplies it', () => {
+  it('sets a Sum variable nothing is connected to to 0 when another coupling would supply it', () => {
+    // As circulatory_autogen: a sum with no terms is 0, so it supplies what it is coupled to.
     const nodes = [
       node('a', [row('s', 'boundary_condition')], [port(['s'], 'Sum'), port(['s'])]),
       node('b', [row('p', 'boundary_condition', '5')]),
     ]
-    const { supplied, emptySums } = resolveBoundaryValues(nodes, [edge('a', 'b', port(['s']), port(['p']))])
-    expect(namesFor(supplied, 'b')).toEqual(['p'])
+    const { supplied, emptySums, ignored } = resolveBoundaryValues(nodes, [edge('a', 'b', port(['s']), port(['p']))])
+    expect(supplied.size).toBe(0)
+    expect(namesFor(emptySums, 'a')).toEqual(['s'])
+    expect(namesFor(ignored, 'b')).toEqual(['p'])
+  })
+
+  it('leaves a computed Sum variable nothing is connected to to its own math', () => {
+    const nodes = [node('a', [row('total', 'variable')], [port(['total'], 'Sum')])]
+    const { emptySums, ignored } = resolveBoundaryValues(nodes, [])
     expect(emptySums.size).toBe(0)
+    expect(ignored.size).toBe(0)
   })
 
   it('names the instance whose port has a malformed per-variable multiport', () => {
@@ -162,5 +180,66 @@ describe('resolveBoundaryValues', () => {
     const nodes = [node('src', [row('q', 'variable')]), node('hub', [row('total', 'boundary_condition')])]
     const { missing } = resolveBoundaryValues(nodes, [edge('src', 'hub', port(['q'], 'Multiply'), port(['total'], 'Sum'))])
     expect(missing.size).toBe(0)
+  })
+
+  describe('values a connection supplies instead', () => {
+    it('ignores a constant coupled to a computed variable', () => {
+      const nodes = [node('vol', [row('C', 'variable')]), node('face', [row('C_up', 'constant', '0.06')])]
+      const { ignored } = resolveBoundaryValues(nodes, [edge('vol', 'face', port(['C']), port(['C_up']))])
+      expect(namesFor(ignored, 'face')).toEqual(['C_up'])
+    })
+
+    it('ignores a global constant coupled to a computed variable', () => {
+      const nodes = [node('src', [row('P', 'variable')]), node('v', [row('P', 'global_constant')])]
+      const { ignored } = resolveBoundaryValues(nodes, [edge('src', 'v', port(['P']), port(['P']))])
+      expect(namesFor(ignored, 'v')).toEqual(['P'])
+    })
+
+    it('ignores a constant on a connected Sum variable', () => {
+      const nodes = [node('hub', [row('total', 'constant', '1')]), node('leaf', [row('q', 'variable')])]
+      const { ignored } = resolveBoundaryValues(nodes, [edge('hub', 'leaf', port(['total'], 'Sum'), port(['q']))])
+      expect(namesFor(ignored, 'hub')).toEqual(['total'])
+    })
+
+    it('ignores a constant fed by a Multiply on either end, or by a per-variable one', () => {
+      const source = [node('src', [row('q', 'variable')]), node('dst', [row('q_in', 'constant', '2')])]
+      expect(namesFor(resolveBoundaryValues(source, [edge('src', 'dst', port(['q'], 'Multiply'), port(['q_in']))]).ignored, 'dst')).toEqual(['q_in'])
+
+      const target = [node('src', [row('q_in', 'constant', '2')]), node('dst', [row('q', 'variable')])]
+      expect(namesFor(resolveBoundaryValues(target, [edge('src', 'dst', port(['q_in']), port(['q'], ['multiply']))]).ignored, 'src')).toEqual(['q_in'])
+
+      const perVariable = [node('src', [row('q', 'variable'), row('u', 'variable')]), node('dst', [row('q_in', 'constant', '2'), row('u', 'boundary_condition')])]
+      const { ignored } = resolveBoundaryValues(perVariable, [
+        edge('src', 'dst', port(['q', 'u'], ['multiply', 'True']), port(['q_in', 'u'])),
+      ])
+      expect(namesFor(ignored, 'dst')).toEqual(['q_in'])
+    })
+
+    it('leaves a constant nothing else supplies, and a blank boundary condition, alone', () => {
+      const nodes = [node('a', [row('k', 'constant', '3')]), node('b', [row('P', 'variable')]), node('c', [row('P', 'boundary_condition')])]
+      const { ignored } = resolveBoundaryValues(nodes, [edge('b', 'c', port(['P']), port(['P']))])
+      expect(ignored.size).toBe(0)
+    })
+  })
+
+  describe('boundary conditions coupled only to each other', () => {
+    it('reports the group, whatever values its members have', () => {
+      const blank = [node('a', [row('T', 'boundary_condition')]), node('b', [row('T', 'boundary_condition')])]
+      expect(resolveBoundaryValues(blank, [edge('a', 'b', port(['T']), port(['T']))]).bcOnly).toEqual([
+        { keys: ['a::T', 'b::T'], label: 'a.T, b.T' },
+      ])
+      const valued = [node('a', [row('T', 'boundary_condition', '310')]), node('b', [row('T', 'boundary_condition', '310')])]
+      expect(resolveBoundaryValues(valued, [edge('a', 'b', port(['T']), port(['T']))]).bcOnly).toHaveLength(1)
+    })
+
+    it('does not report a group something computes or a constant sets', () => {
+      const nodes = [
+        node('a', [row('T', 'boundary_condition')]),
+        node('b', [row('T', 'boundary_condition')]),
+        node('c', [row('T', 'constant', '300')]),
+      ]
+      const edges = [edge('a', 'b', port(['T']), port(['T'])), edge('b', 'c', port(['T']), port(['T']))]
+      expect(resolveBoundaryValues(nodes, edges).bcOnly).toEqual([])
+    })
   })
 })

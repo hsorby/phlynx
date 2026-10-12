@@ -286,13 +286,13 @@ describe('generateFlattenedModel multiport couplings', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringMatching(/"hub" variable "v_sum" sums over its connections/))
   })
 
-  it('uses the value of a Sum variable nothing is connected to', async () => {
+  it('sets a Sum variable nothing is connected to to 0, ignoring its value', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const hub = buildNode('hub', 'file:hub', [vesselPort('exit_ports', ['v_sum', 'u'], ['sum', 'True'])], { v_sum: '0.25' })
     const text = await flatten([hub], [])
-    expect(componentOf(text, 'generated_summations')).toBe('')
-    expect(text).toMatch(/<variable name="v_sum"[^>]*initial_value="0\.25"/)
-    expect(warn).not.toHaveBeenCalled()
+    expect(componentOf(text, 'generated_summations')).toMatch(/<cn cellml:units="per_second">0<\/cn>/)
+    expect(text).not.toMatch(/initial_value="0\.25"/)
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/"hub" variable "v_sum" .* ignoring its value 0\.25 and setting it to 0/))
   })
 
   it('multiplies a variable on either end of the edge by its own factor', async () => {
@@ -438,6 +438,43 @@ describe('scoped models', () => {
     const text = await buildScopedModel(scope, store).text()
     expect(text).toMatch(/<variable name="v_in"[^>]*initial_value="0"/)
     expect(tank.data.variables.find((row) => row.name === 'v_in').value).toBeFalsy()
+  })
+
+  /** Two leaves sharing u through a link, the first fed u by the hub when `fed`. */
+  function linkedLeaves({ fed }) {
+    const leaf = (id, portType) =>
+      buildNode(id, 'file:leaf', [
+        { portType: 'entrance_ports', label: 'vessel', variables: ['v', 'u'], multiportType: 'None' },
+        { portType, label: 'link', variables: ['u'], multiportType: 'None' },
+      ])
+    const leaves = [leaf('leaf_1', 'exit_ports'), leaf('leaf_2', 'entrance_ports')]
+    const link = (source, target) => ({
+      id: `${source.id}_${target.id}`,
+      source: source.id,
+      target: target.id,
+      data: { couplings: resolvePortCouplings([source.data.ports[1]], [target.data.ports[1]]) },
+    })
+    const edges = [link(...leaves)]
+    if (!fed) return { nodes: leaves, edges }
+    const { nodes, edges: hubEdges } = buildNetwork()
+    return { nodes: [nodes[0], ...leaves], edges: [...edges, { ...hubEdges[0], target: 'leaf_1' }] }
+  }
+
+  it('builds boundary conditions the cut leaves coupled only to each other', async () => {
+    const { nodes, edges } = linkedLeaves({ fed: true })
+    const scope = resolveScope(['leaf_1', 'leaf_2'], nodes, edges)
+
+    const report = checkScope(scope, store)
+    expect(report.errors).toEqual([])
+    expect(report.canBuild).toBe(true)
+    await expect(buildScopedModel(scope, store).text()).resolves.toMatch(/initial_value="0"/)
+  })
+
+  it('stops boundary conditions coupled only to each other in the whole model', () => {
+    const { nodes, edges } = linkedLeaves({ fed: false })
+    const report = checkScope(resolveScope(['leaf_1', 'leaf_2'], nodes, edges), store)
+    expect(report.errors).toEqual(['Boundary conditions connected only to each other, so nothing computes them: leaf_1.u, leaf_2.u.'])
+    expect(report.canBuild).toBe(false)
   })
 
   it('flattens a single instance on its own', async () => {

@@ -21,16 +21,19 @@ export const MAX_SWEEP_RUNS = 2000
 
 /**
  * Checks whether a row can be swept: a constant, a global constant, or a boundary condition nothing else
- * supplies, whose own value the model then uses.
+ * supplies, whose own value the model then uses. A value a connection supplies instead can't be.
  *
  * @param {Object} row
  * @param {string} nodeId
  * @param {Set<string>} unsupplied - `nodeId::name` of the boundary conditions nothing supplies (see
  *   resolveBoundaryValues).
+ * @param {Map<string, Set<string>>} [ignored] - Node id to the rows whose value export ignores (see
+ *   resolveBoundaryValues).
  * @returns {boolean}
  */
-export function isSweepableRow(row, nodeId, unsupplied) {
+export function isSweepableRow(row, nodeId, unsupplied, ignored = new Map()) {
   if (!row?.name) return false
+  if (ignored.get(nodeId)?.has(row.name)) return false
   if (row.type === 'boundary_condition') return unsupplied.has(mappingKey(nodeId, row.name))
   return SWEEPABLE_TYPES.has(row.type)
 }
@@ -43,12 +46,13 @@ export function isSweepableRow(row, nodeId, unsupplied) {
  * @param {Object} entry - From buildVariableIndex, given the last run's mapping.
  * @param {Object} options
  * @param {Set<string>} options.unsupplied - See isSweepableRow.
+ * @param {Map<string, Set<string>>} [options.ignored] - See isSweepableRow.
  * @param {Map<string, {kind: string}>|null} [options.variables] - The last run's variables, with their kinds.
  * @param {Object|null} [options.sweep] - The current sweep.
  * @returns {boolean}
  */
-export function isSweepableEntry(entry, { unsupplied, variables = null, sweep = null }) {
-  if (!isSweepableRow({ name: entry.rowName, type: entry.kind }, entry.nodeId, unsupplied)) return false
+export function isSweepableEntry(entry, { unsupplied, ignored, variables = null, sweep = null }) {
+  if (!isSweepableRow({ name: entry.rowName, type: entry.kind }, entry.nodeId, unsupplied, ignored)) return false
   if (sweep && (isSwept(entry, sweep) || (sweep.family && isSwept(entry, sweep.family)))) return false
   const reported = entry.reportedName && variables?.get(entry.reportedName)
   return !reported || reported.kind === 'constant'

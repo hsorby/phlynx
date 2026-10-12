@@ -16,7 +16,7 @@ afterEach(() => wrapper?.unmount())
 const NEW_INITIALISER_VALUE = '__new_initialiser__'
 
 /** Mounts the table with state `x` initialised from `k`, and `x_init` free to take over. */
-function mountTable(mathReferences, { kValue = '1', extraRows = [] } = {}) {
+function mountTable(mathReferences, { kValue = '1', extraRows = [], ignoredNotices = new Map() } = {}) {
   const rows = reactive([
     { name: 'x', units: 'metre', type: 'variable', stateRole: 'state', initialiser: 'k', access: 'access' },
     { name: 'k', units: 'metre', type: 'constant', value: kValue, access: 'access' },
@@ -30,6 +30,7 @@ function mountTable(mathReferences, { kValue = '1', extraRows = [] } = {}) {
       getUnitsNotice: () => '',
       issueFilter: { activeKeys: { value: [] }, toggle: () => {}, isShown: () => true },
       mathReferences,
+      ignoredNotices,
     },
     global: { plugins: [PrimeVue] },
   })
@@ -189,5 +190,20 @@ describe('ParameterTable units', () => {
 
     unitsInputs().at(-1).vm.$emit('update:modelValue', 'uM')
     expect(rows.map((row) => row.units)).toEqual(['uM', 'uM', 'uM'])
+  })
+})
+
+describe('ParameterTable values ignored on export', () => {
+  it('strikes through a value a connection supplies, saying why', async () => {
+    const notice = 'Set by a connection: this value is ignored on export'
+    mountTable(new Set(['t', 'x', 'k']), { ignoredNotices: new Map([['x_init', notice]]) })
+    await flushPromises()
+
+    const ignoredRows = wrapper.findAll('tr.parameter-row--ignored')
+    expect(ignoredRows).toHaveLength(1)
+    const input = ignoredRows[0].find('input.value-input--ignored')
+    expect(input.element.value).toBe('2')
+    expect(input.attributes('title')).toBe(notice)
+    expect(wrapper.findAll('input.value-input--ignored')).toHaveLength(1)
   })
 })

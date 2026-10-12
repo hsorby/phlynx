@@ -201,6 +201,7 @@
                 :issue-filter="issueFilter"
                 :variable-kinds="variableKinds"
                 :connection-supplied="connectionSupplied"
+                :ignored-notices="ignoredNotices"
                 :math-references="mathReferences"
                 :suggest-units="suggestUnitsFor"
               />
@@ -506,6 +507,7 @@ import { useMathSession } from '../composables/useMathSession'
 import { useAppSettings } from '../composables/useAppSettings'
 
 import { isInitialisable } from '../services/math/variableKinds'
+import { resolveBoundaryValues } from '../services/export/boundaryValues'
 import { getNodePlotEntries } from '../services/simulation/plotSelections'
 
 import { isEmpty, syncInitialiserUnits } from '../utils/variables'
@@ -871,11 +873,38 @@ function hasTimeVaryingInitialiser(row) {
   return !!initialiserRow && !isInitialisable(initialiserRow, variableKinds.value)
 }
 
+/**
+ * Each row whose value export ignores, as something else supplies its variable, with why. Uses the rows as edited
+ * here, against the rest of the canvas.
+ */
+const ignoredNotices = computed(() => {
+  const rows = parameterRows.value
+  const canvasNodes = (nodes.value ?? []).map((node) =>
+    node.id === props.id ? { ...node, data: { ...node.data, variables: rows } } : node
+  )
+  let resolved
+  try {
+    resolved = resolveBoundaryValues(canvasNodes, edges.value ?? [])
+  } catch {
+    return new Map() // a malformed multiport, which export reports
+  }
+  const emptySums = resolved.emptySums.get(props.id)
+  return new Map(
+    [...(resolved.ignored.get(props.id) ?? [])].map((name) => [
+      name,
+      emptySums?.has(name)
+        ? 'Sums its connections, and none are connected: it is 0, and this value is ignored on export'
+        : 'Set by a connection: this value is ignored on export',
+    ])
+  )
+})
+
 const ISSUE_MATCHERS = {
   units: (row) => isMissingUnits(row),
   values: (row) => isValueMissing(row),
   unknown: (row) => !!getUnitsNotice(row),
   initialiser: hasTimeVaryingInitialiser,
+  ignored: (row) => ignoredNotices.value.has(row.name),
 }
 
 const issueChips = computed(() => {
@@ -887,6 +916,7 @@ const issueChips = computed(() => {
   const missingValues = count(ISSUE_MATCHERS.values)
   const unknownUnits = count(ISSUE_MATCHERS.unknown)
   const timeVaryingInitialisers = count(ISSUE_MATCHERS.initialiser)
+  const ignoredValues = count(ISSUE_MATCHERS.ignored)
 
   const chips = []
   if (missingUnits) {
@@ -914,6 +944,15 @@ const issueChips = computed(() => {
       icon: 'pi-exclamation-triangle',
       count: timeVaryingInitialisers,
       label: `${plural(timeVaryingInitialisers, 'state')} with time-varying initialiser`,
+    })
+  }
+  if (ignoredValues) {
+    chips.push({
+      key: 'ignored',
+      kind: 'unknown',
+      icon: 'pi-link',
+      count: ignoredValues,
+      label: `${plural(ignoredValues, 'value')} ignored on export`,
     })
   }
   if (unknownUnits) {

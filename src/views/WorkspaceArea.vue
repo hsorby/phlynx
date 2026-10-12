@@ -626,6 +626,7 @@ import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nod
 import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
 import { getHandleUidFromHandleId } from '../utils/handles'
 import { parseParametersFile } from '../utils/import'
+import { applyParameterValues, applyParametersToNodes, skippedParametersMessage } from '../utils/parameters'
 import { detachReactivity } from '../utils/reactivity'
 import {
   ensureExtension,
@@ -1683,46 +1684,12 @@ const loadCellMLData = (content, filename, { notify: shouldNotify = true, trackE
 
 const loadParametersData = async (content, filename, { notify: shouldNotify = true, trackEvents = true } = {}) => {
   try {
-    const variableCatalogue = new Set()
-    const nodeMap = new Map(nodes.value.map((n) => [n.data.name, n]))
-    let totalLocal = 0
+    const variableCatalogue = new Set(nodes.value.flatMap((node) => node.data.variables.map((v) => v.name.trim())))
 
-    for (const [instance, node] of nodeMap) {
-      for (const variable of node.data.variables) {
-        variableCatalogue.add(variable.name.trim())
-      }
-
-      const instanceParameters = Array.from(content)
-        .filter((entry) => entry.variable_name.trimEnd().endsWith(instance))
-        .map((entry) => ({
-          ...entry,
-          name: entry.variable_name.trimEnd().slice(0, -instance.length).replace(/_+$/, ''),
-        }))
-
-      const paramsByName = new Map(instanceParameters.map((p) => [p.name.trim(), p]))
-      let updatedCount = 0
-      node.data.variables = node.data.variables.map((variable) => {
-        const match = paramsByName.get(variable.name.trim())
-        if (!match) return variable
-        updatedCount++
-
-        const matchedUnit = match.units.trim()
-        const currentUnit = variable.units.trim()
-
-        if (matchedUnit !== currentUnit) {
-          console.warn(
-            `Unit mismatch for "${variable.name}": node has "${currentUnit}", parameter has "${matchedUnit}"`
-          )
-        }
-
-        return {
-          ...variable,
-          value: match.value.trim(),
-          data_reference: match.data_reference.trim(),
-          type: 'constant',
-        }
-      })
-      totalLocal += updatedCount
+    // A loaded value never changes a row's type; a computed row's value isn't applied.
+    const { variablesById, updated: totalLocal, skipped } = applyParametersToNodes(nodes.value, Array.from(content))
+    for (const node of nodes.value) {
+      if (variablesById.has(node.id)) node.data.variables = variablesById.get(node.id)
     }
 
     const globalConstants = Array.from(content)
@@ -1739,6 +1706,11 @@ const loadParametersData = async (content, filename, { notify: shouldNotify = tr
     const totalGlobal = globalConstants.length
 
     const totalUpdated = totalLocal + totalGlobal
+
+    // Told even when a batch load quiets its other messages, as these values are dropped.
+    if (skipped.length) {
+      notify.warning({ title: 'Some Parameters Not Applied', message: skippedParametersMessage(skipped) })
+    }
 
     if (shouldNotify && totalUpdated > 0) {
       if (trackEvents) {
@@ -1819,24 +1791,16 @@ async function loadFlowSnapshot(fileName, flowSnapshot, parameterData = {}, { no
 
   let nodeNameToIdMap = new Map()
   const globalValues = new Map()
+  const skippedParameters = []
   // Convert nodeData to nodes format expected by the workspace.
   const nodes = flowSnapshot.nodeData.map((snapshotNode) => {
     let node = snapshotNode
     // Update variables with parameter data if available.
     if (parameterData[node.data.name]) {
       const paramVars = parameterData[node.data.name]
-      node.data.variables = node.data.variables.map((variable) => {
-        const paramVar = paramVars.find((p) => p.name.trimEnd() === variable.name.trim())
-        if (paramVar) {
-          return {
-            ...variable,
-            value: paramVar.value?.trim(),
-            data_reference: paramVar.data_reference?.trim(),
-            type: 'constant',
-          }
-        }
-        return variable
-      })
+      const result = applyParameterValues(node.data.variables, (name) => paramVars.find((p) => p.name.trimEnd() === name))
+      node.data.variables = result.variables
+      skippedParameters.push(...result.skipped.map((name) => ({ nodeName: node.data.name, name })))
     }
     // Resolve math from the snapshot math library. Older snapshots keep values in the math, which
     // move into the node's rows here.
@@ -1908,6 +1872,9 @@ async function loadFlowSnapshot(fileName, flowSnapshot, parameterData = {}, { no
     title: 'Flow Snapshot Loaded',
     message: 'The flow snapshot has been successfully loaded into the workspace.',
   })
+  if (skippedParameters.length) {
+    notify.warning({ title: 'Some Parameters Not Applied', message: skippedParametersMessage(skippedParameters) })
+  }
 
   // globalValues: global constant values taken out of older math, for the caller to seed.
   return { nodeNameToIdMap, globalValues }

@@ -134,7 +134,8 @@
               v-model="slotProps.data.value"
               size="small"
               :placeholder="isValueMissing(slotProps.data) ? 'Value required' : valuePlaceholder(slotProps.data.type)"
-              class="w-full"
+              :class="['w-full', { 'value-input--ignored': ignoredNotices.has(slotProps.data.name) }]"
+              :title="ignoredNotices.get(slotProps.data.name)"
             />
             <span v-else class="cell-static text-muted" title="Computed elsewhere in the math">-</span>
           </template>
@@ -218,6 +219,8 @@ const props = defineProps({
   variableKinds: { type: Map, default: null },
   /** Names constant only because a connection supplies them, from useMathSession, or null. */
   connectionSupplied: { type: Set, default: null },
+  /** Names whose value export ignores, as something else supplies them, to why. */
+  ignoredNotices: { type: Map, default: () => new Map() },
   /** Names the equations use. */
   mathReferences: { type: Set, default: () => new Set() },
   /** (typed) => units suggestions for the Units field, as SanitisedInput's `suggest`; null for none. */
@@ -531,6 +534,7 @@ function parameterRowClass(row) {
     'parameter-row--unresolved': props.isMissingUnits(row) || isValueMissing(row),
     'parameter-row--state': row.stateRole === 'state',
     'parameter-row--initialiser': isInitialiserRow(row),
+    'parameter-row--ignored': props.ignoredNotices.has(row.name),
   }
 }
 
@@ -769,6 +773,12 @@ defineExpose({ flushPendingRenames })
 
 .issue-chip--unknown {
   --chip-color: var(--p-primary-color, #3b82f6);
+}
+
+/* A value export ignores, as something else supplies its variable: kept, but shown struck through */
+.value-input--ignored {
+  color: var(--p-text-muted-color, #64748b);
+  text-decoration: line-through;
 }
 
 .search-group {
