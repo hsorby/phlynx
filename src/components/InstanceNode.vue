@@ -63,7 +63,7 @@
           :sanitise="sanitiseName"
           floating
           class="nodrag"
-          @dblclick.stop
+          @dblclick.stop="onNameInputDoubleClick"
           @commit="saveEdit"
           @revert="cancelEdit"
         />
@@ -288,9 +288,12 @@ watch(viewport, () => {
   if (isEditing.value) nameInputRef.value?.updatePosition()
 })
 
-// Matches the usual double-click interval, so the second click of a double-click can still cancel the rename.
+// Short enough to feel immediate; a slower double-click is caught by DOUBLE_CLICK_WINDOW_MS instead.
 const RENAME_CLICK_DELAY_MS = 250
+// Covers the default OS double-click interval (500ms on Windows and macOS).
+const DOUBLE_CLICK_WINDOW_MS = 500
 let renameClickTimeout = null
+let renameClickedAt = 0
 
 /**
  * Starts renaming a moment after a single click, so a double-click opens the instance editor instead.
@@ -304,6 +307,7 @@ function onNameClick(event) {
   if (event.detail === 0) {
     startEditing()
   } else if (event.detail === 1) {
+    renameClickedAt = Date.now()
     renameClickTimeout = setTimeout(() => {
       renameClickTimeout = null
       startEditing()
@@ -315,6 +319,17 @@ function onNameClick(event) {
 function onNodeDoubleClick() {
   clearTimeout(renameClickTimeout)
   renameClickTimeout = null
+  openInstanceEditor('parameters')
+}
+
+/**
+ * Treats a double-click that lands on a field a click just opened as a double-click on the name, so a
+ * double-click slower than the rename delay still opens the instance editor.
+ */
+function onNameInputDoubleClick() {
+  if (Date.now() - renameClickedAt >= DOUBLE_CLICK_WINDOW_MS) return
+  renameClickedAt = 0
+  cancelEdit()
   openInstanceEditor('parameters')
 }
 

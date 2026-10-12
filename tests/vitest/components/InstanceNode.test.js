@@ -114,6 +114,42 @@ describe('InstanceNode', () => {
     expect(wrapper.emitted('open-instance-editor')[0][0]).toMatchObject({ id: 'a', defaultTab: 'parameters' })
   })
 
+  it('drops a scheduled rename when the node is double-clicked', async () => {
+    mountNode()
+    await nameButton().trigger('click', { detail: 1 })
+    await nameButton().trigger('dblclick')
+    vi.advanceTimersByTime(500)
+    await flushPromises()
+
+    expect(nameInput().exists()).toBe(false)
+    expect(wrapper.emitted('open-instance-editor')).toHaveLength(1)
+  })
+
+  it('opens the instance editor, not a rename, on a double-click slower than the rename delay', async () => {
+    mountNode()
+    await nameButton().trigger('click', { detail: 1 })
+    vi.advanceTimersByTime(300)
+    await flushPromises()
+    expect(nameInput().exists()).toBe(true)
+
+    await nameInput().trigger('dblclick')
+    await flushPromises()
+    expect(nameInput().exists()).toBe(false)
+    expect(wrapper.emitted('open-instance-editor')).toHaveLength(1)
+  })
+
+  it('keeps renaming on a later double-click in the field', async () => {
+    mountNode()
+    await nameButton().trigger('click', { detail: 1 })
+    vi.advanceTimersByTime(1000)
+    await flushPromises()
+
+    await nameInput().trigger('dblclick')
+    await flushPromises()
+    expect(nameInput().exists()).toBe(true)
+    expect(wrapper.emitted('open-instance-editor')).toBeUndefined()
+  })
+
   it('opens the instance editor on a double-click anywhere on the node', async () => {
     mountNode()
     await wrapper.find('.detail-value').trigger('dblclick')
