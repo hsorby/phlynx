@@ -85,7 +85,7 @@
  * The context sidebar's Simulation tab: runs scoped simulations and plots the chosen variables of one of
  * the simulated instances.
  */
-import { computed, onBeforeUnmount, onMounted, ref, toRef } from 'vue'
+import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, ref, toRef } from 'vue'
 import { useRouter } from 'vue-router'
 
 import ProgressBar from 'primevue/progressbar'
@@ -128,10 +128,21 @@ const {
   keepCurrent,
 } = useSimulationRunner({ instanceId: toRef(props, 'instanceId') })
 
+// What had the focus when the simulation page opened, to give it back on return, as the page takes it.
+let focusBeforePage = null
+
 /** Shows the results on the simulation page. */
 function openSimulationPage() {
+  focusBeforePage = document.activeElement
   router.push({ name: 'simulation' })
 }
+
+onActivated(async () => {
+  const element = focusBeforePage
+  focusBeforePage = null
+  await nextTick()
+  if (element?.isConnected) element.focus()
+})
 
 // Plots above the controls at any width; a wider tab gives taller plots.
 const SIZES_KEY = 'phlynx.simulation.splitSizes'

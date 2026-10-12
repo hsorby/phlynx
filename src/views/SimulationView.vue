@@ -13,7 +13,8 @@
           v-tooltip.bottom="'Back to the workspace'"
           @click="goToWorkspace"
         />
-        <h1 class="page-title">Simulation</h1>
+        <!-- Focused on arrival, so keyboard and screen-reader users start on the page. -->
+        <h1 ref="titleEl" class="page-title" tabindex="-1">Simulation</h1>
         <SimulationToolbar
           v-model:scope-mode="scopeMode"
           class="page-toolbar"
@@ -182,7 +183,7 @@ export default {
  * cursors in step, then a protocol run's prediction plots, downloads of the values as CSV, the charts as one PNG and
  * a protocol's run as SED-ML, and beside them what gets plotted and tried out.
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onActivated, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import Button from 'primevue/button'
@@ -242,6 +243,9 @@ const { xAxis, charts, predictionPlotCharts } = useSimulationCharts(scopeNodes)
 
 const hasCharts = computed(() => charts.value.length > 0)
 const hasFigures = computed(() => hasCharts.value || predictionPlotCharts.value.length > 0)
+
+const titleEl = ref(null)
+onActivated(() => titleEl.value?.focus())
 
 /** Returns to the workspace, as the page left it. */
 function goToWorkspace() {
@@ -382,6 +386,10 @@ function downloadPng() {
   border-right: 1px solid var(--p-content-border-color);
   font-size: 1rem;
   font-weight: 600;
+}
+
+.page-title:focus {
+  outline: none;
 }
 
 .page-toolbar {

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { computed, defineComponent, h, ref } from 'vue'
+import { computed, defineComponent, h, KeepAlive, ref } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
@@ -44,9 +44,10 @@ const PlotStub = defineComponent({
 /**
  * Mounts the page on /simulation, with a router whose other routes render nothing.
  *
+ * @param {{isKeptAlive?: boolean}} [options] - Whether to keep it alive, as the app does.
  * @returns {Promise<{wrapper: import('@vue/test-utils').VueWrapper, router: import('vue-router').Router}>}
  */
-async function mountPage() {
+async function mountPage({ isKeptAlive = false } = {}) {
   const Empty = { render: () => null }
   const router = createRouter({
     history: createMemoryHistory(),
@@ -56,7 +57,9 @@ async function mountPage() {
     ],
   })
   await router.push('/simulation')
-  const wrapper = mount(SimulationView, {
+  const page = isKeptAlive ? defineComponent({ setup: () => () => h(KeepAlive, null, () => h(SimulationView)) }) : SimulationView
+  const wrapper = mount(page, {
+    attachTo: document.body,
     global: {
       plugins: [PrimeVue, router],
       directives: { tooltip },
@@ -75,14 +78,13 @@ describe('SimulationView', () => {
   })
   afterEach(() => vi.unstubAllGlobals())
 
-  it('has the toolbar, without the float or page buttons, and the controls beside', async () => {
+  it('has the toolbar, without the float button, and the controls beside', async () => {
     const { wrapper } = await mountPage()
     const labels = wrapper.findAll('button').map((button) => button.attributes('aria-label'))
     expect(labels).toContain('Simulate the whole model')
     expect(labels).toContain('Track this run')
     expect(labels).toContain('Simulation settings')
     expect(labels).not.toContain('Float the results over the canvas')
-    expect(labels).not.toContain('Open the simulation page')
     expect(wrapper.find('.controls-stub').exists()).toBe(true)
     wrapper.unmount()
   })
@@ -108,6 +110,12 @@ describe('SimulationView', () => {
 
     await wrapper.find('button[aria-label="Download the results as CSV"]').trigger('click')
     expect(legacyDownload).toHaveBeenCalledWith('simulation-results.csv', expect.any(Blob))
+    wrapper.unmount()
+  })
+
+  it('focuses its heading on arrival', async () => {
+    const { wrapper } = await mountPage({ isKeptAlive: true })
+    expect(document.activeElement).toBe(wrapper.find('h1.page-title').element)
     wrapper.unmount()
   })
 
