@@ -2125,7 +2125,7 @@ async function onImportConfirm(importPayload, updateProgress) {
   }
 }
 
-function onOpenInstanceEditorDialog(eventPayload, tab = 'parameters') {
+function onOpenInstanceEditorDialog(eventPayload, tab = eventPayload.defaultTab ?? 'parameters') {
   currentEditingNode.value = {
     ...eventPayload,
   }
