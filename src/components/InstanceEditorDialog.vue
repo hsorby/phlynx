@@ -102,6 +102,7 @@
             @update:simple="onSimpleToggle"
             :component-name="componentNameForEditor"
             :variable-definitions="editorDefinitions"
+            :keep-variables="keptVariables"
             @update:component-name="onEditorComponentName"
             @change="handleEditorChange"
             @save="handleSave"
@@ -114,6 +115,7 @@
             :model-value="currentModel"
             :component-name="componentNameForEditor"
             :variable-definitions="editorDefinitions"
+            :keep-variables="keptVariables"
             @change="handleEditorChange"
             @save="handleSave"
             @undo="handleEditorUndo"
@@ -627,13 +629,21 @@ const mathEditorRef = ref(null)
 const parameterTableRef = ref(null)
 
 // The math, its analysis and the parameter rows.
-const session = useMathSession({ history, editorRef: mathEditorRef, ports: editablePorts, plotVariables: trackedNames })
+const session = useMathSession({
+  history,
+  editorRef: mathEditorRef,
+  ports: editablePorts,
+  plotVariables: trackedNames,
+  beforeInit: () => signEditorState() === savedEditorState.value,
+  onInit: rebaselineEditorState,
+})
 const {
   isManaged,
   currentModel,
   currentLayout,
   parameterRows,
   editorDefinitions,
+  keptVariables,
   variableKinds,
   connectionSupplied,
   mathReferences,
@@ -1019,6 +1029,18 @@ const signEditorState = () =>
   })
 // The signature as loaded, so edits to values, the name or the ports count as unsaved.
 const savedEditorState = ref('')
+
+/**
+ * Moves the baseline to the state once the editor's first view of the math is applied, so anything
+ * that view changes in the rows or ports (e.g. a variable it no longer declares) never shows as an
+ * unsaved edit on open. The load sets the baseline first, in case no editor mounts. An edit made before the
+ * editor mounted keeps the old baseline, so it still counts as unsaved.
+ *
+ * @param {boolean} [wasUnchanged=true] - Whether the state still matched the baseline just before that view.
+ */
+function rebaselineEditorState(wasUnchanged = true) {
+  if (!loading.value && wasUnchanged) savedEditorState.value = signEditorState()
+}
 
 // Edits a run wouldn't see, since runs use the saved instance.
 const hasUnsavedEdits = computed(

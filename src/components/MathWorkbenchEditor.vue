@@ -49,6 +49,11 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  // Names to keep declared though no equation uses them, so their rows aren't dropped.
+  keepVariables: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 /**
@@ -92,7 +97,7 @@ const variableUnits = computed(() =>
   Object.fromEntries(props.variableDefinitions.filter((def) => def.units).map((def) => [def.name, def.units]))
 )
 
-const definitionsKey = () => JSON.stringify(props.variableDefinitions)
+const definitionsKey = () => JSON.stringify([props.variableDefinitions, props.keepVariables])
 
 /** Whether every line with math in it is a complete equation, so it can be built. */
 const linesComplete = () => lines.every((line) => !line.mathml || line.complete)
@@ -152,6 +157,7 @@ function run(source, { silent = false } = {}) {
           componentName: props.componentName || undefined,
           mathml: lines.map((line) => line.mathml),
           definitions: props.variableDefinitions,
+          keep: props.keepVariables,
         })
 
   errors.value = result.errors
@@ -222,7 +228,7 @@ function handleLineCommit() {
 }
 
 watch(
-  () => props.variableDefinitions,
+  () => [props.variableDefinitions, props.keepVariables],
   () => {
     if (definitionsKey() !== lastDefinitionsKey) schedule('external')
   }

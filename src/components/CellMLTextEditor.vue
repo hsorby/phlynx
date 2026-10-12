@@ -150,6 +150,11 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+  // Simple Mode: names to keep declared though no equation uses them, so their rows aren't dropped.
+  keepVariables: {
+    type: Array,
+    default: () => []
+  },
   // The text layout saved with the math (comments, blank lines, statements as typed). Read on mount.
   layout: {
     type: Object,
@@ -468,7 +473,8 @@ const updatePreview = async () => {
 }
 
 // ── Parse -> declare variables -> report ──────────────────────────────────────
-const definitionsKey = () => (parser.simplified ? JSON.stringify(props.variableDefinitions) : '')
+const definitionsKey = () =>
+  parser.simplified ? JSON.stringify([props.variableDefinitions, props.keepVariables]) : ''
 
 /**
  * Parses the text into CellML and reports the result.
@@ -489,7 +495,9 @@ function run(source, { text = cellmlText.value, silent = false } = {}) {
   const result = parser.parse(text, {
     baseXml: lastXml,
     componentName: props.componentName || undefined,
-    finalise: simple ? (doc) => applyVariableDefinitions(doc, props.variableDefinitions) : undefined,
+    finalise: simple
+      ? (doc) => applyVariableDefinitions(doc, props.variableDefinitions, { keep: props.keepVariables })
+      : undefined,
   })
 
   errors.value = result.errors
@@ -539,7 +547,7 @@ watch(cellmlText, () => {
 })
 
 watch(
-  () => props.variableDefinitions,
+  () => [props.variableDefinitions, props.keepVariables],
   () => {
     if (parser.simplified && definitionsKey() !== lastDefinitionsKey) schedule('external')
   }

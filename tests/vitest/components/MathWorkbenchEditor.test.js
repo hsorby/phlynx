@@ -274,6 +274,17 @@ describe('MathWorkbenchEditor', () => {
     expect(change.xml).toContain('<variable name="a" units="metre"/>')
   })
 
+  it('declares kept names no equation uses, and rebuilds when they change', async () => {
+    const definitions = [...DEFINITIONS, { name: 'cAMP', units: 'dimensionless' }]
+    await mountEditor({ props: { variableDefinitions: definitions, keepVariables: ['cAMP'] } })
+    expect(changes()[0].xml).toContain('<variable name="cAMP" units="dimensionless"/>')
+
+    await wrapper.setProps({ keepVariables: [] })
+    wrapper.vm.flush()
+    expect(changes().at(-1)).toMatchObject({ source: 'external', valid: true })
+    expect(changes().at(-1).xml).not.toContain('cAMP')
+  })
+
   it('keeps its lines when the session replays the edit it just reported', async () => {
     await mountEditor()
     edit([line(EQUATION), line('', { complete: false, id: 'empty' })])
