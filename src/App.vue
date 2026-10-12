@@ -8,7 +8,7 @@
         <img src="/phlynxlogo.svg" alt="PhLynx Logo" class="centred-image" />
         <strong data-testid="app-version">PhLynx v{{ appVersion }}</strong>
       </div>
-      <div v-show="isWorkspaceActive" class="session-name" @dblclick="startEditing">
+      <div v-show="showsSessionName" class="session-name" @dblclick="startEditing">
         <strong
           v-if="!isEditing"
           ref="sessionNameEl"
@@ -26,7 +26,8 @@
         />
       </div>
       <nav>
-        <router-link to="/" :class="{ 'force-active': isWorkspaceActive }">Workspace</router-link>
+        <router-link to="/">Workspace</router-link>
+        <router-link to="/simulation">Simulation</router-link>
         <router-link to="/docs/" :class="{ 'force-active': isDocsActive }">User Guide</router-link>
         <router-link to="/about">About</router-link>
       </nav>
@@ -79,8 +80,8 @@ const isDocsActive = computed(() => {
   return route.path.startsWith('/docs')
 })
 
-// The simulation page is part of the workspace, so it shows the session's name and the Workspace link lit.
-const isWorkspaceActive = computed(() => {
+// The simulation page shows the workspace's model, so it shows the session's name too.
+const showsSessionName = computed(() => {
   return route.path === '/' || route.name === 'simulation'
 })
 
