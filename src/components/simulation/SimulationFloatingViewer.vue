@@ -1,14 +1,16 @@
 <template>
   <Dialog
-    :visible="state.visible && isCanvasShown"
+    v-model:visible="state.visible"
     :modal="false"
     draggable
     position="bottomright"
     :close-on-escape="false"
     :content-style="{ display: 'flex', flexDirection: 'column', minHeight: 0, padding: '0 12px 12px' }"
-    :pt="{ root: { class: 'simulation-floating-viewer' }, header: { style: { padding: '8px 12px' } } }"
+    :pt="{
+      root: { class: ['simulation-floating-viewer', { 'simulation-floating-viewer--parked': !isCanvasShown }] },
+      header: { style: { padding: '8px 12px' } },
+    }"
     aria-label="Floating simulation viewer"
-    @update:visible="(isVisible) => (state.visible = isVisible)"
     @show="pinWhereShown"
   >
     <template #header>
@@ -267,7 +269,8 @@ import { FLOW_IDS } from '../../utils/constants'
 
 const props = defineProps({
   nodes: { type: Array, default: () => [] },
-  // Whether the canvas it floats over is shown; on another page it waits, hidden, for the canvas to return.
+  // Whether the canvas it floats over is shown; on another page it waits, hidden but kept where it was and at its
+  // size, for the canvas to return.
   isCanvasShown: { type: Boolean, default: true },
 })
 
@@ -636,5 +639,9 @@ function pinWhereShown() {
   min-height: 240px;
   max-width: 90vw;
   max-height: 90vh;
+}
+
+.simulation-floating-viewer--parked {
+  display: none !important;
 }
 </style>
