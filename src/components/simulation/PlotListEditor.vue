@@ -25,7 +25,7 @@
           <i
             v-if="plot.units.size > 1"
             class="pi pi-exclamation-triangle plot-mixed"
-            v-tooltip.top="'This plot mixes units, so it shows as one chart per unit. Move variables to give each unit its own plot.'"
+            v-tooltip.top="isSinglePlot ? 'This plot mixes units, so it shows as one chart per unit.' : 'This plot mixes units, so it shows as one chart per unit. Move variables to give each unit its own plot.'"
             aria-label="Mixed units"
           ></i>
         </button>
@@ -39,6 +39,7 @@
           @click="addHere(plot)"
         />
         <Button
+          v-if="!isSinglePlot"
           icon="pi pi-ellipsis-h"
           text
           rounded
@@ -147,7 +148,7 @@
       </ul>
     </section>
 
-    <Button label="Add plot" icon="pi pi-plus" text size="small" class="plot-add" @click="addNewPlot" />
+    <Button v-if="!isSinglePlot" label="Add plot" icon="pi pi-plus" text size="small" class="plot-add" @click="addNewPlot" />
     <Menu ref="menu" :model="menuItems" popup />
   </div>
 </template>
@@ -196,6 +197,8 @@ const props = defineProps({
   // The variable search's index (see buildVariableIndex), to choose a variable to plot against; without
   // it, plots can't be set against anything but time.
   index: { type: Array, default: null },
+  // One plot only, as the instance editor has: no plots to add, rename, reorder or remove.
+  isSinglePlot: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:plotConfig', 'add-here'])
 

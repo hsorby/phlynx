@@ -74,7 +74,10 @@
           :nodes="nodes"
           :scope-node-ids="hasScope ? store.scopeNodeIds : null"
           :keep-current="keepCurrent"
+          :plot-config="plotConfig"
+          :plot-node-id="plotConfig ? instanceId : null"
           @change="rerunForSliders"
+          @update:plot-config="(next) => emit('update:plotConfig', next)"
         />
       </SplitterPanel>
     </Splitter>
@@ -84,7 +87,8 @@
 <script setup>
 /**
  * The context sidebar's Simulation tab: runs scoped simulations and plots the chosen variables of one of
- * the simulated instances.
+ * the simulated instances. The instance editor's Plot tab gives it a single plot of its own, of its instance's
+ * variables, in place of the workspace's plots.
  */
 import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, ref, toRef } from 'vue'
 import { useRouter } from 'vue-router'
@@ -107,7 +111,10 @@ import { useSliderReruns } from '../../composables/useSliderReruns'
 const props = defineProps({
   // In the instance editor: play runs the whole model, or this instance on its own.
   instanceId: { type: String, default: null },
+  // A single plot of the view's own, never saved, shown in place of the workspace's plots.
+  plotConfig: { type: Object, default: null },
 })
+const emit = defineEmits(['update:plotConfig'])
 
 const router = useRouter()
 const {
@@ -122,6 +129,7 @@ const {
   blockedReason,
   canPlay,
   isOutdated,
+  isOtherRun,
   scopeMode,
   statusLine,
   play,
@@ -226,7 +234,14 @@ if (!props.instanceId) useSelectionAutoRun()
 // Slider moves rerun the scope through one shared, lossy queue (see useSliderReruns).
 const { rerunForSliders } = useSliderReruns()
 
-const { xAxis, charts, predictionPlotCharts } = useSimulationCharts(scopeNodes)
+const { xAxis, charts, predictionPlotCharts } = useSimulationCharts(scopeNodes, { plotConfig: toRef(props, 'plotConfig') })
+
+/** Plays, unless results of the scope play would run are shown or on their way. */
+function ensureResults() {
+  if (canPlay.value && (!store.results || isOtherRun.value)) play()
+}
+
+defineExpose({ ensureResults })
 </script>
 
 <style scoped>

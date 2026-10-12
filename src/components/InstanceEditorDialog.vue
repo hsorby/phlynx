@@ -105,6 +105,7 @@
             :keep-variables="keptVariables"
             @update:component-name="onEditorComponentName"
             @change="handleEditorChange"
+            @variable-click="plotClickedVariable"
             @save="handleSave"
             @undo="handleEditorUndo"
             @redo="handleEditorRedo"
@@ -386,8 +387,21 @@
                 Runs use the saved instance.
                 <Button label="Save to include your edits" link size="small" class="plot-tab-save" @click="handleSave({ keepOpen: true })" />
               </Message>
+              <div class="plot-tab-auto">
+                <label class="plot-tab-auto-label" v-tooltip.bottom="'Click a variable in the CellML Text to plot it alone'">
+                  <ToggleSwitch v-model="isAutoUpdate" class="plot-tab-auto-switch" aria-label="Auto-update: plot a variable clicked in the math" />
+                  Auto-update
+                </label>
+                <span v-if="plotNotice" class="plot-tab-auto-notice" role="status">{{ plotNotice }}</span>
+              </div>
               <!-- Kept mounted through an Apply's reload, so its choices, such as the whole model, last. -->
-              <SimulationPanel v-if="activeTab === 'plot'" :instance-id="id" class="plot-tab-workbench" />
+              <SimulationPanel
+                v-if="activeTab === 'plot'"
+                ref="simulationPanelRef"
+                v-model:plot-config="editorPlotConfig"
+                :instance-id="id"
+                class="plot-tab-workbench"
+              />
             </TabPanel>
           </TabPanels>
         </Tabs>
@@ -487,6 +501,7 @@ import TabList from 'primevue/tablist'
 import TabPanel from 'primevue/tabpanel'
 import TabPanels from 'primevue/tabpanels'
 import Tabs from 'primevue/tabs'
+import ToggleSwitch from 'primevue/toggleswitch'
 
 import CellMLTextEditor from './CellMLTextEditor.vue'
 import MathWorkbenchEditor from './MathWorkbenchEditor.vue'
@@ -511,7 +526,12 @@ import { useAppSettings } from '../composables/useAppSettings'
 
 import { isInitialisable } from '../services/math/variableKinds'
 import { resolveBoundaryValues } from '../services/export/boundaryValues'
-import { getNodePlotEntries } from '../services/simulation/plotSelections'
+import {
+  createSinglePlotConfig,
+  getNodePlotEntries,
+  isPlottableRow,
+  replacePlotSelections,
+} from '../services/simulation/plotSelections'
 
 import { isEmpty, syncInitialiserUnits } from '../utils/variables'
 import { getUnknownUnitsNotice, isValueMissing } from '../utils/parameterRows'
@@ -1013,8 +1033,51 @@ const issueFilter = useIssueFilter({
   availableKeys: computed(() => issueChips.value.map((chip) => chip.key)),
 })
 
-/** How many of the instance's variables are plotted. */
-const plottedCount = computed(() => getNodePlotEntries(simulationSettingsStore.plotConfig, props.id).length)
+// The Plot tab's own single plot, made afresh on each open and never saved.
+const editorPlotConfig = ref(createSinglePlotConfig())
+// Whether clicking a variable in the math plots it.
+const isAutoUpdate = ref(true)
+const simulationPanelRef = ref(null)
+// Says why a clicked variable wasn't plotted.
+const plotNotice = ref('')
+let plotNoticeTimer = null
+
+/** How many variables the Plot tab's plot shows. */
+const plottedCount = computed(() => editorPlotConfig.value.selections?.length ?? 0)
+
+/**
+ * Shows a note beside the Auto-update switch for a few seconds.
+ *
+ * @param {string} text
+ */
+function showPlotNotice(text) {
+  plotNotice.value = text
+  clearTimeout(plotNoticeTimer)
+  plotNoticeTimer = setTimeout(() => (plotNotice.value = ''), 5000)
+}
+
+/**
+ * Plots a variable clicked in the math alone, while the Plot tab shows and auto-updates, running the model when
+ * no results of its scope are shown. Runs use the saved instance, so only its variables can be plotted.
+ *
+ * @param {string} name
+ */
+function plotClickedVariable(name) {
+  if (activeTab.value !== 'plot' || rightCollapsed.value || !isAutoUpdate.value) return
+  const node = nodes.value.find((candidate) => candidate.id === props.id)
+  const row = node?.data?.variables?.find((candidate) => candidate.name === name)
+  if (!row) {
+    if (parameterRows.value.some((candidate) => candidate.name === name)) showPlotNotice(`Save to plot ${name}`)
+    return
+  }
+  if (!isPlottableRow(row)) {
+    showPlotNotice(`${name} is set, not computed, so it isn’t plotted`)
+    return
+  }
+  plotNotice.value = ''
+  editorPlotConfig.value = replacePlotSelections(editorPlotConfig.value, node, row)
+  simulationPanelRef.value?.ensureResults()
+}
 
 /**
  * Signs what a run reads from the instance besides its math: its name, rows and ports.
@@ -1089,12 +1152,16 @@ watch(
   () => props.modelValue,
   async (isOpen) => {
     if (!isOpen) {
+      clearTimeout(plotNoticeTimer)
+      plotNotice.value = ''
       isEditorReady.value = false
       isDialogShown.value = false
       history.clear()
       reloadAfterSave = false
       return
     }
+    editorPlotConfig.value = createSinglePlotConfig()
+    isAutoUpdate.value = true
     await loadEditor()
   }
 )
@@ -1967,6 +2034,30 @@ async function handleSave(options) {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.plot-tab-auto {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  min-width: 0;
+  font-size: 0.8125rem;
+}
+
+.plot-tab-auto-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.plot-tab-auto-notice {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--p-text-muted-color);
 }
 
 .plot-tab-note {

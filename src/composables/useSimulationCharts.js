@@ -75,17 +75,19 @@ export function spreadValues(values, positions, length) {
  * Builds the charts of the shown results.
  *
  * @param {import('vue').Ref<Array<Object>>|Array<Object>} scopeNodes - The simulated instances.
- * @param {{hasInputs?: boolean}} [options] - `hasInputs` charts the values a protocol set whether or not they're
- *   asked for, for a view that shows one chart at a time.
+ * @param {{hasInputs?: boolean, plotConfig?: import('vue').Ref<Object|null>|Object|null}} [options] - `hasInputs`
+ *   charts the values a protocol set whether or not they're asked for, for a view that shows one chart at a time;
+ *   `plotConfig` charts a view's own plots in place of the workspace's.
  * @returns {{xAxis: import('vue').ComputedRef<Object>, charts: import('vue').ComputedRef<Array<Object>>,
  *   predictionPlotCharts: import('vue').ComputedRef<Array<Object>>}} `charts` end with the obs_data's plots (see
  *   buildObsDataCharts), with their `references`; `predictionPlotCharts` as FeaturePlot takes them.
  */
-export function useSimulationCharts(scopeNodes, { hasInputs = false } = {}) {
+export function useSimulationCharts(scopeNodes, { hasInputs = false, plotConfig = null } = {}) {
   const store = useSimulationResultsStore()
   const protocolStore = useProtocolStore()
   const simulationSettingsStore = useSimulationSettingsStore()
   const { settings } = useAppSettings()
+  const getPlotConfig = () => unref(plotConfig) ?? simulationSettingsStore.plotConfig
 
   // Every experiment of a protocol run at once, on one time axis: their times together, and where each one's are.
   const overlay = computed(() => {
@@ -202,7 +204,7 @@ export function useSimulationCharts(scopeNodes, { hasInputs = false } = {}) {
     const { results } = run
     const nodesById = new Map(unref(scopeNodes).map((node) => [node.id, node]))
     const outputsById = new Map(run.inspectionOutputs.map((output) => [output.id, output]))
-    const variables = (simulationSettingsStore.plotConfig?.selections ?? []).flatMap((selection) => {
+    const variables = (getPlotConfig()?.selections ?? []).flatMap((selection) => {
       const plotted = readPlotted(selection, run, nodesById, outputsById)
       if (!plotted) return []
       const key = isInspectionNodeId(selection.nodeId) ? selection.key : `${plotted.node.id}::${selection.variableName}`
@@ -310,7 +312,7 @@ export function useSimulationCharts(scopeNodes, { hasInputs = false } = {}) {
     const previousSlots = store.getSeriesSlots()
     if (!store.results) return []
     // Named as the plot cards name them, even for an imported config that lists no plots.
-    const groups = resolveGroups(simulationSettingsStore.plotConfig)
+    const groups = resolveGroups(getPlotConfig())
     const plotNames = new Map(groups.map((group) => [group.id, group.name]))
     plotNames.set(INSPECTION_PLOT, 'Inspection modules')
     plotNames.set(PROTOCOL_INPUTS_PLOT, 'Protocol inputs')

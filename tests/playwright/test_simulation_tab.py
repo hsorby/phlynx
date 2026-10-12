@@ -155,6 +155,28 @@ def plot_variable(page, path, within=None):
     pick_path(page, "Add a variable to plot", path, within)
 
 
+def click_math_variable(page, dialog, name):
+    """Clicks the first use of a variable's name in an instance editor's CellML Text."""
+    point = dialog.locator(".cm-content").evaluate(
+        r"""(content, name) => {
+          const pattern = new RegExp(`\\b${name}\\b`)
+          const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT)
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const match = pattern.exec(node.textContent)
+            if (!match) continue
+            const range = document.createRange()
+            range.setStart(node, match.index)
+            range.setEnd(node, match.index + name.length)
+            const rect = range.getBoundingClientRect()
+            return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+          }
+          return null
+        }""",
+        name,
+    )
+    page.mouse.click(point["x"], point["y"])
+
+
 def add_slider(page, path, within=None):
     """Adds a slider for a parameter by its instance/variable path, from the Sliders view."""
     scope = within or page
@@ -1118,13 +1140,21 @@ class TestSimulationTab(unittest.TestCase):
             expect(dialog.get_by_role("button", name="Float the results over the canvas")).to_have_count(0)
             dialog.get_by_role("button", name="Simulate the whole model").click()
             expect(dialog.get_by_text("Simulated the whole model")).to_be_visible(timeout=120000)
-            plot_variable(page, "soma_SN/V")
-            expect(page.locator(".simulation-plot .plot-title")).to_have_text("soma_SN/V")
+            plot_variable(page, "soma_SN/V", within=dialog)
+            expect(dialog.locator(".simulation-plot .plot-title")).to_have_text("soma_SN/V")
+            expect(dialog.get_by_role("tab", name="Plot (1)")).to_be_visible()
+
+            # Clicking a variable in the math plots it in place of what the plot showed.
+            dialog.locator(".plot-variable .remove-button").click()
+            expect(dialog.get_by_role("tab", name="Plot (0)")).to_be_visible()
+            click_math_variable(page, dialog, "V")
+            expect(dialog.locator(".simulation-plot .plot-title")).to_have_text("soma_SN/V")
 
             # Apply saves and keeps the editor open, on the Plot tab.
             page.get_by_role("button", name="Apply").click()
             expect(page.get_by_text("CellML Updated")).to_be_visible()
             expect(dialog.get_by_role("button", name="Simulate the whole model")).to_be_visible()
+            expect(dialog.get_by_role("tab", name="Plot (1)")).to_be_visible()
             # ----------- END ------------
 
             context.close()
