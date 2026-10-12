@@ -175,3 +175,26 @@ describe('ContextSidebar global constant parameters', () => {
     expect(wrapper.vm.activeTabId).toBe('params')
   })
 })
+
+describe('ContextSidebar collapsing', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    nodes.value = []
+  })
+
+  it('collapses when asked, and opens again on a tab', async () => {
+    await mountOnParams()
+    const widths = () => wrapper.emitted('resize').map(([width]) => width)
+
+    wrapper.vm.collapse()
+    await flushPromises()
+    expect(wrapper.vm.isCollapsed).toBe(true)
+    expect(widths().at(-1)).toBe(0)
+
+    wrapper.vm.showTab('global')
+    await flushPromises()
+    expect(wrapper.vm.isCollapsed).toBe(false)
+    expect(wrapper.vm.activeTabId).toBe('global')
+    expect(widths().at(-1)).toBeGreaterThan(0)
+  })
+})

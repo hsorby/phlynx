@@ -1,21 +1,28 @@
 /**
  * Shows or hides the floating simulation viewer, a small window of the results that stays over the canvas
- * while the model is edited. WorkspaceArea shows it, and says how to return to the Simulation tab.
+ * while the model is edited. WorkspaceArea shows it, and says how to return to the Simulation tab and how to hide the
+ * sidebar, which floating the results does to give the canvas room.
  */
 import { reactive } from 'vue'
 
 const state = reactive({ visible: false })
 let showSimulationTab = () => {}
+let collapseSidebar = () => {}
 
 /**
  * Gives the viewer's shared state, and ways to show, hide or leave it.
  *
- * @returns {{state: {visible: boolean}, toggle: Function, returnToTab: Function, setTabOpener: Function}}
+ * @returns {{state: {visible: boolean}, toggle: Function, returnToTab: Function, setTabOpener: Function,
+ *   setSidebarCollapser: Function}}
  */
 export function useFloatingViewer() {
   return {
     state,
-    toggle: () => (state.visible = !state.visible),
+    /** Shows the viewer, hiding the sidebar, or hides it, leaving the sidebar as it is. */
+    toggle: () => {
+      state.visible = !state.visible
+      if (state.visible) collapseSidebar()
+    },
     /** Closes the viewer and shows the Simulation tab, opening the sidebar if need be. */
     returnToTab: () => {
       state.visible = false
@@ -27,5 +34,11 @@ export function useFloatingViewer() {
      * @param {Function} opener
      */
     setTabOpener: (opener) => (showSimulationTab = opener),
+    /**
+     * Says how to hide the sidebar.
+     *
+     * @param {Function} collapser
+     */
+    setSidebarCollapser: (collapser) => (collapseSidebar = collapser),
   }
 }

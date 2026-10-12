@@ -1143,12 +1143,11 @@ class TestSimulationTab(unittest.TestCase):
 
             add_slider(page, "soma_SN/g_Na")
 
+            # Floating the results closes the sidebar, leaving the viewer up, and its sliders still rerun the model.
             page.get_by_role("button", name="Float the results over the canvas").click()
             viewer = page.locator(".simulation-floating-viewer")
             expect(viewer.locator(".simulation-plot .plot-title")).to_have_text("soma_SN/V")
-
-            # Closing the sidebar leaves the viewer up, and its sliders still rerun the model.
-            page.locator(".resizable-context-panel .aside-collapse-toggle").click()
+            expect(page.locator(".context-aside--collapsed")).to_have_count(1)
             expect(viewer).to_be_visible()
             # Showing the sliders makes the window taller rather than squeezing the plot.
             height_before = viewer.bounding_box()["height"]

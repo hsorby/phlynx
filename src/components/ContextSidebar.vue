@@ -349,7 +349,12 @@ function showTab(tabId) {
   isCollapsed.value = false
 }
 
-defineExpose({ showTab })
+/** Hides the panel, leaving the canvas its width. */
+function collapse() {
+  isCollapsed.value = true
+}
+
+defineExpose({ showTab, collapse })
 
 // Leaving this for future settings configuration to enable auto-popout / switch to instance parameters
 // watch(selectedNode, (node) => {

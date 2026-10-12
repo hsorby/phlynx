@@ -74,7 +74,7 @@
 
     <span class="toolbar-spacer"></span>
     <Button
-      icon="pi pi-clone"
+      icon="pi pi-window-minimize"
       text
       rounded
       size="small"
