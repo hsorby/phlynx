@@ -61,7 +61,7 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
   /** What the shown results were computed with: `{ settings, overrides }`, for tracking them. */
   const runInputs = shallowRef(null)
   /**
-   * Earlier results kept on the charts beside the live run's: `[{ id, number, isVisible, results, mapping,
+   * Earlier results kept on the charts beside the live run's: `[{ id, number, name, isVisible, results, mapping,
    * inspectionOutputs, settings, inputs }]`, at most MAX_TRACKED_RUNS. Kept while the scope stays the same.
    */
   const trackedRuns = shallowRef([])
@@ -159,6 +159,8 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
     const run = markRaw({
       id: `run_${++trackedRunCount}`,
       number: nextRunNumber(trackedRuns.value),
+      // The name it's given, or null to go by its number.
+      name: null,
       isVisible: true,
       results: results.value,
       mapping: mapping.value,
@@ -194,6 +196,17 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
    */
   function toggleTrackedRun(id) {
     trackedRuns.value = trackedRuns.value.map((run) => (run.id === id ? markRaw({ ...run, isVisible: !run.isVisible }) : run))
+  }
+
+  /**
+   * Names a tracked run, or, given a blank name, has it go by its number again.
+   *
+   * @param {string} id
+   * @param {string|null} name
+   */
+  function renameTrackedRun(id, name) {
+    const trimmed = name?.trim() || null
+    trackedRuns.value = trackedRuns.value.map((run) => (run.id === id ? markRaw({ ...run, name: trimmed }) : run))
   }
 
   /**
@@ -292,6 +305,7 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
     removeTrackedRun,
     removeAllTrackedRuns,
     toggleTrackedRun,
+    renameTrackedRun,
     startRun,
     finishRun,
     finishProtocolRun,

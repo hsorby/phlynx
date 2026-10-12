@@ -39,7 +39,7 @@ describe('simulationResultsStore tracked runs', () => {
     expect(store.canTrackRun()).toBe(false)
     store.finishRun({ results: makeResults(), mapping: new Map(), signature: 's', inspectionOutputs: [], inputs: { settings: SETTINGS, overrides: null } })
     const run = store.trackRun([{ key: 'k', label: 'a/k', value: 2, units: '' }])
-    expect(run).toMatchObject({ number: 1, isVisible: true, settings: SETTINGS, inputs: [{ label: 'a/k' }] })
+    expect(run).toMatchObject({ number: 1, name: null, isVisible: true, settings: SETTINGS, inputs: [{ label: 'a/k' }] })
     expect(run.results).toBe(store.results)
     expect(store.trackedRuns).toHaveLength(1)
   })
@@ -155,6 +155,21 @@ describe('simulationResultsStore tracked runs', () => {
     store.isLiveRunVisible = false
     store.removeAllTrackedRuns()
     expect(store.isLiveRunVisible).toBe(true)
+  })
+
+  it('names a tracked run, and goes back to its number given a blank name', () => {
+    finish()
+    const [first, second] = [store.trackRun(), store.trackRun()]
+    const before = store.trackedRuns
+    store.renameTrackedRun(first.id, '  Low gain ')
+    expect(store.trackedRuns).not.toBe(before)
+    expect(store.trackedRuns.map((run) => run.name)).toEqual(['Low gain', null])
+    expect(store.trackedRuns[1]).toBe(second)
+    store.renameTrackedRun(first.id, '   ')
+    expect(store.trackedRuns[0]).toMatchObject({ id: first.id, number: 1, name: null })
+    store.renameTrackedRun(first.id, 'Again')
+    store.renameTrackedRun(first.id, null)
+    expect(store.trackedRuns[0].name).toBeNull()
   })
 
   it('forgets tracked runs with the workspace', () => {

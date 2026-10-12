@@ -394,12 +394,12 @@ export function useSimulationCharts(scopeNodes, { hasInputs = false } = {}) {
               ? [
                   {
                     key: `${run.id}::${item.key}`,
-                    label: runLabel(item.label, run.number),
+                    label: runLabel(item.label, run.number, run.name),
                     variableLabel: item.label,
                     values: phaseX ? values.get(item.key) : align(run.voiValues, values.get(item.key)),
                     ...(phaseX && { xValues: runX.values, runValues: run.voiValues }),
                     slot: slots.get(item.key),
-                    run: { number: run.number, dash: runDash(run.number) },
+                    run: { number: run.number, name: run.name ?? null, dash: runDash(run.number) },
                   },
                 ]
               : []

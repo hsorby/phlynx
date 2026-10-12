@@ -67,11 +67,21 @@ describe('useSimulationCharts with tracked runs', () => {
     expect(chart.series.map((series) => series.label)).toEqual(['cell/V [#1]', 'cell/w [#1]', 'cell/V', 'cell/w'])
     const [trackedV, , liveV] = chart.series
     expect(trackedV.slot).toBe(liveV.slot)
-    expect(trackedV.run).toEqual({ number: 1, dash: runDash(1) })
+    expect(trackedV.run).toEqual({ number: 1, name: null, dash: runDash(1) })
     expect(liveV.run).toBeNull()
     expect(Array.from(trackedV.values)).toEqual([0, 1])
     expect(Array.from(liveV.values)).toEqual([10, 11])
     expect(chart.titleParts.map((part) => part.slot)).toEqual([chart.series[2].slot, chart.series[3].slot])
+  })
+
+  it('names a tracked run’s lines by the name it was given', () => {
+    const { charts } = useSimulationCharts(NODES)
+    finish(makeResults([0, 1], 0))
+    const run = store.trackRun()
+    store.renameTrackedRun(run.id, 'Low gain')
+    const [trackedV] = charts.value[0].series
+    expect(trackedV.label).toBe('cell/V [Low gain]')
+    expect(trackedV.run.name).toBe('Low gain')
   })
 
   it('leaves out hidden runs, and the live run when it is hidden', () => {

@@ -118,7 +118,7 @@ const props = defineProps({
   // run's own x-axis.
   x: { type: Object, required: true },
   // [{ key, label, variableLabel, slot, values, run, xValues, runValues, isStepped? }], run being a tracked run's
-  // `{ number, dash }`, or null for the live run. On a phase plot, xValues and runValues are the series' own
+  // `{ number, name, dash }`, or null for the live run. On a phase plot, xValues and runValues are the series' own
   // x values and run x-axis values, as a tracked run's differ from the live run's.
   series: { type: Array, required: true },
   // Lines across a window or up the chart, in values, as protocolPlotGroups builds them: [{ key, label, role, slot,
@@ -252,7 +252,7 @@ const chrome = computed(() => CHROME[isDarkMode.value ? 'dark' : 'light'])
 // The runs the lines are from, once tracked runs are shown.
 const runKey = computed(() => {
   const runs = new Map()
-  for (const item of props.series) if (item.run) runs.set(item.run.number, { number: item.run.number, label: `#${item.run.number}`, dash: item.run.dash })
+  for (const item of props.series) if (item.run) runs.set(item.run.number, { number: item.run.number, label: item.run.name || `#${item.run.number}`, dash: item.run.dash })
   if (!runs.size) return []
   const key = [...runs.values()].sort((a, b) => a.number - b.number)
   return props.series.some((item) => !item.run) ? [{ number: 0, label: 'Live', dash: null }, ...key] : key
@@ -266,11 +266,11 @@ const variableCount = computed(() => new Set(props.series.map((item) => item.var
  * variable so a long name cut short still says which run it is. Without tracked runs, lines of one variable
  * (every experiment of a protocol at once) go by their own names.
  *
- * @param {{label: string, variableLabel?: string, run: {number: number}|null}} item
+ * @param {{label: string, variableLabel?: string, run: {number: number, name?: string|null}|null}} item
  * @returns {{label: string|null, run: string|null}}
  */
 function readoutNames(item) {
-  const run = hasRuns.value ? (item.run ? `#${item.run.number}` : 'Live') : null
+  const run = hasRuns.value ? (item.run ? item.run.name || `#${item.run.number}` : 'Live') : null
   // One of every experiment of a protocol shown at once, named for its experiment.
   if (item.experiment != null) return { label: item.label, run }
   if (variableCount.value > 1) return { label: item.variableLabel ?? item.label, run }

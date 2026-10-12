@@ -13,6 +13,7 @@ import {
   runAxisKind,
   runDash,
   runLabel,
+  runName,
 } from '../../../../src/services/simulation/trackedRuns.js'
 
 describe('tracked run numbers and dashes', () => {
@@ -20,6 +21,14 @@ describe('tracked run numbers and dashes', () => {
     expect(nextRunNumber([])).toBe(1)
     expect(nextRunNumber([{ number: 1 }, { number: 3 }])).toBe(2)
     expect(nextRunNumber([{ number: 1 }, { number: 2 }])).toBe(3)
+  })
+
+  it('names a run and its lines by the name it was given, or else its number', () => {
+    expect(runName(2)).toBe('Run #2')
+    expect(runName(2, 'Low gain')).toBe('Low gain')
+    expect(runLabel('cell/V', 2)).toBe('cell/V [#2]')
+    expect(runLabel('cell/V', 2, null)).toBe('cell/V [#2]')
+    expect(runLabel('cell/V', 2, 'Low gain')).toBe('cell/V [Low gain]')
   })
 
   it('gives as many distinct dashes as runs can be tracked', () => {

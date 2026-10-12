@@ -35,7 +35,13 @@
       <li v-for="run in store.trackedRuns" :key="run.id" class="run-item" :class="{ 'run-item--hidden': !run.isVisible }">
         <RunSwatch colour="currentColor" :dash="runDash(run.number)" />
         <div class="run-text">
-          <span class="run-name">Run #{{ run.number }}</span>
+          <InlineText
+            class="run-name run-name--editable"
+            :model-value="run.name"
+            :placeholder="runName(run.number)"
+            aria-label="Run name"
+            @update:model-value="store.renameTrackedRun(run.id, $event)"
+          />
           <span class="run-detail" :title="describe(run.inputs)">{{ describe(run.inputs) }}</span>
         </div>
         <Button
@@ -44,7 +50,7 @@
           rounded
           size="small"
           severity="secondary"
-          :aria-label="`${run.isVisible ? 'Hide' : 'Show'} run #${run.number}`"
+          :aria-label="`${run.isVisible ? 'Hide' : 'Show'} ${runName(run.number, run.name)}`"
           :aria-pressed="!run.isVisible"
           @click="store.toggleTrackedRun(run.id)"
         />
@@ -54,7 +60,7 @@
           rounded
           size="small"
           severity="secondary"
-          :aria-label="`Stop tracking run #${run.number}`"
+          :aria-label="`Stop tracking ${runName(run.number, run.name)}`"
           @click="store.removeTrackedRun(run.id)"
         />
       </li>
@@ -68,16 +74,17 @@
 
 <script setup>
 /**
- * The tracked runs, as web OpenCOR lists them: show, hide or stop tracking each run tracked from the toolbar, or
- * hide the live run to compare tracked runs alone. Each run says the slider values it tried out.
+ * The tracked runs, as web OpenCOR lists them: name, show, hide or stop tracking each run tracked from the
+ * toolbar, or hide the live run to compare tracked runs alone. Each run says the slider values it tried out.
  */
 import { computed } from 'vue'
 
 import Button from 'primevue/button'
 
+import InlineText from './InlineText.vue'
 import RunSwatch from './RunSwatch.vue'
 import { useTrackRun } from '../../composables/useTrackRun'
-import { formatPlotValue as formatValue, MAX_TRACKED_RUNS, runDash } from '../../services/simulation/trackedRuns'
+import { formatPlotValue as formatValue, MAX_TRACKED_RUNS, runDash, runName } from '../../services/simulation/trackedRuns'
 import { useSimulationResultsStore } from '../../stores/simulationResultsStore'
 
 const store = useSimulationResultsStore()
@@ -140,6 +147,13 @@ const liveDetail = computed(() => (store.results ? describe(liveInputs.value) : 
 
 .run-name {
   font-size: 0.85rem;
+}
+
+/* Its text in line with the live run's, the edit box's padding outside it. */
+.run-name--editable {
+  align-self: flex-start;
+  height: 1.5rem;
+  margin-left: -7px;
 }
 
 .run-detail {
