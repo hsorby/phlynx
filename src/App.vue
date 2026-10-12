@@ -34,7 +34,7 @@
 
     <div class="view-container">
       <router-view v-slot="{ Component }">
-        <keep-alive include="WorkspaceArea">
+        <keep-alive :include="['WorkspaceArea', 'SimulationView']">
           <component :is="Component" />
         </keep-alive>
       </router-view>
@@ -79,8 +79,9 @@ const isDocsActive = computed(() => {
   return route.path.startsWith('/docs')
 })
 
+// The simulation page shows the workspace's model, so it shows the session's name too.
 const isWorkspaceActive = computed(() => {
-  return route.path === '/'
+  return route.path === '/' || route.name === 'simulation'
 })
 
 async function startEditing(e) {

@@ -148,3 +148,26 @@ describe('SimulationToolbar float', () => {
     wrapper.unmount()
   })
 })
+
+describe('SimulationToolbar placement', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  const labelsOf = (wrapper) => wrapper.findAll('button').map((button) => button.attributes('aria-label'))
+
+  it('offers the simulation page where asked, and opens it', async () => {
+    const wrapper = mountToolbar({ hasPageLink: true })
+    const open = wrapper.find('button[aria-label="Open the simulation page"]')
+    expect(open.find('.pi-external-link').exists()).toBe(true)
+    await open.trigger('click')
+    expect(wrapper.emitted('open-page')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('offers neither the page nor floating on the simulation page', () => {
+    const wrapper = mountToolbar({ hasFloat: false })
+    expect(labelsOf(wrapper)).not.toContain('Open the simulation page')
+    expect(labelsOf(wrapper)).not.toContain('Float the results over the canvas')
+    expect(labelsOf(wrapper)).toContain('Track this run')
+    wrapper.unmount()
+  })
+})

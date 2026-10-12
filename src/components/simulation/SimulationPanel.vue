@@ -10,11 +10,11 @@
         :blocked-reason="blockedReason"
         :selected-count="selectedNodeIds.length"
         :is-outdated="isOutdated"
-        :can-expand="charts.length > 0 || predictionPlotCharts.length > 0"
         :is-in-sidebar="!instanceId"
+        :has-page-link="!instanceId"
         @play="play"
         @stop="stop"
-        @expand="isResultsDialogOpen = true"
+        @open-page="openSimulationPage"
       />
       <!-- Always there, so the bar showing and hiding never moves what is below it. -->
       <div class="panel-progress-slot">
@@ -77,20 +77,6 @@
         />
       </SplitterPanel>
     </Splitter>
-
-    <SimulationResultsDialog
-      v-if="hasScope"
-      v-model:visible="isResultsDialogOpen"
-      :summary="resultsSummary"
-      :x="xAxis"
-      :charts="charts"
-      :prediction-plot-charts="predictionPlotCharts"
-      :nodes="nodes"
-      :scope-node-ids="store.scopeNodeIds"
-      :keep-current="keepCurrent"
-      @change="rerunForSliders"
-      @play="canPlay && play()"
-    />
   </section>
 </template>
 
@@ -100,6 +86,7 @@
  * the simulated instances.
  */
 import { computed, onBeforeUnmount, onMounted, ref, toRef } from 'vue'
+import { useRouter } from 'vue-router'
 
 import ProgressBar from 'primevue/progressbar'
 import Splitter from 'primevue/splitter'
@@ -109,7 +96,6 @@ import FeaturePlot from './FeaturePlot.vue'
 import ProtocolResultsControls from './ProtocolResultsControls.vue'
 import SimulationControls from './SimulationControls.vue'
 import SimulationPlot from './SimulationPlot.vue'
-import SimulationResultsDialog from './SimulationResultsDialog.vue'
 import SimulationStatusLine from './SimulationStatusLine.vue'
 import SimulationToolbar from './SimulationToolbar.vue'
 import { useSimulationCharts } from '../../composables/useSimulationCharts'
@@ -122,6 +108,7 @@ const props = defineProps({
   instanceId: { type: String, default: null },
 })
 
+const router = useRouter()
 const {
   nodes,
   store,
@@ -135,14 +122,16 @@ const {
   canPlay,
   isOutdated,
   scopeMode,
-  resultsSummary,
   statusLine,
   play,
   stop,
   keepCurrent,
 } = useSimulationRunner({ instanceId: toRef(props, 'instanceId') })
 
-const isResultsDialogOpen = ref(false)
+/** Shows the results on the simulation page. */
+function openSimulationPage() {
+  router.push({ name: 'simulation' })
+}
 
 // Plots above the controls at any width; a wider tab gives taller plots.
 const SIZES_KEY = 'phlynx.simulation.splitSizes'

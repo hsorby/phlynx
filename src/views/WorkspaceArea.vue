@@ -482,7 +482,7 @@
     @generate="onMacroBuilderGenerate"
   />
 
-  <SimulationFloatingViewer :nodes="nodes" />
+  <SimulationFloatingViewer :nodes="nodes" :is-canvas-shown="route.name === 'workspace'" />
   <SimSettingsDialog v-model="simSettingsDialog.visible" :section="simSettingsDialog.section" :nodes="nodes" />
 
   <ProtocolDialog v-model="protocolDialog.visible" :nodes="nodes" />
@@ -515,7 +515,7 @@ export default {
 </script>
 
 <script setup>
-import { computed, inject, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useVueFlow, VueFlow } from '@vue-flow/core'
 import { useRoute } from 'vue-router'
 
@@ -572,6 +572,7 @@ import MacroBuilderDialog from '../components/MacroBuilderDialog.vue'
 import SimSettingsDialog from '../components/SimSettingsDialog.vue'
 import ProtocolDialog from '../components/ProtocolDialog.vue'
 import SimulationFloatingViewer from '../components/simulation/SimulationFloatingViewer.vue'
+import { setWorkspaceMounted } from '../router/workspaceMount'
 import EdgeConnectionDialog from '../components/EdgeConnectionDialog.vue'
 import SettingsDialog from '../components/SettingsDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
@@ -3177,6 +3178,8 @@ const hydrateCellmlAndDependents = async () => {
 }
 
 onMounted(async () => {
+  setWorkspaceMounted(true)
+
   void hydrateCellmlAndDependents().catch((error) => {
     console.error('Failed to initialize libCellML resources in background:', error)
   })
@@ -3192,6 +3195,8 @@ const onMouseMove = (event) => {
 
 // Canvas shortcuts act only while the canvas shows, not from another page.
 useActiveDocumentListeners({ keydown: handleKeyDown, mousemove: onMouseMove })
+
+onUnmounted(() => setWorkspaceMounted(false))
 
 watch(
   () => route.path,

@@ -1,6 +1,6 @@
 <template>
   <Dialog
-    v-model:visible="state.visible"
+    :visible="state.visible && isCanvasShown"
     :modal="false"
     draggable
     position="bottomright"
@@ -8,6 +8,7 @@
     :content-style="{ display: 'flex', flexDirection: 'column', minHeight: 0, padding: '0 12px 12px' }"
     :pt="{ root: { class: 'simulation-floating-viewer' }, header: { style: { padding: '8px 12px' } } }"
     aria-label="Floating simulation viewer"
+    @update:visible="(isVisible) => (state.visible = isVisible)"
     @show="pinWhereShown"
   >
     <template #header>
@@ -266,6 +267,8 @@ import { FLOW_IDS } from '../../utils/constants'
 
 const props = defineProps({
   nodes: { type: Array, default: () => [] },
+  // Whether the canvas it floats over is shown; on another page it waits, hidden, for the canvas to return.
+  isCanvasShown: { type: Boolean, default: true },
 })
 
 const { state, returnToTab } = useFloatingViewer()
@@ -277,7 +280,7 @@ const inspectionStore = useInspectionModuleStore()
 const { run, stop, keepCurrent } = useSimulation()
 const { rerunForSliders } = useSliderReruns()
 // Runs the canvas selection once it is chosen, while the box is open.
-useSelectionAutoRun({ isActive: () => state.visible })
+useSelectionAutoRun({ isActive: () => state.visible && props.isCanvasShown })
 
 const showSliders = ref(false)
 const isRunning = computed(() => store.status === 'running')

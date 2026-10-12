@@ -89,6 +89,7 @@
       <span v-if="trackBlocker" :id="trackBlockerId" class="visually-hidden">{{ trackBlocker }}</span>
     </span>
     <Button
+      v-if="hasFloat"
       icon="pi pi-window-minimize"
       text
       rounded
@@ -100,15 +101,15 @@
       @click="toggleFloatingViewer({ isCollapsingSidebar: isInSidebar })"
     />
     <Button
-      icon="pi pi-window-maximize"
+      v-if="hasPageLink"
+      icon="pi pi-external-link"
       text
       rounded
       size="small"
       severity="secondary"
-      :disabled="!canExpand"
-      aria-label="Open the results in a larger view"
-      v-tooltip.bottom="'Expand'"
-      @click="emit('expand')"
+      aria-label="Open the simulation page"
+      v-tooltip.bottom="'Open the simulation page'"
+      @click="emit('open-page')"
     />
     <Button
       icon="pi pi-pen-to-square"
@@ -138,8 +139,8 @@
 <script setup>
 /**
  * The Simulation tab's controls: play or stop, whether play runs the selection or the whole model, whether it
- * runs the workspace's protocol or the sweep, and which experiment is shown, and buttons to track the run, float or
- * enlarge the results, and open the protocol and the simulation settings.
+ * runs the workspace's protocol or the sweep, and buttons to track the run, float the results or open them on the
+ * simulation page, and open the protocol and the simulation settings.
  */
 import { computed, useId, watch } from 'vue'
 
@@ -169,11 +170,14 @@ const props = defineProps({
   partLabel: { type: String, default: null },
   // The shown results are out of date, so play would update them.
   isOutdated: { type: Boolean, default: false },
-  canExpand: { type: Boolean, default: false },
+  // Whether it offers to float the results over the canvas, which the simulation page, away from the canvas, doesn't.
+  hasFloat: { type: Boolean, default: true },
+  // Whether it offers to open the simulation page, which the page itself and a modal editor don't.
+  hasPageLink: { type: Boolean, default: false },
   // The toolbar is the sidebar's, so floating the results hides the sidebar to give the canvas room.
   isInSidebar: { type: Boolean, default: false },
 })
-const emit = defineEmits(['play', 'stop', 'expand'])
+const emit = defineEmits(['play', 'stop', 'open-page'])
 
 const { open: openSimSettings } = useSimSettingsDialog()
 const { open: openProtocolDialog } = useProtocolDialog()
