@@ -62,6 +62,17 @@ describe('CellMLTextEditor', () => {
     expect(changes().map(({ source, valid }) => ({ source, valid }))).toEqual([{ source: 'init', valid: false }])
   })
 
+  it('declares kept names no equation uses in Simple Mode, and rebuilds when they change', async () => {
+    const definitions = [...DEFINITIONS, { name: 'cAMP', units: 'dimensionless' }]
+    await mountEditor(modelWith('<ci>x</ci>'), { variableDefinitions: definitions, keepVariables: ['cAMP'] })
+    expect(changes()[0].xml).toContain('<variable name="cAMP" units="dimensionless"')
+
+    await wrapper.setProps({ keepVariables: [] })
+    wrapper.vm.flush()
+    expect(changes().at(-1)).toMatchObject({ source: 'external', valid: true })
+    expect(changes().at(-1).xml).not.toContain('cAMP')
+  })
+
   it('renames every use of a variable and reports it as an edit', async () => {
     await mountEditor(modelWith('<apply><plus/><ci>x</ci><apply><sin/><ci>x</ci></apply></apply>'))
     const text = changes()[0].text

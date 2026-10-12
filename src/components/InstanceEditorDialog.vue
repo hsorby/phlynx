@@ -102,6 +102,7 @@
             @update:simple="onSimpleToggle"
             :component-name="componentNameForEditor"
             :variable-definitions="editorDefinitions"
+            :keep-variables="keptVariables"
             @update:component-name="onEditorComponentName"
             @change="handleEditorChange"
             @save="handleSave"
@@ -114,6 +115,7 @@
             :model-value="currentModel"
             :component-name="componentNameForEditor"
             :variable-definitions="editorDefinitions"
+            :keep-variables="keptVariables"
             @change="handleEditorChange"
             @save="handleSave"
             @undo="handleEditorUndo"
@@ -630,6 +632,7 @@ const {
   currentLayout,
   parameterRows,
   editorDefinitions,
+  keptVariables,
   variableKinds,
   connectionSupplied,
   mathReferences,

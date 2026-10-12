@@ -86,6 +86,23 @@ export function applyPortTypes(rows, analysis, portVariables) {
 }
 
 /**
+ * Lists the names the math declares but no equation uses, such as a parameter kept for later.
+ * Initialisers named by a declaration's initial value are left out, since their state brings them.
+ *
+ * @param {import('./analyzeMath').MathAnalysis|null} analysis
+ * @returns {string[]} In declaration order.
+ */
+export function findUnusedDeclared(analysis) {
+  if (!analysis) return []
+  const referenced = new Set(analysis.referenced)
+  const initialisers = new Set(
+    analysis.declared.map((variable) => variable.initialValue).filter((value) => value && !isNumericLiteral(value))
+  )
+  const names = analysis.declared.map((variable) => variable.name)
+  return [...new Set(names)].filter((name) => !referenced.has(name) && !initialisers.has(name))
+}
+
+/**
  * Pairs each state with the variable supplying its initial value. Declarations win, and previous
  * rows fill in any pairing the declarations can't show.
  *

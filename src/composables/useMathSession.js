@@ -8,7 +8,14 @@ import { serializeLayout } from 'cellml-text-editor'
 
 import { useLibraryStore } from '../stores/libraryStore'
 import { analyzeMathXml } from '../services/math/analyzeMath'
-import { SIMPLE_MODE, applyPortTypes, getPortVariables, modeFor, reconcileRows } from '../services/math/reconcileRows'
+import {
+  SIMPLE_MODE,
+  applyPortTypes,
+  findUnusedDeclared,
+  getPortVariables,
+  modeFor,
+  reconcileRows,
+} from '../services/math/reconcileRows'
 import { carryRenames, followPendingRename } from '../services/math/carryRenames'
 import { classifyRows, findConnectionSupplied } from '../services/math/variableKinds'
 import { separateParameters } from '../services/math/separateParameters'
@@ -136,6 +143,27 @@ export function useMathSession({ history, editorRef, ports, plotVariables = null
   /** Declarations Simple Mode writes into the model. */
   const editorDefinitions = computed(() => buildVariableDeclarations(parameterRows.value))
 
+  // Names the math declares but no equation uses (e.g. a parameter kept for later), as of the load or
+  // the latest Advanced Mode analysis, where the text owns declarations. In Simple Mode the table owns
+  // them, so edits there leave this alone: a name an equation stops using is dropped as before.
+  const unusedDeclared = shallowRef([])
+  watch(
+    analysis,
+    (nextAnalysis) => {
+      if (!isManaged.value && nextAnalysis) unusedDeclared.value = findUnusedDeclared(nextAnalysis)
+    },
+    { flush: 'sync' }
+  )
+
+  /**
+   * Names Simple Mode keeps declared though no equation uses them, so their rows survive its rebuilt
+   * XML. Only names that still have a row, so a row removed since stops being kept.
+   */
+  const keptVariables = computed(() => {
+    const names = new Set(parameterRows.value.map((row) => row.name))
+    return unusedDeclared.value.filter((name) => names.has(name))
+  })
+
   /** Each variable's kind (constant, computed constant, ...), or null before the first analysis. */
   const variableKinds = computed(() => classifyRows(analysis.value, parameterRows.value))
 
@@ -215,6 +243,7 @@ export function useMathSession({ history, editorRef, ports, plotVariables = null
     const nextAnalysis = mathRef ? await store.ensureMathAnalysis(mathRef) : null
     if (requestId !== loadRequestId) return
     analysis.value = nextAnalysis
+    unusedDeclared.value = findUnusedDeclared(nextAnalysis)
     setRows(reconcileRows(nextAnalysis, rows, reconcileOptions()))
   }
 
@@ -522,6 +551,7 @@ export function useMathSession({ history, editorRef, ports, plotVariables = null
     currentLayout,
     parameterRows,
     editorDefinitions,
+    keptVariables,
     variableKinds,
     connectionSupplied,
     mathReferences,
