@@ -1,5 +1,5 @@
 <template>
-  <figure class="simulation-plot">
+  <figure class="simulation-plot" :class="{ 'is-fill': fill }">
     <figcaption class="plot-head">
       <span class="plot-title">
         <template v-if="titleParts">
@@ -128,6 +128,8 @@ const props = defineProps({
   // ([{ x, y }]), orientation 'points'.
   references: { type: Array, default: () => [] },
   height: { type: Number, default: 220 },
+  // Fills the height its container gives it, the drawing taking what its heading and keys leave, in place of `height`.
+  fill: { type: Boolean, default: false },
   // Charts with the same key show their cursors at the same time.
   syncKey: { type: String, default: null },
   // Names the chart, so it keeps its zoom when rebuilt.
@@ -172,6 +174,16 @@ const readoutNote = computed(() => {
  * @returns {string}
  */
 const xUnit = () => (props.x.unit && props.x.unit !== 'dimensionless' ? shortUnit(props.x.unit) : '')
+
+// The least height of a filling chart's drawing, to stay readable in a small window.
+const MIN_FILL_HEIGHT_PX = 120
+
+/**
+ * Gets the drawing's height: `height`, or a filling chart's the space left under its heading and keys.
+ *
+ * @returns {number} Pixels.
+ */
+const plotHeight = () => (props.fill ? Math.max(MIN_FILL_HEIGHT_PX, Math.floor(chartEl.value?.clientHeight ?? 0)) : props.height)
 
 const chartEl = ref(null)
 const { isDarkMode } = useColorScheme()
@@ -599,7 +611,7 @@ function buildOptions(width) {
     return {
       mode: 2,
       width,
-      height: props.height,
+      height: plotHeight(),
       scales: { x: { time: false }, y: {} },
       // uPlot marks each series' point that nearestPhasePoint finds, as its readout shows.
       cursor: { drag: { x: true, y: true }, points: { size: 8 }, dataIdx: nearestPhasePoint },
@@ -622,7 +634,7 @@ function buildOptions(width) {
   }
   return {
     width,
-    height: props.height,
+    height: plotHeight(),
     // A chart with reference lines fits them in too.
     scales: { x: { time: false }, ...(props.references.length && { y: { range: rangeY } }) },
     // Synced charts plot different series, so hiding one mustn't hide its namesake by position elsewhere.
@@ -712,7 +724,8 @@ onMounted(() => {
   draw()
   resizeObserver = new ResizeObserver(([entry]) => {
     const width = Math.floor(entry.contentRect.width)
-    if (plot && width > 0 && width !== plot.width) plot.setSize({ width, height: props.height })
+    const height = plotHeight()
+    if (plot && width > 0 && (width !== plot.width || height !== plot.height)) plot.setSize({ width, height })
   })
   if (chartEl.value) resizeObserver.observe(chartEl.value)
 })
@@ -747,7 +760,9 @@ watch(
 )
 watch(
   () => props.height,
-  (height) => plot?.setSize({ width: plot.width, height })
+  (height) => {
+    if (!props.fill) plot?.setSize({ width: plot.width, height })
+  }
 )
 
 /**
@@ -974,6 +989,22 @@ watch(
 .plot-chart {
   width: 100%;
   min-width: 0;
+}
+
+/* A filling chart's drawing takes the height its heading and keys leave, sized to it rather than sizing it. */
+.simulation-plot.is-fill {
+  flex: 1;
+  min-height: 0;
+}
+
+.is-fill .plot-area {
+  flex: 1;
+  min-height: 120px;
+}
+
+.is-fill .plot-chart {
+  position: absolute;
+  inset: 0;
 }
 
 .plot-readout {

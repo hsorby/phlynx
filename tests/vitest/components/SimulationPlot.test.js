@@ -239,6 +239,22 @@ describe('SimulationPlot: reference lines', () => {
     expect(charts.at(-1).options.series.slice(1).map((series) => series.show)).toEqual([true, false, true, false])
   })
 
+  it('sizes a filling chart’s drawing to the space under its heading, not to its height', () => {
+    const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function () {
+      return this.classList.contains('plot-chart') ? 250 : 0
+    })
+    try {
+      wrapper = mount(SimulationPlot, { props: { title: 'Plot', unit: 'm', x: X, series: SERIES, height: 300, fill: true } })
+      expect(charts.at(-1).options.height).toBe(250)
+      expect(wrapper.find('.simulation-plot').classes()).toContain('is-fill')
+    } finally {
+      clientHeight.mockRestore()
+    }
+    wrapper.unmount()
+    wrapper = mount(SimulationPlot, { props: { title: 'Plot', unit: 'm', x: X, series: SERIES, height: 300 } })
+    expect(charts.at(-1).options.height).toBe(300)
+  })
+
   it('names each experiment’s line in the readout, with every experiment shown at once', async () => {
     const lines = [
       { key: 'a::x#e0', label: 'a/x · Exp 1', variableLabel: 'a/x', experiment: 0, slot: 0, values: [1, 2, 3, 4], run: null },
