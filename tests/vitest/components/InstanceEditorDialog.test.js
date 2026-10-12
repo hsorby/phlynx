@@ -23,9 +23,12 @@ vi.mock('@vue-flow/core', async (importOriginal) => {
 })
 vi.mock('../../../src/utils/layout', () => ({ waitUntilStable: () => Promise.resolve() }))
 const run = vi.hoisted(() => vi.fn())
+// The shown results' staleness, which a test sets.
+const simulation = vi.hoisted(() => ({ isStale: null }))
 vi.mock('../../../src/composables/useSimulation', async () => {
   const { ref } = await import('vue')
-  return { useSimulation: () => ({ run, stop: vi.fn(), keepCurrent: vi.fn(), isStale: ref(false) }) }
+  simulation.isStale = ref(false)
+  return { useSimulation: () => ({ run, stop: vi.fn(), keepCurrent: vi.fn(), isStale: simulation.isStale }) }
 })
 vi.mock('../../../src/services/simulation/libopencorLoader', () => ({ libopencor: { status: 'ready' } }))
 
@@ -453,6 +456,38 @@ describe('InstanceEditorDialog Plot tab', () => {
       await panel.find('button[aria-label="Stop plotting x"]').trigger('click')
       expect(panel.props('plotConfig').selections.map((selection) => selection.key)).toEqual(['a::t'])
     })
+
+    it('runs when clicking a variable finds no current results of its scope, and only then', async () => {
+      mountDialog({ defaultTab: 'plot' }, { isPanelReal: true })
+      const editor = await open()
+      await report(editor, 'init', XML)
+      await flushPromises()
+      const { useSimulationResultsStore } = await import('../../../src/stores/simulationResultsStore.js')
+      const results = useSimulationResultsStore()
+
+      await clickVariable('x')
+      expect(run).toHaveBeenCalledExactlyOnceWith(null)
+
+      results.finishRun({
+        results: { voi: { name: 'environment/time', unit: 'second', values: Float64Array.of(0, 1) }, variables: new Map(), isStopped: false, issues: [] },
+        mapping: new Map(),
+        signature: 's',
+      })
+      await clickVariable('t')
+      expect(run).toHaveBeenCalledOnce()
+
+      simulation.isStale.value = true
+      await clickVariable('x')
+      expect(run).toHaveBeenCalledTimes(2)
+      simulation.isStale.value = false
+
+      // The instance's own run, while play runs the whole model.
+      results.scopeNodeIds = ['a']
+      await clickVariable('x')
+      expect(run).toHaveBeenCalledTimes(3)
+      expect(run).toHaveBeenLastCalledWith(null)
+    })
+
   })
 
   it('sends the variables the instance plots with the save, as the workbench left them', async () => {

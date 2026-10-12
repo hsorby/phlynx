@@ -129,7 +129,6 @@ const {
   blockedReason,
   canPlay,
   isOutdated,
-  isOtherRun,
   scopeMode,
   statusLine,
   play,
@@ -236,9 +235,9 @@ const { rerunForSliders } = useSliderReruns()
 
 const { xAxis, charts, predictionPlotCharts } = useSimulationCharts(scopeNodes, { plotConfig: toRef(props, 'plotConfig') })
 
-/** Plays, unless results of the scope play would run are shown or on their way. */
+/** Plays, unless current results of the scope play would run are shown or on their way. */
 function ensureResults() {
-  if (canPlay.value && (!store.results || isOtherRun.value)) play()
+  if (canPlay.value && (!store.results || isOutdated.value)) play()
 }
 
 defineExpose({ ensureResults })

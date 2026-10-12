@@ -188,7 +188,6 @@ export function useSimulationRunner({ instanceId = null, isWholeModelOnly = fals
     blockedReason,
     canPlay,
     isOutdated,
-    isOtherRun,
     scopeMode,
     statusLine,
     play,
