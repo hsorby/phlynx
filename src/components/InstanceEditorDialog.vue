@@ -389,10 +389,16 @@
               </Message>
               <div class="plot-tab-auto">
                 <label class="plot-tab-auto-label" v-tooltip.bottom="'Click a variable in the CellML Text to plot it alone'">
-                  <ToggleSwitch v-model="isAutoUpdate" class="plot-tab-auto-switch" aria-label="Auto-update: plot a variable clicked in the math" />
+                  <ToggleSwitch
+                    v-model="isAutoUpdate"
+                    :disabled="editorKind !== 'text'"
+                    class="plot-tab-auto-switch"
+                    aria-label="Auto-update: plot a variable clicked in the math"
+                  />
                   Auto-update
                 </label>
                 <span v-if="plotNotice" class="plot-tab-auto-notice" role="status">{{ plotNotice }}</span>
+                <span v-else-if="editorKind !== 'text'" class="plot-tab-auto-notice">Click-to-plot works in the CellML Text</span>
               </div>
               <!-- Kept mounted through an Apply's reload, so its choices, such as the whole model, last. -->
               <SimulationPanel
