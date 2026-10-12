@@ -1,7 +1,7 @@
 import JSZip from 'jszip'
 import { describe, expect, it } from 'vitest'
 
-import { generateProtocolZip } from '../../../../src/services/export/protocolExport.js'
+import { generateProtocolZip, generateSedmlZip } from '../../../../src/services/export/protocolExport.js'
 
 describe('generateProtocolZip', () => {
   /** Reads a zip. */
@@ -24,6 +24,16 @@ describe('generateProtocolZip', () => {
       '.': ['http://identifiers.org/combine.specifications/omex', false],
       'protocol.sedml': ['http://identifiers.org/combine.specifications/sed-ml', true],
       'protocol_model.cellml': ['http://identifiers.org/combine.specifications/cellml', false],
+    })
+  })
+
+  it('bundles a time course’s SED-ML under the names given', async () => {
+    const zip = await open(await generateSedmlZip({ sedml: '<sedML/>', cellml: '<model/>', sedmlName: 'simulation.sedml', modelName: 'model.cellml' }))
+    expect(Object.keys(zip.files).sort()).toEqual(['manifest.xml', 'model.cellml', 'simulation.sedml'])
+    expect(await readManifest(zip)).toEqual({
+      '.': ['http://identifiers.org/combine.specifications/omex', false],
+      'simulation.sedml': ['http://identifiers.org/combine.specifications/sed-ml', true],
+      'model.cellml': ['http://identifiers.org/combine.specifications/cellml', false],
     })
   })
 })

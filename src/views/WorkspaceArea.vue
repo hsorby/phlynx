@@ -482,7 +482,7 @@
     @generate="onMacroBuilderGenerate"
   />
 
-  <SimulationFloatingViewer :nodes="nodes" />
+  <SimulationFloatingViewer :nodes="nodes" :is-canvas-shown="route.name === 'workspace'" />
   <SimSettingsDialog v-model="simSettingsDialog.visible" :section="simSettingsDialog.section" :nodes="nodes" />
 
   <ProtocolDialog v-model="protocolDialog.visible" :nodes="nodes" />
@@ -572,6 +572,7 @@ import MacroBuilderDialog from '../components/MacroBuilderDialog.vue'
 import SimSettingsDialog from '../components/SimSettingsDialog.vue'
 import ProtocolDialog from '../components/ProtocolDialog.vue'
 import SimulationFloatingViewer from '../components/simulation/SimulationFloatingViewer.vue'
+import { setWorkspaceMounted } from '../router/workspaceMount'
 import EdgeConnectionDialog from '../components/EdgeConnectionDialog.vue'
 import SettingsDialog from '../components/SettingsDialog.vue'
 import HelperLines from '../components/HelperLines.vue'
@@ -595,6 +596,7 @@ import { useSimulation } from '../composables/useSimulation'
 import { useSimSettingsDialog } from '../composables/useSimSettingsDialog'
 import { useProtocolDialog } from '../composables/useProtocolDialog'
 import { useFloatingViewer } from '../composables/useFloatingViewer'
+import { useActiveDocumentListeners } from '../composables/useActiveDocumentListeners'
 import { scopeFlowObject } from '../services/simulation/scopedModel'
 import { relayoutNodes } from '../services/layouts/physics'
 import { extractSimData as extractSimDataFromSedml } from '../services/import/sedml'
@@ -3176,8 +3178,7 @@ const hydrateCellmlAndDependents = async () => {
 }
 
 onMounted(async () => {
-  document.addEventListener('keydown', handleKeyDown)
-  document.addEventListener('mousemove', onMouseMove)
+  setWorkspaceMounted(true)
 
   void hydrateCellmlAndDependents().catch((error) => {
     console.error('Failed to initialize libCellML resources in background:', error)
@@ -3192,10 +3193,10 @@ const onMouseMove = (event) => {
   mousePosition.value = { x: event.clientX, y: event.clientY }
 }
 
-onUnmounted(() => {
-  document.removeEventListener('keydown', handleKeyDown)
-  document.removeEventListener('mousemove', onMouseMove)
-})
+// Canvas shortcuts act only while the canvas shows, not from another page.
+useActiveDocumentListeners({ keydown: handleKeyDown, mousemove: onMouseMove })
+
+onUnmounted(() => setWorkspaceMounted(false))
 
 watch(
   () => route.path,

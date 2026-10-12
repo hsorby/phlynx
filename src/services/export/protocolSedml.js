@@ -6,113 +6,34 @@
 import { nameExperiment, resolveExperimentColour } from '@physiomelinks/protocol-kit'
 
 import { CLOCK_OFFSET, CLOCK_TIME } from '../simulation/protocolDriverModel'
-import { buildAlgorithm, formatSedNumber } from '../simulation/sedParameters'
+import { formatSedNumber } from '../simulation/sedParameters'
 import { SERIES_COLOURS } from '../simulation/seriesSlots'
+import {
+  CELLML_NAMESPACE,
+  SEDML_NAMESPACE,
+  algorithmElement,
+  ci,
+  cn,
+  element,
+  kinsolElement,
+  math,
+  style,
+  variable,
+  withUnit,
+  writeColour,
+  writeDocument,
+  writeTarget,
+} from './sedmlXml'
+
+export { writeTarget }
 
 /** The model the SED-ML runs: the scope with its drivers and the protocol's clock written in. */
 export const SEDML_MODEL = 'protocol_model.cellml'
 
-const SEDML_NAMESPACE = 'http://sed-ml.org/sed-ml/level1/version4'
-const CELLML_NAMESPACE = 'http://www.cellml.org/cellml/2.0#'
-const MATHML_NAMESPACE = 'http://www.w3.org/1998/Math/MathML'
 const MODEL_ID = 'model'
 
 // How the traces sharing a plot are told apart when they share an experiment's colour.
 const LINE_TYPES = ['solid', 'dash', 'dot']
-const LINE_THICKNESS = '1.5'
-
-/**
- * Makes an XML element.
- *
- * @param {string} name
- * @param {Object} [attributes] - Values written as text; null and undefined ones are left out.
- * @param {Array<Object|null|false>|string} [children] - Elements (falsy ones left out), or the element's text.
- * @returns {{name: string, attributes: Object, children: Array|string}}
- */
-const element = (name, attributes = {}, children = []) => ({ name, attributes, children })
-
-/**
- * Escapes text for XML, between tags or in a double-quoted attribute (so XPaths keep their single quotes).
- *
- * @param {*} text
- * @returns {string}
- */
-const escapeXml = (text) =>
-  String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
-
-/**
- * Writes an element and its children, indented two spaces a level.
- *
- * @param {Object} node - From element.
- * @param {number} [depth]
- * @returns {string}
- */
-function writeElement({ name, attributes, children }, depth = 0) {
-  const indent = '  '.repeat(depth)
-  const written = Object.entries(attributes)
-    .filter(([, value]) => value != null)
-    .map(([key, value]) => ` ${key}="${escapeXml(value)}"`)
-    .join('')
-  if (typeof children === 'string') return `${indent}<${name}${written}>${escapeXml(children)}</${name}>`
-  const kept = children.filter(Boolean)
-  if (!kept.length) return `${indent}<${name}${written}/>`
-  return [`${indent}<${name}${written}>`, ...kept.map((child) => writeElement(child, depth + 1)), `${indent}</${name}>`].join('\n')
-}
-
-/**
- * Wraps MathML content in its `<math>` element.
- *
- * @param {Object} content
- * @returns {Object}
- */
-const math = (content) => element('math', { xmlns: MATHML_NAMESPACE }, [content])
-
-/**
- * Makes MathML naming a variable.
- *
- * @param {string} id
- * @returns {Object}
- */
-const ci = (id) => element('ci', {}, id)
-
-/**
- * Makes MathML for a number, written as the rest of the SED-ML writes them.
- *
- * @param {number} value
- * @returns {Object}
- */
-const cn = (value) => element('cn', {}, formatSedNumber(value))
-
-/**
- * Writes the XPath of a model variable named `component/variable`, as libOpenCOR reports it.
- *
- * @param {string} name
- * @returns {string}
- */
-export function writeTarget(name) {
-  const separator = name.indexOf('/')
-  return `/cellml:model/cellml:component[@name='${name.slice(0, separator)}']/cellml:variable[@name='${name.slice(separator + 1)}']`
-}
-
-/**
- * Writes a '#' hex colour as SED-ML has them: RRGGBB, or RRGGBBAA with its alpha, without '#'.
- *
- * @param {string} colour - '#rgb', '#rgba', '#rrggbb' or '#rrggbbaa', as resolveExperimentColour gives them.
- * @returns {string}
- */
-function writeColour(colour) {
-  const digits = colour.slice(1)
-  return (digits.length <= 4 ? [...digits].map((digit) => digit + digit).join('') : digits).toUpperCase()
-}
-
-/**
- * Adds a unit to a name, as the axes show them.
- *
- * @param {string} text
- * @param {string|null|undefined} unit
- * @returns {string}
- */
-const withUnit = (text, unit) => (unit ? `${text} (${unit})` : text)
 
 /**
  * Gives a segment's time course as the joined results keep it. A segment whose first point repeats the last one
@@ -166,26 +87,6 @@ const subTask = (id, order, task, changes = []) =>
 const setValue = (name, value) => element('setValue', { modelReference: MODEL_ID, target: writeTarget(name) }, [math(cn(value))])
 
 /**
- * Makes a data generator's variable.
- *
- * @param {string} id
- * @param {string} name - The model variable, `component/variable`.
- * @param {string} taskReference
- * @returns {Object}
- */
-const variable = (id, name, taskReference) => element('variable', { id, target: writeTarget(name), taskReference })
-
-/**
- * Makes a line style.
- *
- * @param {string} id
- * @param {{baseStyle?: string, line: {type: string, color: string}}} options
- * @returns {Object}
- */
-const style = (id, { baseStyle, line }) =>
-  element('style', { id, baseStyle }, [element('line', { type: line.type, color: line.color, thickness: LINE_THICKNESS })])
-
-/**
  * Builds the SED-ML of a protocol's run, with its trace plots and a report of them.
  *
  * @param {Object} options
@@ -200,6 +101,7 @@ const style = (id, { baseStyle, line }) =>
  * @param {Array<{name: string, label: string, unit: string}>|null} [options.inputs] - The protocol's inputs to plot
  *   first, or null for none.
  * @param {boolean} options.overlay - Whether every experiment shares each trace plot, or each has its own.
+ * @param {boolean} [options.needsNlaSolver] - The model has algebraic loops, which KINSOL solves alongside its ODEs.
  * @returns {string} The SED-ML document.
  */
 export function buildProtocolSedml({
@@ -213,6 +115,7 @@ export function buildProtocolSedml({
   traces,
   inputs = null,
   overlay,
+  needsNlaSolver = false,
 }) {
   /** Gives the variable a plan parameter sets. */
   const reportedOf = (parameter) => {
@@ -265,14 +168,7 @@ export function buildProtocolSedml({
     ]
   })
 
-  const { solver, parameters } = buildAlgorithm(settings)
-  const algorithm = element('algorithm', { kisaoID: solver.kisaoId }, [
-    element(
-      'listOfAlgorithmParameters',
-      {},
-      parameters.map(({ kisaoId, value }) => element('algorithmParameter', { kisaoID: kisaoId, value }))
-    ),
-  ])
+  const algorithm = algorithmElement(settings)
   const simulationElements = [...simulations.values()].map(({ n, timeCourse }) =>
     element(
       'uniformTimeCourse',
@@ -283,7 +179,7 @@ export function buildProtocolSedml({
         outputEndTime: formatSedNumber(timeCourse.outputEndTime),
         numberOfSteps: String(timeCourse.numberOfSteps),
       },
-      [algorithm]
+      [algorithm, needsNlaSolver && kinsolElement('nlaAlgorithm')]
     )
   )
   const taskElements = [...simulations.values()].map(({ n }) => element('task', { id: `task${n}`, modelReference: MODEL_ID, simulationReference: `sim${n}` }))
@@ -396,5 +292,5 @@ export function buildProtocolSedml({
     element('listOfOutputs', {}, outputs),
     element('listOfStyles', {}, styles),
   ])
-  return `<?xml version="1.0" encoding="UTF-8"?>\n${writeElement(document)}\n`
+  return writeDocument(document)
 }

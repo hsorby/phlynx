@@ -501,7 +501,7 @@ class TestSimulationTab(unittest.TestCase):
             context.close()
             browser.close()
 
-    def test_results_dialog_syncs_cursors_and_downloads(self):
+    def test_simulation_page_syncs_cursors_and_downloads(self):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=HEADLESS_MODE)
 
@@ -524,18 +524,19 @@ class TestSimulationTab(unittest.TestCase):
             expect(page.get_by_text("Simulated 1 instance on their own")).to_be_visible(timeout=120000)
             plot_variable(page, "soma_SN/V")
 
-            page.get_by_role("button", name="Open the results in a larger view").click()
-            dialog = page.get_by_role("dialog", name="Simulation results")
-            charts = dialog.locator(".simulation-plot")
+            page.get_by_role("button", name="Open the simulation page").click()
+            expect(page).to_have_url(re.compile(r"/simulation$"))
+            sim_page = page.locator(".simulation-view")
+            charts = sim_page.locator(".simulation-plot")
             expect(charts).to_have_count(1)
             # Variables can be plotted from beside the charts too.
-            plot_variable(page, "soma_SN/m", within=dialog)
+            plot_variable(page, "soma_SN/m", within=sim_page)
             expect(charts).to_have_count(2)
 
             # So can sliders be added and moved, rerunning the simulation.
-            add_slider(page, "soma_SN/g_Na", within=dialog)
+            add_slider(page, "soma_SN/g_Na", within=sim_page)
             page.evaluate(f"window.__shownResults = {RESULTS_STORE}.results")
-            dialog.locator(".p-slider-handle").first.focus()
+            sim_page.locator(".p-slider-handle").first.focus()
             for _ in range(10):
                 page.keyboard.press("ArrowRight")
             page.wait_for_function(
@@ -550,7 +551,7 @@ class TestSimulationTab(unittest.TestCase):
             expect(times.nth(1)).to_have_text(times.nth(0).inner_text())
 
             with page.expect_download() as download:
-                dialog.get_by_role("button", name="Download the results as CSV").click()
+                sim_page.get_by_role("button", name="Download the results as CSV").click()
             with open(download.value.path()) as f:
                 lines = f.read().splitlines()
             # The first column is the variable of integration, named after the model's first ODE's: t.
@@ -559,13 +560,14 @@ class TestSimulationTab(unittest.TestCase):
             self.assertEqual(lines[1].split(",")[0], "0")
 
             with page.expect_download() as download:
-                dialog.get_by_role("button", name="Download the charts as a PNG image").click()
+                sim_page.get_by_role("button", name="Download the charts as a PNG image").click()
             with open(download.value.path(), "rb") as f:
                 self.assertEqual(f.read(8), b"\x89PNG\r\n\x1a\n")
 
-
-            dialog.get_by_role("button", name="Maximise the results").click()
-            expect(dialog.get_by_role("button", name="Restore the results to their size")).to_be_visible()
+            # Back on the workspace, the sidebar shows both charts too.
+            sim_page.get_by_role("button", name="Back to the workspace").click()
+            expect(page).not_to_have_url(re.compile(r"/simulation$"))
+            expect(page.locator(".simulation-panel .simulation-plot")).to_have_count(2)
             # ----------- END ------------
 
             context.close()
@@ -635,25 +637,25 @@ class TestSimulationTab(unittest.TestCase):
             page.get_by_role("option", name="SHR M-activation").click()
             self.assertEqual(page.evaluate(SHOWN_G_M), {"experiments": 2, "values": [0.00778]})
 
-            # The larger view switches between them too, once the sidebar's list has gone.
+            # The simulation page switches between them too, once the sidebar's list has gone.
             expect(page.get_by_role("listbox")).to_have_count(0)
-            page.get_by_role("button", name="Open the results in a larger view").click()
-            dialog = page.get_by_role("dialog", name="Simulation results")
-            dialog.get_by_role("combobox", name="Experiment to show").click()
+            page.get_by_role("button", name="Open the simulation page").click()
+            sim_page = page.locator(".simulation-view")
+            sim_page.get_by_role("combobox", name="Experiment to show").click()
             page.get_by_role("option", name="SHR", exact=True).click()
             self.assertEqual(page.evaluate(SHOWN_G_M), {"experiments": 2, "values": [0.00389]})
             # It switches between the time course and the protocol too, running each at once.
-            run_mode = dialog.get_by_role("group", name="What play runs")
+            run_mode = sim_page.get_by_role("group", name="What play runs")
             run_mode.get_by_role("button", name="Time course").click()
             expect(protocol_button).to_have_attribute("aria-pressed", "false")
             page.wait_for_function(f"{RESULTS_STORE}.status === 'done' && !{RESULTS_STORE}.protocolResults", timeout=120000)
-            expect(dialog.get_by_role("combobox", name="Experiment to show")).to_have_count(0)
+            expect(sim_page.get_by_role("combobox", name="Experiment to show")).to_have_count(0)
             run_mode.get_by_role("button", name="Protocol").click()
             expect(protocol_button).to_have_attribute("aria-pressed", "true")
             page.wait_for_function(f"{RESULTS_STORE}.status === 'done' && !!{RESULTS_STORE}.protocolResults", timeout=120000)
-            expect(dialog.get_by_role("combobox", name="Experiment to show")).to_be_visible()
-            dialog.get_by_role("button", name="Close", exact=True).click()
-            expect(dialog).to_have_count(0)
+            expect(sim_page.get_by_role("combobox", name="Experiment to show")).to_be_visible()
+            sim_page.get_by_role("button", name="Back to the workspace").click()
+            expect(sim_page).to_have_count(0)
 
             # Back to the time course, the slider is on again with the value it was left at.
             protocol_button.click()
@@ -898,8 +900,8 @@ class TestSimulationTab(unittest.TestCase):
             self.assertEqual(page.evaluate(f"{RESULTS_STORE}.status"), "done", page.evaluate(f"JSON.stringify([{RESULTS_STORE}.report, {RESULTS_STORE}.error])"))
             page.get_by_role("button", name=re.compile(r"^Plots \(")).click()
             plot_variable(page, "soma_SN/V")
-            page.get_by_role("button", name="Open the results in a larger view").click()
-            results = page.get_by_role("dialog", name="Simulation results")
+            page.get_by_role("button", name="Open the simulation page").click()
+            results = page.locator(".simulation-view")
             with page.expect_download() as download:
                 results.get_by_role("button", name="Download the protocol's run as SED-ML").click()
 
@@ -1038,12 +1040,12 @@ class TestSimulationTab(unittest.TestCase):
             expect(voltage.get_by_role("button", name="V peak (calc max)")).to_have_count(2)
             expect(voltage.locator(".plot-key")).to_contain_text("g_M doubled")
 
-            # The larger view shows them too.
-            page.get_by_role("button", name="Open the results in a larger view").click()
-            dialog = page.get_by_role("dialog", name="Simulation results")
-            expect(dialog.locator(".simulation-plot .plot-title")).to_have_text(["soma_SN/i_M", "soma_SN/V", "instance_parameters/g_M"])
-            expect(dialog.get_by_role("button", name="V_peak_obs (calc max)")).to_be_visible()
-            expect(dialog.get_by_role("region", name="Prediction plots").locator(".feature-plot")).to_have_count(2)
+            # The simulation page shows them too.
+            page.get_by_role("button", name="Open the simulation page").click()
+            sim_page = page.locator(".simulation-view")
+            expect(sim_page.locator(".simulation-plot .plot-title")).to_have_text(["soma_SN/i_M", "soma_SN/V", "instance_parameters/g_M"])
+            expect(sim_page.get_by_role("button", name="V_peak_obs (calc max)")).to_be_visible()
+            expect(sim_page.get_by_role("region", name="Prediction plots").locator(".feature-plot")).to_have_count(2)
             # ----------- END ------------
 
             context.close()

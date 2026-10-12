@@ -82,6 +82,7 @@ export function forgetSimulationSession() {
  * Runs scoped simulations of the workspace and keeps their results in simulationResultsStore.
  *
  * @returns {{run: Function, stop: Function, keepCurrent: Function, prepareProtocolExport: Function,
+ *   prepareRunExport: Function,
  *   isStale: import('vue').ComputedRef<boolean>}}
  */
 export function useSimulation() {
@@ -476,8 +477,59 @@ export function useSimulation() {
       // With their units, unlike the kept model's, for the SED-ML's axes.
       variables: new Map([...described.variables].map(([name, { kind, unit }]) => [name, { kind, unit }])),
       voi: { name: described.voi?.name ?? '', unit: described.voi?.unit ?? '' },
+      needsNlaSolver: !!described.needsNlaSolver,
       // What the SED-ML runs: PhLynx's plan, on the model with its drivers and clock written in.
       sedml: { cellml, plan: prepared.plan, targets: prepared.targets, inputs: prepared.inputs },
+    }
+  }
+
+  /**
+   * Prepares a run of the model for its SED-ML: the scope flattened as run flattens it, with the sliders' values, which
+   * the simulator reads for its variables' names and units. Refused while a run is going, as the simulator reads one
+   * model at a time.
+   *
+   * @param {Object} [options]
+   * @param {string[]|null} [options.nodeIds] - The nodes to export, or null for every node; by default the last run's.
+   * @returns {Promise<{errors: string[], settings?: Object, mapping?: Map<string, string>,
+   *   variables?: Map<string, {kind: string, unit: string}>, voi?: {name: string, unit: string}, isSteadyState?: boolean,
+   *   needsNlaSolver?: boolean, inspectionOutputs?: Array, cellml?: string}>} Only `errors`, saying why, when the model
+   *   can't be flattened or read.
+   */
+  async function prepareRunExport({ nodeIds = store.scopeNodeIds } = {}) {
+    const busy = () => !!currentRun || store.status === 'running'
+    const refusal = { errors: ['Wait for the run to finish, or stop it, before exporting it.'] }
+    if (busy()) return refusal
+    const scope = resolveCurrentScope(nodeIds)
+    const { errors } = summariseScopeReport(checkScope(scope, libraryStore))
+    if (errors.length) return { errors }
+
+    const simulator = await whenLibOpenCORReady()
+    if (!simulator) return { errors: [libopencor.reason ?? 'The simulator couldn’t load.'] }
+    // As run flattens it: with the sliders' values, as the results show them.
+    const withOverrides = applyParameterOverrides(scope, libraryStore, selectRunOverrides(false))
+    const cellml = await buildScopedModel(withOverrides.scope, withOverrides.libraryStore, { check: false }).text()
+    if (busy()) return refusal
+
+    const built = { key: ++sessionCount, cellml }
+    // As prepareProtocolExport does: reading this model replaces the one the worker keeps.
+    session = null
+    let described
+    try {
+      described = await simulator.describeModel({ cellml, key: built.key })
+    } catch (error) {
+      return { errors: [error.message] }
+    }
+    const mapped = await mapResults(built, scope, described)
+    return {
+      errors: [],
+      settings: { ...simulationSettingsStore.simulationSettings },
+      mapping: mapped.mapping,
+      variables: new Map([...described.variables].map(([name, { kind, unit }]) => [name, { kind, unit }])),
+      voi: { name: described.voi?.name ?? '', unit: described.voi?.unit ?? '' },
+      isSteadyState: !!described.isSteadyState,
+      needsNlaSolver: !!described.needsNlaSolver,
+      inspectionOutputs: mapped.inspectionOutputs,
+      cellml,
     }
   }
 
@@ -544,5 +596,5 @@ export function useSimulation() {
     return signRun(resolveCurrentScope(store.scopeNodeIds), selectRunOverrides()) !== store.signature
   })
 
-  return { run, stop, keepCurrent, prepareProtocolExport, isStale }
+  return { run, stop, keepCurrent, prepareProtocolExport, prepareRunExport, isStale }
 }

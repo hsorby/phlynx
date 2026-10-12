@@ -105,7 +105,8 @@ function createClient(worker, onReady) {
      * Lists a model's variables without running it, reading and keeping the model as startSimulation does.
      *
      * @param {Object} options - `{ cellml, key }`.
-     * @returns {Promise<{voi: Object, variables: Map<string, {kind: string, unit: string}>, isSteadyState: boolean}>}
+     * @returns {Promise<{voi: Object, variables: Map<string, {kind: string, unit: string}>, isSteadyState: boolean,
+     *   needsNlaSolver: boolean}>} `needsNlaSolver` when the model has algebraic loops, as libOpenCOR solves with KINSOL.
      */
     describeModel({ cellml = null, key = null }) {
       return send({ type: 'describe', cellml, key }, decodeRunResults).promise

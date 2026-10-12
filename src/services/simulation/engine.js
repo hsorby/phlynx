@@ -224,6 +224,8 @@ export function createSimulationSession({ module: loc, cellml }) {
   let model = null
   // A model without ODEs is algebraic: libOpenCOR solves it once, as a steady state, with no time course.
   let isSteadyState = false
+  // The model has algebraic loops, which libOpenCOR solves with KINSOL alongside the ODE solver, if any.
+  let needsNlaSolver = false
   // The changes the last run applied, freed once replaced.
   let changeHandles = []
 
@@ -249,6 +251,9 @@ export function createSimulationSession({ module: loc, cellml }) {
     simulation = keep(document.simulation(0))
     model = keep(document.model(0))
     isSteadyState = !!loc.SedSteadyState && simulation instanceof loc.SedSteadyState
+    const nlaSolver = simulation.nlaSolver
+    needsNlaSolver = !!nlaSolver
+    nlaSolver?.delete?.()
   } catch (error) {
     dispose()
     throw error
@@ -533,7 +538,7 @@ export function createSimulationSession({ module: loc, cellml }) {
       for (const { kind, count, name, unit } of VARIABLE_KINDS) {
         for (let i = 0; i < task[count]; i++) variables.set(task[name](i), { kind, unit: task[unit](i) })
       }
-      return { voi: { name: task.voiName, unit: task.voiUnit }, variables, isSteadyState }
+      return { voi: { name: task.voiName, unit: task.voiUnit }, variables, isSteadyState, needsNlaSolver }
     } finally {
       task?.delete()
       instance.delete()

@@ -111,6 +111,7 @@ import 'uplot/dist/uPlot.min.css'
 
 import RunSwatch from './RunSwatch.vue'
 import { useColorScheme } from '../../composables/useColorScheme'
+import { forgetChartGutters, reportChartGutter, widestChartGutters } from '../../services/simulation/chartAlignment'
 import { AXIS_FONT, CHROME, formatTicks, formatValue, measureLabel, sizeValueAxis } from '../../services/simulation/chartStyle'
 import { getChartZoom, setChartZoom } from '../../services/simulation/chartZoom'
 import { findNearestPoint } from '../../services/simulation/nearestPoint'
@@ -154,6 +155,24 @@ const props = defineProps({
  * @returns {number} Pixels.
  */
 const padRight = (chart) => Math.max(12, Math.ceil(measureLabel(chart.axes[0]?._values?.at(-1) ?? '') / 2) + 2)
+
+// Charts against the same time axis, whose cursors move together, line up: each takes its group's widest gutters.
+const alignmentId = Symbol('chart')
+const alignmentKey = computed(() => (props.syncKey && !props.x.isPhase && !props.x.isSteadyState ? props.syncKey : null))
+
+/**
+ * Sizes one of the chart's gutters: its own size, or the widest of the charts it lines up with.
+ *
+ * @param {'left'|'right'} side - The value axis's, or the right padding.
+ * @param {number} own - Pixels.
+ * @returns {number} Pixels.
+ */
+function alignGutter(side, own) {
+  const key = alignmentKey.value
+  if (!key) return own
+  reportChartGutter(key, alignmentId, side, own)
+  return Math.max(own, widestChartGutters(key)[side])
+}
 
 // The readout's width, about, to keep it inside the chart.
 const READOUT_WIDTH_PX = 150
@@ -564,6 +583,18 @@ function updatePhaseReadout(chart) {
 const STEPPED_PATHS = uPlot.paths.stepped({ align: -1 })
 
 let plot = null
+// Whether the viewer is zooming this chart alone: dragging across it, or double-clicking it, with shift held.
+let isZoomingAlone = false
+// The events a chart passes to the charts it moves with, which zoom (or unzoom) them too.
+const ZOOM_EVENTS = new Set(['mousedown', 'mouseup', 'dblclick'])
+
+/**
+ * Notes whether a press or double-click zooms the chart alone, before the chart acts on it.
+ *
+ * @param {MouseEvent} event
+ */
+const noteZoomAlone = (event) => (isZoomingAlone = event.shiftKey)
+
 // The x range zoomed into, kept across new values and redraws; null when showing the whole run.
 let zoom = getChartZoom(props.zoomKey)
 let isUpdatingData = false
@@ -674,11 +705,16 @@ function buildOptions(width) {
     // A chart with reference lines fits them in too.
     scales: { x: { time: false }, ...(props.references.length && { y: { range: rangeY } }) },
     // Synced charts plot different series, so hiding one mustn't hide its namesake by position elsewhere.
-    cursor: { y: false, points: { size: 8 }, ...(props.syncKey && { sync: { key: props.syncKey, setSeries: false } }) },
+    // Synced charts zoom together; with shift held, a chart zooms alone.
+    cursor: {
+      y: false,
+      points: { size: 8 },
+      ...(props.syncKey && { sync: { key: props.syncKey, setSeries: false, filters: { pub: (type) => !(isZoomingAlone && ZOOM_EVENTS.has(type)) } } }),
+    },
     hooks: { setScale: [recordZoom], setCursor: [updateReadout], drawClear: [drawSegments], draw: [drawReferences] },
     legend: { show: false },
-    padding: [8, padRight, 0, 0],
-    axes: [{ ...axis(xTicks), size: 28 }, { ...axis(), size: sizeValueAxis }],
+    padding: [8, (chart) => alignGutter('right', padRight(chart)), 0, 0],
+    axes: [{ ...axis(xTicks), size: 28 }, { ...axis(), size: (chart, values) => alignGutter('left', sizeValueAxis(chart, values)) }],
     series: [
       { label: props.x.label },
       ...props.series.map((series) => ({
@@ -744,6 +780,8 @@ function draw() {
   if (!chartEl.value) return
   isUpdatingData = true
   plot = new uPlot(buildOptions(chartEl.value.clientWidth || 300), buildData(), chartEl.value)
+  // Caught on the way down, so it's known before the chart passes the event on.
+  for (const type of ['mousedown', 'dblclick']) plot.root.addEventListener(type, noteZoomAlone, true)
   restoreZoom()
   isUpdatingData = false
   labelCanvas()
@@ -767,6 +805,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (alignmentKey.value) forgetChartGutters(alignmentKey.value, alignmentId)
   resizeObserver?.disconnect()
   plot?.destroy()
   plot = null
@@ -794,6 +833,16 @@ watch(
   },
   { flush: 'post' }
 )
+// Another chart of the group widening a gutter moves this one's to match; one leaving the group forgets its own.
+watch(
+  () => (alignmentKey.value ? JSON.stringify(widestChartGutters(alignmentKey.value)) : ''),
+  (widest) => {
+    if (widest) plot?.redraw(false, true)
+  }
+)
+watch(alignmentKey, (now, before) => {
+  if (before && before !== now) forgetChartGutters(before, alignmentId)
+})
 watch(
   () => props.height,
   (height) => {
