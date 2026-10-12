@@ -9,6 +9,7 @@ import { useFlowHistoryStore } from '../../../src/stores/historyStore.js'
 import { useLibraryStore } from '../../../src/stores/libraryStore.js'
 import { useSimulationSettingsStore } from '../../../src/stores/simulationSettingsStore.js'
 import { NEW_MODULE_FILENAME, NEW_MODULE_REF } from '../../../src/utils/constants.js'
+import { previewCouplings } from '../../../src/utils/edges.js'
 import { detachReactivity } from '../../../src/utils/reactivity.js'
 import { ensureLibCellmlReady } from '../helpers/libcellml-bootstrap.js'
 
@@ -187,6 +188,19 @@ describe('useInstanceSave', () => {
     expect(findNode('a').data.mathRef).toBe(DECAY_REF)
     expect(library.availableMath.has(GROWTH_REF)).toBe(true)
     expect(library.getGlobalConstant('g')).toBeDefined()
+  })
+
+  it('couples the edited ports as the instance editor previews them', async () => {
+    const ports = [{ label: 'p', portType: 'general_ports', variables: ['x'] }]
+    edges.value = [
+      { id: 'e', source: 'a', target: 'b', data: { couplings: [] } },
+      { id: 'f', source: 'b', target: 'a', data: { couplings: [] } },
+    ]
+    const preview = new Map(detachReactivity([...previewCouplings('a', ports, nodes.value, edges.value)]))
+
+    await saveInstanceEdit(buildSave({ ports }))
+    expect(detachReactivity(edges.value.map((edge) => edge.data.couplings))).toEqual([preview.get('e'), preview.get('f')])
+    expect(preview.get('e')).toHaveLength(1)
   })
 
   it('undoes a save on an instance that was deleted and restored', async () => {
