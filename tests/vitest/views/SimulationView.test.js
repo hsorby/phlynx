@@ -4,7 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const charts = ref([])
 const predictionPlotCharts = ref([])
@@ -73,6 +73,7 @@ describe('SimulationView', () => {
     predictionPlotCharts.value = []
     legacyDownload.mockClear()
   })
+  afterEach(() => vi.unstubAllGlobals())
 
   it('has the toolbar, without the float or page buttons, and the controls beside', async () => {
     const { wrapper } = await mountPage()
@@ -107,6 +108,36 @@ describe('SimulationView', () => {
 
     await wrapper.find('button[aria-label="Download the results as CSV"]').trigger('click')
     expect(legacyDownload).toHaveBeenCalledWith('simulation-results.csv', expect.any(Blob))
+    wrapper.unmount()
+  })
+
+  it('sizes the charts to fill the pane, less the gaps and the prediction plots’ heading', async () => {
+    // Reports the charts' pane as 800px tall.
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback) {
+          this.callback = callback
+        }
+        observe() {
+          this.callback([{ contentRect: { height: 800 } }])
+        }
+        disconnect() {}
+      }
+    )
+    charts.value = [{ key: 'p1', title: 'Voltage', unit: 'mV', series: [] }]
+    const { wrapper } = await mountPage()
+    const heightOf = () => wrapper.findComponent(PlotStub).props('height')
+    expect(heightOf()).toBe(800 - 64)
+
+    charts.value = [...charts.value, { key: 'p2', title: 'Current', unit: 'nA', series: [] }]
+    await wrapper.vm.$nextTick()
+    expect(heightOf()).toBe((800 - 16) / 2 - 64)
+
+    charts.value = charts.value.slice(0, 1)
+    predictionPlotCharts.value = [{ key: 'f1', title: 'Peak', series: [] }]
+    await wrapper.vm.$nextTick()
+    expect(heightOf()).toBe((800 - 16 - 34 - 16) / 2 - 64)
     wrapper.unmount()
   })
 

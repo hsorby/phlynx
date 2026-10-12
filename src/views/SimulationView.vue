@@ -91,50 +91,53 @@
     </header>
 
     <div class="page-body">
-      <main ref="chartsEl" class="page-charts" aria-label="Simulation results">
-        <template v-if="hasFigures">
-          <SimulationPlot
-            v-for="chart in charts"
-            :key="chart.key"
-            :zoom-key="`page:${chart.key}`"
-            :ref="(plot) => setPlot(chart.key, plot)"
-            :title="chart.title"
-            :title-parts="chart.titleParts"
-            :unit="chart.unit"
-            :x="chart.x ?? xAxis"
-            :note="chart.note"
-            :series="chart.series"
-            :references="chart.references"
-            :height="chartHeight"
-            :sync-key="chart.x ? null : 'simulation-page'"
-          />
-          <section v-if="predictionPlotCharts.length" class="page-prediction-plots" aria-labelledby="page-prediction-plots-title">
-            <h2 id="page-prediction-plots-title" class="page-prediction-plots-title">Prediction plots</h2>
-            <FeaturePlot
-              v-for="chart in predictionPlotCharts"
+      <main class="page-main" aria-label="Simulation results">
+        <div ref="chartsEl" class="page-charts">
+          <template v-if="hasFigures">
+            <SimulationPlot
+              v-for="chart in charts"
               :key="chart.key"
+              :zoom-key="`page:${chart.key}`"
               :ref="(plot) => setPlot(chart.key, plot)"
               :title="chart.title"
+              :title-parts="chart.titleParts"
               :unit="chart.unit"
-              :x="chart.x"
-              :y-label="chart.yLabel"
+              :x="chart.x ?? xAxis"
+              :note="chart.note"
               :series="chart.series"
+              :references="chart.references"
               :height="chartHeight"
+              :sync-key="chart.x ? null : 'simulation-page'"
             />
-          </section>
-          <p class="page-hint">Drag across a chart to zoom in; double-click it to zoom out.</p>
-        </template>
-        <div v-else class="page-empty">
-          <i class="pi pi-chart-line page-empty-icon" aria-hidden="true"></i>
-          <p class="page-empty-title">{{ emptyTitle }}</p>
-          <p class="page-empty-text">{{ emptyHint }}</p>
+            <section v-if="predictionPlotCharts.length" class="page-prediction-plots" aria-labelledby="page-prediction-plots-title">
+              <h2 id="page-prediction-plots-title" class="page-prediction-plots-title">Prediction plots</h2>
+              <FeaturePlot
+                v-for="chart in predictionPlotCharts"
+                :key="chart.key"
+                :ref="(plot) => setPlot(chart.key, plot)"
+                :title="chart.title"
+                :unit="chart.unit"
+                :x="chart.x"
+                :y-label="chart.yLabel"
+                :series="chart.series"
+                :height="chartHeight"
+              />
+            </section>
+          </template>
+          <div v-else class="page-empty">
+            <i class="pi pi-chart-line page-empty-icon" aria-hidden="true"></i>
+            <p class="page-empty-title">{{ emptyTitle }}</p>
+            <p class="page-empty-text">{{ emptyHint }}</p>
+          </div>
         </div>
+        <!-- Below the charts' pane rather than in it, so the charts can fill the pane. -->
+        <p v-if="hasFigures" class="page-hint">Drag across a chart to zoom in; double-click it to zoom out.</p>
       </main>
 
       <div
         class="resize-handle"
         :class="{ 'resize-handle--disabled': isControlsCollapsed }"
-        @mousedown="!isControlsCollapsed && startResize($event)"
+        @mousedown="onHandleMousedown"
       >
         <button
           type="button"
@@ -205,6 +208,9 @@ import { legacyDownload } from '../utils/save'
 const FILE_NAME = 'simulation-results'
 // A chart's title and legend, above and below its plotting area.
 const CHART_CHROME_PX = 64
+// The space between the charts, and the prediction plots' heading with its rule, as the styles set them.
+const CHART_GAP_PX = 16
+const PREDICTION_HEADING_PX = 34
 const MIN_CHART_HEIGHT = 240
 
 const router = useRouter()
@@ -272,6 +278,18 @@ const controlsView = ref('plots')
 const targetPlotId = ref(null)
 const isControlsCollapsed = ref(false)
 const { width: controlsWidth, startResize } = useResizableAside(360, 280, 640, 'right')
+// As the page's styles stack the controls under the charts.
+const NARROW_QUERY = '(max-width: 820px)'
+
+/**
+ * Starts resizing the controls from their handle, while they are shown beside the charts.
+ *
+ * @param {MouseEvent} event
+ */
+function onHandleMousedown(event) {
+  if (isControlsCollapsed.value || window.matchMedia?.(NARROW_QUERY).matches) return
+  startResize(event)
+}
 
 const pageEl = ref(null)
 const chartsEl = ref(null)
@@ -282,7 +300,10 @@ let chartsObserver = null
 const chartHeight = computed(() => {
   if (!chartsHeight.value) return 320
   const count = Math.min(2, Math.max(1, charts.value.length + predictionPlotCharts.value.length))
-  return Math.round(Math.max(MIN_CHART_HEIGHT, chartsHeight.value / count - CHART_CHROME_PX))
+  const predictionCount = Math.min(count, predictionPlotCharts.value.length)
+  // What else the shown charts share the pane with: the gaps between them and before the prediction plots.
+  const spacing = (count - 1) * CHART_GAP_PX + (predictionCount ? PREDICTION_HEADING_PX + CHART_GAP_PX : 0)
+  return Math.round(Math.max(MIN_CHART_HEIGHT, (chartsHeight.value - spacing) / count - CHART_CHROME_PX))
 })
 
 onMounted(() => {
@@ -401,6 +422,14 @@ function downloadPng() {
   min-height: 0;
 }
 
+.page-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
 .page-charts {
   display: flex;
   flex-direction: column;
@@ -431,7 +460,9 @@ function downloadPng() {
 }
 
 .page-hint {
+  flex-shrink: 0;
   margin: 0;
+  padding: 4px 20px 8px;
   font-size: 0.75rem;
   color: var(--p-text-muted-color);
 }
@@ -530,8 +561,19 @@ function downloadPng() {
     flex-direction: column;
   }
 
+  /* A bar above the controls, still with its button to show or hide them, but not dragged. */
   .resize-handle {
-    display: none;
+    width: auto;
+    height: 6px;
+    cursor: default;
+  }
+
+  .resize-handle:hover {
+    background-color: var(--p-content-border-color);
+  }
+
+  .aside-collapse-toggle i {
+    transform: rotate(90deg);
   }
 
   .page-controls {
