@@ -538,12 +538,15 @@ describe('InstanceEditorDialog Plot tab', () => {
       expect(plotTabLabel()).toBe('Plot (0)')
     })
 
-    it('says click-to-plot needs the CellML Text while the Math Editor shows', async () => {
+    it('plots a variable clicked in the Math Editor', async () => {
       window.localStorage.setItem('instanceEditorDialog.editorKind', 'math')
       try {
         await openPlotTab()
-        expect(wrapper.find('.plot-tab-auto-label').findComponent({ name: 'ToggleSwitch' }).props('disabled')).toBe(true)
-        expect(wrapper.find('.plot-tab-auto-notice').text()).toBe('Click-to-plot works in the CellML Text')
+        expect(wrapper.find('.plot-tab-auto-label').findComponent({ name: 'ToggleSwitch' }).props('disabled')).toBe(false)
+        expect(wrapper.find('.plot-tab-auto-notice').exists()).toBe(false)
+
+        await clickVariable('x')
+        expect(plottedKeys()).toEqual(['a::x'])
       } finally {
         window.localStorage.clear()
       }

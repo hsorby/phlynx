@@ -15,6 +15,7 @@
           :variable-units="variableUnits"
           @equations-change="handleEquationsChange"
           @line-commit="handleLineCommit"
+          @variable-click="({ name }) => emit('variable-click', name)"
         />
       </div>
     </div>
@@ -61,8 +62,10 @@ const props = defineProps({
  * `source` is 'init' on mount, 'edit' once typing pauses or a line is committed, or 'external' after
  * a prop change.
  * `text` is the lines' Content MathML.
+ * Emits `variable-click` with a variable's CellML name when a plain click lands on it; the workbench already leaves
+ * out double-clicks and drags.
  */
-const emit = defineEmits(['change', 'save', 'undo', 'redo'])
+const emit = defineEmits(['change', 'save', 'undo', 'redo', 'variable-click'])
 
 /** What this editor's text is written in, so the session can tell its text from another editor's. */
 const FORMAT = 'mathml'

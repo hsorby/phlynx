@@ -118,6 +118,7 @@
             :variable-definitions="editorDefinitions"
             :keep-variables="keptVariables"
             @change="handleEditorChange"
+            @variable-click="plotClickedVariable"
             @save="handleSave"
             @undo="handleEditorUndo"
             @redo="handleEditorRedo"
@@ -399,20 +400,16 @@
                 <template #toolbar>
                   <label
                     class="plot-tab-auto-label"
-                    v-tooltip.bottom="'Click a variable in the CellML Text to plot it alone. Off, adding offers only the plot\'s units.'"
+                    v-tooltip.bottom="'Click a variable in the math to plot it alone. Off, adding offers only the plot\'s units.'"
                   >
                     <ToggleSwitch
                       v-model="isAutoUpdate"
-                      :disabled="editorKind !== 'text'"
                       class="plot-tab-auto-switch"
                       aria-label="Auto-update: plot a variable clicked in the math"
                     />
                     <span class="plot-tab-auto-text">Auto-update</span>
                   </label>
                   <span v-if="plotNotice" class="plot-tab-auto-notice" role="status" :title="plotNotice">{{ plotNotice }}</span>
-                  <span v-else-if="editorKind !== 'text'" class="plot-tab-auto-notice" title="Click-to-plot works in the CellML Text">
-                    Click-to-plot works in the CellML Text
-                  </span>
                 </template>
               </SimulationPanel>
             </TabPanel>
