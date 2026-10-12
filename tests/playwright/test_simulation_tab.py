@@ -156,24 +156,33 @@ def plot_variable(page, path, within=None):
 
 
 def click_math_variable(page, dialog, name):
-    """Clicks the first use of a variable's name in an instance editor's CellML Text."""
+    """Clicks a variable's name where an instance editor's CellML Text solves for it, as in `ode(V, t)`."""
     point = dialog.locator(".cm-content").evaluate(
         r"""(content, name) => {
-          const pattern = new RegExp(`\\b${name}\\b`)
-          const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT)
-          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-            const match = pattern.exec(node.textContent)
+          const pattern = new RegExp(`\\bode\\(\\s*${name}\\b`)
+          for (const line of content.querySelectorAll('.cm-line')) {
+            const match = pattern.exec(line.textContent)
             if (!match) continue
-            const range = document.createRange()
-            range.setStart(node, match.index)
-            range.setEnd(node, match.index + name.length)
-            const rect = range.getBoundingClientRect()
-            return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+            // The line's text is split across its tokens' text nodes: find the one the name starts in.
+            let offset = match.index + match[0].length - name.length
+            const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT)
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+              if (offset >= node.textContent.length) {
+                offset -= node.textContent.length
+                continue
+              }
+              const range = document.createRange()
+              range.setStart(node, offset)
+              range.setEnd(node, Math.min(offset + name.length, node.textContent.length))
+              const rect = range.getBoundingClientRect()
+              return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+            }
           }
           return null
         }""",
         name,
     )
+    assert point is not None, f"No ode({name}, ...) in the CellML Text to click"
     page.mouse.click(point["x"], point["y"])
 
 

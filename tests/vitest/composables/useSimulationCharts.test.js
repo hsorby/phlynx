@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { createPinia, setActivePinia } from 'pinia'
+import { ref } from 'vue'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { findSegments, mergeTimes, spreadValues, useSimulationCharts } from '../../../src/composables/useSimulationCharts.js'
@@ -65,6 +66,42 @@ describe('useSimulationCharts', () => {
     store.finishProtocolRun({ protocolResults: { experiments: [experiment()], issues: [], elapsedMs: 1, isStopped: false }, experiment: 0, mapping: new Map(), signature: 's' })
 
     expect([...useSimulationCharts([NODE]).xAxis.value.values]).toEqual([0, 1, 2, 3, 4])
+  })
+})
+
+describe('a view’s own plots', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('charts the plots a view gives in place of the workspace’s, following them as they change', () => {
+    const selection = (name) => ({ key: `n1::${name}`, nodeId: 'n1', variableName: name, groupId: 'plot-1' })
+    const configOf = (name) => ({ groups: [{ id: 'plot-1', name: 'Plot 1' }], selections: [selection(name)] })
+    useSimulationSettingsStore().plotConfig = configOf('A')
+    useSimulationResultsStore().finishRun({
+      results: {
+        voi: { name: 'environment/time', unit: 'second', values: Float64Array.of(0, 1) },
+        variables: new Map([
+          ['soma/A', { kind: 'state', unit: 'volt', values: Float64Array.of(0, 1) }],
+          ['soma/B', { kind: 'state', unit: 'volt', values: Float64Array.of(2, 3) }],
+        ]),
+        isStopped: false,
+        issues: [],
+      },
+      mapping: new Map([
+        ['n1::A', 'soma/A'],
+        ['n1::B', 'soma/B'],
+      ]),
+      signature: 's',
+    })
+    const editorConfig = ref(configOf('B'))
+    const { charts } = useSimulationCharts([NODE], { plotConfig: editorConfig })
+    expect(charts.value.map(({ title }) => title)).toEqual(['soma/B'])
+
+    editorConfig.value = configOf('A')
+    expect(charts.value.map(({ title }) => title)).toEqual(['soma/A'])
+    // Without a view's own, the workspace's.
+    expect(useSimulationCharts([NODE]).charts.value.map(({ title }) => title)).toEqual(['soma/A'])
+    useSimulationSettingsStore().plotConfig = configOf('B')
+    expect(charts.value.map(({ title }) => title)).toEqual(['soma/A'])
   })
 })
 
