@@ -530,7 +530,9 @@ import {
   createSinglePlotConfig,
   getNodePlotEntries,
   isPlottableRow,
+  renamePlotVariables,
   replacePlotSelections,
+  resolvePlotConfig,
 } from '../services/simulation/plotSelections'
 
 import { isEmpty, syncInitialiserUnits } from '../utils/variables'
@@ -1046,6 +1048,37 @@ let plotNoticeTimer = null
 const plottedCount = computed(() => editorPlotConfig.value.selections?.length ?? 0)
 
 /**
+ * Gets the names of the instance's variables the Plot tab's plot shows or plots against.
+ *
+ * @returns {Array<string>}
+ */
+function getEditorPlotNames() {
+  const axisNames = (editorPlotConfig.value.groups ?? [])
+    .map((group) => group.xAxis)
+    .filter((xAxis) => xAxis?.nodeId === props.id)
+    .map((xAxis) => xAxis.variableName)
+  return [...getNodePlotEntries(editorPlotConfig.value, props.id).map(({ name }) => name), ...axisNames]
+}
+
+// Variables joining the Plot tab's plot are followed through the math's renames too, so an Apply keeps them.
+watch(getEditorPlotNames, (names) => {
+  const tracked = new Set(trackedNames.value.map(({ savedName }) => savedName))
+  const added = [...new Set(names)].filter((name) => !tracked.has(name))
+  if (added.length) trackedNames.value = [...trackedNames.value, ...added.map((name) => ({ name, savedName: name }))]
+})
+
+/**
+ * Gives a plot under the names a save gave the instance's variables, without those it no longer has.
+ *
+ * @param {Object} plotConfig
+ * @returns {Object}
+ */
+function followSavedNames(plotConfig) {
+  const renamed = new Map(trackedNames.value.map(({ savedName, name }) => [savedName, name]))
+  return resolvePlotConfig(renamePlotVariables(plotConfig, props.id, renamed), nodes.value)
+}
+
+/**
  * Shows a note beside the Auto-update switch for a few seconds.
  *
  * @param {string} text
@@ -1204,9 +1237,11 @@ async function loadEditor({ keepTab = false } = {}) {
       : [],
   }))
   indexPortConnections()
+  if (keepTab) editorPlotConfig.value = followSavedNames(editorPlotConfig.value)
   // What the instance plots, so a rename in the math reaches its plots. Only these: tracking every name could
   // see a rename onto a removed variable's name merged away (see useMathSession).
-  trackedNames.value = getNodePlotEntries(simulationSettingsStore.plotConfig, props.id).map(({ name }) => ({ name, savedName: name }))
+  const plottedNames = [...getNodePlotEntries(simulationSettingsStore.plotConfig, props.id).map(({ name }) => name), ...getEditorPlotNames()]
+  trackedNames.value = [...new Set(plottedNames)].map((name) => ({ name, savedName: name }))
 
   // Saved stateRole/initialiser keep pairings the math alone can't reveal, such as shared initialisers.
   const savedRows = props.variables.map((row) => ({

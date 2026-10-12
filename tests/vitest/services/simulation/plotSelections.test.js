@@ -17,6 +17,7 @@ import {
   removePlot,
   removePlotSelection,
   renamePlot,
+  renamePlotVariables,
   resolveGroups,
   resolvePlotConfig,
   setNodePlotVariables,
@@ -356,5 +357,19 @@ describe('plotting against a variable', () => {
     const json = JSON.parse(buildSimulationJson(exported, {}, { voi, mappedParameters: {} }))
     expect(json.output.plots.map((plot) => plot.xValue)).toEqual(['data__soma__y', 'voi__environment__time'])
     expect(json.output.data.map((entry) => entry.id)).toEqual(['data__soma__x', 'data__soma__y', 'voi__environment__time'])
+  })
+})
+
+describe('renamePlotVariables', () => {
+  const reference = (nodeId, name, groupId) => ({ key: `${nodeId}::${name}`, nodeId, variableName: name, groupId })
+
+  it("renames one node's plotted variables and what its plots plot against, keeping the first of two made the same", () => {
+    const config = buildPlotConfig(
+      [{ id: 'plot-1', name: 'Plot 1', xAxis: reference('a', 'x') }],
+      [reference('a', 'x', 'plot-1'), reference('a', 'y', 'plot-1'), reference('b', 'x', 'plot-1')]
+    )
+    const renamed = renamePlotVariables(config, 'a', new Map([['x', 'y'], ['y', 'y']]))
+    expect(renamed.selections.map(({ key }) => key)).toEqual(['a::y', 'b::x'])
+    expect(renamed.groups[0].xAxis).toMatchObject({ key: 'a::y', variableName: 'y' })
   })
 })

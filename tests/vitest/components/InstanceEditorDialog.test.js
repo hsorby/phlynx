@@ -494,6 +494,34 @@ describe('InstanceEditorDialog Plot tab', () => {
       expect(run).toHaveBeenLastCalledWith(null)
     })
 
+    it('follows a variable an Apply renames, and drops one it removes', async () => {
+      const { useSimulationSettingsStore } = await import('../../../src/stores/simulationSettingsStore.js')
+      useSimulationSettingsStore().setPlotConfig({ groups: [{ id: 'plot-1', name: 'Plot 1' }], selections: [] })
+      await openPlotTab()
+      await clickVariable('x')
+      await report(wrapper.findComponent(FakeEditor), 'edit', XML.replaceAll('name="x"', 'name="y"').replaceAll('<ci>x</ci>', '<ci>y</ci>'))
+
+      await wrapper.findAll('button').find((button) => button.text() === 'Apply').trigger('click')
+      await flushPromises()
+      expect(wrapper.emitted('confirm')[0][0].plotVariables).toEqual([])
+      // The workspace saves the instance, and the editor reloads it.
+      const renamed = variables.map((row) => (row.name === 'x' ? { ...row, name: 'y' } : row))
+      flowNodes.value = [{ id: 'a', data: { name: 'a', variables: renamed } }]
+      await wrapper.setProps({ variables: renamed })
+      await flushPromises()
+      expect(plottedKeys()).toEqual(['a::y'])
+      expect(plotTabLabel()).toBe('Plot (1)')
+
+      await wrapper.findAll('button').find((button) => button.text() === 'Apply').trigger('click')
+      await flushPromises()
+      const removed = renamed.filter((row) => row.name !== 'y')
+      flowNodes.value = [{ id: 'a', data: { name: 'a', variables: removed } }]
+      await wrapper.setProps({ variables: removed })
+      await flushPromises()
+      expect(plottedKeys()).toEqual([])
+      expect(plotTabLabel()).toBe('Plot (0)')
+    })
+
   })
 
   it('sends the variables the instance plots with the save, as the workbench left them', async () => {
