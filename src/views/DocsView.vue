@@ -164,6 +164,9 @@ const currentPageComponent = computed(() => {
   return docsMap[`/docs/${slug}`]
 })
 
+// Headings the contents list shows and follows. h5/h6 are minor labels, such as the changelog's release dates.
+const TOC_HEADINGS = 'h1, h2, h3, h4'
+
 const headings = ref([])
 const activeHeading = ref('')
 
@@ -171,7 +174,7 @@ const extractHeadings = () => {
   const mainElement = document.querySelector('.markdown-body')
   if (!mainElement) return []
 
-  const headingElements = mainElement.querySelectorAll('h1, h2, h3, h4, h5, h6')
+  const headingElements = mainElement.querySelectorAll(TOC_HEADINGS)
   const extractedHeadings = []
   const usedIds = new Set()
 
@@ -224,7 +227,7 @@ const updateActiveHeading = () => {
   const mainElement = document.querySelector('.markdown-body')
   if (!mainElement) return
 
-  const headingElements = Array.from(mainElement.querySelectorAll('h1, h2, h3, h4, h5, h6'))
+  const headingElements = Array.from(mainElement.querySelectorAll(TOC_HEADINGS))
   if (headingElements.length === 0) return
 
   const scrollTop = mainElement.scrollTop
