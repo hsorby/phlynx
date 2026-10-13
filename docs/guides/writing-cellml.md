@@ -1,167 +1,84 @@
 # Writing CellML Guide
 
-The modules used in PhLynx are written in <GlossaryLink term="CellML"/>, a structured text format for storing and sharing computer-based mathematical models. CellML facilitates module coupling due to its emphasis on unit consistency. 
+PhLynx modules are written in <GlossaryLink term="CellML"/>, a model format that checks units for consistency. You edit them as **CellML Text**, a code-like syntax (`a = b + c;`) that PhLynx converts to CellML XML.
 
-PhLynx's Instance Editor has two interchangeable ways to write a module's equations — the text-based **CellML Text** editor this guide is mostly about, and a WYSIWYG **Math Editor** — plus a **Simple Mode** that manages variable declarations for you. The following document provides a primer on how to write and edit CellML text in PhLynx, and on how these modes differ.
+## Opening the Editor
 
-## CellML Text
-
-Native CellML is based on XML, a format that is excellent for machines but verbose and difficult for humans to read. To address this, IDEs such as OpenCOR—and now PhLynx—use an abstracted format called **CellML Text**. This allows you to write mathematical models using familiar, code-like syntax (e.g., `a = b + c;`) which the software automatically converts into the underlying XML.
-
-## Using the CellML Editor
-
-To open the editor, click the **CellML** icon button on the right of any module node in the workspace.
-
-![Labelled module node](../assets/images/labelled-module.png){.align-center width="600px"}
-
-This opens the **Instance Editor**, whose left pane has two tabs for writing equations:
+Double-click a node, or click its **Edit instance** (pencil icon) button, to open the Instance Editor. Its left pane has two tabs that edit the same equations:
 
 ![CellML text editor](../assets/images/cellml-text-edit.png){.align-center width="600px"}
 
-* **CellML Text:** the text editor this guide describes — a dark window where you write code, with a dynamic preview pane above it that renders the equation visually when your cursor is on a line.
-* **Math Editor:** a WYSIWYG alternative — build the same equations by typing and clicking, without CellML Text syntax. It always behaves as Simple Mode (below). Clicking a variable you've already written plots it in the dialog's **Plot** tab when Auto-update is on; see [Simulating Your Model](./simulating-your-model.md).
+| Tab | What it does |
+| --- | --- |
+| **CellML Text** | Text editor with a **Simple Mode** toggle and font-size buttons. The equation preview above it renders the line under the cursor and lists parse errors by line; you can collapse or resize it. |
+| **Math Editor** | Build the same equations by typing and clicking. Always in Simple Mode. |
 
-Both tabs edit the same equations, and the right pane's **Parameters** tab always lists the module's variables regardless of which editor you're using.
+If one tab can't show part of the math, it points you to the other. While the right pane shows the **Plot** tab with **Auto-update** on, clicking a variable in the math plots it. For the rest of the dialog (Parameters, Ports, Plot), see [Interface Overview](../reference/ui-overview.md#instance-editor).
 
 ### Simple Mode vs. Advanced Mode
 
-The CellML Text tab has a **Simple Mode** toggle, on by default:
+| | Simple Mode (default) | Advanced Mode (Simple Mode off) |
+| --- | --- | --- |
+| Text holds | Equations only | The whole model: `def model`, `def comp`, `var` lines and equations |
+| Variables declared in | The **Parameters** tab, kept in step for you | The text |
+| Component name set in | The dialog header | The text (`def comp [name] as`) |
 
-* **Simple Mode (on):** variable declarations are managed for you from the **Parameters** tab — you only write equations in the text editor — and the component name is an editable field in the dialog header.
-* **Advanced Mode (off):** the text is the single source of truth. You declare every variable yourself (see [Declaring Variables](#declaring-variables) below) and name the component in the text itself (`def comp [name] as`); the header's component name becomes read-only.
+PhLynx remembers which mode you last used. In Simple Mode, if you rename a variable that is still used elsewhere, a notice offers **Rename all** or **Keep both**.
 
-The Math Editor tab has no Simple/Advanced toggle — it always manages declarations for you, the same way CellML Text does in Simple Mode.
+### Saving
 
-> [!TIP]
-> **Saving Changes:** 
->* If you are editing a **Custom Module**, clicking `Save` updates the file directly.
-> * If you are editing a **Library Module**, you must click `Save As`. This creates a copy of the module in the `User_Modules.cellml` container in your Module List, leaving the original library version untouched.
+- **Save** writes the math back to the component's file and closes the editor; **Apply** saves and keeps it open. PhLynx asks before overwriting an existing component (**Overwrite Math?**).
+- If other instances use the same component, tick **Apply math changes to all N instances** to update them too.
+- Built-in templates can't be overwritten; PhLynx asks for a new name (**Save As New Component**).
 
-## Writing CellML Text
+## Units {#units}
 
-For those experienced with the text editor of legacy OpenCOR, PhLynx will feel familiar, though there are differences. PhLynx is built on **CellML 2.0**, which simplifies connection logic (concepts like "input" vs "public interface" directionality are unified). 
+PhLynx has a built-in units library, so modules don't need to define their own. In Simple Mode, the Parameters tab's **Units** column suggests library units as you type. To create a unit, type an expression such as `mV/ms` and pick the new unit it offers. For anything else, import a units file; see [CellML Units File](../reference/cellml-units-file.md).
 
-### Units
+## Writing Equations
 
-Typically, custom units are declared at the top of a CellML file. However, PhLynx centralises unit definitions for the most commonly used biological units to keep module files clean. 
+Every equation ends with `;`, and both sides must have matching units.
 
-If your module requires a specific unit not found in the PhLynx internal library, you must import a custom units file (see [CellML Specification](https://www.cellml.org/specifications/archive/20030930/units.pdf)).
+| Kind | Syntax |
+| --- | --- |
+| Operators | `+`, `-`, `*`, `/` |
+| Functions | `sin`, `cos`, `exp`, `sqrt`, `power`, `abs`, `min`, `max`, `ln` (natural log), `log` (base 10) |
+| Number with units | `2 {mV}` (no units means dimensionless) |
 
-### Module Structure
-
-Modules in PhLynx follow a standard nesting structure:
-
-```bash
-def model [model_name] as
-    def comp [module_name] as
-        
-        [Your Variable Declarations]
-
-        [Your Equations]
-
-    enddef;
-enddef;
-```
-
-> [!NOTE] 
-> Currently, the def model and def comp wrappers are required. Future versions of PhLynx may remove this requirement to simplify the view further.
-
-### Declaring Variables
-
-> [!NOTE]
-> This section applies to **Advanced Mode** (Simple Mode off). In Simple Mode, declarations are managed for you from the Parameters tab — you can skip to [Writing Equations](#writing-equations).
-
-Before using a variable in an equation, you must declare it. A declaration includes the variable's name, its units, and optional properties like an initial value or interface status.
-
-**Syntax:**
-
-```bash
-var [name]: [units] {init: [value], interface: [public]};
-```
-
-**Examples:**
-
-```bash
-// A constant internal parameter
-var R: J_s_per_m6 {init: 8.5}; 
-
-// A variable exposed to other modules (a Port)
-var u_e: J_per_m3 {init: 150, interface: public};
-
-// A standard variable calculated within this module
-var flow: m3_per_s;
-```
-
-**Key Components:**
-* `var`: The keyword to start a declaration.
-* `init: [value]`: Sets the starting value (required for constants and state variables).
-* `interface: public`: Exposes this variable as a Port on the module node, allowing it to be connected to other modules.
-
-### Writing Equations
-
-Equations in CellML Text are written using standard mathematical notation. All equations must end with a semicolon `;`.
-
-#### Algebraic Expressions
-You can use standard arithmetic operators (`+`, `-`, `*`, `/`) and common mathematical functions (`sin`, `cos`, `exp`, `log`, `sqrt`, `power`).
-
-**Example**:
 ```bash
 // Ohm's law for fluid flow
 flow = (u_in - u_out) / R;
 
-// Calculating area from a radius variable
+// Area from a radius
 area = 3.14159 * power(radius, 2);
 ```
-> [!WARNING] 
-> Ensure that the units on the Left Hand Side (LHS) of the equation match the calculated units on the Right Hand Side (RHS). CellML enforces dimensional consistency.
 
-#### Ordinary Differential Equations (ODEs)
+### Ordinary Differential Equations (ODEs)
 
-ODEs describe how a variable changes over time. To define a differential equation, you must first declare a variable representing time.
-
-**1. Declare Time Variable:**
+`ode(variable, VoI)` is the derivative of a variable with respect to the variable of integration (VoI):
 
 ```bash
-var t: second;
-```
-
-**2. Define the ODE:**
-
-Use the `ode(variable, independent_variable)` syntax.
-
-**Example:**
-```bash
-// Define the change in volume (V) over time (t)
+// Rate of change of volume V with respect to t
 ode(V, t) = flow_in - flow_out;
 ```
 
-In this example, PhLynx interprets `ode(V, t)` as the derivative dV/dt. The solver will then integrate this variable over the course of the simulation.
+- The second argument is the VoI, whatever its name (`t`, `time`, `tau`) or units. Simple Mode adds its row to the Parameters tab; in Advanced Mode, declare it yourself (`var t: second;`).
+- On export, every module's VoI is connected to one `environment` variable, which takes its name and units from the first ODE's VoI (e.g. `environment/time` in seconds).
+- A module without ODEs that needs the VoI, such as a stimulus, can declare `t` or `time` in time units; PhLynx connects it when the units are compatible.
 
-The second argument of `ode` is the **variable of integration** (VoI), whatever it is called (`t`, `time`, `tau`) and whatever it measures. It is usually time, but an ODE can integrate over a distance in metres or anything else. When the model is exported, every module's VoI is connected to one variable in the `environment` component, named and measured like the first ODE's VoI: for example `environment/time` in seconds, or `environment/x` in metres. Any other variable is just a variable, even one named `t`, so you can still use `t` for something else, such as a thickness, and give it a value in the parameter table.
+### Algebraic Systems
 
-A module without ODEs that still needs time, such as a stimulus that switches on and off, can declare a variable named `t` or `time` in time units (for example `second`). PhLynx then connects that variable to the model's VoI too, when their units are compatible.
+A model with no ODEs has no VoI and is solved once, so its plots list each variable's value. To see a curve, sweep a parameter; see [Sweep](../reference/simulation-ui-overview.md#sweep). To plot one variable against another, see [Plots](../reference/simulation-ui-overview.md#plots).
 
-#### Algebraic Systems
-
-A model doesn't need any ODEs. If none of its modules has one, it is an **algebraic system**: it has no VoI, and its equations are solved once. Running it in the Simulation tab lists the value of each plotted variable instead of drawing a chart. An OMEX export describes it as a steady-state simulation.
-
-**Example:**
 ```bash
 // A lever: the load moved for a given effort
 load = effort * arm_ratio;
 ```
 
-To see how an algebraic system responds over a range, **sweep** one of its parameters. In **Simulation Settings → Sweep**, choose a parameter, a global constant, or a boundary condition that holds its own value. Then set the range (**From**, **To**) and the number of **Points**. Each run solves the model once per value, and every plot is drawn against the swept parameter. For example, sweep a channel's membrane voltage to plot its current–voltage curve. Sliders still apply, so moving one redraws the whole curve. Web OpenCOR can't run sweeps, so an OMEX export solves the model once, at the parameter's own value. For the full Sweep editor — a second "family" parameter, readouts for ODE models, and cost warnings — see [Simulation UI Reference](../reference/simulation-ui-overview.md#sweep-editor).
+### Conditional Logic (Piecewise)
 
-#### Plotting One Variable Against Another
+Use a `sel` block:
 
-By default a plot is drawn against time, or against the swept parameter of an algebraic system. To plot against another variable from the same run instead, such as a phase plot of `w` against `v`, open the plot's **⋯** menu, choose **Plot against a variable…** and pick the variable. **Plot against time** in the same menu undoes it. The CSV download includes the variable a plot is drawn against, and an OMEX export draws the plot the same way in web OpenCOR.
-
-#### Conditional Logic (Piecewise)
-
-CellML uses a `sel` (select) block to handle conditional logic, such as a valve opening or closing based on pressure.
-
-**Syntax:**
 ```bash
 x = sel
     case [condition]: [value_if_true];
@@ -169,11 +86,38 @@ x = sel
 endsel;
 ```
 
-**Example:**
 ```bash
-// If pressure is greater than 100, flow is restricted
+// A valve: flow only from high to low pressure
 flow = sel
-    case pressure > 100.0: 0.0;
-    otherwise: (pressure - 100.0) / R;
+    case u_in > u_out: (u_in - u_out) / R;
+    otherwise: 0 {m3_per_s};
 endsel;
 ```
+
+## Advanced Mode {#advanced-mode}
+
+In Advanced Mode the text is the whole model, wrappers included:
+
+```bash
+def model [model_name] as
+    def comp [component_name] as
+        [variable declarations]
+        [equations]
+    enddef;
+enddef;
+```
+
+Declare every variable before you use it:
+
+```bash
+var [name]: [units] {init: [value], interface: [public]};
+```
+
+```bash
+var R: Js_per_m6 {init: 8.5};                     // constant
+var u_e: J_per_m3 {init: 150, interface: public};
+var flow: m3_per_s;                               // calculated
+```
+
+- `init`: starting value. Constants and state variables need one.
+- `interface`: CellML visibility, `public` by default. Ports are set in the **Ports** tab, not here.

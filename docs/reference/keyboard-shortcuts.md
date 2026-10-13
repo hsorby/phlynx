@@ -1,27 +1,48 @@
 # Keyboard Shortcuts
 
-A reference list of keyboard shortcuts available in the PhLynx Workbench to speed up your workflow.
+On Mac, use Cmd wherever Ctrl appears. Workspace shortcuts are ignored while you type in a field or have a dialog open.
 
-## General Operations
+## Workspace {#workspace}
 
-| Action | Windows / Linux | Mac |
-| :--- | :--- | :--- |
-| **Undo** | `Ctrl` + `Z` | `Cmd` + `Z` |
-| **Redo** | `Ctrl` + `Shift` + `Z` | `Cmd` + `Shift` + `Z` |
-| **Delete Module** | `Delete` or `Backspace` | `Delete` or `Backspace` |
+| Action | Shortcut |
+| :--- | :--- |
+| Save workspace | Ctrl/Cmd+S |
+| Undo | Ctrl/Cmd+Z |
+| Redo | Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y |
+| Copy / paste (at the pointer) | Ctrl/Cmd+C / Ctrl/Cmd+V |
+| Duplicate selection | Ctrl/Cmd+D |
+| Delete selection | Delete or Backspace |
+| Select all instances | Ctrl/Cmd+A |
+| Add to selection | Ctrl+click (Cmd+click on Mac) |
+| Box select | Shift+drag |
+| Pan / zoom | Drag empty canvas / scroll wheel or pinch |
+| Run the current import / export | Ctrl/Cmd+I / Ctrl/Cmd+E |
+| Rename an instance | Click its name; Enter saves, Esc cancels |
+| Open the Instance Editor | Double-click an instance |
+| Open the Connections dialog | Double-click an arrow |
 
-## Selection Controls
+## Search {#search}
 
-| Action | Shortcut | Description |
-| :--- | :--- | :--- |
-| **Multi-Select** | `Ctrl` + Click | Add individual modules to the current selection. |
-| **Box Select** | `Shift` + Drag | Click and drag on the canvas to select all modules within the area. |
-| **Select All** | `Ctrl` + `A` | Selects all nodes in the current view. |
+| Action | Shortcut |
+| :--- | :--- |
+| Focus search | / or Ctrl/Cmd+F |
+| Next / previous match | Enter / Shift+Enter (or ↓ / ↑) |
+| Search by variable | Start with `var:` |
+| Clear search | Esc |
 
-## Navigation
+## Instance Editor {#instance-editor}
 
-| Action | Shortcut | Description |
-| :--- | :--- | :--- |
-| **Pan** | Space + Drag | Hold spacebar and click-drag to move the canvas (alternative to mouse wheel). |
-| **Zoom In** | `+` | Zooms into the center of the viewport. |
-| **Zoom Out** | `-` | Zooms out from the center of the viewport. |
+| Action | Shortcut |
+| :--- | :--- |
+| Save and close | Ctrl/Cmd+Enter |
+| Undo / redo | Ctrl/Cmd+Z / Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y |
+
+## Simulation {#simulation}
+
+| Action | Shortcut |
+| :--- | :--- |
+| Run (Play) | F9 (with the Simulation panel or page focused) |
+| Zoom the VoI range on all linked plots | Drag across a plot |
+| Zoom one plot alone | Shift+drag |
+| Reset zoom | Double-click the plot |
+| Undo / redo in the protocol dialog | Ctrl/Cmd+Z / Ctrl/Cmd+Shift+Z |

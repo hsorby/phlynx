@@ -1,51 +1,75 @@
 # Simulation UI Reference
 
-This page details the controls of the **Simulation panel** — the shared workbench used in the Context Sidebar's Simulation tab, the Instance Editor's Plot tab, and the full-page `/simulation` view. For a task-oriented walkthrough, see [Simulating Your Model](../guides/simulating-your-model.md).
+Every Simulation panel control. For a walkthrough, see [Simulating Your Model](../guides/simulating-your-model.md).
 
-## Toolbar
+## Toolbar {#toolbar}
 
-| Control | Icon | Purpose |
-| :--- | :--- | :--- |
-| **Play / Stop** | Triangle / Square | Runs or stops the simulation. Its tooltip names what will run, e.g. "Simulate the whole model" or "Simulate the selection (3)". |
-| **Scope switch** | `pi-sitemap` / `pi-box` | Toggles between **Whole model** and **Selection**. Not shown on the `/simulation` page, which always runs the whole model. |
-| **Protocol** | `pi-list-check` | Shown only when a protocol (`obs_data.json`) is loaded. Switches Play to run the protocol's experiments instead of a time course. |
-| **Sweep** | `pi-chart-line` | Shown only when a sweep is configured (Simulation Settings → Sweep). Switches Play to run the sweep. |
-| **Track** | `pi-bookmark` | Keeps the current run's lines on the charts, dashed, while you try other values. See [Tracked Runs](#tracked-runs). |
-| **Float** | `pi-window-minimize` | Opens a small floating results window over the canvas, collapsing the sidebar to give the canvas room. |
-| **Open page** | `pi-external-link` | Navigates to the full-page `/simulation` view (available from the sidebar and Instance Editor, not on the page itself). |
-| **Edit obs_data** | `pi-pen-to-square` | Opens the protocol editor. See [Running Protocols](../guides/running-protocols.md). |
-| **Settings** | `pi-cog` | Opens Simulation Settings on its Parameters tab (Plot Setup and Parameter Scan). |
+| Button (tooltip) | Purpose |
+| :--- | :--- |
+| **Play / Stop** (triangle / square) | Runs or stops (F9). The tooltip says what runs, e.g. **Simulate the whole model**. A dot means results are out of date. |
+| Scope switch | **Whole model** or **Selection** (sidebar) / **This instance** (Plot tab). |
+| **Run the protocol's experiments** (checklist icon) | Shown when a protocol is loaded. See [Running Protocols](../guides/running-protocols.md). |
+| **Run the sweep** (chart-line icon) | Shown when a sweep is set. |
+| **Track this run** (bookmark icon) | See [Tracked Runs](#tracked-runs). |
+| **Float over the canvas** (window icon) | Sidebar only. Opens the [floating viewer](#floating-viewer). |
+| **Open the simulation page** (external-link icon) | Sidebar only. |
+| **Edit obs_data** (pen-to-square icon) | Opens the protocol editor. |
+| **Simulation settings** (cog icon) | Opens [Simulation Settings](#simulation-settings) on Solver. |
 
-Play, Protocol and Sweep are mutually exclusive: only one determines what pressing Play runs at a time. On the full `/simulation` page, pressing **F9** also runs the current mode.
+The protocol and sweep buttons switch what Play runs, and run it.
 
-## Plots
+## Controls {#controls}
 
-- **One unit per plot.** A plot only accepts variables sharing its units; adding a variable in different units creates a new plot.
-- **Synced chart groups.** Time-course charts in the same panel share the widest left/right gutters among them, so their plotting areas line up despite differently-sized y-axis labels.
-- **Zoom.** Drag across a chart to zoom in; double-click it to zoom back out. This zooms every chart in its sync group together. Hold **Shift** while dragging or double-clicking to zoom that one chart alone.
-- A chart's zoom persists by its own key, so it survives reopening the floating viewer.
+Views: **Plots**, **Sliders**, **Sweep**, **Runs**. Search matches every typed word in an `instance/variable` path.
 
-## Sweep Editor
+### Plots {#plots}
 
-Configure a sweep from Simulation Settings → Sweep, or the sidebar's parameter-scan editor:
+- Search to add a variable to the chosen plot. A plot holds one unit; other units go to a matching or new plot.
+- **Add plot**; ⋯ menu: **Rename**, **Move up**, **Move down**, **Remove plot**.
+- **Phase plots:** ⋯ ▸ **Plot against a variable…**; **Plot against time** returns to the VoI, whatever it is.
+- **Zoom:** drag in, double-click out. Charts zoom together; hold Shift for one.
 
-- **From / To / Points:** the swept range and its number of samples (2 to 1000 points).
-- **Family (optional):** draws one curve per value of a second parameter. Enter its values in the **"Values separated by commas"** field — commas, spaces, or semicolons all work (up to 8 values).
-- **Reading of each time course** (ODE models only): each run is reduced to one of four readouts — **End** (the steady-state value), **Min**, **Max**, or **Peak** (the value furthest from zero, keeping its sign). Default is End.
-- A cost estimate ("51 × 3 = 153 time courses, about 12 s") warns once a sweep exceeds 200 runs, and is capped at 2000 runs total.
-- Sweeps can't be exported as SED-ML — switch back to the time course first. Web OpenCOR also can't run a sweep; an OMEX export instead solves the model once, at the parameter's own value.
+### Sliders {#sliders}
 
-## Tracked Runs
+- **Add slider**. Moving one reruns the model.
+- ⋯ menu: **Back to the model's value**, **Apply this value to the model**, **Edit range…**, **Remove slider**.
+- **swept** marks the swept parameter. Sliders are off during a protocol.
 
-Track the current run from the toolbar to keep its lines on the charts (dashed) while you try other slider values:
+### Sweep {#sweep}
 
-- Each tracked run can be renamed inline, shown/hidden, or removed individually, or all removed at once.
-- The live run itself can also be hidden, to compare tracked runs alone.
-- Up to a fixed maximum of tracked runs are kept at a time (older ones must be removed to track more).
-- Each run records the slider and global-constant values it used, shown as its detail line.
+**Sweep a parameter**: a constant, global constant, or boundary condition nothing supplies. Results plot against it.
 
-## Exports
+- **From / To / Points:** 2 to 1000 points.
+- ⋯ ▸ **Add a curve for each value of…** a second parameter (up to 8 values; 2000 runs max). ⋯ also has **Change parameter…** and **Stop sweeping**.
+- **Reading** of each time course (ODE models): **End** (default), **Min**, **Max** or **Peak** (the value furthest from 0).
+- Shows the run count and a time estimate; warns above 200 time courses.
+- The SED-ML download is off while sweeping. Other exports run the model once, at the parameter's own value.
 
-- **CSV:** every plotted series, at full precision.
-- **PNG:** the charts as shown, composed into one image (not available for a steady-state/algebraic run, which has no chart).
-- **SED-ML:** a zip of the run plan plus the CellML model — either the protocol's run, or the time course/steady-state run. Disabled while a sweep is active (see above).
+### Tracked Runs {#tracked-runs}
+
+- Up to 5. Not for protocol runs or sweeps with curves. Cleared when the run type changes (time course, steady state, another sweep).
+- In **Runs**: rename, hide or remove runs; hide the live run.
+
+## Simulation Page {#simulation-page}
+
+![The /simulation page](../assets/images/simulation-page.png){.align-center width="800px"}
+
+- Runs the whole model; **Workspace** goes back.
+- **Time course / Protocol / Sweep** sets what Play runs.
+- The controls panel resizes and collapses. Its folding **Simulation settings** section holds **Starts at**, **Plots start at**, **Ends at**, **Point interval** and **Solver**.
+
+## Floating Viewer {#floating-viewer}
+
+One plot at a time (picker, or **New plot**), with **Edit this plot's variables**, scope, Play/Stop, **Sliders**, **Track this run** and **Back to the Simulation tab**.
+
+## Simulation Settings {#simulation-settings}
+
+From the cog or the main toolbar's **Configure simulation settings**. Tabs: **Plots**, **Sliders & sweep**, **Solver**. Web OpenCOR doesn’t support a later **Plots start at**, so an export may not match.
+
+## Downloads {#downloads}
+
+Only on the simulation page:
+
+- **CSV:** every plotted series.
+- **PNG:** the charts as one image (not for steady state).
+- **SED-ML:** zip of the run, its plots and the CellML model. When disabled, its tooltip says why.

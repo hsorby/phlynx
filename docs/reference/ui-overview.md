@@ -1,235 +1,146 @@
 # Interface Overview
 
-This page summarizes all user interface elements in the Workbench view of PhLynx.
+The top nav switches between **Workspace**, **Simulation** ([simulation page](./simulation-ui-overview.md#simulation-page)), **User Guide** and **About**. The Workspace view has four areas: the **[Toolbar](#toolbar)** (top), **[Available Modules](#module-library)** (left, your <GlossaryLink term="modules"/>), the **[Workspace canvas](#workspace)** (centre) and the **[Context Sidebar](#context-sidebar)** (right).
 
-## Workbench Overview
+![PhLynx Workspace view with the toolbar, Available Modules, canvas and Context Sidebar](../assets/images/phlynx_ui.png){.align-center width="800px"}
 
-The Workbench is the primary interface for building and configuring models. It is divided into four main interaction areas:
-
-* **[Toolbar](../reference/ui-overview#toolbar) (Top):** Tools for file management, importing/exporting, and general workspace operations.
-* **[Module List](../reference/ui-overview#module-list) (Left):** A library of imported <GlossaryLink term="modules"/> available for use.
-* **[Workspace](../reference/ui-overview#workspace) (Centre):** The canvas where you assemble, configure, and connect your model components.
-* **[Context Sidebar](../reference/ui-overview#context-sidebar) (Right):** Inspects and simulates whatever is selected on the canvas.
-
-These areas are highlighted in the image below:
-
-![PhLynx Workbench view with workspace, toolbar, and module list labelled](../assets/images/phlynx_ui.png){.align-center width="600px"}
+For shortcuts, see [Keyboard Shortcuts](./keyboard-shortcuts.md).
 
 ---
 
-## Toolbar
+## Toolbar {#toolbar}
 
-The toolbar provides essential controls for managing your project files and workspace state.
+![The main toolbar](../assets/images/toolbar.png){.align-center width="800px"}
 
-### File Management
-
-#### Load Workspace
-Restores a previously saved PhLynx workspace.
-* **Action:** Opens a file dialog to select a `.json` workspace file.
-* **Result:** Restores module positions, definitions, connections, and visual customizations (colors/names).
-
-#### Save Workspace
-Saves the current state of your project.
-* **Action:** Downloads a `.json` file to your browser's default download folder.
-* **Result:** Preserves the current workspace state for later restoration.
-
-### Edit Operations
-
-* **Undo (`Ctrl+Z`):** Reverses the last action.
-* **Redo (`Ctrl+Shift+Z`):** Reapplies the last undone action.
-* **Macro Build:** Enters the Macro Build component. See the [Macro Build Guide](../guides/macro-build-guide) for details.
-
-### Import
-
-The Import menu allows you to bring various file types into PhLynx.
-
-#### 1. Instance Array
-Populates the workspace using a [module array](./file-types#instance-array) file.
-* **Supported Format:** `.csv`
-* **Result:** Automatically populates the workspace with configured and connected modules based on the array definition.
-
-> [!NOTE]
-> If PhLynx does not recognize component types within the array, you may be prompted to provide additional module files.
-
-#### 2. CellML File
-Imports [CellML](./cellml-module-format) components to the Module List, **and** any [units](./cellml-units-file) the same file defines to the Units library.
-* **Supported Format:** `.cellml`
-* **Result:** Adds every component found in the file to the **Module List** panel, and every named `<units>` definition to the units library, in one step. A file is useful as a units source even if its components are never placed — see [CellML Units File](./cellml-units-file).
-
-#### 3. Module Configurations
-Imports [Module Configuration](./file-types#module-configuration) files to update internal definitions.
-* **Supported Format:** `.json`
-* **Result:** Updates the configuration parameters of modules in the internal store.
-
-#### 4. Parameters
-Imports a parameter file to identify constants and global constants. *(Marked for Deprecation)*
-* **Supported Format:** `.csv` (Circulatory Autogen parameter format)
-* **Result:** Categorizes variables properly during export.
-* **Naming Convention:**
-    * Constants: `[module_name]_[parameter_name]`
-    * Global Constants: `[parameter_name]`
-
-#### 5. COMBINE Archive
-Imports a COMBINE/OMEX archive (`.omex`) exported from PhLynx or produced alongside a model, including a `params_for_id.csv` parameter-scan file or an `obs_data.json` protocol file it contains. See [Running Protocols](../guides/running-protocols.md) and [Supported File Formats](./file-types.md#params_for_idcsv).
-* **Supported Format:** `.omex`
-* **Result:** Restores the model plus any protocol or parameter-scan configuration bundled with it.
-
-### Export
-
-Generates output files for Circulatory Autogen or standard CellML.
-
-> [!NOTE]
-> Chrome users will be prompted to select a save location upon export. Other browsers may default to the Downloads folder.
-
-| Export Type | Output Content | Requirements |
+| Button (tooltip) | Icon | What it does |
 | :--- | :--- | :--- |
-| **Configuration Files** | A `.zip` archive containing:<br>• `instance_array.csv` (connections)<br>• `module_config.json` (parameters/ports) | • At least one module in workspace<br>• Parameter file loaded<br>• Ports defined for connections |
-| **CellML Model** | A flattened CellML 2.0 model file. | • At least one module in workspace<br>• Ports defined for connections<br>• All units defined |
-| **COMBINE Archive** | A `.omex` archive containing the model plus any `obs_data.json` protocol or `params_for_id.csv` parameter-scan configuration. | Same as CellML Model. |
+| **Load workspace** | Folder | Opens a saved `.json` [workspace file](./file-types.md#workspace-file). |
+| **Save workspace** | Disk | Saves to `.json`, including simulation settings (Ctrl/Cmd+S). |
+| **Clean up workspace** | Dustpan | Auto-arranges the instances. |
+| **Clear workspace** | Eraser | Removes everything from the canvas (undoable). |
+| **Undo** / **Redo** | Arrows | Edit history. |
+| **Add left / top / right / bottom handle** | Box with a dot on that side | Adds a port on that side of the selected instances. |
+| **Open macro builder** | Hammer | Opens the [Macro Builder](../guides/macro-build-guide.md). |
+| **Configure simulation settings** | Chart with cog | Opens [Simulation Settings](./simulation-ui-overview.md#simulation-settings). |
+| **Settings** | Cog | Opens app [Settings](#settings). |
+| **Import** / **Export** / **Send** | Split buttons | Click runs the last-used item (Ctrl/Cmd+I, Ctrl/Cmd+E); the arrow opens the menu. |
+
+On the right are **Report Issue** and a light/dark switch. Where supported (e.g. Chrome), saving and exporting ask where to put the file.
+
+### Import {#import}
+
+| Menu item | File | Result |
+| :--- | :--- | :--- |
+| **Instance Array** | `.csv` | Builds a connected model from an [instance array](./file-types.md#instance-array), asking for any missing module files. |
+| **CellML File** | `.cellml` | Adds its components to Available Modules and its [units](./cellml-units-file.md) to the units library. |
+| **Module Config** | `.json` | Loads [module configurations](./file-types.md#module-configuration). |
+| **Parameters** | `.csv` | Fills parameter values from a [parameter file](./file-types.md#parameter-file). |
+| **COMBINE Archive** | `.omex` | Restores a model with any protocol or [`params_for_id.csv`](./file-types.md#params_for_idcsv). |
+
+You can also drop `.cellml` or `.omex` files onto the canvas ([Opening files](./file-types.md#opening-files)).
+
+### Export and Send {#export}
+
+| Menu item | Output |
+| :--- | :--- |
+| **CellML** (default) | Flattened CellML 2.0 model, with a link to open it in OpenCOR. |
+| **Circulatory Autogen** | `.zip` of CA input files; see [Using PhLynx with Circulatory Autogen](../guides/use-with-circulatory-autogen.md#export). |
+| **OpenCOR** | `.omex` with plots, settings and any parameter scan, with a link to open it in Web OpenCOR. |
+| **CUFLynx** | `.omex` for CUFLynx. |
+| **CellML (selection)** / **OpenCOR (selection)** | The same, for the selected instances only; warns if the selection is incomplete. |
+
+**Send** (paper-plane icon) opens the model, or the selection, straight in Web OpenCOR without saving a file.
 
 ---
 
-## Module List
+## Available Modules {#module-library}
 
-The Module List panel (left) displays all CellML components available for your model.
+Modules are grouped by source file. **Search Library…** filters them; drag a card onto the canvas to place an instance.
 
-**Features:**
-* **Collapsible Sections:** Click module headers to expand or collapse groups of components from the same source file.
-* **Drag and Drop:** Click and drag any item from the list onto the **Workspace** to add it to your model.
-* **Visual ID:** Components maintain the names defined in their source CellML files.
+* Each card has a module picker, a config picker when there are several, **Preview configuration** (eye icon) and **Remove module** (cross icon).
+* **Hide module library** (chevron) collapses the panel; drag its edge to resize.
 
 ---
 
-## Workspace
+## Workspace canvas {#workspace}
 
-The central canvas where model assembly takes place.
+| Action | How |
+| :--- | :--- |
+| Pan / zoom | Drag empty canvas / scroll wheel or pinch |
+| Select | Click; Ctrl+click (Cmd+click on Mac) adds; Shift+drag draws a box |
+| Rename an instance | Click its name |
+| Open the Instance Editor | Double-click an instance, or click **Edit instance** (pencil icon) |
+| Right-click the canvas | **Create Module**, **Select All**, **Fit View**, **Clear Workspace** |
+| Right-click an instance | **Replace Module**, **Simulate Instance** (or **Simulate Selection (N)**) |
 
-**Navigation & Interaction:**
-* **Pan:** Click and drag on empty space to move the view.
-* **Zoom:** Use the mouse wheel or trackpad to zoom in/out.
-* **Select:** Click a module to select it; hold `Ctrl` (or `Cmd`) to select multiple.
-* **Area Select:** Hold `Shift` and drag to create a selection box.
-* **Connect:** Click and drag from a module's **Port Node** to another module to create a connection.
+**Search** (`Type / to search`, top of the canvas): find instances by name, or prefix `var:` to find them by variable. Enter / Shift+Enter steps through matches.
 
-### Control Bar
-Located in the bottom-left corner, the Control Bar offers quick access to view settings:
-1.  **Zoom In**
-2.  **Zoom Out**
-3.  **Zoom to Fit:** Centers all modules in the view.
-4.  **Lock Workspace:** Prevents accidental movement of modules.
-5.  **Screenshot:** Captures an image of the current view.
+**Controls** (bottom-left): zoom, fit view, lock, and **Export image** (picture icon), which saves the view as PNG or SVG ([Settings](#settings)). A minimap sits bottom-right.
 
 ---
 
-## Module Nodes
+## Instance nodes {#module-nodes}
 
-A Module Node is the visual representation of a CellML module within the workspace. It displays the editable module name (exported as `module_name`) and its origin component.
+![An instance node](../assets/images/module-elements.png){.align-center width="400px"}
 
-Each node features three interactive tools for configuration:
-
-![Labelled module node](../assets/images/module-elements.png){.align-center width="600px"}
-
-### 1. Key (Colour Selector)
-* **Icon:** Key (Left)
-* **Purpose:** Assigns a color category to the module for visual organization. These colors do not affect export functionality.
-* **Options:** Membrane (Pink), Process (Blue), Compartment (Orange), Protein (Green).
-
-![Expanded Key menu](../assets/images/key.png){.align-center width="300px"}
-
-### 2. Add Port Node
-* **Icon:** Pin (Centre)
-* **Purpose:** Adds a connection point (Port Node) to the edge of the module.
-* **Usage:** Click the icon, then select a direction (Top, Right, Bottom, Left) from the menu. You can add multiple ports to a single module.
-
-![Expanded Add Port Node menu](../assets/images/add-port-node.png){.align-center width="600px"}
-
-### 3. Edit Instance
-* **Icon:** Pencil (Right)
-* **Purpose:** Opens the **Instance Editor**, a dialog for writing the instance's equations and configuring its parameters, ports and plot.
+Each node shows its name, component (box icon), source file (file icon) and **Edit instance** (pencil icon). A warning triangle means a parameter has no value.
 
 ---
 
-### Instance Editor
+## Connections {#connections}
 
-The Instance Editor is a two-pane dialog: equations on the left, and a **Parameters / Ports / Plot** tab group on the right.
-
-![Expanded Edit Module dialog](../assets/images/edit-module-detail.png){.align-center width="600px"}
-
-#### Instance Name and Component Name
-The dialog header has two fields:
-* **Instance:** This instance's name in the workspace. Must be unique within the workspace.
-* **Component:** The underlying CellML component name used in exported files. While **Simple Mode** (see below) is on, this is editable directly; with Simple Mode off, the component name comes from the equations themselves (`def comp [name] as`) and is shown read-only.
-
-#### Writing Equations
-The left pane has two interchangeable editor tabs — both edit the same underlying equations:
-* **CellML Text:** a structured text editor. See [Writing CellML](../guides/writing-cellml.md) for the language itself, and for the **Simple Mode** toggle that controls whether variable declarations are managed automatically or written by hand.
-* **Math Editor:** a WYSIWYG equation editor — type and click to build expressions without CellML Text syntax. It always behaves as Simple Mode. Clicking a variable rendered here plots it on the **Plot** tab when Auto-update is on; see [Simulating Your Model](../guides/simulating-your-model.md).
-
-#### Port Definitions
-On the **Ports** tab, each row maps one or more internal CellML variables to a visual port on the instance node:
-
-1.  **Type:** I (input), O (output), or G (general). See [Valid Port Configurations](./valid-port-configurations.md).
-2.  **Label:** The shared name for the port (e.g., `sodium_concentration`). This must match the connected port's label on the target instance.
-3.  **Mode:** Toggles the port between **Basicport** (exactly one connection) and **Multiport** (several connections). A multiport's variables can each be set to **True** (a plain shared link), **Sum** (adds the value from every connection), or **Multiply** (scales the connection's value by a factor you enter) — click a variable's chip to cycle through these.
-4.  **Variables:** One or more internal CellML variables exposed through this port.
-5.  **Manage Ports:** **Add port** adds a row; the trash icon removes one.
-
-**Controls:**
-* **Save:** Applies changes and closes the dialog.
-* **Apply:** Saves and keeps the dialog open.
-* **Cancel:** Discards changes.
+* **Add a port:** hover a node's edge and drag from the green ghost handle, or use the toolbar's **Add … handle** buttons.
+* **Connect:** drag from one port to another. The arrow's direction is used in instance array exports.
+* **Edit couplings:** double-click an arrow to open the [Connections dialog](./valid-port-configurations.md#connections-dialog).
+* **Delete:** select an arrow and press Delete or Backspace. Hover a port and click its trash icon to remove it and its arrows.
 
 ---
 
-## Context Sidebar
+## Instance Editor {#instance-editor}
 
-A collapsible panel on the right edge of the Workbench, with five vertical icon tabs:
+The header holds the **Instance** name (unique), the **Component** name and the source file.
+
+![Instance Editor on the Ports tab](../assets/images/edit-module-detail.png){.align-center width="800px"}
+
+* **Left pane:** **CellML Text** or **Math Editor**, two views of the same equations; see [Writing CellML](../guides/writing-cellml.md).
+* **Right pane:** **Parameters**, **Ports** and **Plot** tabs (collapsible, resizable).
+* **Footer:** **Cancel**, **Apply** (save and keep editing) and **Save** (Ctrl/Cmd+Enter). **Apply math changes to all N instances** also updates instances sharing the component.
+
+### Port definitions {#port-definitions}
+
+Each row on the **Ports** tab exposes variables through a port; hover the dot by the label to see what it connects to.
+
+| Column | Meaning |
+| :--- | :--- |
+| **Type** | G, I or O; see [port types](./valid-port-configurations.md#port-types). |
+| **Label** | Shared name; ports couple when labels match. |
+| **Mode** | Toggles **Basicport** (one connection) and **Multiport** (several). |
+| **Variables** | The variables the port exposes. On a multiport, click a variable's chip to cycle **True**, **Sum** and **Multiply** (with a factor). |
+
+**Add port** adds a row; the trash icon removes one.
+
+---
+
+## Context Sidebar {#context-sidebar}
+
+**Hide context panel** (chevron) collapses it to its icons; click an icon to reopen that tab.
 
 | Tab | Icon | Shows |
 | :--- | :--- | :--- |
-| **Global parameters** | Globe | Every global constant, searchable, with editable values. |
-| **Instance parameters** | Sliders | The selected instance's parameters (searchable). Disabled with multiple instances selected. |
-| **Inspection modules** | Question mark | User-created "Inspection Modules" that surface a signed read-out of chosen variables, independent of ports. |
-| **Properties** | Wrench | The node colour-category picker. |
-| **Simulation** | Chart line | The Simulation panel: play the whole model or the current selection, plot variables, and run protocols or parameter sweeps. See [Simulating Your Model](../guides/simulating-your-model.md) and [Simulation UI Reference](./simulation-ui-overview.md). |
+| **Global parameters** | Globe | Global constants (searchable, editable) |
+| **Instance parameters** | Sliders | The selected instance's parameters (one instance at a time) |
+| **Inspection modules** | Question mark | Read-outs of chosen variables |
+| **Properties** | Wrench | Node colour theme; click a category to colour the selection |
+| **Simulation** | Chart | Run and plot; see [Simulation UI Reference](./simulation-ui-overview.md) |
 
 ---
 
-## Connections
+## Settings {#settings}
 
-Connections define how data is shared between modules.
+Opened with **Settings** (cog icon).
 
-### Port Nodes
-Small circular nodes added to the edge of a module.
-* **Create:** Use the **Add Port Node** (Pin) tool on a module.
-* **Delete:** Hover over a port node and click the **Trash** icon.
-    > [!WARNING]
-    > Deleting a port node will also delete all arrows connected to it.
-
-### Connection Arrows
-Lines indicating a shared variable relationship between two modules.
-* **Create:** Click and drag from one Port Node to another. The target node will highlight when a valid connection can be made.
-* **Direction:** The arrow points to the "destination" module. This directionality is used specifically for module array file exports.
-* **Delete:** Click the arrow to select it, then press `Delete`.
-
----
-
-## Shortcuts & Selection
-
-### Selection Tools
-
-| Action | Command | Result |
-| :--- | :--- | :--- |
-| **Single Select** | Click Module | Selects one module. |
-| **Multi-Select (Click)** | `Ctrl` + Click (Win/Linux)<br>`Cmd` + Click (Mac) | Adds module to current selection. |
-| **Multi-Select (Area)** | `Shift` + Drag | Selects all modules within the drawn box. |
-
-### Keyboard Shortcuts
-
-| Action | Shortcut |
+| Section | Settings |
 | :--- | :--- |
-| **Delete Selection** | `Delete` or `Backspace` |
-| **Undo** | `Ctrl` + `Z` |
-| **Redo** | `Ctrl` + `Shift` + `Z` |
-| **Rename Instance** | Click the instance name, then type |
-| **Open Instance Editor** | Double-click the instance node |
+| Units | **Units suggestion format**: CellML built-in or SI base units |
+| Simulation | **Plot inspection modules**; **Show data items** (in Edit obs_data) |
+| Image export | **Image format** (PNG or SVG); **Include warning symbols** |

@@ -1,29 +1,22 @@
 # Port Logic
 
-Ports determine how data flows between connected modules. Each port must be assigned a specific type—**Input**, **Output**, or **General**—which dictates its compatibility with other ports in the system.
+When you draw a connection, PhLynx **couples** each pair of ports that share a label and have compatible types. The couplings are stored on the connection and used on export.
 
-## Connection Logic
+## Port types {#port-types}
 
-During model export, PhLynx connects variables between modules only if two conditions are met:
-1.  **Matching Labels:** The connected ports share the exact same port label.
-2.  **Compatible Types:** The port types form a valid pair as defined below.
-
-## Compatibility Table
-
-The following table outlines valid connections between port types:
-
-| Port Type | Connects With |
+| Source port (arrow tail) | Couples with target port (arrow head) |
 | :--- | :--- |
-| **Input** | Output, General |
-| **Output** | Input, General |
-| **General** | Input, Output, General |
+| **Output** (O) | Input, General |
+| **General** (G) | Input, Output, General |
+| **Input** (I) | General, in the [Connections dialog](#connections-dialog) only |
 
-> [!NOTE]
-> **Circulatory Autogen Users:** "Input" and "Output" port types are equivalent to "Entrance" and "Exit" port types respectively in [Circulatory Autogen](https://github.com/physiomelinks/circulatory_autogen).
+Input/Output are Circulatory Autogen's Entrance/Exit. A **Basicport** takes one connection; a [Multiport](./glossary.md#multiport) takes several.
 
-## Incompatible Connections
+## Connections dialog {#connections-dialog}
 
-If two connected ports share a label but have incompatible types (e.g., Input to Input), **the connection will be ignored** during model export.
+![Connections dialog](../assets/images/connections-dialog.png){.align-center width="800px"}
+
+Double-click a connection to open **Connections**, where each port shows as Connected, Taken (by another connection) or Available. Drag between ports with the same label and compatible types to couple them, or drop onto **Add Port** to create a matching port. Click **Done** to save or **Cancel** to discard.
 
 > [!IMPORTANT]
-> Currently, PhLynx does not generate a warning or error message for incompatible connections. Ensure your port types are configured correctly before exporting to avoid missing connections in your final model.
+> A connection with no matching ports shows no warning. Check its couplings here before exporting.

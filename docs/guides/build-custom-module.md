@@ -1,50 +1,9 @@
 # Using Custom Modules
 
-When your model requires specific components not found in the default library, you can create and import custom CellML modules. This process requires uploading specific definition files to ensure the model can be exported and simulated correctly.
+Use your own CellML modules alongside the built-in ones.
 
-## 1. Create Custom Modules
+1. **Write the module.** Either drag the **new_module** template from the <GlossaryLink term="module-list"/> and write its equations in the Instance Editor (see [Writing CellML](./writing-cellml.md)), or write a `.cellml` file in another tool (see [CellML Module Format](../reference/cellml-module-format.md)).
+2. **Import the file.** Use Import ▸ **CellML File**, or drop one or more `.cellml` files on the Workspace. Components appear in Available Modules, and any `<units>` join the units library ([CellML Units File](../reference/cellml-units-file.md)).
+3. **Optionally import values.** Use Import ▸ **Parameters** (`.csv`) to fill in parameter values; see [Supported File Formats](../reference/file-types.md#parameter-file). Set each variable's type in the Instance Editor's Parameters tab.
 
-Write your custom CellML modules in your preferred IDE. To ensure compatibility with PhLynx, follow the structure and conventions outlined in the [Module Format Guide](../writing-cellml).
-
-## 2. Import Module Files
-
-Once your `.cellml` files are ready, import them into the workbench:
-
-1.  Click the arrow next to **Import** in the Toolbar.
-2.  Select **Modules**.
-3.  Choose your `.cellml` file(s) from the dialog.
-4.  **Result:** Your modules will appear in the **Module List** and can be placed into the workspace.
-
-## 3. Import Parameter Definitions
-
-To ensure PhLynx correctly categorizes variables as *constants* or *global constants* during export, you must upload a parameter configuration file.
-
-**Requirements:**
-* **Format:** `.csv`
-* **Naming Convention:**
-    * **Constants:** `[module_name]_[parameter_name]`
-    * **Global Constants:** `[parameter_name]`
-
-> [!IMPORTANT]
-> Parameter names in this file must exactly match the parameter and module names used in your PhLynx project.
-
-**Action:**
-1.  Click the arrow next to **Import** in the Toolbar.
-2.  Select **Parameters**.
-3.  Select your `parameter.csv` file.
-
-## 4. Import Unit Definitions
-
-PhLynx leverages CellML's innate dimensional consistency validation. If your modules use custom units that are not defined in the standard PhLynx library, you must import a custom units file.
-
-**Action:**
-1.  Click the arrow next to **Import** in the Toolbar.
-2.  Select **Units**.
-3.  Select your `units.cellml` file.
-
-> [!NOTE]
-> For a guide on creating unit definition files, see the official [CellML Specification](https://www.cellml.org/specifications/archive/20030930/units.pdf).
-
-## 5. Build Your Model
-
-Once the module, parameter, and unit files are imported, your custom components function exactly like standard library modules. You can drag them from the <GlossaryLink term="module-list"/>, connect them using ports, and include them in your final system export.
+Custom modules then work like library modules: place, connect and export them as usual.
