@@ -12,10 +12,10 @@
       ref="expandToggleRef"
       type="button"
       class="library-expand-toggle"
-      aria-label="Show module library"
+      :aria-label="`Show ${subject}`"
       aria-expanded="false"
       @click="toggleCollapsed"
-      v-tooltip.right="'Show module library'"
+      v-tooltip.right="`Show ${subject}`"
     >
       <i class="pi pi-bars"></i>
     </button>
@@ -29,10 +29,10 @@
               ref="collapseToggleRef"
               type="button"
               class="library-collapse-toggle"
-              aria-label="Hide module library"
+              :aria-label="`Hide ${subject}`"
               aria-expanded="true"
               @click="toggleCollapsed"
-              v-tooltip.bottom="'Hide module library'"
+              v-tooltip.bottom="`Hide ${subject}`"
             >
               <i class="pi pi-chevron-left"></i>
             </button>
@@ -56,6 +56,11 @@ const props = defineProps({
   title: {
     type: String,
     default: 'Available Modules',
+  },
+  // What the show/hide buttons name, as in "Hide module library".
+  subject: {
+    type: String,
+    default: 'module library',
   },
   initialWidth: {
     type: Number,

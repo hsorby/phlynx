@@ -2,36 +2,28 @@
   <div class="docs-page relative-container" >
     <ThemeToggle floating />
 
-    <aside :class="['left-sidebar', { collapsed: isCollapse }]">
-      <div class="sidebar-header">
-        <h2 v-show="!isCollapse" class="sidebar-title">User Guide</h2>
-        <div class="sidebar-header-actions">
-          <Button
-            class="collapse-btn"
-            :icon="isCollapse ? 'pi pi-angle-right' : 'pi pi-angle-left'"
-            rounded
-            text
-            severity="secondary"
-            @click="isCollapse = !isCollapse"
-          />
-        </div>
-      </div>
-
-      <div class="sidebar-menu">
+    <ResizableLibraryPanel
+      title="User Guide"
+      subject="user guide menu"
+      :overlay="false"
+      :initial-width="250"
+      :min-width="180"
+      :max-width="400"
+    >
+      <nav class="sidebar-menu" aria-label="User guide">
         <div v-for="group in menuGroups" :key="group.title" class="menu-group">
           <div class="menu-group-title" @click="toggleGroup(group.title)">
             <span class="menu-group-label">
               <i :class="group.icon" />
-              <span v-show="!isCollapse">{{ group.title }}</span>
+              <span>{{ group.title }}</span>
             </span>
             <i
-              v-show="!isCollapse"
               class="pi pi-angle-down menu-group-caret"
               :class="{ 'menu-group-caret--open': isGroupOpen(group.title) }"
             />
           </div>
 
-          <div v-show="isGroupOpen(group.title) && !isCollapse" class="menu-group-items">
+          <div v-show="isGroupOpen(group.title)" class="menu-group-items">
             <router-link
               v-for="item in group.items"
               :key="item.path"
@@ -43,8 +35,8 @@
             </router-link>
           </div>
         </div>
-      </div>
-    </aside>
+      </nav>
+    </ResizableLibraryPanel>
 
     <main class="markdown-body">
       <component :is="currentPageComponent" v-if="currentPageComponent" />
@@ -78,8 +70,8 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import Button from 'primevue/button'
 import ThemeToggle from '../components/ThemeToggle.vue'
+import ResizableLibraryPanel from '../components/ResizableLibraryPanel.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useColorScheme } from '../composables/useColorScheme'
 import githubMarkdownLightCss from 'github-markdown-css/github-markdown-light.css?inline'
@@ -88,7 +80,6 @@ import githubMarkdownDarkCss from 'github-markdown-css/github-markdown-dark.css?
 const route = useRoute()
 const router = useRouter()
 const { isDarkMode } = useColorScheme()
-const isCollapse = ref(false)
 const openGroups = ref(['Getting Started', 'Guides', 'Reference', 'Help'])
 const markdownFiles = import.meta.glob('@docs/**/*.md', { eager: true })
 const docsMap = {}
@@ -371,52 +362,21 @@ watch(currentSlug, () => {
   overflow: hidden;
 }
 
-.left-sidebar {
-  width: 250px;
-  flex-shrink: 0;
-  height: 100%;
-  overflow-y: auto;
-  border-right: 1px solid var(--p-content-border-color);
-  transition: width 0.3s ease;
-  background: var(--p-content-background);
-}
 
-.left-sidebar.collapsed {
-  width: 64px;
-}
 
 .theme-toggle-switch {
   margin-right: 8px;
 }
 
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px;
-  border-bottom: 1px solid var(--p-content-border-color);
-  min-height: 60px;
-}
 
-.sidebar-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
 
-.sidebar-title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  white-space: nowrap;
-}
 
-.collapse-btn {
-  flex-shrink: 0;
-}
 
 .sidebar-menu {
-  padding: 8px 0;
+  height: 100%;
+  overflow-y: auto;
+  /* Full width rows, past the panel's padding. */
+  margin: 0 -1rem;
 }
 
 .menu-group {
@@ -469,15 +429,7 @@ watch(currentSlug, () => {
   color: var(--p-primary-color);
 }
 
-.left-sidebar.collapsed .sidebar-header {
-  justify-content: center;
-  padding: 16px 8px;
-}
 
-.left-sidebar.collapsed .menu-group-title,
-.left-sidebar.collapsed .menu-group-items {
-  display: none;
-}
 
 .markdown-body {
   flex: 1;
