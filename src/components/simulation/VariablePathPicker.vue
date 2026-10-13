@@ -17,7 +17,7 @@
   >
     <template #option="{ option }">
       <div class="path-option" :class="{ 'path-option--elsewhere': !option.inScope }">
-        <span class="path-text">
+        <span class="path-text" v-overflow-title="`${option.component}/${option.name}`">
           <span class="path-component">{{ option.component }}/</span><span class="path-name">{{ option.name }}</span>
         </span>
         <span class="path-meta">
@@ -41,6 +41,7 @@ import { nextTick, ref } from 'vue'
 
 import AutoComplete from 'primevue/autocomplete'
 
+import { vOverflowTitle } from '../../directives/overflowTitle'
 import { searchVariableIndex } from '../../services/simulation/variableIndex'
 
 const KIND_LABELS = { variable: 'variable', constant: 'parameter', global_constant: 'global', boundary_condition: 'boundary', inspection: 'inspection' }
@@ -92,17 +93,26 @@ async function pick(entry) {
   font-size: 0.8125rem;
 }
 
+/* The instance gives way first, so the variable's name is what stays. */
 .path-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: flex;
+  min-width: 0;
   white-space: nowrap;
 }
 
 .path-component {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--p-text-muted-color);
 }
 
 .path-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-weight: 600;
 }
 
