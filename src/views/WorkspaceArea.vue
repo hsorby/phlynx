@@ -623,8 +623,9 @@ import ExportIcon from '../components/icons/ExportIcon.vue'
 
 import { useScreenshot } from '../services/useScreenshot'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
-import { migrateWorkspace, separateNodeParameters } from '../services/workspaceMigrator'
-import { buildWorkspaceFile, loadWorkspaceFile } from '../services/workspaceFile'
+import { separateNodeParameters } from '../services/workspaceMigrator'
+import { loadWorkspaceFile } from '../services/workspaceFile'
+import { useWorkspaceSaveLoad } from '../composables/useWorkspaceSaveLoad'
 import { useSimulation } from '../composables/useSimulation'
 import { useSimSettingsDialog } from '../composables/useSimSettingsDialog'
 import { useProtocolDialog } from '../composables/useProtocolDialog'
@@ -653,7 +654,6 @@ import {
   edgeLineOptions,
   FLOW_IDS,
   IMPORT_KEYS,
-  JSON_FILE_TYPES,
   NEW_INSTANCE_MODULE_REF,
   NUM_GHOST_HANDLES_TOP_BOT,
   NUM_GHOST_HANDLES_LEFT_RIGHT,
@@ -664,14 +664,7 @@ import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
 import { parseParametersFile } from '../utils/import'
 import { applyParameterValues, applyParametersToNodes, skippedParametersMessage } from '../utils/parameters'
 import { detachReactivity } from '../utils/reactivity'
-import {
-  ensureExtension,
-  legacyDownload,
-  saveFileHandle,
-  saveWithDialog,
-  stripExtension,
-  writeFileHandle,
-} from '../utils/save'
+import { saveWithDialog, stripExtension } from '../utils/save'
 
 const workspaceFileInput = ref(null)
 
@@ -2062,40 +2055,6 @@ function handleAutoLayout() {
   relayoutNodes(nodes.value, edges.value)
 }
 
-async function handleSaveWorkspace() {
-  const safeName = ensureExtension(sessionMetadataStore.lastSaveName, '.json')
-  const result = await saveFileHandle(safeName, JSON_FILE_TYPES)
-  if (result.status) {
-    if (result.handle) {
-      const blob = createSaveBlob()
-      try {
-        writeFileHandle(result.handle, blob)
-        sessionMetadataStore.setLastSaveName(result.handle.name)
-        trackEvent('save_action', {
-          category: 'Save',
-          action: 'save_workflow',
-          label: `File: ${result.handle.name}`,
-          file_type: 'json',
-        })
-        notify.success({ title: 'Workflow saved!' })
-      } catch (err) {
-        trackEvent('save_action', {
-          category: 'Save',
-          action: 'save_workflow',
-          label: `Error: ${err.message}`,
-          file_type: 'json',
-        })
-        notify.error({
-          title: 'Error Saving Workflow',
-          message: err.message,
-        })
-      }
-    }
-  } else {
-    saveDialogVisible.value = true
-  }
-}
-
 /**
  * Collects all state and processes it into the current export format.
  */
@@ -2259,86 +2218,16 @@ function snapshotFlowState(nodeIds = null) {
   })
 }
 
-/**
- * Collects all state and creates blob from it.
- */
-function createSaveBlob() {
-  const saveState = buildWorkspaceFile({
-    flow: toObject(),
-    library: libraryStore,
-    simulation: simulationSettingsStore,
-    inspectionModules: inspectionModuleStore,
-    omex: omexStore,
-  })
-
-  const jsonString = JSON.stringify(saveState, null, 2)
-  return new Blob([jsonString], { type: 'application/json' })
-}
-
-/**
- * Collects all state and downloads it as a JSON file.
- */
-const onSaveConfirm = async (fileName) => {
-  const baseName = fileName || sessionMetadataStore.lastSaveName
-  const finalName = ensureExtension(baseName, '.json')
-  const blob = createSaveBlob()
-
-  legacyDownload(finalName, blob)
-
-  sessionMetadataStore.setLastSaveName(fileName)
-  notify.success({ title: 'Workflow saved!' })
-}
-
-/**
- * Restores the application state from a loaded workspace. Errors are rethrown for the caller to report.
- */
-async function applyWorkspaceState(loadedState, { source = 'json' } = {}) {
-  const { clearWorkspace } = useClearWorkspace()
-
-  try {
-    // Validate the loaded file
-    if (!loadedState.flow || !loadedState.store) {
-      throw new Error('Invalid workflow file format.')
-    }
-
-    // Handles legacy formats if needed
-    const migratedState = migrateWorkspace(loadedState)
-
-    // Clear the current Vue Flow state without creating a history step for this load action.
-    await clearWorkspace({ recordHistory: false })
-
-    setViewport(migratedState.flow.viewport)
-    fromObject(migratedState.flow)
-
-    // Rebuild the edge index so the EdgeConnectionDialog subgraph is correct.
-    rebuildNodeEdgeIndex()
-    recomputeMissingCouplings()
-
-    // Restore Pinia store state.
-    libraryStore.loadState(migratedState.store)
-    simulationSettingsStore.loadState(migratedState.simulation)
-    inspectionModuleStore.loadState(migratedState.inspectionModules)
-    omexStore.loadState(migratedState.workspace)
-
-    trackEvent('workflow_load_action', {
-      category: 'Workflow',
-      action: 'load_workflow',
-      label: `Nodes: ${nodes.value.length}, Edges: ${edges.value.length}`,
-      file_type: source,
-    })
-    notify.success({
-      title: 'Workflow loaded successfully!',
-    })
-  } catch (error) {
-    trackEvent('workflow_load_action', {
-      category: 'Workflow',
-      action: 'load_workflow',
-      label: `Error: ${error.message}`,
-      file_type: source,
-    })
-    throw error
-  }
-}
+const { handleSaveWorkspace, onSaveConfirm, applyWorkspaceState } = useWorkspaceSaveLoad({
+  saveDialogVisible,
+  nodes,
+  edges,
+  toObject,
+  fromObject,
+  setViewport,
+  rebuildNodeEdgeIndex,
+  recomputeMissingCouplings,
+})
 
 /**
  * Reads a JSON file and restores the application state. Clears the file input, so re-picking the
