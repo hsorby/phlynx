@@ -254,11 +254,12 @@ const updateActiveHeading = () => {
     return
   }
 
-  const scrollPosition = scrollTop + 100
+  // Measured against the scrolling pane, whatever the headings' offsetParent is.
+  const paneTop = mainElement.getBoundingClientRect().top
 
   for (let i = headingElements.length - 1; i >= 0; i--) {
     const heading = headingElements[i]
-    if (heading.offsetTop <= scrollPosition) {
+    if (heading.getBoundingClientRect().top - paneTop <= 100) {
       activeHeading.value = heading.id
       return
     }
@@ -485,6 +486,12 @@ watch(currentSlug, () => {
   overflow-y: auto;
   padding: 20px 40px;
   box-sizing: border-box;
+}
+
+/* Each page renders in its own .markdown-body wrapper. Only <main> scrolls, as the contents list follows its scroll. */
+.markdown-body .markdown-body {
+  height: auto;
+  overflow: visible;
 }
 
 .heading-highlight {
