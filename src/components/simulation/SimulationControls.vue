@@ -10,7 +10,12 @@
       size="small"
       class="controls-views"
       aria-label="Show"
-    />
+    >
+      <template #option="{ option }">
+        <!-- Named "Plots (3)" for a screen reader, the count shown as a badge. -->
+        <span class="controls-view-label">{{ option.name }}</span> <span class="controls-view-count"><span class="visually-hidden">(</span>{{ option.count }}<span class="visually-hidden">)</span></span>
+      </template>
+    </SelectButton>
 
     <template v-if="view === 'plots'">
       <div class="controls-search">
@@ -131,12 +136,24 @@ const plotOptions = computed(() => resolveGroups(shownPlotConfig.value))
 const plottedCount = computed(() => shownPlotConfig.value?.selections?.length ?? 0)
 const sliderDefinitions = computed(() => settingsStore.parameterScanConfig?.selections ?? [])
 const sliderKeys = computed(() => new Set(sliderDefinitions.value.map((definition) => sliderValueKey(definition))))
+/**
+ * Describes a view for the switch: its name and how many it holds.
+ *
+ * @param {string} name
+ * @param {number} count
+ * @param {string} value
+ * @returns {{label: string, name: string, count: number, value: string}}
+ */
+function describeView(name, count, value) {
+  return { label: `${name} (${count})`, name, count, value }
+}
+
 const views = computed(() => [
-  { label: `Plots (${plottedCount.value})`, value: 'plots' },
-  { label: `Sliders (${sliderKeys.value.size})`, value: 'sliders' },
+  describeView('Plots', plottedCount.value, 'plots'),
+  describeView('Sliders', sliderKeys.value.size, 'sliders'),
   // The swept parameter, and the one its curves vary.
-  { label: `Sweep (${settingsStore.simulationSettings.sweep ? (settingsStore.simulationSettings.sweep.family ? 2 : 1) : 0})`, value: 'sweep' },
-  { label: `Runs (${resultsStore.trackedRuns.length})`, value: 'runs' },
+  describeView('Sweep', settingsStore.simulationSettings.sweep ? (settingsStore.simulationSettings.sweep.family ? 2 : 1) : 0, 'sweep'),
+  describeView('Runs', resultsStore.trackedRuns.length, 'runs'),
 ])
 
 // The target is the plot chosen last, or the first while that one is gone.
@@ -275,8 +292,47 @@ function focusPicker() {
   min-width: 0;
 }
 
+/* Across the controls, the four views sharing it, so none of them wraps or is cut off as the controls narrow. */
 .controls-views {
-  align-self: flex-start;
+  display: flex;
+  width: 100%;
+}
+
+.controls-views :deep(.p-togglebutton) {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-inline: 4px;
+}
+
+.controls-views :deep(.p-togglebutton-content) {
+  gap: 4px;
+  min-width: 0;
+  padding-inline: 6px;
+  white-space: nowrap;
+}
+
+.controls-view-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.controls-view-count {
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--p-content-hover-background);
+  font-size: 0.75rem;
+  color: var(--p-text-muted-color);
 }
 
 .controls-search {
@@ -301,8 +357,17 @@ function focusPicker() {
   width: 7.5rem;
 }
 
-/* Narrow: the plot to add to goes under the search box. */
+/* Narrow: the plot to add to goes under the search box, and each view's count sits in its corner, taking no width. */
 @container (max-width: 300px) {
+  .controls-view-count {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    padding: 0 3px;
+    font-size: 0.5625rem;
+    line-height: 0.75rem;
+  }
+
   .controls-search {
     flex-direction: column;
   }
