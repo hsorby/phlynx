@@ -56,16 +56,25 @@ describe('useWorkspaceSearch', () => {
     expect(search.getNodeClass({ id: 'lung' })).toBe('node-search-dimmed')
   })
 
-  it('steps through matches both ways, wrapping round, and zooms to each', () => {
+  it('steps through matches from the first, wrapping round, and zooms to each', () => {
     const { search, zoomToNode, type } = setup([makeNode('a1'), makeNode('a2'), makeNode('a3')])
     type('a')
+    expect(search.currentMatchIndex.value).toBe(-1)
     search.cycleToNextMatch()
     search.cycleToNextMatch()
     search.cycleToNextMatch()
-    expect(zoomToNode.mock.calls.map(([id]) => id)).toEqual(['a2', 'a3', 'a1'])
+    search.cycleToNextMatch()
+    expect(zoomToNode.mock.calls.map(([id]) => id)).toEqual(['a1', 'a2', 'a3', 'a1'])
     search.cycleToPreviousMatch()
     expect(zoomToNode).toHaveBeenLastCalledWith('a3')
     expect(search.currentMatchIndex.value).toBe(2)
+  })
+
+  it('steps back from the last match when none is current yet', () => {
+    const { search, zoomToNode, type } = setup([makeNode('a1'), makeNode('a2')])
+    type('a')
+    search.cycleToPreviousMatch()
+    expect(zoomToNode).toHaveBeenLastCalledWith('a2')
   })
 
   it('zooms to a single match again rather than stepping past it', () => {
@@ -74,7 +83,7 @@ describe('useWorkspaceSearch', () => {
     search.cycleToNextMatch()
     search.cycleToNextMatch()
     search.cycleToPreviousMatch()
-    expect(zoomToNode.mock.calls).toEqual([['heart'], ['heart']])
+    expect(zoomToNode.mock.calls).toEqual([['heart'], ['heart'], ['heart']])
   })
 
   it('clears the query and its matches', () => {
@@ -95,14 +104,14 @@ describe('useWorkspaceSearch', () => {
     expect(search.currentMatchIndex.value).toBe(1)
   })
 
-  it('goes back to the first match when the current one stops matching', async () => {
+  it('has no current match once the current one stops matching', async () => {
     const { nodes, search, type } = setup([makeNode('a1'), makeNode('a2')])
     type('a')
     search.selectMatch(1)
     nodes.value[1].data.name = 'z'
     await nextTick()
     expect(search.matchCount.value).toBe(1)
-    expect(search.currentMatchIndex.value).toBe(0)
+    expect(search.currentMatchIndex.value).toBe(-1)
   })
 
   it('does not re-run when a node only moves', async () => {
@@ -238,7 +247,25 @@ describe('useWorkspaceSearch', () => {
       search.onSearchFocus()
       type('a')
       press(search, 'Enter')
-      expect(zoomToNode).toHaveBeenCalledWith('a2')
+      expect(zoomToNode).toHaveBeenCalledWith('a1')
+    })
+
+    it('steps through matches with the arrow keys once a query is typed', () => {
+      const { search, zoomToNode, type } = setup([makeNode('a1'), makeNode('a2'), makeNode('a3')])
+      search.onSearchFocus()
+      type('a')
+      expect(press(search, 'ArrowDown').defaultPrevented).toBe(true)
+      press(search, 'ArrowDown')
+      press(search, 'ArrowUp')
+      expect(zoomToNode.mock.calls.map(([id]) => id)).toEqual(['a1', 'a2', 'a1'])
+    })
+
+    it('leaves the arrow keys to the text when nothing matches', () => {
+      const { search, zoomToNode, type } = setup([makeNode('a1')])
+      search.onSearchFocus()
+      type('zz')
+      expect(press(search, 'ArrowDown').defaultPrevented).toBe(false)
+      expect(zoomToNode).not.toHaveBeenCalled()
     })
   })
 })

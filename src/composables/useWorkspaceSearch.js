@@ -17,7 +17,8 @@ import { SEARCH_MODES, findWorkspaceMatches, parseSearchQuery } from '../utils/w
 export function useWorkspaceSearch({ nodes, findNode, zoomToNode }) {
   const searchQuery = ref('')
   const matches = ref([])
-  const currentMatchIndex = ref(0)
+  // -1 until the user steps to a match.
+  const currentMatchIndex = ref(-1)
   const isSearchFocused = ref(false)
   const isPickerDismissed = ref(false)
   const pickerIndex = ref(0)
@@ -41,8 +42,7 @@ export function useWorkspaceSearch({ nodes, findNode, zoomToNode }) {
   const runSearch = ({ keepCurrent = false } = {}) => {
     const currentId = matchIds.value[currentMatchIndex.value]
     matches.value = findWorkspaceMatches(nodes.value, parsedQuery.value)
-    const keptIndex = keepCurrent ? matchIds.value.indexOf(currentId) : -1
-    currentMatchIndex.value = Math.max(keptIndex, 0)
+    currentMatchIndex.value = keepCurrent ? matchIds.value.indexOf(currentId) : -1
   }
 
   const clearSearch = () => {
@@ -63,15 +63,12 @@ export function useWorkspaceSearch({ nodes, findNode, zoomToNode }) {
 
   const cycleToNextMatch = () => {
     const count = matchIds.value.length
-    if (count === 0) return
-    // A single match is zoomed to again rather than stepped past.
-    selectMatch(count === 1 ? 0 : (currentMatchIndex.value + 1) % count)
+    if (count) selectMatch((currentMatchIndex.value + 1) % count)
   }
 
   const cycleToPreviousMatch = () => {
     const count = matchIds.value.length
-    if (count <= 1) return
-    selectMatch((currentMatchIndex.value - 1 + count) % count)
+    if (count) selectMatch(currentMatchIndex.value <= 0 ? count - 1 : currentMatchIndex.value - 1)
   }
 
   /**
@@ -97,8 +94,8 @@ export function useWorkspaceSearch({ nodes, findNode, zoomToNode }) {
 
   /**
    * Handles the search box's keys: the mode picker's arrows and Enter while it shows (Tab too, unless the name
-   * search is highlighted, so Tab still leaves the box), otherwise Enter and Shift+Enter to step through matches.
-   * Escape clears the box, or leaves it once empty.
+   * search is highlighted, so Tab still leaves the box), otherwise the arrows or Enter and Shift+Enter to step
+   * through matches. Escape clears the box, or leaves it once empty.
    *
    * @param {KeyboardEvent} event
    */
@@ -110,9 +107,9 @@ export function useWorkspaceSearch({ nodes, findNode, zoomToNode }) {
     } else if (showModePicker.value && (event.key === 'Enter' || (event.key === 'Tab' && !event.shiftKey && pickerIndex.value > 0))) {
       event.preventDefault()
       pickMode(pickerIndex.value)
-    } else if (event.key === 'Enter') {
+    } else if (event.key === 'Enter' || (matchIds.value.length && ['ArrowDown', 'ArrowUp'].includes(event.key))) {
       event.preventDefault()
-      if (event.shiftKey) cycleToPreviousMatch()
+      if (event.key === 'ArrowUp' || (event.key === 'Enter' && event.shiftKey)) cycleToPreviousMatch()
       else cycleToNextMatch()
     } else if (event.key === 'Escape') {
       event.preventDefault()

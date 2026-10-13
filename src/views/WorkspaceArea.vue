@@ -294,7 +294,7 @@
       >
         <div
           class="workspace-search-container"
-          :class="{ 'search-inactive': !isSearchFocused && !searchQuery }"
+          :class="{ 'search-inactive': !isSearchFocused && !searchQuery, 'search-mode-var': parsedQuery.mode === 'var' }"
         >
           <div class="workspace-search-input-wrapper">
             <IconField>
@@ -302,7 +302,7 @@
               <InputText
                 ref="searchInputRef"
                 v-model="searchQuery"
-                class="w-62"
+                class="w-full"
                 placeholder="Search workspace… (/)"
                 @input="runSearch()"
                 @keydown="onSearchKeydown"
@@ -353,7 +353,7 @@
                 />
               </div>
             </div>
-            <ul v-if="matchCount >= 1" class="search-match-list">
+            <ul v-if="matchCount >= 1" ref="matchListRef" class="search-match-list">
               <li
                 v-for="(match, index) in matchingNodesList"
                 :key="match.node.id"
@@ -1051,6 +1051,7 @@ const clipboard = ref({ nodes: [], edges: [] })
 const mousePosition = ref({ x: 0, y: 0 })
 
 const searchInputRef = ref(null)
+const matchListRef = ref(null)
 const {
   searchQuery,
   parsedQuery,
@@ -1082,6 +1083,12 @@ const describeMatchedVariable = (row) => {
   const kind = variableKindLabel(row)
   return kind ? `${row.name} (${kind})` : row.name
 }
+
+// Keep the current match in view as the arrows step through a long list.
+watch(currentMatchIndex, async () => {
+  await nextTick()
+  matchListRef.value?.querySelector('.search-match-item.active')?.scrollIntoView?.({ block: 'nearest' })
+})
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
@@ -3387,10 +3394,18 @@ watch(
   top: 16px;
   right: 16px;
   z-index: 10;
-  transition: opacity 0.3s ease;
+  width: 15.5rem;
+  max-width: calc(100% - 32px);
+  transition:
+    opacity 0.3s ease,
+    width 0.2s ease;
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.workspace-search-container.search-mode-var {
+  width: 24rem;
 }
 
 .workspace-search-container.search-inactive {
