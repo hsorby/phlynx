@@ -293,7 +293,6 @@
         }"
       >
         <div
-          ref="searchBarEl"
           class="workspace-search-container"
           :class="{ 'search-inactive': !searchBarFocused && !searchQuery }"
         >
@@ -301,10 +300,12 @@
             <IconField>
               <InputIcon class="pi pi-search" />
               <InputText
+                ref="searchInputRef"
                 v-model="searchQuery"
                 class="w-62"
                 placeholder="Search Workspace..."
-                @input="handleSearchInput"
+                @input="runSearch()"
+                @keydown="onSearchKeydown"
                 @focus="searchBarFocused = true"
                 @blur="searchBarFocused = false"
               />
@@ -597,6 +598,7 @@ import { useSimSettingsDialog } from '../composables/useSimSettingsDialog'
 import { useProtocolDialog } from '../composables/useProtocolDialog'
 import { useFloatingViewer } from '../composables/useFloatingViewer'
 import { useActiveDocumentListeners } from '../composables/useActiveDocumentListeners'
+import { useWorkspaceSearch } from '../composables/useWorkspaceSearch'
 import { scopeFlowObject } from '../services/simulation/scopedModel'
 import { relayoutNodes } from '../services/layouts/physics'
 import { extractSimData as extractSimDataFromSedml } from '../services/import/sedml'
@@ -1016,13 +1018,20 @@ const undoRedoSelection = false
 const clipboard = ref({ nodes: [], edges: [] })
 const mousePosition = ref({ x: 0, y: 0 })
 
-// Search functionality
-const searchQuery = ref('')
-const matchCount = ref(null)
-const matchingNodeIds = ref(new Set())
+const searchInputRef = ref(null)
 const searchBarFocused = ref(false)
-
-const currentMatchIndex = ref(0)
+const {
+  searchQuery,
+  matchCount,
+  matchingNodesList,
+  currentMatchIndex,
+  runSearch,
+  clearSearch,
+  selectMatch,
+  cycleToNextMatch,
+  cycleToPreviousMatch,
+  getNodeClass,
+} = useWorkspaceSearch({ nodes, findNode, zoomToNode })
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
@@ -1210,82 +1219,42 @@ function selectAllNodes() {
   })
 }
 
-const clearSearch = () => {
-  searchQuery.value = ''
-  handleSearchInput()
-}
-
 const onPaneClick = () => {
   if (searchQuery.value) {
     clearSearch()
   }
 }
 
-const handleSearchInput = () => {
-  if (!searchQuery.value.trim()) {
-    matchingNodeIds.value.clear()
-    matchCount.value = null
-    currentMatchIndex.value = 0
-    return
-  }
-
-  const query = searchQuery.value.toLowerCase()
-  const matches = new Set()
-
-  nodes.value.forEach((node) => {
-    // Search in all relevant name fields
-    const moduleRef = node.data?.moduleRef?.toLowerCase() || ''
-    const name = node.data?.name?.toLowerCase() || ''
-    const mathRef = node.data?.mathRef?.toLowerCase() || ''
-
-    if (moduleRef.includes(query) || name.includes(query) || mathRef.includes(query)) {
-      matches.add(node.id)
-    }
-  })
-
-  matchingNodeIds.value = matches
-  matchCount.value = matches.size
-  currentMatchIndex.value = 0
+/** Focuses the search box and selects its text, so typing replaces the last query. */
+const focusSearch = () => {
+  const input = searchInputRef.value?.$el
+  input?.focus()
+  input?.select()
 }
 
-const matchingNodesList = computed(() =>
-  Array.from(matchingNodeIds.value)
-    .map((id) => findNode(id))
-    .filter(Boolean)
-)
-
-const selectMatch = (index) => {
-  const matchArray = Array.from(matchingNodeIds.value)
-  if (index < 0 || index >= matchArray.length) return
-
-  currentMatchIndex.value = index
-  zoomToNode(matchArray[index])
-}
-
-const cycleToNextMatch = () => {
-  if (matchCount.value === 0) return
-
-  const matchArray = Array.from(matchingNodeIds.value)
-
-  if (matchCount.value === 1) {
-    // If only one match, just zoom to it
-    zoomToNode(matchArray[0])
-  } else {
-    // Multiple matches, cycle through them
-    currentMatchIndex.value = (currentMatchIndex.value + 1) % matchArray.length
-    zoomToNode(matchArray[currentMatchIndex.value])
+/**
+ * Steps through matches with Enter and Shift+Enter, and clears (then leaves) the box with Escape.
+ *
+ * @param {KeyboardEvent} event
+ */
+const onSearchKeydown = (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    if (event.shiftKey) cycleToPreviousMatch()
+    else cycleToNextMatch()
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    if (searchQuery.value) clearSearch()
+    else event.target.blur?.()
   }
 }
 
-const cycleToPreviousMatch = () => {
-  if (matchCount.value <= 1) return
-
-  const matchArray = Array.from(matchingNodeIds.value)
-  currentMatchIndex.value = (currentMatchIndex.value - 1 + matchArray.length) % matchArray.length
-  zoomToNode(matchArray[currentMatchIndex.value])
-}
-
-const zoomToNode = (nodeId) => {
+/**
+ * Centres the view on a node.
+ *
+ * @param {string} nodeId
+ */
+function zoomToNode(nodeId) {
   const node = findNode(nodeId)
   if (!node) return
 
@@ -1301,13 +1270,6 @@ const zoomToNode = (nodeId) => {
     },
     { duration: 300 }
   )
-}
-
-const getNodeClass = (props) => {
-  if (!searchQuery.value.trim()) {
-    return ''
-  }
-  return matchingNodeIds.value.has(props.id) ? 'node-search-match' : 'node-search-dimmed'
 }
 
 function handleClearWorkspace() {
@@ -2965,21 +2927,6 @@ const pasteSelection = async (atMouse = false) => {
 const handleKeyDown = (event) => {
   // Check if user is typing in an input field (don't trigger copy/paste then)
   if (['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
-    // Allow Enter/Shift+Enter/Escape in search input for navigation
-    if (event.target.closest('.workspace-search-input')) {
-      if (event.key === 'Enter') {
-        event.preventDefault()
-        if (event.shiftKey) {
-          cycleToPreviousMatch()
-        } else {
-          cycleToNextMatch()
-        }
-      } else if (event.key === 'Escape' && searchQuery.value) {
-        event.preventDefault()
-        clearSearch()
-        event.target.blur?.()
-      }
-    }
     return
   }
 
@@ -3043,9 +2990,9 @@ const handleKeyDown = (event) => {
   }
 
   // Search shortcuts
-  if ((isCtrl && event.key === 'f') || event.key === '/') {
+  if ((isCtrl && event.key.toLowerCase() === 'f') || (event.key === '/' && !isCtrl && !event.altKey)) {
     event.preventDefault()
-    document.querySelector('.workspace-search-input input')?.focus()
+    focusSearch()
   }
 
   if (event.key === 'Escape' && searchQuery.value) {
@@ -3216,18 +3163,6 @@ watch(
   { immediate: true }
 )
 
-// Track only the fields the search reads; a deep watch walked every node on each drag frame and selection change.
-watch(
-  () =>
-    searchQuery.value.trim()
-      ? nodes.value.map((n) => `${n.id}|${n.data?.name}|${n.data?.moduleRef}|${n.data?.mathRef}`).join('\n')
-      : '',
-  () => {
-    if (searchQuery.value.trim()) {
-      handleSearchInput()
-    }
-  }
-)
 </script>
 
 <style>
