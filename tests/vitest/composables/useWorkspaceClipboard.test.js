@@ -144,6 +144,22 @@ describe('useWorkspaceClipboard', () => {
       expect(snapshot.module.moduleRef).toBe(MODULE_REF)
     })
 
+    it('snapshots each module and math once, however many nodes use it', async () => {
+      library.addMath('file:other', DECAY_XML)
+      library.addModule({ moduleRef: 'mod:other', mathRef: 'file:other', name: 'other', ports: [], variables: [] })
+      const data = { name: 'D', moduleRef: 'mod:other', mathRef: 'file:other' }
+      nodes.value.push(createNode('dndnode_3', 'D', 0, 0, { data }))
+      // Two nodes share the first module, and the one after them uses another.
+      select(['dndnode_0', 'dndnode_1', 'dndnode_3'])
+
+      await clipboard.copySelection()
+
+      expect(Object.keys(JSON.parse(systemClipboard.text).storeSnapshot)).toEqual([
+        `${MODULE_REF}::${MATH_REF}`,
+        'mod:other::file:other',
+      ])
+    })
+
     it('leaves out of the snapshot nodes whose module or math is not in the library', async () => {
       const data = { name: 'D', moduleRef: 'mod:gone', mathRef: 'file:gone' }
       nodes.value.push(createNode('dndnode_3', 'D', 0, 0, { data }))
@@ -202,6 +218,33 @@ describe('useWorkspaceClipboard', () => {
       expect(nodes.value[0].data.mathRef).toBe(MATH_REF)
     })
 
+    it('restores the math layout into a fresh library, and drops a layout that is not valid', async () => {
+      const layout = {
+        format: 'cellml-text-layout',
+        version: 1,
+        components: [{ name: 'decay', leading: ['// decay'], statements: [], footer: [] }],
+      }
+      library.setMathLayout(MATH_REF, layout)
+      select(['dndnode_0'])
+      await clipboard.copySelection()
+      const copied = systemClipboard.text
+
+      for (const [text, expected] of [
+        [copied, layout],
+        [copied.replace('cellml-text-layout', 'bogus'), null],
+      ]) {
+        setActivePinia(createPinia())
+        const freshLibrary = useLibraryStore()
+        nodes.value = []
+        edges.value = []
+        systemClipboard.text = text
+
+        await createClipboard().pasteSelection()
+
+        expect(freshLibrary.getMathLayout(MATH_REF)).toEqual(expected)
+      }
+    })
+
     it('gives pasted nodes new unique ids and names, and selects only them', async () => {
       select(['dndnode_0', 'dndnode_1'])
       await clipboard.copySelection()
@@ -219,6 +262,32 @@ describe('useWorkspaceClipboard', () => {
         ['dndnode_6', 'B_2'],
       ])
       expect(nodes.value.filter((node) => node.selected).map((node) => node.id)).toEqual(['dndnode_5', 'dndnode_6'])
+      expect(nodes.value.slice(3).map((node) => node.type)).toEqual(Array(4).fill('moduleNode'))
+    })
+
+    it('moves values out of older math into the rows of the pasted nodes', async () => {
+      const row = { name: 'k', type: 'constant', units: 'per_second', value: '' }
+      const old = createNode('x0', 'Old', 0, 0, { data: { ...createNode('', '', 0, 0).data, variables: [row] } })
+      const module = library.availableModules.get(MODULE_REF)
+      const entry = { mathRef: MATH_REF, math: DECAY_XML, moduleRef: MODULE_REF, module }
+      systemClipboard.text = JSON.stringify({ nodes: [old], edges: [], storeSnapshot: { key: entry } })
+
+      await clipboard.pasteSelection()
+
+      const pasted = nodes.value.at(-1)
+      expect(pasted.data.variables.find((variable) => variable.name === 'k').value).toBe('0.5')
+    })
+
+    it('keeps names unique within one paste, not only against the workspace', async () => {
+      // Pasting 'A' takes 'A_1', which the second pasted node (named 'A_1' in the other window) must avoid.
+      const pasted = [createNode('x0', 'A', 0, 0), createNode('x1', 'A_1', 0, 0)]
+      systemClipboard.text = JSON.stringify({ nodes: pasted, edges: [] })
+
+      await clipboard.pasteSelection()
+
+      const names = nodes.value.slice(3).map((node) => node.data.name)
+      expect(names).toHaveLength(2)
+      expect(new Set([...names, 'A', 'B', 'C']).size).toBe(5)
     })
 
     it('recreates edges between pasted nodes and drops edges to nodes that were not copied', async () => {
@@ -237,6 +306,18 @@ describe('useWorkspaceClipboard', () => {
         data: { couplings: [] },
       })
       expect(edges.value.filter((edge) => edge.selected).map((edge) => edge.id)).toEqual(['edge_2'])
+    })
+
+    it('gives every pasted edge its own id', async () => {
+      select(['dndnode_0', 'dndnode_1', 'dndnode_2'], ['edge_0', 'edge_1'])
+      await clipboard.copySelection()
+
+      await clipboard.pasteSelection()
+
+      expect(edges.value.slice(2).map((edge) => [edge.id, edge.source, edge.target])).toEqual([
+        ['edge_2', 'dndnode_3', 'dndnode_4'],
+        ['edge_3', 'dndnode_4', 'dndnode_5'],
+      ])
     })
 
     it('offsets pasted nodes by 50 in both directions by default', async () => {
@@ -287,11 +368,15 @@ describe('useWorkspaceClipboard', () => {
       expect(nodes.value.at(-1).data.name).toBe('Other')
     })
 
-    it('does nothing when there is nothing to paste', async () => {
+    it('does nothing when there is nothing to paste, leaving the selection as it was', async () => {
+      select(['dndnode_1'], ['edge_0'])
+
       await clipboard.pasteSelection()
 
       expect(nodes.value).toHaveLength(3)
       expect(edges.value).toHaveLength(2)
+      expect(nodes.value.filter((node) => node.selected).map((node) => node.id)).toEqual(['dndnode_1'])
+      expect(edges.value.filter((edge) => edge.selected).map((edge) => edge.id)).toEqual(['edge_0'])
     })
   })
 
