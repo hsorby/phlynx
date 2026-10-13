@@ -4,11 +4,12 @@ This page summarizes all user interface elements in the Workbench view of PhLynx
 
 ## Workbench Overview
 
-The Workbench is the primary interface for building and configuring models. It is divided into three main interaction areas:
+The Workbench is the primary interface for building and configuring models. It is divided into four main interaction areas:
 
 * **[Toolbar](../reference/ui-overview#toolbar) (Top):** Tools for file management, importing/exporting, and general workspace operations.
 * **[Module List](../reference/ui-overview#module-list) (Left):** A library of imported <GlossaryLink term="modules"/> available for use.
 * **[Workspace](../reference/ui-overview#workspace) (Centre):** The canvas where you assemble, configure, and connect your model components.
+* **[Context Sidebar](../reference/ui-overview#context-sidebar) (Right):** Inspects and simulates whatever is selected on the canvas.
 
 These areas are highlighted in the image below:
 
@@ -50,10 +51,10 @@ Populates the workspace using a [module array](./file-types#instance-array) file
 > [!NOTE]
 > If PhLynx does not recognize component types within the array, you may be prompted to provide additional module files.
 
-#### 2. Modules
-Imports [CellML](./cellml-module-format) components to the Module List.
+#### 2. CellML File
+Imports [CellML](./cellml-module-format) components to the Module List, **and** any [units](./cellml-units-file) the same file defines to the Units library.
 * **Supported Format:** `.cellml`
-* **Result:** Adds all components found in the file to the **Module List** panel, making them available for placement.
+* **Result:** Adds every component found in the file to the **Module List** panel, and every named `<units>` definition to the units library, in one step. A file is useful as a units source even if its components are never placed — see [CellML Units File](./cellml-units-file).
 
 #### 3. Module Configurations
 Imports [Module Configuration](./file-types#module-configuration) files to update internal definitions.
@@ -68,10 +69,10 @@ Imports a parameter file to identify constants and global constants. *(Marked fo
     * Constants: `[module_name]_[parameter_name]`
     * Global Constants: `[parameter_name]`
 
-#### 5. Units
-Imports a [Units](./cellml-units-file) definition file.
-* **Supported Format:** `.cellml`
-* **Result:** Updates unit definitions in the internal store.
+#### 5. COMBINE Archive
+Imports a COMBINE/OMEX archive (`.omex`) exported from PhLynx or produced alongside a model, including a `params_for_id.csv` parameter-scan file or an `obs_data.json` protocol file it contains. See [Running Protocols](../guides/running-protocols.md) and [Supported File Formats](./file-types.md#params_for_idcsv).
+* **Supported Format:** `.omex`
+* **Result:** Restores the model plus any protocol or parameter-scan configuration bundled with it.
 
 ### Export
 
@@ -84,6 +85,7 @@ Generates output files for Circulatory Autogen or standard CellML.
 | :--- | :--- | :--- |
 | **Configuration Files** | A `.zip` archive containing:<br>• `instance_array.csv` (connections)<br>• `module_config.json` (parameters/ports) | • At least one module in workspace<br>• Parameter file loaded<br>• Ports defined for connections |
 | **CellML Model** | A flattened CellML 2.0 model file. | • At least one module in workspace<br>• Ports defined for connections<br>• All units defined |
+| **COMBINE Archive** | A `.omex` archive containing the model plus any `obs_data.json` protocol or `params_for_id.csv` parameter-scan configuration. | Same as CellML Model. |
 
 ---
 
@@ -141,35 +143,55 @@ Each node features three interactive tools for configuration:
 
 ![Expanded Add Port Node menu](../assets/images/add-port-node.png){.align-center width="600px"}
 
-### 3. Edit Module
+### 3. Edit Instance
 * **Icon:** Pencil (Right)
-* **Purpose:** Opens the **Edit Module Dialog** to rename the module and configure port variables.
+* **Purpose:** Opens the **Instance Editor**, a dialog for writing the instance's equations and configuring its parameters, ports and plot.
 
 ---
 
-### Edit Module Dialog
+### Instance Editor
 
-This dialog allows for detailed configuration of the module's properties and data mappings.
+The Instance Editor is a two-pane dialog: equations on the left, and a **Parameters / Ports / Plot** tab group on the right.
 
 ![Expanded Edit Module dialog](../assets/images/edit-module-detail.png){.align-center width="600px"}
 
-#### Module Name
-Sets the unique identifier for the module in exported files.
-* **Requirement:** Must be unique within the workspace.
+#### Instance Name and Component Name
+The dialog header has two fields:
+* **Instance:** This instance's name in the workspace. Must be unique within the workspace.
+* **Component:** The underlying CellML component name used in exported files. While **Simple Mode** (see below) is on, this is editable directly; with Simple Mode off, the component name comes from the equations themselves (`def comp [name] as`) and is shown read-only.
+
+#### Writing Equations
+The left pane has two interchangeable editor tabs — both edit the same underlying equations:
+* **CellML Text:** a structured text editor. See [Writing CellML](../guides/writing-cellml.md) for the language itself, and for the **Simple Mode** toggle that controls whether variable declarations are managed automatically or written by hand.
+* **Math Editor:** a WYSIWYG equation editor — type and click to build expressions without CellML Text syntax. It always behaves as Simple Mode. Clicking a variable rendered here plots it on the **Plot** tab when Auto-update is on; see [Simulating Your Model](../guides/simulating-your-model.md).
 
 #### Port Definitions
-Maps specific CellML variables to the visual ports created on the module node.
+On the **Ports** tab, each row maps one or more internal CellML variables to a visual port on the instance node:
 
-1.  **Port Type:** Use the dropdown to select one of I (input), O (output), and G (general) to set the port type. 
-2.  **Port Name:** Enter a custom name for the shared variable (e.g., `sodium_concentration`). This acts as the "common language" between connected modules.
-3.  **Variable Selection:** Use the dropdown to select one or more internal CellML variables to expose through this port.
-4.  **Manage Ports:**
-    * **Add Port:** Adds a new definition row.
-    * **Delete:** Removes a definition row.
+1.  **Type:** I (input), O (output), or G (general). See [Valid Port Configurations](./valid-port-configurations.md).
+2.  **Label:** The shared name for the port (e.g., `sodium_concentration`). This must match the connected port's label on the target instance.
+3.  **Mode:** Toggles the port between **Basicport** (exactly one connection) and **Multiport** (several connections). A multiport's variables can each be set to **True** (a plain shared link), **Sum** (adds the value from every connection), or **Multiply** (scales the connection's value by a factor you enter) — click a variable's chip to cycle through these.
+4.  **Variables:** One or more internal CellML variables exposed through this port.
+5.  **Manage Ports:** **Add port** adds a row; the trash icon removes one.
 
 **Controls:**
-* **Save:** Applies changes and closes the dialog (`Enter`).
+* **Save:** Applies changes and closes the dialog.
+* **Apply:** Saves and keeps the dialog open.
 * **Cancel:** Discards changes.
+
+---
+
+## Context Sidebar
+
+A collapsible panel on the right edge of the Workbench, with five vertical icon tabs:
+
+| Tab | Icon | Shows |
+| :--- | :--- | :--- |
+| **Global parameters** | Globe | Every global constant, searchable, with editable values. |
+| **Instance parameters** | Sliders | The selected instance's parameters (searchable). Disabled with multiple instances selected. |
+| **Inspection modules** | Question mark | User-created "Inspection Modules" that surface a signed read-out of chosen variables, independent of ports. |
+| **Properties** | Wrench | The node colour-category picker. |
+| **Simulation** | Chart line | The Simulation panel: play the whole model or the current selection, plot variables, and run protocols or parameter sweeps. See [Simulating Your Model](../guides/simulating-your-model.md) and [Simulation UI Reference](./simulation-ui-overview.md). |
 
 ---
 
@@ -209,5 +231,5 @@ Lines indicating a shared variable relationship between two modules.
 | **Delete Selection** | `Delete` or `Backspace` |
 | **Undo** | `Ctrl` + `Z` |
 | **Redo** | `Ctrl` + `Shift` + `Z` |
-| **Rename Module** | Double-click module name |
-| **Save Dialog Changes** | `Enter` |
+| **Rename Instance** | Click the instance name, then type |
+| **Open Instance Editor** | Double-click the instance node |

@@ -38,7 +38,7 @@ The **Library** features a search bar to locate specific components. To add a mo
     
     ![PhLynx Workspace with modules in position](../assets/images/quick-start-step-one-placed.png){.align-center width="800px"}
 
-2.  Double-click each instance node to rename them as follows:
+2.  Click each instance's name (a double-click opens the Instance Editor instead) and rename them as follows:
     * Rename **SN_soma** to **soma_SN**
     * Rename **SN_axon** to **axon_SN**
     * Rename **SN_varicosity** to **var_SN**
@@ -55,7 +55,7 @@ Intances interact via specific tools located on the instance node itself.
 
 * **[Key](../reference/ui-overview#key) (Left):** Assigns a color for visual identification.
 * **[Add Handle](../reference/ui-overview#add-port-node) (Centre-left):** adds a connection point.
-* **[Edit Instance Configuration](../reference/ui-overview#edit-module) (Centre-right):** Opens the configuration dialog.
+* **[Edit Instance Configuration](../reference/ui-overview#instance-editor) (Centre-right):** Opens the Instance Editor.
 * **[Edit CellML](../guides/writing-cellml) (Right):** Opens the CellML text editor. 
 
 **Managing Connections**
@@ -80,37 +80,37 @@ Connect the instances placed in [Step 1](#step-1-place-and-rename) as shown belo
 
 ### Editing Instances
 
-Before exporting, the model requires specific data configuration. Click the **Edit Instance** (pencil) icon to open the configuration dialog.
+Before exporting, the model requires specific data configuration. Click the **Edit Instance** (pencil) icon to open the Instance Editor, and switch to its **Ports** tab.
 
 ![Labelled Edit Instance dialog](../assets/images/edit-module-detail.png){.align-center width="800px"}
 
-Use this dialog to define <GlossaryLink term="ports"/>—collections of variables shared between connected instances. A port definition consists of:
+Use this tab to define <GlossaryLink term="ports"/>—collections of variables shared between connected instances. A port definition consists of:
 
 * **Type:** Directionality of the port. Input (I), Output (O), or General (G). See [Valid Port Configurations](../reference/valid-port-configurations.md).
 * **Label:** The shared name for the variable. This label must match the connected port's label on the target instance.
 * **Variable(s):** The internal CellML variable(s) associated with this port.
-* **Sum?:** Toggles whether this port sums values from multiple connections (e.g., summing transmembrane flux from multiple channels).
+* **Mode:** Toggles the port between **Basicport** (exactly one connection) and **Multiport** (several connections, each set to sum or multiply the connected value — see [Interface Overview](../reference/ui-overview.md#port-definitions)).
 
 #### Step 3: Configure Ports
-Configure the ports for each instance using the tables below:
+Configure the ports for each instance using the tables below (all Basicport, since each takes one connection):
 
 **1. var_SN**
-| Type | Label | Variable(s) | Sum? |
+| Type | Label | Variable(s) | Mode |
 | :--- | :--- | :--- | :--- |
-| Input | membrane_voltage | V | No |
-| Output | synaptic_NE | NE | No |
+| Input | membrane_voltage | V | Basicport |
+| Output | synaptic_NE | NE | Basicport |
 
 **2. axon_SN**
-| Type | Label | Variable(s) | Sum? |
+| Type | Label | Variable(s) | Mode |
 | :--- | :--- | :--- | :--- |
-| Input | VI_port | V_in, I | No |
-| Output | membrane_voltage | V | No |
+| Input | VI_port | V_in, I | Basicport |
+| Output | membrane_voltage | V | Basicport |
 
 **3. soma_SN**
-| Type | Label | Variable(s) | Sum? |
+| Type | Label | Variable(s) | Mode |
 | :--- | :--- | :--- | :--- |
-| Input | i_stim | I_in | No |
-| Output | VI_port | V, I_out | No |
+| Input | i_stim | I_in | Basicport |
+| Output | VI_port | V, I_out | Basicport |
 
 ## Saving and Restoring
 
@@ -139,11 +139,16 @@ Select **CellML** to save the model to your Downloads folder.
 
 ## Simulating
 
-To verify your new model:
+PhLynx can simulate your model without leaving the app:
 
-1.  Navigate to [Web OpenCOR](https://opencor.ws/app).
-2.  Drag and drop your exported CellML file into the window.
-3.  Press the **Play** button (top-left) to run the simulation.
+1.  Open the **Simulation** tab in the Context Sidebar (right edge of the Workbench).
+2.  Switch the scope toggle to **Whole model**.
+3.  Press **Play**. Once it finishes, pick variables to plot from the controls below the chart.
+
+See [Simulating Your Model](../guides/simulating-your-model.md) for sliders, tracking runs, protocols, sweeps, and exporting results.
+
+> [!TIP]
+> To check your model elsewhere, export it as CellML and drag it into [Web OpenCOR](https://opencor.ws/app), then press its **Play** button (top-left).
 
 You have now successfully created, exported, and simulated a PhLynx model. 
 
