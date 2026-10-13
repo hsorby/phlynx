@@ -4,6 +4,12 @@ import Papa from 'papaparse'
 import { notify } from '../../utils/notify'
 import { parseMathRef, parseModuleRef, restorePorts, restoreVariables } from '../../utils/config'
 import { PORT_TYPE_OPTIONS } from '../../utils/constants'
+import { isBlank } from '../../utils/variables'
+import { resolveBoundaryValues } from './boundaryValues'
+
+// CA's placeholder for a value still to be given; it reads an empty cell as NaN.
+const EMPTY_VALUE = 'EMPTY_MUST_BE_FILLED'
+const MAX_NAMED_MISSING = 3
 
 /**
  * Generates a zip blob for the Circulatory Autogen export.
@@ -89,7 +95,8 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore, ob
         out_instances: out_instances.join(' '),
       })
 
-      // Collect parameters for this node's module
+      // Collect parameters for this node's module. CA needs a row for every boundary condition, and uses it only
+      // while nothing is connected to it.
       for (const variable of node.data.variables || []) {
         if (variable.type === 'constant') {
           allParameters.add(JSON.stringify({
@@ -98,9 +105,18 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore, ob
             value: variable.value || '',
             data_reference: variable.data_reference || 'phlynx',
           }))
+        } else if (variable.type === 'boundary_condition') {
+          allParameters.add(JSON.stringify({
+            variable_name: `${variable.name}_${node.data.name}`,
+            units: variable.units || '',
+            value: isBlank(variable.value) ? EMPTY_VALUE : variable.value,
+            data_reference: variable.data_reference || 'phlynx',
+          }))
         }
       }
     }
+
+    warnMissingBoundaryValues(nodes, edges)
 
     // Convert Map to array
     const module_config = Array.from(uniqueModuleConfigs.values());
@@ -137,4 +153,27 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore, ob
     notify.error({ message: `Failed to export config files: ${error.message}` })
     throw error
   }
+}
+
+/**
+ * Warns about boundary conditions that nothing is connected to and that have no value, which CA leaves to be filled.
+ *
+ * @param {Array} nodes - The array of nodes from Vue Flow.
+ * @param {Array} edges - The array of edges from Vue Flow.
+ */
+function warnMissingBoundaryValues(nodes, edges) {
+  const nodeNames = new Map(nodes.map((node) => [node.id, node.data.name]))
+  const missing = [...resolveBoundaryValues(nodes, edges).missing].flatMap(([nodeId, names]) =>
+    [...names].map((name) => `${nodeNames.get(nodeId)}.${name}`)
+  )
+  if (!missing.length) return
+
+  const named = missing.slice(0, MAX_NAMED_MISSING)
+  const more = missing.length - named.length
+  const list = more > 0 ? `${named.join(', ')} and ${more} more` : named.join(', ')
+  const count = missing.length === 1 ? '1 boundary condition has' : `${missing.length} boundary conditions have`
+  notify.warning({
+    title: 'Missing Boundary Values',
+    message: `${count} no value and nothing connected, so CA will ask for ${missing.length === 1 ? 'it' : 'them'}: ${list}.`,
+  })
 }
