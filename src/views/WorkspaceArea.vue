@@ -2137,9 +2137,9 @@ const handleKeyDown = (event) => {
     selectAllNodes()
   }
 
-  if (isCtrl && event.key.toLowerCase() === 's' && !somethingAvailable.value) {
+  if (isCtrl && event.key.toLowerCase() === 's') {
     event.preventDefault()
-    handleSaveWorkspace()
+    if (somethingAvailable.value) handleSaveWorkspace()
   }
 
   const undoRedoAction = getUndoRedoAction(event)

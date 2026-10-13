@@ -36,6 +36,16 @@ DROP_FILE_JS = """
 """
 
 
+# Stand in for the browser's save picker: record each call, then cancel as the user would.
+RECORD_SAVE_PICKER_JS = """
+window.__savePickerCalls = 0;
+window.showSaveFilePicker = async () => {
+    window.__savePickerCalls += 1;
+    throw new DOMException('cancelled', 'AbortError');
+};
+"""
+
+
 def read_resource(name):
     with open(os.path.join(RESOURCE_PATH, name)) as f:
         return f.read()
@@ -325,6 +335,31 @@ class TestWorkspaceCanvas(unittest.TestCase):
         page.mouse.move(1100, 300)
         expect(page.locator(".vue-flow__connection-path")).to_have_count(0)
         expect(page.locator(EDGE)).to_have_count(2)
+
+
+    # ---------- keyboard shortcuts -----------
+
+    def test_save_shortcut_saves_a_populated_workspace(self):
+        page = self.page
+        page.add_init_script(RECORD_SAVE_PICKER_JS)
+        self.open_workspace()
+
+        page.locator(".vue-flow__pane").click(position={"x": 1100, "y": 300})
+        page.keyboard.press("ControlOrMeta+s")
+
+        page.wait_for_function("() => window.__savePickerCalls === 1")
+
+    def test_save_shortcut_does_nothing_on_an_empty_workspace(self):
+        page = self.page
+        page.add_init_script(RECORD_SAVE_PICKER_JS)
+        self.open_empty_workspace()
+
+        page.locator(".vue-flow__pane").click(position={"x": 1100, "y": 300})
+        page.keyboard.press("ControlOrMeta+s")
+
+        # The save button is disabled on an empty canvas, and so is its shortcut.
+        expect(page.locator("button:has(.pi-save)")).to_be_disabled()
+        self.assertEqual(page.evaluate("window.__savePickerCalls"), 0)
 
 
 if __name__ == '__main__':
