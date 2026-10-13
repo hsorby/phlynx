@@ -49,6 +49,8 @@ const readBlob = async (blob) => JSON.parse(await blob.text())
 function fillStores() {
   useLibraryStore().loadState({ availableCollections: COLLECTIONS })
   useSimulationSettingsStore().setSimulationSettings({ endingPoint: 42, maxSteps: 77 })
+  useInspectionModuleStore().addModule({ id: 'insp-1', name: 'Flow probe', units: 'mL', variables: [] })
+  useOmexStore().setArchive({ archiveName: 'model.omex', cellmlFileName: 'model.cellml' })
 }
 
 beforeEach(() => {
@@ -119,7 +121,12 @@ describe('handleSaveWorkspace', () => {
     expect(saved.store.availableCollections).toEqual(COLLECTIONS)
     expect(useSessionMetadataStore().lastSaveName).toBe('picked.json')
     expect(notify.success).toHaveBeenCalledWith({ title: 'Workflow saved!' })
-    expect(trackEvent).toHaveBeenCalledWith('save_action', expect.objectContaining({ label: 'File: picked.json' }))
+    expect(trackEvent).toHaveBeenCalledWith('save_action', {
+      category: 'Save',
+      action: 'save_workflow',
+      label: 'File: picked.json',
+      file_type: 'json',
+    })
     expect(save.legacyDownload).not.toHaveBeenCalled()
     expect(saveDialogVisible.value).toBe(false)
   })
@@ -152,7 +159,12 @@ describe('handleSaveWorkspace', () => {
     expect(notify.error).toHaveBeenCalledWith({ title: 'Error Saving Workflow', message: 'disk full' })
     expect(notify.success).not.toHaveBeenCalled()
     expect(useSessionMetadataStore().lastSaveName).not.toBe('picked.json')
-    expect(trackEvent).toHaveBeenCalledWith('save_action', expect.objectContaining({ label: 'Error: disk full' }))
+    expect(trackEvent).toHaveBeenCalledWith('save_action', {
+      category: 'Save',
+      action: 'save_workflow',
+      label: 'Error: disk full',
+      file_type: 'json',
+    })
   })
 
   it('does not await the write, so a user abort inside it (resolves true) still reads as saved', async () => {
@@ -217,7 +229,10 @@ describe('applyWorkspaceState', () => {
     expect(flow.recomputeMissingCouplings).toHaveBeenCalledOnce()
     expect(useLibraryStore().getState().availableCollections).toEqual(COLLECTIONS)
     expect(useSimulationSettingsStore().simulationSettings).toMatchObject({ endingPoint: 42, maxSteps: 77 })
+    expect(saved.inspectionModules).toHaveLength(1)
     expect(useInspectionModuleStore().getState()).toEqual(saved.inspectionModules)
+    expect(useInspectionModuleStore().getState()[0]).toMatchObject({ id: 'insp-1', name: 'Flow probe' })
+    expect(saved.workspace.archiveName).toBe('model.omex')
     expect(useOmexStore().getState()).toEqual(saved.workspace)
     expect(notify.success).toHaveBeenCalledWith({ title: 'Workflow loaded successfully!' })
     expect(trackEvent).toHaveBeenCalledWith('workflow_load_action', {
@@ -230,7 +245,10 @@ describe('applyWorkspaceState', () => {
 
   it('clears the workspace before it restores the flow', async () => {
     const order = []
-    clearWorkspace.mockImplementation(async () => order.push('clear'))
+    clearWorkspace.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      order.push('clear')
+    })
     flow.fromObject.mockImplementation(() => order.push('fromObject'))
     await view.applyWorkspaceState({
       id: PHLYNX_PROJECT_IDENTIFIER,
