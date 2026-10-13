@@ -7,6 +7,7 @@ Start the app (`yarn dev`), then run:
 With names (e.g. `toolbar simulation-page`), only those screenshots are taken.
 """
 
+import json
 import os
 import re
 import sys
@@ -23,6 +24,7 @@ from test_simulation_tab import (  # noqa: E402
     OPT_IN_TO_ISOLATION,
     RESULTS_STORE,
     SIMULATOR_READY,
+    pick_path,
     plot_variable,
     simulate_whole_model,
 )
@@ -292,6 +294,115 @@ def macro_builder(page):
     save(dialog, "macro-builder")
 
 
+def units_create(page):
+    open_workspace(page)
+    dialog = open_instance_editor(page)
+    # c_SL's Units field (the first row is I_out): typing an expression offers library equivalents and a new unit.
+    field = dialog.locator(".right-pane input[placeholder='e.g. mV or mV/ms']").nth(1)
+    field.click()
+    field.press("ControlOrMeta+a")
+    field.press_sequentially("mV/ms", delay=40)
+    expect(page.locator(".sanitised-input__option").filter(has_text="mV_per_ms")).to_be_visible()
+    for _ in range(3):
+        field.press("ArrowDown")
+    page.wait_for_timeout(300)
+    # No Esc: with no list open it closes the editor.
+    row = field.locator("xpath=ancestor::tr[1]")
+    save(page, "units-create", clip=clip_around([row, page.locator(".sanitised-input__suggestions")], margin=16))
+
+
+def math_editor(page):
+    open_workspace(page)
+    dialog = open_instance_editor(page)
+    dialog.get_by_role("tab", name="Math Editor").click()
+    page.wait_for_timeout(2500)
+    keyboard = page.keyboard
+    keyboard.press("End")
+    keyboard.press("Enter")
+    keyboard.type("\\dd", delay=30)
+    keyboard.press("Space")
+    keyboard.type("V_m", delay=30)
+    keyboard.press("Tab")
+    keyboard.type("t", delay=30)
+    keyboard.press("Space")
+    keyboard.type("=(I_stim-I_ion)/C_m", delay=30)
+    keyboard.press("Enter")
+    keyboard.type("I_ion=g_K*n^4", delay=30)
+    keyboard.press("Space")
+    keyboard.type("*(V_m-E_K)", delay=30)
+    keyboard.press("Enter")
+    keyboard.type("tau_n=1/(alpha_n+beta_n)", delay=30)
+    keyboard.press("Enter")
+    keyboard.press("Backspace")
+    page.mouse.move(VIEWPORT["width"] / 2, VIEWPORT["height"] - 5)
+    page.wait_for_timeout(1500)
+    save(dialog, "math-editor")
+
+
+def sweep_view(page):
+    page.set_viewport_size({"width": VIEWPORT["width"], "height": 1000})
+    open_workspace(page)
+    run_whole_model(page)
+    plot_variable(page, "soma_SN/V")
+    close_search(page)
+    page.get_by_role("button", name=re.compile(r"^Sweep \(")).click()
+    page.get_by_role("button", name="Sweep a parameter").click()
+    pick_path(page, "Choose a parameter to sweep", "soma_SN/g_M")
+    close_search(page)
+    for test_id, value in (("sim-sweep-from", "0.002"), ("sim-sweep-to", "0.006"), ("sim-sweep-points", "21")):
+        box = page.get_by_test_id(test_id)
+        box.fill(value)
+        box.press("Tab")
+    page.get_by_test_id("sim-sweep-readout").get_by_text("Max", exact=True).click()
+    page.get_by_test_id("sim-sweep-mode").click()
+    page.wait_for_function(f"{RESULTS_STORE}.status === 'done' && {RESULTS_STORE}.results?.isSweep", timeout=120000)
+    page.mouse.move(5, 995)
+    page.wait_for_timeout(300)
+    dismiss_toasts(page)
+    save(page, "sweep-view", clip=page.locator(".resizable-context-panel").bounding_box())
+
+
+# Two experiments stepping the soma's input current, each recording V's peak, plotted against the step.
+PROTOCOL_EDITOR_OBS_DATA = {
+    "protocol_info": {
+        "pre_times": [1, 1],
+        "sim_times": [[1, 2], [1, 2]],
+        "params_to_change": {"soma_SN/I_in": [[0, -0.05], [0, -0.1]]},
+        "experiment_labels": ["Step to -0.05 nA", "Step to -0.1 nA"],
+    },
+    "prediction_items": [
+        {"data_item_name": "soma_SN/V", "operands": ["soma_SN/V"], "unit": "milliV", "experiment_idx": 0,
+         "subexperiment_idx": 1, "operation": "max", "item_name_for_plotting": "V_peak"},
+        {"data_item_name": "soma_SN/V_2", "operands": ["soma_SN/V"], "unit": "milliV", "experiment_idx": 1,
+         "subexperiment_idx": 1, "operation": "max", "item_name_for_plotting": "V_peak"},
+    ],
+    "prediction_plots": [
+        {"name": "Peak V vs step current", "kind": "feature_vs_input",
+         "x": {"params_to_change": "soma_SN/I_in", "subexperiment_idx": 1}, "y": "V_peak", "series": None},
+    ],
+}
+ADD_PROTOCOL_EDITOR_OBS_DATA = (
+    "(() => { const payload = new TextEncoder().encode(" + json.dumps(json.dumps(PROTOCOL_EDITOR_OBS_DATA)) + ").buffer;"
+    " document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('omex')"
+    ".setArchive({ extras: [{ location: 'SN_simple_obs_data.json', format: 'application/json', payload }] }) })()"
+)
+
+
+def protocol_editor(page):
+    page.set_viewport_size({"width": VIEWPORT["width"], "height": 1100})
+    open_workspace(page)
+    open_simulation_tab(page)
+    page.evaluate(ADD_PROTOCOL_EDITOR_OBS_DATA)
+    page.get_by_role("button", name="Edit obs_data", exact=True).click()
+    dialog = page.get_by_role("dialog", name="Edit obs_data")
+    dialog.get_by_role("button", name="Step to -0.05 nA", exact=True).click()
+    expect(dialog.get_by_label("Experiment name")).to_have_value("Step to -0.05 nA")
+    page.evaluate("document.activeElement?.blur()")
+    page.mouse.move(5, 1095)
+    page.wait_for_timeout(600)
+    save(dialog, "protocol-editor")
+
+
 SHOTS = {
     "phlynx_ui": phlynx_ui,
     "toolbar": toolbar,
@@ -307,6 +418,10 @@ SHOTS = {
     "protocol-results": protocol_results,
     "connections-dialog": connections_dialog,
     "macro-builder": macro_builder,
+    "units-create": units_create,
+    "math-editor": math_editor,
+    "sweep-view": sweep_view,
+    "protocol-editor": protocol_editor,
 }
 
 
