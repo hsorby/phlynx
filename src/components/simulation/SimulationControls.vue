@@ -1,5 +1,6 @@
 <template>
   <section class="simulation-controls" aria-label="What gets plotted and tried out">
+    <SimulationSettingsSection v-if="hasSettings" />
     <SelectButton
       v-model="view"
       :options="views"
@@ -77,6 +78,7 @@ import SelectButton from 'primevue/selectbutton'
 
 import PlotListEditor from './PlotListEditor.vue'
 import RunList from './RunList.vue'
+import SimulationSettingsSection from './SimulationSettingsSection.vue'
 import SliderList from './SliderList.vue'
 import SweepEditor from './SweepEditor.vue'
 import VariablePathPicker from './VariablePathPicker.vue'
@@ -100,6 +102,8 @@ const props = defineProps({
   plotNodeId: { type: String, default: null },
   // Adding to the view's own plot offers only variables in the units it already shows.
   isUnitFiltered: { type: Boolean, default: false },
+  // The time course and solver settings, in a section at the top.
+  hasSettings: { type: Boolean, default: false },
 })
 // `change`: a slider moved, so the scope wants running again.
 const emit = defineEmits(['change', 'update:plotConfig'])

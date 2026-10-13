@@ -63,7 +63,7 @@
         <Button icon="pi pi-times" text rounded size="small" severity="secondary" aria-label="Cancel" @click="choosingXFor = null" />
       </div>
       <div v-else-if="plot.xAxis" class="plot-x">
-        <span class="plot-x-text" :title="`Plotted against ${plot.xAxis.label}`">
+        <span class="plot-x-text" v-overflow-title="`Plotted against ${plot.xAxis.label}`">
           Against <span class="plot-variable-component">{{ plot.xAxis.componentLabel }}/</span><span class="plot-variable-name">{{ plot.xAxis.variableName }}</span>
         </span>
         <Button
@@ -81,7 +81,7 @@
       <ul v-if="plot.selections.length" class="plot-variables">
         <li v-for="selection in plot.selections" :key="selection.key" class="plot-variable" :class="{ 'plot-variable--elsewhere': !selection.inScope }">
           <span class="plot-swatch" :class="{ 'plot-swatch--none': !selection.colour }" :style="{ background: selection.colour ?? 'transparent' }" aria-hidden="true"></span>
-          <span class="plot-variable-text" :title="selection.title">
+          <span class="plot-variable-text" v-overflow-title="selection.title">
             <span class="plot-variable-component">{{ selection.componentLabel }}/</span><span class="plot-variable-name">{{ selection.variableName }}</span>
           </span>
           <span class="plot-variable-units">{{ selection.units }}</span>
@@ -130,7 +130,7 @@
       </header>
       <ul class="plot-variables">
         <li v-for="selection in unassigned" :key="selection.key" class="plot-variable">
-          <span class="plot-variable-text">
+          <span class="plot-variable-text" v-overflow-title="selection.title">
             <span class="plot-variable-component">{{ selection.componentLabel }}/</span><span class="plot-variable-name">{{ selection.variableName }}</span>
           </span>
           <Button
@@ -168,6 +168,7 @@ import Select from 'primevue/select'
 import VariablePathPicker from './VariablePathPicker.vue'
 import { useColorScheme } from '../../composables/useColorScheme'
 import { useConfirmDialog } from '../../composables/useConfirmDialog'
+import { vOverflowTitle } from '../../directives/overflowTitle'
 import {
   acceptsUnits,
   addPlot,
@@ -481,7 +482,8 @@ function openMenu(event, plot) {
 .plot-variable {
   display: flex;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 2px 6px;
   min-height: 30px;
   font-size: 0.8125rem;
 }
@@ -502,20 +504,29 @@ function openMenu(event, plot) {
   visibility: hidden;
 }
 
+/* The instance gives way first, so the variable's name is what stays; the units, plot and remove button wrap
+   below the name rather than squeeze it. */
 .plot-variable-text {
-  flex: 1;
+  flex: 1 1 10rem;
   min-width: 0;
-  overflow: hidden;
+  display: flex;
   white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .plot-variable-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-weight: 600;
   color: var(--p-text-color);
 }
 
 .plot-variable-component {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--p-text-muted-color);
 }
 
