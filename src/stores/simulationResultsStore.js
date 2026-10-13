@@ -27,8 +27,8 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
   const progress = ref(0)
   /** The node ids the run covered, or null for the whole model. */
   const scopeNodeIds = ref(null)
-  /** The pre-flight report, worded: `{ errors, warnings }`. */
-  const report = ref({ errors: [], warnings: [] })
+  /** The pre-flight report, worded: `{ errors, warnings, notes }`. */
+  const report = ref({ errors: [], warnings: [], notes: [] })
   const error = ref(null)
   const results = shallowRef(null)
   /** A protocol run's results, every experiment's: `{ experiments, issues, elapsedMs, isStopped }`, or null. */
@@ -100,7 +100,7 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
     status.value = 'running'
     progress.value = 0
     scopeNodeIds.value = nodeIds
-    report.value = { errors: [], warnings: [] }
+    report.value = { errors: [], warnings: [], notes: [] }
     error.value = null
     signature.value = null
     if (!isSameScope) {
@@ -258,7 +258,7 @@ export const useSimulationResultsStore = defineStore('simulationResults', () => 
     status.value = 'idle'
     progress.value = 0
     scopeNodeIds.value = null
-    report.value = { errors: [], warnings: [] }
+    report.value = { errors: [], warnings: [], notes: [] }
     error.value = null
     results.value = null
     protocolResults.value = null

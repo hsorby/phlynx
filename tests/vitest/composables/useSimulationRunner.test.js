@@ -88,6 +88,20 @@ describe('useSimulationRunner', () => {
     expect(runner.isOutdated.value).toBe(false)
   })
 
+  it('counts warnings in the results’ status, but not notes, which only pass along', () => {
+    const runner = setUpRunner()
+    runner.store.status = 'done'
+    runner.store.results = { voi: { values: [0], unit: 's' } }
+    runner.store.report = { errors: [], warnings: [], notes: ['"a.u" uses its own value.'] }
+    expect(runner.statusLine.value).toMatchObject({ severity: 'info', icon: null, details: [], notes: ['"a.u" uses its own value.'] })
+    expect(runner.statusLine.value.text).not.toMatch(/warning/)
+
+    runner.store.report = { errors: [], warnings: ['"a.w" is set to 0.'], notes: ['"a.u" uses its own value.'] }
+    expect(runner.statusLine.value).toMatchObject({ severity: 'warn', icon: 'pi-exclamation-triangle', notes: ['"a.u" uses its own value.'] })
+    expect(runner.statusLine.value.text).toMatch(/1 warning\.$/)
+    expect(runner.statusLine.value.details).toEqual([{ title: 'Warnings', lines: ['"a.w" is set to 0.'] }])
+  })
+
   it('runs the whole model from an instance editor, or its instance on its own when switched to it', () => {
     const runner = setUpRunner({ instanceId: 'b' })
     expect(runner.blockedReason.value).toBeNull()

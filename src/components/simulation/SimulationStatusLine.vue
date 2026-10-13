@@ -9,6 +9,7 @@
       <i v-if="status.icon" :class="['pi', status.icon]" aria-hidden="true"></i>
       <span>{{ status.text }}</span>
     </p>
+    <InfoTip v-if="status.notes?.length" class="status-note" :text="status.notes.join('\n')" :label="`Notes: ${status.notes.join(' ')}`" />
     <Popover ref="popover">
       <div class="status-details">
         <section v-for="section in status.details" :key="section.title">
@@ -24,14 +25,17 @@
 
 <script setup>
 /**
- * One line saying what the simulation is doing or what needs attention, with the full lists a click away.
+ * One line saying what the simulation is doing or what needs attention, with the full lists a click away, and any
+ * notes on what is expected in a tooltip.
  */
 import { ref } from 'vue'
 
 import Popover from 'primevue/popover'
 
+import InfoTip from './InfoTip.vue'
+
 defineProps({
-  // { text, severity: 'info' | 'warn' | 'error', icon, details: [{ title, lines }] }
+  // { text, severity: 'info' | 'warn' | 'error', icon, details: [{ title, lines }], notes?: string[] }
   status: { type: Object, required: true },
 })
 
@@ -40,6 +44,9 @@ const popover = ref(null)
 
 <style scoped>
 .simulation-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
   font-size: 0.8125rem;
   color: var(--p-text-muted-color);
@@ -49,6 +56,7 @@ const popover = ref(null)
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   max-width: 100%;
   margin: 0;
 }

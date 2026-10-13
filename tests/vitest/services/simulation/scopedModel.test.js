@@ -255,9 +255,9 @@ describe('buildScopeSignature', () => {
 })
 
 describe('summariseScopeReport', () => {
-  it('words errors and warnings, one line each', () => {
+  it('words errors, warnings and notes, one line each', () => {
     const entry = (variableName) => ({ nodeId: 'a', nodeName: 'a_name', variableName })
-    const { errors, warnings } = summariseScopeReport({
+    const { errors, warnings, notes } = summariseScopeReport({
       errors: ['Select at least one instance to simulate.'],
       incompleteNodes: [{ nodeId: 'o', nodeName: 'o_name', reason: 'has no module' }],
       missingValues: [{ ...entry('k'), kind: 'constant' }],
@@ -277,9 +277,10 @@ describe('summariseScopeReport', () => {
       '"a_name.r" leaves out 2 terms from outside the selection.',
       'Inspection module "total" leaves out 2 variables from outside the selection.',
       'Inspection module "outside" has no variables in the selection, so it is left out.',
-      '"a_name.u" uses its own value, since what supplies it is outside the selection.',
       '"a_name.w" has no value and nothing in the selection supplies it, so it is set to 0.',
     ])
+    // Falling back to its own value is expected, so it is a note rather than a warning.
+    expect(notes).toEqual(['"a_name.u" uses its own value, since what supplies it is outside the selection.'])
   })
 })
 

@@ -211,7 +211,7 @@ export function useSimulation() {
     store.report = summariseScopeReport(checkScope(scope, libraryStore))
     if (isProtocolRun) {
       const { errors, warnings } = protocolStore.validation
-      store.report = { errors: [...store.report.errors, ...errors], warnings: [...store.report.warnings, ...warnings] }
+      store.report = { ...store.report, errors: [...store.report.errors, ...errors], warnings: [...store.report.warnings, ...warnings] }
     }
     if (store.report.errors.length) {
       store.failRun('blocked')
@@ -384,7 +384,7 @@ export function useSimulation() {
     })
     const { plan, targets, inputs, errors } = prepared
     settings = prepared.settings
-    store.report = { errors, warnings: [...store.report.warnings, ...prepared.warnings.filter((message) => !store.report.warnings.includes(message))] }
+    store.report = { ...store.report, errors, warnings: [...store.report.warnings, ...prepared.warnings.filter((message) => !store.report.warnings.includes(message))] }
     if (errors.length) {
       store.failRun('blocked')
       return

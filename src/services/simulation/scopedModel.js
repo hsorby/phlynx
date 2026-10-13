@@ -325,10 +325,11 @@ export function buildScopeSignature(scope, libraryStore) {
 }
 
 /**
- * Words a checkScope report as readable lines: errors stop the build, warnings don't.
+ * Words a checkScope report as readable lines: errors stop the build, warnings don't, and notes say what is expected,
+ * such as a boundary condition falling back to its own value.
  *
  * @param {ReturnType<typeof checkScope>} report
- * @returns {{errors: string[], warnings: string[]}}
+ * @returns {{errors: string[], warnings: string[], notes: string[]}}
  */
 export function summariseScopeReport(report) {
   const variable = ({ nodeName, variableName }) => `"${nodeName}.${variableName}"`
@@ -350,7 +351,6 @@ export function summariseScopeReport(report) {
         ? `Inspection module "${name}" has no variables in the selection, so it is left out.`
         : `Inspection module "${name}" leaves out ${plural(removed, 'variable')} from outside the selection.`
     ),
-    ...report.usesOwnValue.map((entry) => `${variable(entry)} uses its own value, since what supplies it is outside the selection.`),
     ...report.zeroedBoundaries.map((entry) => `${variable(entry)} has no value and nothing in the selection supplies it, so it is set to 0.`),
     // stripCelsiusToArbitraryUnit (utils/cellml.js) drops the 273.15 K offset, which only differences survive.
     ...(report.usesCelsius ?? []).map(
@@ -358,5 +358,7 @@ export function summariseScopeReport(report) {
     ),
   ]
 
-  return { errors, warnings }
+  const notes = report.usesOwnValue.map((entry) => `${variable(entry)} uses its own value, since what supplies it is outside the selection.`)
+
+  return { errors, warnings, notes }
 }
