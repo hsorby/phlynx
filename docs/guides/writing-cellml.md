@@ -2,7 +2,7 @@
 
 The modules used in PhLynx are written in <GlossaryLink term="CellML"/>, a structured text format for storing and sharing computer-based mathematical models. CellML facilitates module coupling due to its emphasis on unit consistency. 
 
-PhLynx contains a simple text-based editor for users to modify modules directly within the application. The following document provides a primer on how to write and edit CellML text in PhLynx.
+PhLynx's Instance Editor has two interchangeable ways to write a module's equations — the text-based **CellML Text** editor this guide is mostly about, and a WYSIWYG **Math Editor** — plus a **Simple Mode** that manages variable declarations for you. The following document provides a primer on how to write and edit CellML text in PhLynx, and on how these modes differ.
 
 ## CellML Text
 
@@ -14,14 +14,23 @@ To open the editor, click the **CellML** icon button on the right of any module 
 
 ![Labelled module node](../assets/images/labelled-module.png){.align-center width="600px"}
 
-This opens the **CellML Text Editor** dialog.
+This opens the **Instance Editor**, whose left pane has two tabs for writing equations:
 
 ![CellML text editor](../assets/images/cellml-text-edit.png){.align-center width="600px"}
 
-There are three main components to this dialog:
-1.  **Header:** Displays the name of the module being edited and its source file.
-2.  **Equation Viewport:** A dynamic preview pane that renders the math equations visually when your cursor is active on a line of code.
-3.  **Text Editor:** The main dark window where you write your code.
+* **CellML Text:** the text editor this guide describes — a dark window where you write code, with a dynamic preview pane above it that renders the equation visually when your cursor is on a line.
+* **Math Editor:** a WYSIWYG alternative — build the same equations by typing and clicking, without CellML Text syntax. It always behaves as Simple Mode (below). Clicking a variable you've already written plots it in the dialog's **Plot** tab when Auto-update is on; see [Simulating Your Model](./simulating-your-model.md).
+
+Both tabs edit the same equations, and the right pane's **Parameters** tab always lists the module's variables regardless of which editor you're using.
+
+### Simple Mode vs. Advanced Mode
+
+The CellML Text tab has a **Simple Mode** toggle, on by default:
+
+* **Simple Mode (on):** variable declarations are managed for you from the **Parameters** tab — you only write equations in the text editor — and the component name is an editable field in the dialog header.
+* **Advanced Mode (off):** the text is the single source of truth. You declare every variable yourself (see [Declaring Variables](#declaring-variables) below) and name the component in the text itself (`def comp [name] as`); the header's component name becomes read-only.
+
+The Math Editor tab has no Simple/Advanced toggle — it always manages declarations for you, the same way CellML Text does in Simple Mode.
 
 > [!TIP]
 > **Saving Changes:** 
@@ -58,6 +67,9 @@ enddef;
 > Currently, the def model and def comp wrappers are required. Future versions of PhLynx may remove this requirement to simplify the view further.
 
 ### Declaring Variables
+
+> [!NOTE]
+> This section applies to **Advanced Mode** (Simple Mode off). In Simple Mode, declarations are managed for you from the Parameters tab — you can skip to [Writing Equations](#writing-equations).
 
 Before using a variable in an equation, you must declare it. A declaration includes the variable's name, its units, and optional properties like an initial value or interface status.
 
@@ -139,7 +151,7 @@ A model doesn't need any ODEs. If none of its modules has one, it is an **algebr
 load = effort * arm_ratio;
 ```
 
-To see how an algebraic system responds over a range, **sweep** one of its parameters. In **Simulation Settings → Sweep**, choose a parameter, a global constant, or a boundary condition that holds its own value. Then set the range (**From**, **To**) and the number of **Points**. Each run solves the model once per value, and every plot is drawn against the swept parameter. For example, sweep a channel's membrane voltage to plot its current–voltage curve. Sliders still apply, so moving one redraws the whole curve. Web OpenCOR can't run sweeps, so an OMEX export solves the model once, at the parameter's own value.
+To see how an algebraic system responds over a range, **sweep** one of its parameters. In **Simulation Settings → Sweep**, choose a parameter, a global constant, or a boundary condition that holds its own value. Then set the range (**From**, **To**) and the number of **Points**. Each run solves the model once per value, and every plot is drawn against the swept parameter. For example, sweep a channel's membrane voltage to plot its current–voltage curve. Sliders still apply, so moving one redraws the whole curve. Web OpenCOR can't run sweeps, so an OMEX export solves the model once, at the parameter's own value. For the full Sweep editor — a second "family" parameter, readouts for ODE models, and cost warnings — see [Simulation UI Reference](../reference/simulation-ui-overview.md#sweep-editor).
 
 #### Plotting One Variable Against Another
 

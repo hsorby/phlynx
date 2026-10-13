@@ -63,3 +63,27 @@ An XML-based markup language for describing mathematical models.
 ### Circulatory Autogen {#circulatory-autogen}
 <!-- aliases: -->
 A Python project for combining CellML modules into a system model and performing parameter identification.
+
+### Protocol {#protocol}
+<!-- aliases: protocols, obs_data -->
+A sequence of experiments, stored in an `obs_data.json` file, that set parameters and record outputs against a model.
+
+### Experiment {#experiment}
+<!-- aliases: experiments -->
+One run within a protocol, with its own inputs and recorded outputs.
+
+### Sweep {#sweep}
+<!-- aliases: sweeps, parameter sweep -->
+A simulation run repeatedly across a range of one parameter's values, optionally with a second "family" parameter drawing one curve per value.
+
+### Tracked Run {#tracked-run}
+<!-- aliases: tracked runs, track -->
+A simulation run whose lines are pinned to the charts, dashed, so later runs can be compared against it.
+
+### Multiport {#multiport}
+<!-- aliases: multiports -->
+A port that accepts more than one connection. Each connected variable is set to True (a plain shared link), Sum (adds every connection's value), or Multiply (scales a connection's value by a factor).
+
+### SED-ML {#sedml}
+<!-- aliases: -->
+An XML format describing how to run and plot a simulation experiment, exportable from PhLynx alongside its CellML model.

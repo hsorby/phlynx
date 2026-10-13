@@ -108,3 +108,20 @@ A CSV file defining the network topology (connections) of the system. Each row r
 
 **Example Instance Array:**
 ![Example module array file](../assets/images/vessel-array.png){.align-center width="600px"}
+
+---
+
+### 3. Parameter Scan (`params_for_id.csv`)
+
+A CSV file used by CUFLynx/circulatory_autogen to define a parameter sweep/identification range for one or more parameters. PhLynx reads it automatically from an imported COMBINE archive and turns each row into a slider in Simulation Settings' Parameter Scan tab, and writes it back out the same way on export.
+
+| Column | Description |
+| :--- | :--- |
+| **vessel_name** | The instance name the parameter belongs to, or `global` for a global constant. |
+| **param_name** | The parameter's name. |
+| **param_type** | Always `const`. |
+| **min** | The slider's minimum value. |
+| **max** | The slider's maximum value. |
+| **name_for_plotting** | A display label for the parameter. |
+
+See [Running Protocols](../guides/running-protocols.md#parameter-sweeps-via-params_for_idcsv).
