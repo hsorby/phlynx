@@ -340,7 +340,6 @@ def math_editor(page):
 
 
 def sweep_view(page):
-    page.set_viewport_size({"width": VIEWPORT["width"], "height": 1000})
     open_workspace(page)
     run_whole_model(page)
     plot_variable(page, "soma_SN/V")
@@ -356,7 +355,7 @@ def sweep_view(page):
     page.get_by_test_id("sim-sweep-readout").get_by_text("Max", exact=True).click()
     page.get_by_test_id("sim-sweep-mode").click()
     page.wait_for_function(f"{RESULTS_STORE}.status === 'done' && {RESULTS_STORE}.results?.isSweep", timeout=120000)
-    page.mouse.move(5, 995)
+    page.mouse.move(5, VIEWPORT["height"] - 5)
     page.wait_for_timeout(300)
     dismiss_toasts(page)
     save(page, "sweep-view", clip=page.locator(".resizable-context-panel").bounding_box())

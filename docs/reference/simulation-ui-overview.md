@@ -39,11 +39,11 @@ Views: **Plots**, **Sliders**, **Sweep**, **Runs**. Search matches every typed w
 
 ### Sweep {#sweep}
 
-**Sweep a parameter**: a constant, global constant, or boundary condition nothing supplies. Results plot against it.
+**Sweep a parameter**: a constant, global constant, or boundary condition nothing supplies in the scope Play runs next (a connected one can be swept when its instance runs on its own). Results plot against it. The info icon explains sweeps and their exports.
 
 - **From / To / Points:** 2 to 1000 points.
 - ⋯ ▸ **Add a curve for each value of…** a second parameter (up to 8 values; 2000 runs max). ⋯ also has **Change parameter…** and **Stop sweeping**.
-- **Reading** of each time course (ODE models): **End** (default), **Min**, **Max** or **Peak** (the value furthest from 0).
+- **Reading** of each time course (shown for ODE models only): **End** (default), **Min**, **Max** or **Peak** (the value furthest from 0).
 - Shows the run count and a time estimate; warns above 200 time courses.
 - The SED-ML download is off while sweeping. Other exports run the model once, at the parameter's own value.
 

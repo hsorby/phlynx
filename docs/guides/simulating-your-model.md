@@ -34,6 +34,8 @@ The line under the toolbar says what the simulation is doing, or what needs atte
 | *… press play to update* | The charts are out of date: the model, settings or selection changed, or they show another run. |
 | An error from the solver | The run failed. Click for the solver's messages; any results up to the failure stay on the charts. Changing the solver settings in [Simulation Settings](#run-length) may help. |
 
+An info icon on the line holds notes: things that are expected but worth knowing, such as boundary conditions using their own values when you simulate a selection. Notes don't count as warnings.
+
 A model with no differential equations is solved once, as a **steady state**, rather than over the VoI. The status line then ends *once: without differential equations, nothing changes over time*, and each plot lists its variables' values in place of a chart.
 
 > [!NOTE]
@@ -48,7 +50,7 @@ To check one instance or a few on their own:
 - **From the Instance Editor:** in the **Plot** tab, set the scope switch to **This instance**.
 
 > [!NOTE]
-> When you simulate a selection, Sum/Multiply inputs that are cut off are dropped, with a warning. A boundary condition with no supplier and no value is set to 0 for that run.
+> When you simulate a selection, Sum/Multiply inputs that are cut off are dropped, with a warning. A boundary condition whose supplier is outside the selection uses its own value; that is expected, so the status line lists it under an info icon rather than as a warning. One with no value is set to 0 for that run.
 
 ### Choosing What to Plot {#choosing-what-to-plot}
 
@@ -118,9 +120,9 @@ With the default settings, soma_SN fires. This sweep finds the M-current conduct
 
 1. Run the whole model once and plot **soma_SN/V**, as in [Running a Simulation](#running-a-simulation). The sweep plots whatever is on the **Plots** view, and uses this run's duration for its time estimate.
 2. Click **Sweep** in the views bar under the charts. It reads *No sweep yet.*
-3. Click **Sweep a parameter** (plus icon), type `g_M` and pick **soma_SN/g_M**. The search only offers what a sweep can vary: constants, global constants, and boundary conditions that nothing connected supplies. *Not in the last run* marks a parameter outside the current scope.
+3. Click **Sweep a parameter** (plus icon), type `g_M` and pick **soma_SN/g_M**. The search only offers what a sweep can vary: constants, global constants, and boundary conditions that nothing supplies in the scope Play runs next. So a connected boundary condition can be swept when you simulate its instance on its own; in a whole-model run, the status line says it *is supplied through a connection in this run*. *Not in the last run* marks a parameter outside the current scope. The info icon beside the parameter explains what a sweep does and what an export makes of it.
 4. The range starts at half the parameter's value either side, with 51 points. Set **From** to `0.002`, **To** to `0.006` and **Points** to `21`. The points are spaced evenly, ends included.
-5. Under **Reading**, click **Max**. The line below now reads *21 time courses*, with an estimate of how long they will take.
+5. Under **Reading** (shown for models with ODEs), click **Max**. The line below now reads *21 time courses*, with an estimate of how long they will take.
 6. Click **Run the sweep** (chart-line icon), which has appeared in the toolbar. It turns into a highlighted **Sweep** button, and the sweep runs at once.
 
 ![The Sweep view after a sweep of g_M](../assets/images/sweep-view.png){.align-center width="550px"}
@@ -129,7 +131,7 @@ The status line reads *Simulated the whole model at 21 values of soma_SN/g_M, fr
 
 ### Choosing the Reading {#sweep-reading}
 
-The reading applies only to models with ODEs. It is taken between **Plots start at** and **Ends at**.
+The **Reading** row appears only for models with ODEs; a model without them is solved once per value. The reading is taken between **Plots start at** and **Ends at**.
 
 | Reading | Takes | Use it for |
 | :--- | :--- | :--- |
@@ -140,7 +142,7 @@ The reading applies only to models with ODEs. It is taken between **Plots start 
 
 For a firing neuron, **Peak** picks the after-hyperpolarisation (about −87 mV here) rather than the spike, because that is further from 0. Use **Max** for spike height.
 
-If **Simulation starts at** is earlier than **Plots start at**, to let the model settle, a note says that the first moments aren't read.
+If **Simulation starts at** is earlier than **Plots start at**, to let the model settle, an info icon beside **Reading** says that the first moments aren't read.
 
 ### Changing and Rerunning {#sweep-rerun}
 
