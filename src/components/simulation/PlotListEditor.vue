@@ -78,7 +78,7 @@
         />
       </div>
 
-      <ul v-if="plot.selections.length" class="plot-variables">
+      <ul v-if="plot.selections.length" class="plot-variables plot-variables--columns" :class="{ 'plot-variables--movable': plots.length > 1 }">
         <li v-for="selection in plot.selections" :key="selection.key" class="plot-variable" :class="{ 'plot-variable--elsewhere': !selection.inScope }">
           <span class="plot-swatch" :class="{ 'plot-swatch--none': !selection.colour }" :style="{ background: selection.colour ?? 'transparent' }" aria-hidden="true"></span>
           <span class="plot-variable-text" v-overflow-title="selection.title">
@@ -482,10 +482,27 @@ function openMenu(event, plot) {
 .plot-variable {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 2px 6px;
+  gap: 6px;
   min-height: 30px;
   font-size: 0.8125rem;
+}
+
+/* A plot's rows share their columns, so the units, the plot to move to and the remove button line up down
+   the plot, whatever each variable's name; only the name shrinks. */
+.plot-variables--columns {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  column-gap: 6px;
+}
+
+.plot-variables--columns.plot-variables--movable {
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+}
+
+.plot-variables--columns > .plot-variable {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
 }
 
 .plot-variable--elsewhere {
@@ -504,10 +521,9 @@ function openMenu(event, plot) {
   visibility: hidden;
 }
 
-/* The instance gives way first, so the variable's name is what stays; the units, plot and remove button wrap
-   below the name rather than squeeze it. */
+/* The instance gives way first, so the variable's name is what stays. */
 .plot-variable-text {
-  flex: 1 1 10rem;
+  flex: 1;
   min-width: 0;
   display: flex;
   white-space: nowrap;
@@ -582,6 +598,11 @@ function openMenu(event, plot) {
   .plot-move,
   .plot-variable-units {
     display: none;
+  }
+
+  .plot-variables--columns,
+  .plot-variables--columns.plot-variables--movable {
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 }
 </style>
