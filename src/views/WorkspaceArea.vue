@@ -303,7 +303,7 @@
                 ref="searchInputRef"
                 v-model="searchQuery"
                 class="w-full"
-                placeholder="Search workspace… (/)"
+                placeholder="Type / to search"
                 @input="runSearch()"
                 @keydown="onSearchKeydown"
                 @focus="onSearchFocus"

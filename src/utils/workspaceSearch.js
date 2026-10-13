@@ -6,8 +6,8 @@ const VAR_PREFIX = /^\s*var:\s*/i
 
 // The modes the search box offers, in the order its picker lists them.
 export const SEARCH_MODES = [
-  { prefix: '', label: 'Name', hint: 'Search instances by name' },
-  { prefix: 'var:', label: 'var:', hint: 'Find instances containing a variable' },
+  { prefix: '', label: 'Name (default)', hint: 'Just start typing' },
+  { prefix: 'var:', label: 'var:', hint: 'Instances containing a variable' },
 ]
 
 const KIND_LABELS = { constant: 'parameter', global_constant: 'global', boundary_condition: 'boundary' }
