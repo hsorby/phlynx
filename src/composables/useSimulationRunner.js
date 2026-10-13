@@ -19,8 +19,8 @@ import { FLOW_IDS } from '../utils/constants'
  * @param {{instanceId?: import('vue').Ref<string|null>|string|null, isWholeModelOnly?: boolean}} [options] - The
  *   instance an instance editor runs on its own, or none for the canvas selection; and whether the view only runs the
  *   whole model, as the simulation page, with no canvas to select from, does.
- * @returns {Object} The run state, `play`, `stop`, `keepCurrent`, `scopeMode` and `statusLine`; `isOtherRun` says an
- *   instance editor shows another scope's results.
+ * @returns {Object} The run state, `play`, `stop`, `keepCurrent`, `scopeMode`, `playScopeNodeIds` (what play
+ *   simulates) and `statusLine`; `isOtherRun` says an instance editor shows another scope's results.
  */
 export function useSimulationRunner({ instanceId = null, isWholeModelOnly = false } = {}) {
   const { nodes, getSelectedNodes } = useVueFlow(FLOW_IDS.MAIN)
@@ -137,10 +137,15 @@ export function useSimulationRunner({ instanceId = null, isWholeModelOnly = fals
   })
   const isOutdated = computed(() => !!store.results && (isStale.value || isSelectionChanged.value || isOtherRun.value))
 
+  // The instances play simulates, as the switch says: the edited instance or the selection, or null for the whole model.
+  const playScopeNodeIds = computed(() => {
+    if (scopeMode.value === 'model') return null
+    return getInstanceId() ? [getInstanceId()] : sortedSelectedIds.value
+  })
+
   /** Simulates the whole model or the part, as the switch says. */
   function play() {
-    if (scopeMode.value === 'model') run(null)
-    else run(getInstanceId() ? [getInstanceId()] : sortedSelectedIds.value)
+    run(playScopeNodeIds.value)
   }
 
   // What the status line says: the most pressing thing first, with the full lists a click away. Notes, such as a
@@ -192,6 +197,7 @@ export function useSimulationRunner({ instanceId = null, isWholeModelOnly = fals
     canPlay,
     isOutdated,
     scopeMode,
+    playScopeNodeIds,
     statusLine,
     play,
     stop,

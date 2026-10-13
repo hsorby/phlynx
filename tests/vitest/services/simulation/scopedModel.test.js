@@ -106,6 +106,15 @@ describe('checkScope', () => {
     expect(fixed.usesOwnValue).toEqual([{ nodeId: 'b', nodeName: 'b_name', variableName: 'v' }])
   })
 
+  it('doesn’t warn about a boundary condition without a value that the run supplies, as a sweep does', () => {
+    const a = createNode('a', { vType: 'variable' })
+    const b = createNode('b')
+
+    const report = checkScope(resolveScope(['b'], [a, b], [connect(a, b)]), library(), { suppliedKeys: new Set(['b::v']) })
+    expect(report.canBuild).toBe(true)
+    expect(report.zeroedBoundaries).toEqual([])
+  })
+
   it('doesn’t report a boundary condition whose supplier is in the scope', () => {
     const a = createNode('a', { vType: 'variable' })
     const b = createNode('b')
@@ -281,6 +290,16 @@ describe('summariseScopeReport', () => {
     ])
     // Falling back to its own value is expected, so it is a note rather than a warning.
     expect(notes).toEqual(['"a_name.u" uses its own value, since what supplies it is outside the selection.'])
+  })
+
+  it('groups the boundary conditions using their own values into one note', () => {
+    const entry = (variableName) => ({ nodeId: 'a', nodeName: 'a_name', variableName })
+    const report = { errors: [], incompleteNodes: [], missingValues: [], conflicts: [], lostSumTerms: [], trimmedModules: [], zeroedBoundaries: [] }
+
+    expect(summariseScopeReport({ ...report, usesOwnValue: [] }).notes).toEqual([])
+    expect(summariseScopeReport({ ...report, usesOwnValue: [entry('u'), entry('v'), entry('w')] }).notes).toEqual([
+      'These use their own values, since what supplies them is outside the selection: "a_name.u", "a_name.v", "a_name.w".',
+    ])
   })
 })
 

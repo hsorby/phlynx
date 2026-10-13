@@ -243,3 +243,58 @@ export function resolveSweepTarget({ sweep, role = 'swept', nodes, mapping, vari
   const separator = reported.indexOf('/')
   return { component: reported.slice(0, separator), variable: reported.slice(separator + 1) }
 }
+
+/**
+ * Says why a sweep of a boundary condition, or its family's, can't run in a scope: a connection inside the scope
+ * supplies its value, so its own isn't used. Anything else, as a row since deleted or retyped, or one outside the
+ * scope, is left to findSweepProblem and resolveSweepTarget.
+ *
+ * @param {Object|null} sweep
+ * @param {Object} options
+ * @param {Array<Object>} options.nodes - The scope's nodes.
+ * @param {Map<string, Map<string, {state: string}>>} options.status - From resolveBoundaryValues, given the scope's
+ *   nodes and the edges inside it.
+ * @returns {string|null}
+ */
+export function findBoundarySweepProblem(sweep, { nodes, status }) {
+  const targets = [
+    [sweep, 'sweep it'],
+    [sweep?.family, 'vary it across curves'],
+  ]
+  for (const [target, aim] of targets) {
+    if (target?.type !== 'boundary_condition') continue
+    const node = nodes.find(({ id }) => id === target.nodeId)
+    const row = node?.data?.variables?.find(({ name }) => name === target.parameterName)
+    if (row?.type !== 'boundary_condition' || status.get(target.nodeId)?.get(row.name)?.state !== 'connected') continue
+    return `${sweepLabel(target)} is supplied through a connection in this run: simulate ${target.nodeName} on its own to ${aim}.`
+  }
+  return null
+}
+
+/**
+ * Tells whether a scope's math has ODEs, so its run is a time course, as the flattened model does (see
+ * generateFlattenedModel). A VoI given a value in the parameter rows still leaves its ODEs.
+ *
+ * @param {Array<Object>} nodes - The scope's nodes.
+ * @param {Function} getMathAnalysis - libraryStore.getMathAnalysis.
+ * @returns {boolean|null} Null when none found has ODEs but some node's math has no analysis.
+ */
+export function scopeHasOde(nodes, getMathAnalysis) {
+  let isKnown = true
+  for (const node of nodes) {
+    const analysis = node.data?.mathRef ? getMathAnalysis(node.data.mathRef) : null
+    if (!analysis) isKnown = false
+    else if (analysis.voi?.length > 0) return true
+  }
+  return isKnown ? false : null
+}
+
+/**
+ * Lists the boundary conditions a sweep, and its family, give values of their own, so a run doesn't warn that one
+ * without a value is set to 0.
+ *
+ * @param {Object|null} sweep
+ * @returns {Set<string>} Their `nodeId::name`.
+ */
+export const listSweptBoundaries = (sweep) =>
+  new Set([sweep, sweep?.family].filter((target) => target?.type === 'boundary_condition').map((target) => mappingKey(target.nodeId, target.parameterName)))

@@ -282,6 +282,57 @@ describe('useSimulation', () => {
       expect(store.results).toMatchObject({ isSweep: true, sweepLabel: 'a/k' })
     })
 
+    describe('of a boundary condition', () => {
+      const port = { label: 'p', variables: ['k'] }
+      const BC_SWEEP = { ...SWEEP, type: 'boundary_condition' }
+
+      beforeEach(() => {
+        // b computes the k that a's boundary condition takes.
+        nodes.value = [
+          createNode('a', [{ name: 'x', type: 'variable' }, { name: 'k', type: 'boundary_condition', value: '2' }]),
+          createNode('b', [{ name: 'x', type: 'variable' }, { name: 'k', type: 'variable' }]),
+        ]
+        edges.value = [{ id: 'e', source: 'b', target: 'a', data: { couplings: [{ sourcePort: port, targetPort: port }] } }]
+      })
+
+      it.each([
+        ['swept', { sweep: BC_SWEEP }, 'sweep it'],
+        ['varied across curves', { sweep: { ...SWEEP, family: { ...BC_SWEEP, values: [1, 2] } } }, 'vary it across curves'],
+      ])('won’t have one %s that a connection in the run supplies', async (_, settings, aim) => {
+        if (settings.sweep.family) nodes.value[0].data.variables.push({ name: 'g', type: 'constant', value: '1' })
+        const sweep = settings.sweep.family ? { ...settings.sweep, key: 'a::g', parameterName: 'g', type: 'constant' } : settings.sweep
+        useSimulationSettingsStore().setSimulationSettings({ ...useSimulationSettingsStore().simulationSettings, sweep })
+        const { run } = useSimulation()
+
+        await run(null)
+
+        expect(store.status).toBe('error')
+        expect(store.error.message).toBe(`a/k is supplied through a connection in this run: simulate a on its own to ${aim}.`)
+        expect(engine.runs).toHaveLength(0)
+      })
+
+      it('sweeps one whose supplier is outside the run, at its own value', async () => {
+        useSimulationSettingsStore().setSimulationSettings({ ...useSimulationSettingsStore().simulationSettings, sweep: BC_SWEEP })
+        const { run } = useSimulation()
+
+        run(['a'])
+        await settle()
+        expect(store.status).toBe('running')
+        expect(engine.runs[0].options.sweep).toEqual({ ...TARGET, readout: 'end' })
+      })
+
+      it('doesn’t warn that one without a value is set to 0, as the sweep gives it values', async () => {
+        nodes.value[0].data.variables[1].value = ''
+        useSimulationSettingsStore().setSimulationSettings({ ...useSimulationSettingsStore().simulationSettings, sweep: BC_SWEEP })
+        const { run } = useSimulation()
+
+        run(['a'])
+        await settle()
+        expect(store.status).toBe('running')
+        expect(store.report.warnings).toEqual([])
+      })
+    })
+
     it('explains a sweep of something the model computes', async () => {
       useSimulationSettingsStore().setSimulationSettings({ ...useSimulationSettingsStore().simulationSettings, sweep: { ...SWEEP, key: 'a::x', parameterName: 'x' } })
       engine.variables = new Map([['a/x', { kind: 'algebraic' }]])

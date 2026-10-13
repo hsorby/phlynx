@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
+import { resolveBoundaryValues } from '../../../../src/services/export/boundaryValues'
 import {
   createFamily,
   createSweep,
   familyValues,
+  findBoundarySweepProblem,
+  listSweptBoundaries,
   findSweepProblem,
   isSweepableEntry,
   isSweepableRow,
@@ -11,6 +14,7 @@ import {
   MAX_SWEEP_POINTS,
   MAX_SWEEP_RUNS,
   resolveSweepTarget,
+  scopeHasOde,
   splitFamily,
   sweepLabel,
   sweepReadout,
@@ -229,5 +233,72 @@ describe('sweepReadout', () => {
     expect(sweepReadout({})).toBe('end')
     expect(sweepReadout({ readout: 'mean' })).toBe('end')
     expect(sweepReadout(null)).toBe('end')
+  })
+})
+
+describe('findBoundarySweepProblem', () => {
+  const port = { label: 'p', variables: ['V'] }
+  const bcRow = { name: 'V', type: 'boundary_condition', value: '1' }
+  const bc = { key: 'a::V', nodeId: 'a', nodeName: 'mem', parameterName: 'V', type: 'boundary_condition' }
+  const constant = { key: 'b::g', nodeId: 'b', nodeName: 'cell', parameterName: 'g', type: 'constant' }
+  // b computes the V that a's boundary condition takes.
+  const connected = [node('a', 'mem', [bcRow]), node('b', 'cell', [{ name: 'V', type: 'variable' }, { name: 'g', type: 'constant', value: '1' }])]
+  const edges = [{ id: 'e', source: 'b', target: 'a', data: { couplings: [{ sourcePort: port, targetPort: port }] } }]
+  const problemOf = (sweep, nodes, scopeEdges = edges) =>
+    findBoundarySweepProblem(sweep, { nodes, status: resolveBoundaryValues(nodes, scopeEdges).status })
+
+  it('says when a connection in the scope supplies a swept boundary condition, or its family’s', () => {
+    expect(problemOf(bc, connected)).toBe('mem/V is supplied through a connection in this run: simulate mem on its own to sweep it.')
+    expect(problemOf({ ...constant, family: bc }, connected)).toBe(
+      'mem/V is supplied through a connection in this run: simulate mem on its own to vary it across curves.'
+    )
+  })
+
+  it('passes one nothing in the scope supplies, a constant, and one outside the scope', () => {
+    expect(problemOf(bc, connected, [])).toBeNull()
+    expect(problemOf(bc, [connected[0]], [])).toBeNull()
+    expect(problemOf(constant, connected)).toBeNull()
+    expect(problemOf(bc, [connected[1]], [])).toBeNull()
+    expect(problemOf(null, connected)).toBeNull()
+  })
+
+  it('leaves a row since deleted or retyped to the other checks', () => {
+    expect(problemOf(bc, [node('a', 'mem', []), connected[1]])).toBeNull()
+    expect(problemOf(bc, [node('a', 'mem', [{ ...bcRow, type: 'constant' }]), connected[1]])).toBeNull()
+  })
+
+  it('passes one on a Sum port nothing is connected to', () => {
+    const summed = { ...node('a', 'mem', [bcRow]), data: { name: 'mem', variables: [bcRow], ports: [{ label: 'in', variables: ['V'], multiportType: 'Sum' }] } }
+    expect(problemOf(bc, [summed], [])).toBeNull()
+  })
+})
+
+describe('scopeHasOde', () => {
+  const analyses = new Map([
+    ['ode', { voi: ['t'] }],
+    ['algebraic', { voi: [] }],
+  ])
+  const getMathAnalysis = (mathRef) => analyses.get(mathRef) ?? null
+  const withMath = (id, mathRef) => ({ id, data: { name: id, mathRef, variables: [] } })
+
+  it('tells whether any of the scope’s math integrates over a VoI', () => {
+    expect(scopeHasOde([withMath('a', 'algebraic'), withMath('b', 'ode')], getMathAnalysis)).toBe(true)
+    expect(scopeHasOde([withMath('a', 'algebraic')], getMathAnalysis)).toBe(false)
+    expect(scopeHasOde([], getMathAnalysis)).toBe(false)
+  })
+
+  it('can’t tell without every node’s analysis, unless one has ODEs', () => {
+    expect(scopeHasOde([withMath('a', 'algebraic'), withMath('b', 'missing')], getMathAnalysis)).toBeNull()
+    expect(scopeHasOde([withMath('a', 'missing'), withMath('b', 'ode')], getMathAnalysis)).toBe(true)
+    expect(scopeHasOde([{ id: 'c', data: { name: 'c', variables: [] } }], getMathAnalysis)).toBeNull()
+  })
+})
+
+describe('listSweptBoundaries', () => {
+  it('lists the boundary conditions a sweep and its curves vary, and nothing else', () => {
+    const bc = { nodeId: 'a', parameterName: 'v', type: 'boundary_condition' }
+    expect(listSweptBoundaries(null)).toEqual(new Set())
+    expect(listSweptBoundaries({ nodeId: 'a', parameterName: 'k', type: 'constant' })).toEqual(new Set())
+    expect(listSweptBoundaries({ ...bc, family: { nodeId: 'b', parameterName: 'w', type: 'boundary_condition' } })).toEqual(new Set(['a::v', 'b::w']))
   })
 })
