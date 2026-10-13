@@ -2961,7 +2961,7 @@ const handleKeyDown = (event) => {
     selectAllNodes()
   }
 
-  if (isCtrl && event.key.toLowerCase() === 's' && !somethingAvailable) {
+  if (isCtrl && event.key.toLowerCase() === 's' && !somethingAvailable.value) {
     event.preventDefault()
     handleSaveWorkspace()
   }
