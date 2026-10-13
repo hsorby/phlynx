@@ -550,7 +550,6 @@ import { useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import SplitButton from 'primevue/splitbutton'
 import JSZip from 'jszip'
-import { parseLayout } from 'cellml-text-editor'
 import Divider from 'primevue/divider'
 import InputText from 'primevue/inputtext'
 import IconField from 'primevue/iconfield'
@@ -642,6 +641,7 @@ import { notify } from '../utils/notify'
 import { getHelperLines } from '../utils/helperLines'
 import { getPurgedUrlForResource, getUrlForResource, loadManifest } from '../utils/resources'
 import { useClearWorkspace } from '../composables/useClearWorkspace'
+import { shouldIgnoreShortcut, useWorkspaceClipboard } from '../composables/useWorkspaceClipboard'
 import { useColorScheme } from '../composables/useColorScheme'
 import { useAppSettings } from '../composables/useAppSettings'
 import { useNodeThemeStore } from '../stores/nodeThemeStore'
@@ -659,8 +659,7 @@ import {
   NUM_GHOST_HANDLES_LEFT_RIGHT,
   PHLYNX_PROJECT_VERSION,
 } from '../utils/constants'
-import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
-import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
+import { resolvePortCouplings } from '../utils/edges'
 import { parseParametersFile } from '../utils/import'
 import { applyParameterValues, applyParametersToNodes, skippedParametersMessage } from '../utils/parameters'
 import { detachReactivity } from '../utils/reactivity'
@@ -1043,7 +1042,6 @@ const currentImportConfig = ref({})
 
 const activeExportNotification = ref(null)
 
-const clipboard = ref({ nodes: [], edges: [] })
 const mousePosition = ref({ x: 0, y: 0 })
 
 const searchInputRef = ref(null)
@@ -1133,11 +1131,7 @@ onConnectEnd(() => {
   revertPendingGhostIfUnused()
 })
 
-function selectAllNodes() {
-  nodes.value.forEach((node) => {
-    node.selected = true
-  })
-}
+const { copySelection, pasteSelection, selectAllNodes } = useWorkspaceClipboard({ mousePosition, allNodeNames })
 
 const onPaneClick = () => {
   if (searchQuery.value) {
@@ -2414,195 +2408,8 @@ function doImageExport() {
   }).catch((err) => notify.error({ title: 'Image export failed', message: err?.message ?? String(err) }))
 }
 
-const getBoundingCenter = (nodes) => {
-  if (nodes.length === 0) return { x: 0, y: 0 }
-
-  let minX = Infinity,
-    minY = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity
-
-  nodes.forEach((n) => {
-    const pos = {
-      x: n.position.x + n.dimensions.width / 2,
-      y: n.position.y + n.dimensions.height / 2,
-    }
-    if (pos.x < minX) minX = pos.x
-    if (pos.y < minY) minY = pos.y
-    if (pos.x > maxX) maxX = pos.x
-    if (pos.y > maxY) maxY = pos.y
-  })
-
-  return {
-    x: minX + (maxX - minX) / 2,
-    y: minY + (maxY - minY) / 2,
-  }
-}
-
-const copySelection = async () => {
-  const nodes = getSelectedNodes.value
-  const edges = getSelectedEdges.value
-
-  if (nodes.length === 0) return
-
-  const storeSnapshot = {}
-  for (const node of nodes) {
-    const { moduleRef, mathRef } = node.data
-    if (!moduleRef || !mathRef) continue
-
-    if (!libraryStore.availableMath.has(mathRef) || !libraryStore.availableModules.has(moduleRef)) continue
-    const math = libraryStore.availableMath.get(mathRef)
-    const module = libraryStore.availableModules.get(moduleRef)
-    if (!math || !module) continue
-
-    const key = `${moduleRef}::${mathRef}`
-    if (storeSnapshot[key]) {
-      continue
-    }
-
-    storeSnapshot[key] = {
-      mathRef,
-      math,
-      layout: libraryStore.getMathLayout(mathRef),
-      moduleRef,
-      module,
-    }
-  }
-
-  const payload = {
-    nodes: detachReactivity(nodes),
-    edges: detachReactivity(edges),
-    storeSnapshot,
-  }
-
-  clipboard.value = payload
-
-  try {
-    await navigator.clipboard.writeText(JSON.stringify(payload))
-  } catch (err) {
-    console.warn('Clipboard write failed', err)
-  }
-}
-
-const pasteSelection = async (atMouse = false) => {
-  let sourceClipboard = clipboard.value
-
-  // Try reading from system clipboard (for cross-window paste)
-  try {
-    const text = await navigator.clipboard.readText()
-    const parsed = JSON.parse(text)
-    if (parsed?.nodes && parsed?.edges) {
-      sourceClipboard = parsed
-    }
-  } catch (err) {
-    // Ignore clipboard read errors
-  }
-
-  if (!sourceClipboard.nodes || sourceClipboard.nodes.length === 0) return
-
-  // Nodes copied from an older version keep values in their math; they move into the rows here.
-  const clipboardMath = Object.values(sourceClipboard.storeSnapshot ?? {}).map((entry) => [entry.mathRef, entry.math])
-  const clipboardNodes = separateNodeParameters(sourceClipboard.nodes, clipboardMath).nodes
-
-  if (sourceClipboard.storeSnapshot) {
-    for (const entry of Object.values(sourceClipboard.storeSnapshot)) {
-      if (!libraryStore.availableModules.has(entry.moduleRef)) {
-        libraryStore.addModule(entry.module)
-      }
-      if (!libraryStore.availableMath.has(entry.mathRef)) {
-        // Clipboard text can come from anywhere, so the layout is checked like a saved one.
-        const layout = entry.layout ? parseLayout(JSON.stringify(entry.layout)) : null
-        libraryStore.addMath(entry.mathRef, entry.math, true, layout)
-      }
-    }
-  }
-
-  const newNodes = []
-  const newEdges = []
-
-  let dx = 50
-  let dy = 50
-
-  if (atMouse) {
-    // Convert screen mouse pixels to graph coordinates (handling zoom/pan)
-    const mouseFlowPos = screenToFlowCoordinate(mousePosition.value)
-    const clipboardCenter = getBoundingCenter(sourceClipboard.nodes)
-
-    // Calculate difference to move center -> mouse
-    dx = mouseFlowPos.x - clipboardCenter.x
-    dy = mouseFlowPos.y - clipboardCenter.y
-  }
-
-  const idMap = {}
-  const nodeIdSet = nodes.value.map((n) => n.id)
-  const edgeIdSet = edges.value.map((e) => e.id)
-
-  const namesSet = new Set()
-  allNodeNames.value.forEach((name) => namesSet.add(name))
-
-  clipboardNodes.forEach((node) => {
-    const newId = getNextNodeId(nodeIdSet)
-    idMap[node.id] = newId
-    nodeIdSet.push(newId)
-
-    const finalName = generateUniqueInstanceName(node.data.name, namesSet)
-    namesSet.add(finalName)
-
-    // Create the new node with offset position.
-    newNodes.push({
-      id: newId,
-      type: node.type,
-      data: {
-        ...node.data,
-        name: finalName,
-      },
-      position: {
-        x: node.position.x + dx,
-        y: node.position.y + dy,
-      },
-      // Reset selection state so we focus on the new copy.
-      selected: true,
-    })
-  })
-
-  sourceClipboard.edges.forEach((edge) => {
-    const newSource = idMap[edge.source]
-    const newTarget = idMap[edge.target]
-
-    // If both endpoints exist in our new set, recreate the connection.
-    if (newSource && newTarget) {
-      const newEdgeId = getNextEdgeId(edgeIdSet)
-      edgeIdSet.push(newEdgeId)
-
-      newEdges.push({
-        ...edge,
-        id: newEdgeId,
-        source: newSource,
-        target: newTarget,
-        selected: true,
-      })
-    }
-  })
-
-  getSelectedNodes.value.forEach((n) => (n.selected = false))
-  getSelectedEdges.value.forEach((e) => (e.selected = false))
-
-  addNodes(newNodes)
-  addEdges(newEdges)
-}
-
 const handleKeyDown = (event) => {
-  // Check if user is typing in an input field (don't trigger copy/paste then)
-  if (['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
-    return
-  }
-
-  // Don't intercept shortcuts while any dialog is open: they would act on the workspace behind it.
-  // CodeMirror and the math workbench edit in focusable divs rather than
-  // INPUT/TEXTAREA, so the check above doesn't catch them. We guard on both the
-  // dialog-open state and on whether focus is inside any CodeMirror editor element.
-  if (dialogVisible.value) return
-  if (event.target.closest('.cm-editor')) return
+  if (shouldIgnoreShortcut(event, dialogVisible.value)) return
 
   const isCtrl = event.ctrlKey || event.metaKey
   const isShift = event.shiftKey
