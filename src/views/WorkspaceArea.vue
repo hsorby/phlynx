@@ -294,7 +294,7 @@
       >
         <div
           class="workspace-search-container"
-          :class="{ 'search-inactive': !searchBarFocused && !searchQuery }"
+          :class="{ 'search-inactive': !isSearchFocused && !searchQuery }"
         >
           <div class="workspace-search-input-wrapper">
             <IconField>
@@ -303,19 +303,37 @@
                 ref="searchInputRef"
                 v-model="searchQuery"
                 class="w-62"
-                placeholder="Search Workspace..."
+                placeholder="Search workspace… (/)"
                 @input="runSearch()"
                 @keydown="onSearchKeydown"
-                @focus="searchBarFocused = true"
-                @blur="searchBarFocused = false"
+                @focus="onSearchFocus"
+                @blur="onSearchBlur"
               />
               <InputIcon v-if="searchQuery" class="search-clear-input pi pi-times-circle" @click="clearSearch" />
             </IconField>
           </div>
-          <div v-if="searchQuery" class="search-suffix-content">
+          <div v-if="showModePicker" class="search-suffix-content">
+            <ul class="search-match-list search-mode-picker">
+              <li
+                v-for="(mode, index) in SEARCH_MODES"
+                :key="mode.label"
+                class="search-match-item"
+                :class="{ active: index === pickerIndex }"
+                @mousedown.prevent="pickMode(index)"
+              >
+                {{ mode.label }}
+                <span class="search-match-vars">{{ mode.hint }}</span>
+              </li>
+            </ul>
+          </div>
+          <div v-else-if="searchQuery" class="search-suffix-content">
             <div class="search-suffix-header">
+              <Tag v-if="parsedQuery.mode === 'var'" value="var" severity="secondary" rounded />
               <span v-if="matchCount !== null" class="search-match-count">
-                {{ matchCount }} match{{ matchCount !== 1 ? 'es' : '' }}
+                <template v-if="parsedQuery.mode === 'var'">
+                  {{ matchCount }} instance{{ matchCount !== 1 ? 's' : '' }}
+                </template>
+                <template v-else>{{ matchCount }} match{{ matchCount !== 1 ? 'es' : '' }}</template>
               </span>
               <div v-if="matchCount >= 1" class="search-nav-buttons">
                 <Button
@@ -337,15 +355,27 @@
             </div>
             <ul v-if="matchCount >= 1" class="search-match-list">
               <li
-                v-for="(node, index) in matchingNodesList"
-                :key="node.id"
+                v-for="(match, index) in matchingNodesList"
+                :key="match.node.id"
                 class="search-match-item"
                 :class="{ active: index === currentMatchIndex }"
                 @click="selectMatch(index)"
               >
-                {{ node.data?.name || node.data?.moduleRef || node.id }}
+                {{ match.node.data?.name || match.node.data?.moduleRef || match.node.id }}
+                <span
+                  v-if="match.variables.length"
+                  class="search-match-vars"
+                  :title="match.variables.map(describeMatchedVariable).join(', ')"
+                >
+                  {{ match.variables.slice(0, 3).map(describeMatchedVariable).join(', ')
+                  }}{{ match.variables.length > 3 ? ` +${match.variables.length - 3} more` : '' }}
+                </span>
               </li>
             </ul>
+            <p v-else-if="matchCount === 0" class="search-empty">
+              <template v-if="parsedQuery.mode === 'var'">No instance has a variable matching '{{ parsedQuery.term }}'</template>
+              <template v-else>No instances match '{{ parsedQuery.term }}'</template>
+            </p>
           </div>
         </div>
 
@@ -528,6 +558,7 @@ import Divider from 'primevue/divider'
 import InputText from 'primevue/inputtext'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
+import Tag from 'primevue/tag'
 import ConfirmDialog from 'primevue/confirmdialog'
 import ThemeToggle from '../components/ThemeToggle.vue'
 import { Toast } from 'primevue'
@@ -599,6 +630,7 @@ import { useProtocolDialog } from '../composables/useProtocolDialog'
 import { useFloatingViewer } from '../composables/useFloatingViewer'
 import { useActiveDocumentListeners } from '../composables/useActiveDocumentListeners'
 import { useWorkspaceSearch } from '../composables/useWorkspaceSearch'
+import { SEARCH_MODES, variableKindLabel } from '../utils/workspaceSearch'
 import { scopeFlowObject } from '../services/simulation/scopedModel'
 import { relayoutNodes } from '../services/layouts/physics'
 import { extractSimData as extractSimDataFromSedml } from '../services/import/sedml'
@@ -1019,19 +1051,37 @@ const clipboard = ref({ nodes: [], edges: [] })
 const mousePosition = ref({ x: 0, y: 0 })
 
 const searchInputRef = ref(null)
-const searchBarFocused = ref(false)
 const {
   searchQuery,
+  parsedQuery,
   matchCount,
   matchingNodesList,
   currentMatchIndex,
+  isSearchFocused,
+  showModePicker,
+  pickerIndex,
   runSearch,
   clearSearch,
   selectMatch,
   cycleToNextMatch,
   cycleToPreviousMatch,
+  pickMode,
+  onSearchFocus,
+  onSearchBlur,
+  onSearchKeydown,
   getNodeClass,
 } = useWorkspaceSearch({ nodes, findNode, zoomToNode })
+
+/**
+ * Names a matched variable with its kind, such as `R (global)`.
+ *
+ * @param {Object} row
+ * @returns {string}
+ */
+const describeMatchedVariable = (row) => {
+  const kind = variableKindLabel(row)
+  return kind ? `${row.name} (${kind})` : row.name
+}
 
 const allNodeNames = computed(() => nodes.value.map((n) => n.data.name))
 const somethingAvailable = computed(() => nodes.value.length > 0)
@@ -1230,23 +1280,6 @@ const focusSearch = () => {
   const input = searchInputRef.value?.$el
   input?.focus()
   input?.select()
-}
-
-/**
- * Steps through matches with Enter and Shift+Enter, and clears (then leaves) the box with Escape.
- *
- * @param {KeyboardEvent} event
- */
-const onSearchKeydown = (event) => {
-  if (event.key === 'Enter') {
-    event.preventDefault()
-    if (event.shiftKey) cycleToPreviousMatch()
-    else cycleToNextMatch()
-  } else if (event.key === 'Escape') {
-    event.preventDefault()
-    if (searchQuery.value) clearSearch()
-    else event.target.blur?.()
-  }
 }
 
 /**
@@ -3432,6 +3465,22 @@ watch(
   background: color-mix(in srgb, var(--p-primary-color) 15%, transparent);
   color: var(--p-primary-color);
   font-weight: 600;
+}
+
+.search-match-vars {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--p-text-muted-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-empty {
+  margin: 0;
+  padding: 4px 2px;
+  font-size: 12px;
+  color: var(--p-text-muted-color);
 }
 
 .cursor-pointer {
