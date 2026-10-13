@@ -57,7 +57,13 @@
       />
     </template>
 
-    <SweepEditor v-else-if="view === 'sweep'" :sweep="settingsStore.simulationSettings.sweep ?? null" :nodes="nodes" @update:sweep="setSweep" />
+    <SweepEditor
+      v-else-if="view === 'sweep'"
+      :sweep="settingsStore.simulationSettings.sweep ?? null"
+      :nodes="nodes"
+      :play-scope-node-ids="playScopeNodeIds"
+      @update:sweep="setSweep"
+    />
 
     <RunList v-else-if="view === 'runs'" />
 
@@ -101,6 +107,8 @@ const props = defineProps({
   nodes: { type: Array, default: () => [] },
   // The nodes the last run simulated, or null for all of them.
   scopeNodeIds: { type: Array, default: null },
+  // The nodes play simulates next, or null for all of them: what the sweep can vary.
+  playScopeNodeIds: { type: Array, default: null },
   // Makes a change that keeps the shown results true (see useSimulation).
   keepCurrent: { type: Function, default: (change) => change() },
   // A view's own single plot, edited in place of the workspace's plots, or null for the workspace's.

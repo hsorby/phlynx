@@ -6,16 +6,31 @@ import PrimeVue from 'primevue/config'
 import Menu from 'primevue/menu'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-
+const edges = ref([])
 vi.mock('@vue-flow/core', async (importOriginal) => ({
   ...(await importOriginal()),
-  useVueFlow: () => ({ edges: ref([]) }),
+  useVueFlow: () => ({ edges }),
 }))
 
 const { default: SweepEditor } = await import('../../../src/components/simulation/SweepEditor.vue')
 const { useSimulationResultsStore } = await import('../../../src/stores/simulationResultsStore.js')
 const { useSimulationSettingsStore } = await import('../../../src/stores/simulationSettingsStore.js')
 const { default: VariablePathPicker } = await import('../../../src/components/simulation/VariablePathPicker.vue')
+const { useLibraryStore } = await import('../../../src/stores/libraryStore.js')
+
+// Keeps a tooltip's text where a test can read it.
+const tooltip = {
+  mounted: (el, binding) => (el.dataset.tooltip = binding.value),
+  updated: (el, binding) => (el.dataset.tooltip = binding.value),
+}
+const ODE_MATH = `<model xmlns="http://www.cellml.org/cellml/2.0#" name="m"><component name="m">
+  <variable name="t" units="second"/><variable name="x" units="dimensionless" initial_value="1"/>
+  <math xmlns="http://www.w3.org/1998/Math/MathML"><apply><eq/><apply><diff/><bvar><ci>t</ci></bvar><ci>x</ci></apply><cn>1</cn></apply></math>
+</component></model>`
+const ALGEBRAIC_MATH = `<model xmlns="http://www.cellml.org/cellml/2.0#" name="m"><component name="m">
+  <variable name="x" units="dimensionless"/><variable name="k" units="dimensionless"/>
+  <math xmlns="http://www.w3.org/1998/Math/MathML"><apply><eq/><ci>x</ci><apply><times/><cn>2</cn><ci>k</ci></apply></apply></math>
+</component></model>`
 
 const nodes = [
   {
@@ -31,7 +46,10 @@ const nodes = [
 ]
 
 let wrapper
-beforeEach(() => setActivePinia(createPinia()))
+beforeEach(() => {
+  setActivePinia(createPinia())
+  edges.value = []
+})
 afterEach(() => wrapper?.unmount())
 
 /**
@@ -39,10 +57,10 @@ afterEach(() => wrapper?.unmount())
  *
  * @param {Object|null} sweep
  */
-function mountEditor(sweep = null) {
+function mountEditor(sweep = null, props = {}) {
   wrapper = mount(SweepEditor, {
-    props: { nodes, sweep, 'onUpdate:sweep': (next) => wrapper.setProps({ sweep: next }) },
-    global: { plugins: [PrimeVue] },
+    props: { nodes, sweep, 'onUpdate:sweep': (next) => wrapper.setProps({ sweep: next }), ...props },
+    global: { plugins: [PrimeVue], directives: { tooltip } },
   })
 }
 
@@ -74,6 +92,68 @@ describe('SweepEditor', () => {
     await flushPromises()
     expect(wrapper.props('sweep')).toBeNull()
     expect(addButton()).toBeDefined()
+  })
+
+  it('explains itself in a tooltip beside its button, or its parameter, not in text always shown', async () => {
+    mountEditor(null)
+    expect(wrapper.text().trim()).toBe('Sweep a parameter')
+    expect(wrapper.find('[data-testid="sim-sweep-about"]').exists()).toBe(true)
+
+    await wrapper.setProps({ sweep: { key: 'n1::g', nodeId: 'n1', nodeName: 'channel', parameterName: 'g', units: 'siemens', type: 'constant', from: 1, to: 3, points: 51 } })
+    const about = wrapper.get('[data-testid="sim-sweep-parameter"] [data-testid="sim-sweep-about"]')
+    expect(about.find('.pi-info-circle').exists()).toBe(true)
+    expect(about.attributes('data-tooltip')).toMatch(/read between the plots’ Start and End/)
+    expect(about.attributes('data-tooltip')).toMatch(/Web OpenCOR can’t run sweeps/)
+    expect(about.attributes('aria-label')).toBe(about.attributes('data-tooltip'))
+    expect(about.element.tagName).toBe('BUTTON')
+    expect(wrapper.text()).not.toMatch(/Web OpenCOR|of each time course|No sweep yet/)
+  })
+
+  describe('its scope', () => {
+    // The membrane's V is a boundary condition the cell, connected to it, supplies.
+    const connected = [
+      { id: 'cell', data: { name: 'cell', variables: [{ name: 'V', type: 'variable', units: 'volt' }] } },
+      { id: 'mem', data: { name: 'mem', variables: [{ name: 'V', type: 'boundary_condition', units: 'volt', value: '-80' }] } },
+    ]
+    const port = { label: 'p', variables: ['V'] }
+    const BC_SWEEP = { key: 'mem::V', nodeId: 'mem', nodeName: 'mem', parameterName: 'V', units: 'volt', type: 'boundary_condition', from: -100, to: 0, points: 51 }
+
+    beforeEach(() => {
+      edges.value = [{ source: 'cell', target: 'mem', data: { couplings: [{ sourcePort: port, targetPort: port }] } }]
+    })
+
+    /**
+     * Lists the paths the picker offers.
+     *
+     * @returns {string[]}
+     */
+    async function offered() {
+      await addButton().trigger('click')
+      const picker = wrapper.findComponent(VariablePathPicker)
+      return picker.props('index').filter(picker.props('filter')).map((entry) => entry.path)
+    }
+
+    it('offers a connected boundary condition when its instance runs on its own, not with the whole model', async () => {
+      mountEditor(null, { nodes: connected })
+      expect(await offered()).toEqual([])
+      wrapper.unmount()
+
+      mountEditor(null, { nodes: connected, playScopeNodeIds: ['mem'] })
+      expect(await offered()).toEqual(['mem/V'])
+    })
+
+    it('warns that the whole model supplies a boundary condition swept on its own', async () => {
+      mountEditor(BC_SWEEP, { nodes: connected, playScopeNodeIds: ['mem'] })
+      expect(wrapper.text()).not.toMatch(/supplied through a connection/)
+
+      await wrapper.setProps({ playScopeNodeIds: null })
+      expect(wrapper.text()).toMatch(/mem\/V is supplied through a connection in this run: simulate mem on its own to sweep it\./)
+    })
+
+    it('leaves the run to warn where the scope play runs isn’t known, as in Simulation Settings', () => {
+      mountEditor(BC_SWEEP, { nodes: connected })
+      expect(wrapper.text()).not.toMatch(/supplied through a connection/)
+    })
   })
 
   describe('its reading', () => {
@@ -117,10 +197,38 @@ describe('SweepEditor', () => {
       const settingsStore = useSimulationSettingsStore()
       settingsStore.setSimulationSettings({ ...settingsStore.simulationSettings, initialPoint: 0, startingPoint: 1, endingPoint: 2 })
       await flushPromises()
-      expect(wrapper.get('[data-testid="sim-sweep-transient"]').text()).toMatch(/a min in the first moments/)
+      const transient = wrapper.get('[data-testid="sim-sweep-transient"]')
+      expect(transient.attributes('data-tooltip')).toMatch(/a min in the first moments/)
+      expect(transient.attributes('aria-label')).toBe(transient.attributes('data-tooltip'))
+      expect(transient.element.tagName).toBe('BUTTON')
 
       await wrapper.setProps({ sweep: { ...SWEEP, readout: 'end' } })
       expect(wrapper.find('[data-testid="sim-sweep-transient"]').exists()).toBe(false)
+    })
+
+    it('reads only a scope with ODEs, going by its math, or while that isn’t known, its last run', async () => {
+      const libraryStore = useLibraryStore()
+      libraryStore.addMath('file:ode', ODE_MATH)
+      libraryStore.addMath('file:algebraic', ALGEBRAIC_MATH)
+      const withMath = [
+        { id: 'n1', data: { ...nodes[0].data, mathRef: 'file:algebraic' } },
+        { id: 'n2', data: { name: 'clock', mathRef: 'file:ode', variables: [] } },
+      ]
+      mountEditor(SWEEP, { nodes: withMath, playScopeNodeIds: ['n1'] })
+      expect(wrapper.find('[data-testid="sim-sweep-readout"]').exists()).toBe(false)
+      expect(wrapper.get('[data-testid="sim-sweep-cost"]').text()).toBe('51 solves.')
+
+      await wrapper.setProps({ playScopeNodeIds: null })
+      expect(wrapper.find('[data-testid="sim-sweep-readout"]').exists()).toBe(true)
+
+      // An edit to the math shows at once, whatever the last run of this scope found.
+      finish({ elapsedMs: 4, isSteadyState: true })
+      await flushPromises()
+      expect(wrapper.find('[data-testid="sim-sweep-readout"]').exists()).toBe(true)
+
+      // Without the math's analysis, the run says.
+      await wrapper.setProps({ nodes: [withMath[0], { id: 'n2', data: { name: 'clock', mathRef: 'file:unknown', variables: [] } }] })
+      expect(wrapper.find('[data-testid="sim-sweep-readout"]').exists()).toBe(false)
     })
   })
 
@@ -132,7 +240,7 @@ describe('SweepEditor', () => {
     function mountWithKo(sweep) {
       wrapper = mount(SweepEditor, {
         props: { nodes: twoParameters, sweep, 'onUpdate:sweep': (next) => wrapper.setProps({ sweep: next }) },
-        global: { plugins: [PrimeVue] },
+        global: { plugins: [PrimeVue], directives: { tooltip } },
       })
     }
 

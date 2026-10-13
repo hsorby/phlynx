@@ -75,6 +75,7 @@
           v-model:target-plot-id="targetPlotId"
           :nodes="nodes"
           :scope-node-ids="hasScope ? store.scopeNodeIds : null"
+          :play-scope-node-ids="playScopeNodeIds"
           :keep-current="keepCurrent"
           :plot-config="plotConfig"
           :plot-node-id="plotConfig ? instanceId : null"
@@ -135,6 +136,7 @@ const {
   canPlay,
   isOutdated,
   scopeMode,
+  playScopeNodeIds,
   statusLine,
   play,
   stop,

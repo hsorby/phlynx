@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 
+import { resolveBoundaryValues } from '../services/export/boundaryValues'
 import { SimulationError } from '../services/simulation/engine'
 import { libopencor, whenLibOpenCORReady } from '../services/simulation/libopencorLoader'
 import { buildParameterChanges } from '../services/simulation/parameterChanges'
@@ -16,7 +17,7 @@ import {
 import { NO_CLOCK, addProtocolClock, addProtocolDrivers } from '../services/simulation/protocolDriverModel'
 import { listFeatureOperands, resolveFeatureOperands } from '../services/simulation/protocolFeatures'
 import { clampSolverSettings, prepareProtocolRun } from '../services/simulation/protocolRun'
-import { familyValues, findSweepProblem, resolveSweepTarget, splitFamily, sweepLabel, sweepReadout, sweepValues } from '../services/simulation/sweep'
+import { familyValues, findBoundarySweepProblem, findSweepProblem, resolveSweepTarget, splitFamily, sweepLabel, sweepReadout, sweepValues } from '../services/simulation/sweep'
 import { buildVariableMapping, mapInspectionModules } from '../services/simulation/variableMapping'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
 import { useLibraryStore } from '../stores/libraryStore'
@@ -178,6 +179,10 @@ export function useSimulation() {
       if (!isSweepRun) return null
       const problem = findSweepProblem(settings.sweep)
       if (problem) throw new SimulationError(problem)
+      // A boundary condition a connection in the scope supplies would sweep what supplies it instead.
+      const { status } = resolveBoundaryValues(scope.nodes, scope.internalEdges)
+      const boundaryProblem = findBoundarySweepProblem(settings.sweep, { nodes: scope.nodes, status })
+      if (boundaryProblem) throw new SimulationError(boundaryProblem)
       const found = { nodes: scope.nodes, mapping: source.mapping, variables: source.variables }
       const target = resolveSweepTarget({ sweep: settings.sweep, ...found })
       if (target.problem) throw new SimulationError(target.problem)

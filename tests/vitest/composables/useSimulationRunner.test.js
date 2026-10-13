@@ -112,4 +112,17 @@ describe('useSimulationRunner', () => {
     runner.scopeMode.value = 'selection'
     expect(run).toHaveBeenLastCalledWith(['b'])
   })
+
+  it('says what play runs, as the switch says, before it runs', () => {
+    const editor = setUpRunner({ instanceId: 'b' })
+    expect(editor.playScopeNodeIds.value).toBeNull()
+    editor.scopeMode.value = 'selection'
+    expect(editor.playScopeNodeIds.value).toEqual(['b'])
+
+    const sidebar = setUpRunner()
+    expect(sidebar.playScopeNodeIds.value).toBeNull()
+    sidebar.store.scopeMode = 'selection'
+    selected.value = ['b', 'a']
+    expect(sidebar.playScopeNodeIds.value).toEqual(['a', 'b'])
+  })
 })

@@ -1,17 +1,12 @@
 <template>
   <section class="sweep-editor" aria-label="Parameter sweep">
-    <p class="sweep-hint">
-      Run the model at each value of one parameter, and plot against it: solved once each, or with differential equations, a
-      time course each, read as chosen below. Play runs it with the toolbar’s Sweep on. To step from a holding value and read
-      the peak, use a protocol.
-    </p>
-
     <div v-if="sweep" class="sweep-card" data-testid="sim-sweep-parameter">
       <div class="sweep-head">
         <span class="sweep-label" :title="label">
           <span class="sweep-component">{{ sweep.nodeName }}/</span><span class="sweep-name">{{ sweep.parameterName }}</span>
         </span>
         <span v-if="sweep.units" class="sweep-units">{{ sweep.units }}</span>
+        <InfoTip :text="ABOUT" data-testid="sim-sweep-about" />
         <Button
           icon="pi pi-ellipsis-h"
           text
@@ -98,8 +93,12 @@
           <small v-if="familyError" class="sweep-error" role="alert">{{ familyError }}</small>
         </div>
       </div>
-      <div class="sweep-field">
-        <label :id="`${id}-readout`">Reading <span class="sweep-hint-inline">of each time course, between Start and End</span></label>
+      <!-- Without ODEs, each value is solved once: there is no time course to read. -->
+      <div v-if="!isSteadyState" class="sweep-field">
+        <span class="sweep-field-label">
+          <label :id="`${id}-readout`">Reading</label>
+          <InfoTip v-if="hasHiddenTransient" :text="transientNote" data-testid="sim-sweep-transient" />
+        </span>
         <SelectButton
           :model-value="readout"
           :options="READOUTS"
@@ -119,22 +118,13 @@
       <Message v-else-if="isLong" severity="warn" size="small" data-testid="sim-sweep-long">
         That’s a lot of time courses: fewer points, or a larger point interval, make the sweep quicker.
       </Message>
-      <Message v-if="hasHiddenTransient" severity="secondary" size="small" data-testid="sim-sweep-transient">
-        Each time course starts at the initial time, before the plots’ Start, so a {{ readoutLabel }} in the first moments
-        isn’t read. To read the peak after a step from a holding value, use a protocol.
-      </Message>
-      <Message v-if="!problem" severity="secondary" size="small">
-        Web OpenCOR can’t run sweeps, so an export solves or simulates the model once, at the parameter’s own value.
-      </Message>
     </div>
-
-    <p v-else-if="!isAdding" class="sweep-hint">No sweep yet.</p>
 
     <!-- Last, as Add slider is. The search shows when asked for, and tucks away after a pick. -->
     <div v-if="isAdding" ref="pickerEl" class="sweep-picker">
       <VariablePathPicker
         :index="index"
-        :filter="(entry) => isSweepableEntry(entry, { unsupplied, ignored, variables: resultsStore.results?.variables, sweep })"
+        :filter="(entry) => isSweepableEntry(entry, { unsupplied, ignored, variables: lastRunVariables, sweep })"
         :describe="describeSweepable"
         :placeholder="pickingFor === 'family' ? 'Vary a parameter across curves…' : sweep ? 'Sweep another parameter…' : 'Sweep a parameter…'"
         :aria-label="pickingFor === 'family' ? 'Choose a parameter for the curves' : 'Choose a parameter to sweep'"
@@ -150,7 +140,11 @@
         @click="isAdding = false"
       />
     </div>
-    <Button v-else-if="!sweep" label="Sweep a parameter" icon="pi pi-plus" text size="small" class="sweep-add-button" @click="startAdding" />
+    <!-- The editor has no title of its own: the tab or the dialog names it, so what it does is told beside its button. -->
+    <div v-else-if="!sweep" class="sweep-add">
+      <Button label="Sweep a parameter" icon="pi pi-plus" text size="small" @click="startAdding" />
+      <InfoTip :text="ABOUT" data-testid="sim-sweep-about" />
+    </div>
 
     <Menu ref="menu" :model="menuItems" popup />
     <Menu ref="familyMenu" :model="familyMenuItems" popup />
@@ -174,9 +168,22 @@ import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import SelectButton from 'primevue/selectbutton'
 
+import InfoTip from './InfoTip.vue'
 import VariablePathPicker from './VariablePathPicker.vue'
 import { resolveBoundaryValues } from '../../services/export/boundaryValues'
-import { createFamily, createSweep, familyValues, findSweepProblem, isSweepableEntry, MAX_SWEEP_POINTS, sweepLabel, sweepReadout } from '../../services/simulation/sweep'
+import { resolveScope } from '../../services/simulation/scopedModel'
+import {
+  createFamily,
+  createSweep,
+  familyValues,
+  findBoundarySweepProblem,
+  findSweepProblem,
+  isSweepableEntry,
+  MAX_SWEEP_POINTS,
+  scopeHasOde,
+  sweepLabel,
+  sweepReadout,
+} from '../../services/simulation/sweep'
 import { READOUTS } from '../../services/simulation/sweepReadouts'
 import { buildVariableIndex } from '../../services/simulation/variableIndex'
 import { useLibraryStore } from '../../stores/libraryStore'
@@ -187,6 +194,10 @@ import { FLOW_IDS } from '../../utils/constants'
 const props = defineProps({
   // Every node in the workspace: any of their parameters can be swept.
   nodes: { type: Array, default: () => [] },
+  // The nodes play simulates next, or null for all of them. A boundary condition connected only from outside them
+  // uses its own value there, so it can be swept. Left out where the scope isn't known, as in Simulation Settings,
+  // the editor goes by the whole model, but leaves the run to say if a connection supplies a boundary condition.
+  playScopeNodeIds: { type: Array, default: undefined },
 })
 // The sweep, or null for none (see services/simulation/sweep.js).
 const sweep = defineModel('sweep', { type: Object, default: null })
@@ -200,13 +211,51 @@ const label = computed(() => (sweep.value ? sweepLabel(sweep.value) : ''))
 const familyLabel = computed(() => (sweep.value?.family ? sweepLabel(sweep.value.family) : ''))
 // How many curves the family draws: one for a sweep without one.
 const curveCount = computed(() => (sweep.value?.family ? Math.max(1, familyValues(sweep.value.family).length) : 1))
-const problem = computed(() => (sweep.value ? findSweepProblem(sweep.value) : null))
 const settingsStore = useSimulationSettingsStore()
+
+// What the header's info says: what a sweep does, how its reading works, and what an export makes of it.
+const ABOUT =
+  'Run the model at each value of one parameter, and plot against it: solved once each, or with differential ' +
+  'equations, a time course each, read between the plots’ Start and End. Play runs it with the toolbar’s Sweep on. ' +
+  'To step from a holding value and read the peak, use a protocol. Web OpenCOR can’t run sweeps, so an export solves ' +
+  'or simulates the model once, at the parameter’s own value.'
+
+const pickerEl = ref(null)
+// The search opens from the Sweep a parameter button or a menu, never on its own.
+const isAdding = ref(false)
+// What a pick sets: the swept parameter, or the one its curves vary.
+const pickingFor = ref('sweep')
+
+// The instances play simulates next. With none selected, play can't run, so the editor goes by the whole model's.
+const scopeIds = computed(() => (props.playScopeNodeIds?.length ? props.playScopeNodeIds : null))
+const isLastRunThisScope = computed(() => JSON.stringify(resultsStore.scopeNodeIds ?? null) === JSON.stringify(scopeIds.value))
+const isBoundarySweep = computed(() => [sweep.value, sweep.value?.family].some((target) => target?.type === 'boundary_condition'))
+// The scope's nodes and the edges inside it: only what the picker or a boundary condition's sweep needs.
+const scope = computed(() => (isAdding.value || isBoundarySweep.value ? resolveScope(scopeIds.value, props.nodes, edges.value) : null))
+// The boundary conditions nothing connected in the scope supplies, whose own values a sweep can vary. For the whole
+// model, this also leaves out what export ignores.
+const boundaryValues = computed(() => (scope.value ? resolveBoundaryValues(scope.value.nodes, scope.value.internalEdges) : null))
+const unsupplied = computed(() => boundaryValues.value?.unsupplied ?? new Set())
+const ignored = computed(() => boundaryValues.value?.ignored ?? new Map())
+
+// What stops the sweep from running: as the run would say, including a boundary condition the scope supplies.
+const problem = computed(() => {
+  if (!sweep.value) return null
+  const found = findSweepProblem(sweep.value)
+  if (found || !scope.value || props.playScopeNodeIds === undefined) return found
+  return findBoundarySweepProblem(sweep.value, { nodes: scope.value.nodes, status: boundaryValues.value.status })
+})
 
 const readout = computed(() => sweepReadout(sweep.value))
 const readoutLabel = computed(() => READOUTS.find(({ id }) => id === readout.value).label.toLowerCase())
-// The last run's model, once known: without ODEs, each value is solved once rather than run as a time course.
-const isSteadyState = computed(() => !!resultsStore.results?.isSteadyState)
+// Without ODEs, each value is solved once rather than run as a time course: as the scope's math says, so an edit
+// shows at once; while that isn't known, as the last run found, when it ran the scope play runs next; else with ODEs.
+const isSteadyState = computed(() => {
+  const nodes = props.nodes.filter((node) => !scopeIds.value || scopeIds.value.includes(node.id))
+  const hasOde = scopeHasOde(nodes, libraryStore.getMathAnalysis)
+  if (hasOde !== null) return !hasOde
+  return !!(isLastRunThisScope.value && resultsStore.results?.isSteadyState)
+})
 // Past this many time courses, the sweep says it will be slow.
 const LONG_SWEEP_RUNS = 200
 const isLong = computed(() => !isSteadyState.value && Number.isInteger(sweep.value?.points) && sweep.value.points * curveCount.value > LONG_SWEEP_RUNS)
@@ -231,21 +280,19 @@ const hasHiddenTransient = computed(() => {
   const { initialPoint, startingPoint } = settingsStore.simulationSettings
   return !isSteadyState.value && readout.value !== 'end' && initialPoint < startingPoint
 })
+const transientNote = computed(
+  () =>
+    `Each time course starts at the initial time, before the plots’ Start, so a ${readoutLabel.value} in the first ` +
+    'moments isn’t read. To read the peak after a step from a holding value, use a protocol.'
+)
 
-const pickerEl = ref(null)
-// The search opens from the Sweep a parameter button or a menu, never on its own.
-const isAdding = ref(false)
-// What a pick sets: the swept parameter, or the one its curves vary.
-const pickingFor = ref('sweep')
-
+// The last run's variables, with their kinds, for the picker, when it ran the scope play runs next: another scope may
+// supply a value through a connection this one cuts.
+const lastRunVariables = computed(() => (isLastRunThisScope.value ? resultsStore.results?.variables : null))
 // Given the last run's mapping, so the picker can leave out what that run computed (see isSweepableEntry).
 const index = computed(() =>
   isAdding.value ? buildVariableIndex(props.nodes, { scopeNodeIds: resultsStore.scopeNodeIds, mapping: resultsStore.mapping }) : []
 )
-// The boundary conditions nothing connected supplies, whose own values a sweep can vary.
-const boundaryValues = computed(() => (isAdding.value ? resolveBoundaryValues(props.nodes, edges.value) : null))
-const unsupplied = computed(() => boundaryValues.value?.unsupplied ?? new Set())
-const ignored = computed(() => boundaryValues.value?.ignored ?? new Map())
 
 /**
  * Notes whether a parameter was in the last run, and what the model makes the same as it.
@@ -369,6 +416,12 @@ const familyMenuItems = [
   color: var(--p-text-muted-color);
 }
 
+.sweep-field-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .sweep-hint-inline {
   font-weight: 400;
 }
@@ -435,7 +488,8 @@ const familyMenuItems = [
   min-width: 0;
 }
 
-.sweep-field label {
+.sweep-field label,
+.sweep-field-label {
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--p-text-muted-color);
@@ -452,7 +506,10 @@ const familyMenuItems = [
   min-width: 0;
 }
 
-.sweep-add-button {
+.sweep-add {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   align-self: flex-start;
 }
 

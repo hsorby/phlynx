@@ -90,3 +90,19 @@ describe('SimulationControls unit filter', () => {
     expect(getOffered(wrapper.findComponent({ name: 'PlotListEditor' }).props('isPlottable'))).toHaveLength(4)
   })
 })
+
+describe('SimulationControls sweep', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('gives the sweep editor the scope play runs next', async () => {
+    wrapper = mount(SimulationControls, {
+      props: { nodes, view: 'sweep', playScopeNodeIds: ['a'] },
+      global: { plugins: [PrimeVue], directives: { tooltip: {} }, stubs: { SweepEditor: true } },
+    })
+    const editor = () => wrapper.findComponent({ name: 'SweepEditor' })
+    expect(editor().props('playScopeNodeIds')).toEqual(['a'])
+
+    await wrapper.setProps({ playScopeNodeIds: null })
+    expect(editor().props('playScopeNodeIds')).toBeNull()
+  })
+})
