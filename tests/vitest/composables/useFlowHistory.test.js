@@ -253,6 +253,11 @@ describe('useFlowHistory', () => {
       expect(getUndoRedoAction(key('Y', { ctrlKey: true }))).toBe('redo')
     })
 
+    it('maps Ctrl/Cmd+Shift+Z to redo when the browser reports an uppercase key', () => {
+      expect(getUndoRedoAction(key('Z', { ctrlKey: true, shiftKey: true }))).toBe('redo')
+      expect(getUndoRedoAction(key('Z', { metaKey: true, shiftKey: true }))).toBe('redo')
+    })
+
     it('ignores keys without a modifier and other shortcuts', () => {
       expect(getUndoRedoAction(key('z'))).toBeNull()
       expect(getUndoRedoAction(key('y'))).toBeNull()
