@@ -88,6 +88,14 @@ describe('generateExportZip', () => {
     expect(notified.warning).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('out.u_out') }))
   })
 
+  it('writes a constant or global constant of 0, which is not blank', async () => {
+    const node = nodeWith('out', [{ name: 'R', type: 'constant', units: 'Js_per_m6', value: 0 }])
+    const library = { globalVariables: [['g', { units: 'dimensionless', value: 0 }]], availableModules: new Map([['arterial_simple:vp', {}]]) }
+    const parameters = parametersOf(await readZip(await generateExportZip('heart', [node], [], library)))
+    expect(parameters.R_out.value).toBe('0')
+    expect(parameters.g.value).toBe('0')
+  })
+
   it('writes no obs_data for a workspace without one', async () => {
     expect(Object.keys(await readZip(await generateExportZip('heart', [], [], LIBRARY)))).not.toContain('heart_obs_data.json')
   })

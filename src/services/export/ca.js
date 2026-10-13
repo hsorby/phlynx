@@ -102,7 +102,7 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore, ob
           allParameters.add(JSON.stringify({
             variable_name: `${variable.name}_${node.data.name}`,
             units: variable.units || '',
-            value: variable.value || '',
+            value: isBlank(variable.value) ? '' : variable.value,
             data_reference: variable.data_reference || 'phlynx',
           }))
         } else if (variable.type === 'boundary_condition') {
@@ -128,7 +128,7 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore, ob
       allParameters.add(JSON.stringify({
         variable_name: variable[0],
         units: variable[1].units || '',
-        value: variable[1].value || '',
+        value: isBlank(variable[1].value) ? '' : variable[1].value,
         data_reference: 'phlynx',
       }))
     }
