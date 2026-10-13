@@ -300,10 +300,10 @@ class TestWorkspaceCanvas(unittest.TestCase):
         dialog.get_by_role("button", name="Overwrite").click()
         expect(dialog).to_be_hidden()
 
-        # The fixture's instances are replaced by the dropped model's.
+        # The fixture's instances are replaced, not added to: appending would leave duplicates (6 nodes).
+        expect(page.locator(NODE)).to_have_count(FIXTURE_NODE_COUNT)
         expect(node_by_name(page, "var_SN")).to_have_count(1)
-        overwritten = page.locator(NODE).count()
-        self.assertGreater(overwritten, 0)
+        expect(page.locator(NODE).filter(has_text="model.cellml")).to_have_count(FIXTURE_NODE_COUNT)
 
     # ---------- connecting handles -----------
 
