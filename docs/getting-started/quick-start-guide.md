@@ -37,29 +37,14 @@ Connect the three instances as shown:
 
 ## Step 3: Configure Ports {#step-3}
 
-<GlossaryLink term="ports"/> say which variables a connection shares. For each instance:
+<GlossaryLink term="ports"/> say which variables a connection shares. Set them up from each connection:
 
-1. Click **Edit instance** (pencil icon) on the node to open the [Instance Editor](../reference/ui-overview.md#instance-editor), then open its **Ports** tab.
-2. Click **Add port** for each row below. Set **Type** (I = input, O = output), **Label** and **Variables**. Leave **Mode** on Basicport (one connection per port).
-3. Click **Save**.
+1. Double-click the **soma_SN → axon_SN** arrow to open the [Connections dialog](../reference/valid-port-configurations.md#connections-dialog). The source instance is on the left, the target on the right.
+2. Click **Add Port** on a side for each of that instance's rows below, then set **Type** (I = input, O = output), **Label** and **Variables**. Leave **Mode** on Basicport (one connection per port).
+3. Ports with the same label and compatible types link up automatically, joined by a line. Click **Done**.
+4. Repeat for the **axon_SN → var_SN** arrow. axon_SN's VI_port is already there; add the rest.
 
-Connected ports must share the same label. See [Port Logic](../reference/valid-port-configurations.md#port-types) for the type rules.
-
-![Instance Editor on the Ports tab](../assets/images/edit-module-detail.png){.align-center width="800px"}
-
-**var_SN**
-
-| Type | Label | Variables |
-| :--- | :--- | :--- |
-| I | membrane_voltage | V |
-| O | synaptic_NE | NE |
-
-**axon_SN**
-
-| Type | Label | Variables |
-| :--- | :--- | :--- |
-| I | VI_port | V_in, I |
-| O | membrane_voltage | V |
+![Connections dialog with soma_SN's and axon_SN's VI_port linked](../assets/images/connections-dialog.png){.align-center width="800px"}
 
 **soma_SN**
 
@@ -68,11 +53,29 @@ Connected ports must share the same label. See [Port Logic](../reference/valid-p
 | I | i_stim | I_in |
 | O | VI_port | V, I_out |
 
+**axon_SN**
+
+| Type | Label | Variables |
+| :--- | :--- | :--- |
+| I | VI_port | V_in, I |
+| O | membrane_voltage | V |
+
+**var_SN**
+
+| Type | Label | Variables |
+| :--- | :--- | :--- |
+| I | membrane_voltage | V |
+| O | synaptic_NE | NE |
+
+You can also edit an instance's ports on the **Ports** tab of the [Instance Editor](../reference/ui-overview.md#instance-editor). See [Port Logic](../reference/valid-port-configurations.md#port-types) for the type rules.
+
 ## Simulate
 
 1. Click **Simulation** (chart icon) on the right-hand rail. The scope switch should read **Whole model**.
 2. Click **Simulate the whole model** (play icon), or press F9 while the panel has focus.
 3. Click **Add a variable here** (plus icon) beside a plot name to choose what to plot, e.g. soma_SN's V.
+
+The soma starts firing at about 6 s, so keep the default run of 0–10 s.
 
 ![Simulation tab after a run](../assets/images/simulation-sidebar.png){.align-center width="550px"}
 

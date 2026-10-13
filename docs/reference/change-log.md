@@ -4,10 +4,6 @@
 ## v0.4.2
 ###### Released on 2026-10-09
 
-#### Not Specified
-* Update vue3-math-editor to v0.3.3 by [@jmdowrick](https://github.com/jmdowrick) in [#650](https://github.com/physiomelinks/PhLynx/pull/650)
-
-
 #### New Features
 * Add SVG output for screenshots by [@hsorby](https://github.com/hsorby) in [#665](https://github.com/physiomelinks/PhLynx/pull/665)
 * Add multiport summary to math editor by [@jmdowrick](https://github.com/jmdowrick) in [#645](https://github.com/physiomelinks/PhLynx/pull/645)
@@ -40,7 +36,7 @@
 ## v0.4.1
 ###### Released on 2026-10-06
 
-#### Not Specified
+#### Maintenance Work
 * Update vue3-math-editor to v0.3.3 by [@jmdowrick](https://github.com/jmdowrick) in [#650](https://github.com/physiomelinks/PhLynx/pull/650)
 * Recognise OMEX flow snapshots from version 1.0.0 onwards by [@jmdowrick](https://github.com/jmdowrick) in [#643](https://github.com/physiomelinks/PhLynx/pull/643)
 

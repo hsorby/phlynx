@@ -22,7 +22,6 @@ from test_simulation_tab import (  # noqa: E402
     FEATURES_SETTINGS,
     OPT_IN_TO_ISOLATION,
     RESULTS_STORE,
-    SHORTEN_SIMULATION,
     SIMULATOR_READY,
     plot_variable,
     simulate_whole_model,
@@ -32,6 +31,12 @@ from test_workspace import centre, ghost_handle, node_by_name, wait_for_settled_
 IMAGES = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "docs", "assets", "images"))
 VIEWPORT = {"width": 1440, "height": 900}
 LIGHT_THEME = "localStorage.setItem('phlynx-color-scheme', 'light')"
+# A new workspace's settings (BASELINE_SIMULATION_SETTINGS), as a reader following the quick start has. The fixture
+# predates saved settings, so it loads with the coarser ones older files get, between which the solver gives up.
+APP_DEFAULT_SIMULATION = (
+    "document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('simulationSettings')"
+    ".setSimulationSettings({ startingPoint: 0, endingPoint: 10, pointInterval: 0.001, tolerance: 1e-7, maxSteps: 500 })"
+)
 SIMULATION_DONE = f"['done', 'error', 'blocked'].includes({RESULTS_STORE}.status)"
 
 
@@ -78,7 +83,8 @@ def open_simulation_tab(page):
 def run_whole_model(page):
     page.wait_for_function("window.crossOriginIsolated === true", timeout=APP_MOUNT_TIMEOUT)
     page.wait_for_function(SIMULATOR_READY, timeout=APP_MOUNT_TIMEOUT)
-    page.evaluate(SHORTEN_SIMULATION)
+    # The whole 0–10 s: the soma only starts firing at about 6 s.
+    page.evaluate(APP_DEFAULT_SIMULATION)
     open_simulation_tab(page)
     simulate_whole_model(page)
     page.wait_for_function(SIMULATION_DONE, timeout=120000)
@@ -154,7 +160,8 @@ def connect_port_nodes(page):
     end = centre(ghost_handle(page, "axon_SN", "left"))
     page.mouse.move(*start)
     page.mouse.down()
-    page.mouse.move(end[0] - 30, end[1] + 30, steps=15)
+    # Over the target's ghost handle, so it shows where the connection will land.
+    page.mouse.move(*end, steps=15)
     page.wait_for_timeout(300)
     save(page, "connect-port-nodes", clip=clip_around([node_by_name(page, "soma_SN"), node_by_name(page, "axon_SN")], margin=40))
     page.mouse.up()
