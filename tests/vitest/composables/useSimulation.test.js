@@ -306,6 +306,21 @@ describe('useSimulation', () => {
     expect(engine.runs).toHaveLength(0)
   })
 
+  it('notes a boundary condition using its own value, as the cut leaves it, without warning about it', async () => {
+    const port = { portType: 'general_ports', label: 'flow', variables: ['v'], multiportType: 'None' }
+    const supplier = { id: 'a', data: { name: 'a', mathRef: 'file:m', variables: [{ name: 'v', type: 'variable' }], ports: [port] } }
+    const supplied = { id: 'b', data: { name: 'b', mathRef: 'file:m', variables: [{ name: 'v', type: 'boundary_condition', value: '2' }], ports: [port] } }
+    nodes.value = [supplier, supplied]
+    edges.value = [{ id: 'a_b', source: 'a', target: 'b', data: { couplings: [{ sourcePort: port, targetPort: port }] } }]
+    const { run } = useSimulation()
+
+    run(['b'])
+    await settle()
+
+    expect(store.report.warnings).toEqual([])
+    expect(store.report.notes).toEqual(['"b.v" uses its own value, since what supplies it is outside the selection.'])
+  })
+
   it('reports a simulator that couldn’t load', async () => {
     Object.assign(loader, { module: null, reason: 'This browser window doesn’t allow service workers.' })
     const { run } = useSimulation()
@@ -586,6 +601,25 @@ describe('useSimulation', () => {
       expect(store.results.variables.get('instance_parameters/k').values[0]).toBe(2)
       store.showExperiment(1)
       expect(store.results.variables.get('instance_parameters/k').values[0]).toBe(3)
+    })
+
+    it('keeps the note on a boundary condition using its own value through a protocol run', async () => {
+      const port = { portType: 'general_ports', label: 'flow', variables: ['v'], multiportType: 'None' }
+      const supplier = { id: 'a', data: { name: 'a', mathRef: 'file:m', variables: [{ name: 'v', type: 'variable' }], ports: [port] } }
+      const variables = [{ name: 'v', type: 'boundary_condition', value: '2' }, { name: 'k', type: 'constant', value: '1' }]
+      nodes.value = [supplier, { id: 'b', data: { name: 'b', mathRef: 'file:m', variables, ports: [port] } }]
+      edges.value = [{ id: 'a_b', source: 'a', target: 'b', data: { couplings: [{ sourcePort: port, targetPort: port }] } }]
+      useProtocol({ ...PROTOCOL, params_to_change: { 'b/k': [[2], [3]] } })
+      const { run } = useSimulation()
+
+      const done = run(['b'])
+      await settle()
+      engine.protocolRuns[0].finish(PROTOCOL_RESULTS)
+      await done
+
+      expect(store.status).toBe('done')
+      expect(store.report.warnings).toEqual([])
+      expect(store.report.notes).toEqual(['"b.v" uses its own value, since what supplies it is outside the selection.'])
     })
 
     it('reruns the model it read, without reading it again', async () => {

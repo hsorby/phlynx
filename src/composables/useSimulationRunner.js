@@ -143,9 +143,11 @@ export function useSimulationRunner({ instanceId = null, isWholeModelOnly = fals
     else run(getInstanceId() ? [getInstanceId()] : sortedSelectedIds.value)
   }
 
-  // What the status line says: the most pressing thing first, with the full lists a click away.
+  // What the status line says: the most pressing thing first, with the full lists a click away. Notes, such as a
+  // boundary condition using its own value, are expected, so they neither warn nor count as warnings.
   const statusLine = computed(() => {
     const warnings = store.report.warnings.length ? [{ title: 'Warnings', lines: store.report.warnings }] : []
+    const notes = store.report.notes ?? []
     if (isSimulatorMissing.value) return { severity: 'error', icon: 'pi-exclamation-circle', text: libopencor.reason ?? 'The simulator isn’t available.', details: [] }
     if (store.status === 'blocked') {
       const count = store.report.errors.length
@@ -158,18 +160,19 @@ export function useSimulationRunner({ instanceId = null, isWholeModelOnly = fals
         icon: 'pi-exclamation-circle',
         text: store.results ? `${store.error?.message} ${resultsSummary.value}` : store.error?.message ?? 'The simulation failed.',
         details: [...(issues.length ? [{ title: 'Solver messages', lines: issues }] : []), ...warnings],
+        notes,
       }
     }
     // The progress bar shows how far; announcing each percent would flood a screen reader.
-    if (isRunning.value) return { severity: 'info', icon: null, text: 'Running…', details: warnings }
+    if (isRunning.value) return { severity: 'info', icon: null, text: 'Running…', details: warnings, notes }
     if (isLoading.value) return { severity: 'info', icon: 'pi-spin pi-spinner', text: 'Loading the simulator…', details: [] }
-    if (isStale.value && store.results) return { severity: 'warn', icon: 'pi-refresh', text: 'The model or settings changed · press play to update', details: warnings }
-    if (isSelectionChanged.value) return { severity: 'warn', icon: 'pi-refresh', text: 'The selection changed · press play to update', details: warnings }
-    if (isOtherRun.value) return { severity: 'warn', icon: 'pi-refresh', text: 'These results are from another run · press play to update', details: warnings }
+    if (isStale.value && store.results) return { severity: 'warn', icon: 'pi-refresh', text: 'The model or settings changed · press play to update', details: warnings, notes }
+    if (isSelectionChanged.value) return { severity: 'warn', icon: 'pi-refresh', text: 'The selection changed · press play to update', details: warnings, notes }
+    if (isOtherRun.value) return { severity: 'warn', icon: 'pi-refresh', text: 'These results are from another run · press play to update', details: warnings, notes }
     if (store.results) {
       const count = store.report.warnings.length
       const text = count ? `${resultsSummary.value} ${count} ${count === 1 ? 'warning' : 'warnings'}.` : resultsSummary.value
-      return { severity: count ? 'warn' : 'info', icon: count ? 'pi-exclamation-triangle' : null, text, details: warnings }
+      return { severity: count ? 'warn' : 'info', icon: count ? 'pi-exclamation-triangle' : null, text, details: warnings, notes }
     }
     if (isWholeModelOnly) return { severity: 'info', icon: null, text: 'Press play to simulate the whole model.', details: [] }
     const part = getInstanceId() ? 'this instance' : 'the selected instances'
