@@ -143,6 +143,18 @@ describe('useConnect', () => {
     })
   })
 
+  describe('target port slots', () => {
+    it('picks the next port slot for later edges into the same target', async () => {
+      nodes.value[1].data.ports = [port('entrance_ports', 'flow', ['x']), port('entrance_ports', 'flow', ['y'])]
+      nodes.value[2].data.ports = [port('exit_ports', 'flow')]
+      await connect({ source: 'a', target: 'b', sourceHandle: 'handle_s1', targetHandle: 'handle_t1' })
+      await connect({ source: 'c', target: 'b', sourceHandle: 'handle_s2', targetHandle: 'handle_t2' })
+
+      expect(edges.value[0].data.couplings[0].targetPort.variables).toEqual(['x'])
+      expect(edges.value[1].data.couplings[0].targetPort.variables).toEqual(['y'])
+    })
+  })
+
   describe('rejected connections', () => {
     const expectNothingHappened = () => {
       expect(edges.value).toHaveLength(0)
@@ -286,19 +298,45 @@ describe('useConnect', () => {
       expect(suppressedEdgeIds.size).toBe(0)
     })
 
+    it('suppresses history for the pending and old edges while they are being swapped', async () => {
+      const during = {}
+      deps.confirm.mockImplementation(async () => {
+        during.confirm = [...suppressedEdgeIds]
+        return true
+      })
+      deps.revertHandlesForEdge.mockImplementation(async () => {
+        during.revert = [...suppressedEdgeIds].sort()
+      })
+
+      await connect(second)
+
+      expect(during.confirm).toEqual(['pending--a--b'])
+      expect(during.revert).toEqual(['a--b', 'pending--a--b'])
+    })
+
     it('records a replace-edge command that undo and redo swap', async () => {
       await connect(second)
       commit()
       expect(history.canUndo).toBe(true)
 
+      const replaced = edges.value[0]
+      deps.revertHandlesForEdge.mockClear()
+
       await history.undo()
+      expect(deps.revertHandlesForEdge).toHaveBeenCalledWith(expect.objectContaining(second), ['a--b'], {
+        trackHistory: false,
+      })
       expect(edges.value).toHaveLength(1)
       expect(edges.value[0]).toMatchObject(first)
+      deps.revertHandlesForEdge.mockClear()
       expect(deps.reactivateEdgeHandles).toHaveBeenLastCalledWith(expect.objectContaining(first), {
         trackHistory: false,
       })
 
       await history.redo()
+      expect(deps.revertHandlesForEdge).toHaveBeenCalledWith(expect.objectContaining(first), ['a--b'], {
+        trackHistory: false,
+      })
       expect(edges.value).toHaveLength(1)
       expect(edges.value[0]).toMatchObject(second)
       expect(deps.reactivateEdgeHandles).toHaveBeenLastCalledWith(expect.objectContaining(second), {
