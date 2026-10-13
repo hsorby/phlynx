@@ -85,6 +85,32 @@ describe('useCellmlDrop', () => {
       expect(nodes.value.map((n) => n.id)).toEqual(['a', 'new-only'])
     })
 
+    it('waits for the graph to load before rebuilding the edge index', async () => {
+      const order = []
+      deps.loadFromCellML.mockImplementation(async () => {
+        await Promise.resolve()
+        order.push('loaded')
+      })
+      deps.rebuildNodeEdgeIndex.mockImplementation(() => order.push('rebuilt'))
+
+      await drop.loadCellMLFiles([{ name: 'm.cellml', content: '<model/>' }])
+
+      expect(order).toEqual(['loaded', 'rebuilt'])
+    })
+
+    it('waits for the graph to load before restoring the snapshot on combine', async () => {
+      nodes.value = [createNode('old')]
+      deps.confirm.mockResolvedValue(false)
+      deps.loadFromCellML.mockImplementation(async () => {
+        await Promise.resolve()
+        nodes.value = [createNode('a')]
+      })
+
+      await drop.loadCellMLFiles([{ name: 'm.cellml', content: '<model/>' }])
+
+      expect(nodes.value.map((n) => n.id)).toEqual(['a', 'old'])
+    })
+
     it('reads a browser File through readFileAsText', async () => {
       readFileAsText.mockResolvedValue('<from-file/>')
       const file = new File(['ignored'], 'f.cellml')
@@ -132,7 +158,7 @@ describe('useCellmlDrop', () => {
       expect(nodes.value.find((n) => n.id === 'a').position.x).toBe(10)
 
       const restoredEdge = addEdges.mock.calls[0][0][0]
-      expect(restoredEdge.id).toMatch(/^old-edge_restored_/)
+      expect(restoredEdge.id).toMatch(/^old-edge_restored_[0-9a-f-]{36}$/)
       expect(restoredEdge.source).toBe('a_1')
       expect(restoredEdge.target).toBe('old')
       expect(edges.value.map((e) => e.id)).toContain('fresh-edge')
@@ -152,6 +178,40 @@ describe('useCellmlDrop', () => {
       await drop.loadCellMLFiles([{ name: 'm.cellml', content: '<model/>' }])
 
       expect(nodes.value.map((n) => n.id)).toEqual(['a', 'a_1', 'a_2', 'a_1_1'])
+    })
+
+    it('does not reuse an id it has just assigned to an earlier restored node', async () => {
+      nodes.value = [createNode('a'), createNode('a_1')]
+      deps.confirm.mockResolvedValue(false)
+      deps.loadFromCellML.mockImplementation(async () => {
+        nodes.value = [createNode('a')]
+      })
+
+      await drop.loadCellMLFiles([{ name: 'm.cellml', content: '<model/>' }])
+
+      // 'a' clashes and becomes 'a_1', so the snapshot's own 'a_1' must move on to 'a_1_1'.
+      expect(nodes.value.map((n) => n.id)).toEqual(['a', 'a_1', 'a_1_1'])
+    })
+
+    it('keeps the other node and edge fields when restoring the snapshot', async () => {
+      nodes.value = [{ ...createNode('old'), type: 'module' }]
+      edges.value = [{ id: 'e', source: 'old', target: 'old', sourceHandle: 'h1', targetHandle: 'h2' }]
+      deps.confirm.mockResolvedValue(false)
+
+      await drop.loadCellMLFiles([{ name: 'm.cellml', content: '<model/>' }])
+
+      expect(nodes.value.find((n) => n.id === 'old')).toMatchObject({ type: 'module', data: { name: 'old' } })
+      expect(addEdges.mock.calls[0][0][0]).toMatchObject({ sourceHandle: 'h1', targetHandle: 'h2' })
+    })
+
+    it('remaps the target endpoint of restored edges as well as the source', async () => {
+      nodes.value = [createNode('a'), createNode('old')]
+      edges.value = [{ id: 'e', source: 'old', target: 'a' }]
+      deps.confirm.mockResolvedValue(false)
+
+      await drop.loadCellMLFiles([{ name: 'm.cellml', content: '<model/>' }])
+
+      expect(addEdges.mock.calls[0][0][0]).toMatchObject({ source: 'old', target: 'a_1' })
     })
 
     it('does not touch edge endpoints that are not in the snapshot', async () => {
@@ -236,6 +296,19 @@ describe('useCellmlDrop', () => {
         message: 'Loaded 1 module from 1 file. 1 file failed.',
       })
       expect(notify.success).not.toHaveBeenCalled()
+    })
+
+    it('uses the singular for a single unit', async () => {
+      deps.loadCellMLData
+        .mockResolvedValueOnce({ ok: true, moduleCount: 0, unitsCount: 1 })
+        .mockResolvedValueOnce({ ok: false, moduleCount: 0, unitsCount: 0 })
+
+      await drop.loadCellMLFiles(entries)
+
+      expect(notify.warning).toHaveBeenCalledWith({
+        title: 'Partial Import',
+        message: 'Loaded 1 unit from 1 file. 1 file failed.',
+      })
     })
 
     it('errors when every file fails', async () => {
