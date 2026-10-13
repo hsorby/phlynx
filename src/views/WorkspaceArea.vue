@@ -172,7 +172,6 @@
           <SplitButton
             text
             size="small"
-            icon="pi pi-upload"
             :model="importMenuItems"
             severity="primary"
             @click="triggerCurrentImport"
@@ -184,6 +183,9 @@
               showDelay: 300,
             }"
           >
+            <template #icon>
+              <ImportIcon />
+            </template>
             <!-- Dropdown Menu Item Icons -->
             <template #item="{ item, props }">
               <a class="p-menuitem-link" v-ripple v-bind="props.action">
@@ -201,7 +203,6 @@
           <SplitButton
             text
             size="small"
-            icon="pi pi-download"
             :model="exportMenuItems"
             severity="primary"
             style="margin-left: 10px"
@@ -215,6 +216,9 @@
               showDelay: 300,
             }"
           >
+            <template #icon>
+              <ExportIcon />
+            </template>
             <!-- Dropdown Menu Item Icons -->
             <template #item="{ item, props }">
               <a class="p-menuitem-link" v-ripple v-bind="props.action">
@@ -450,11 +454,7 @@
     @confirm="onInstanceEditConfirm"
   />
 
-  <SaveDialog
-    v-model="saveDialogVisible"
-    :default-name="sessionMetadataStore.lastSaveName"
-    @confirm="onSaveConfirm"
-  />
+  <SaveDialog v-model="saveDialogVisible" :default-name="sessionMetadataStore.lastSaveName" @confirm="onSaveConfirm" />
 
   <SaveDialog
     v-model="exportDialogVisible"
@@ -478,10 +478,7 @@
     @confirm="handleCreateInspectionModule"
   />
 
-  <MacroBuilderDialog
-    v-model="macroBuilderDialogVisible"
-    @generate="onMacroBuilderGenerate"
-  />
+  <MacroBuilderDialog v-model="macroBuilderDialogVisible" @generate="onMacroBuilderGenerate" />
 
   <SimulationFloatingViewer :nodes="nodes" :is-canvas-shown="route.name === 'workspace'" />
   <SimSettingsDialog v-model="simSettingsDialog.visible" :section="simSettingsDialog.section" :nodes="nodes" />
@@ -588,6 +585,8 @@ import AddHandleTop from '../components/icons/AddHandles/AddHandleTop.vue'
 import AddHandleRight from '../components/icons/AddHandles/AddHandleRight.vue'
 import DustpanBrush from '../components/icons/DustpanBrush.vue'
 import SimulationSettingsIcon from '../components/icons/SimulationSettingsIcon.vue'
+import ImportIcon from '../components/icons/ImportIcon.vue'
+import ExportIcon from '../components/icons/ExportIcon.vue'
 
 import { useScreenshot } from '../services/useScreenshot'
 import { useMacroGenerator } from '../services/generate/generateWorkflow'
@@ -967,7 +966,10 @@ const { settings: appSettings } = useAppSettings()
 
 /** MiniMap nodes follow the active node colour theme; uncategorised nodes keep the MiniMap default grey. */
 function miniMapNodeColour(node) {
-  return categoryColour(nodeThemeStore.activeTheme, node.data?.domainType, isDarkMode.value) ?? (isDarkMode.value ? '#3f3f46' : '#e2e2e2')
+  return (
+    categoryColour(nodeThemeStore.activeTheme, node.data?.domainType, isDarkMode.value) ??
+    (isDarkMode.value ? '#3f3f46' : '#e2e2e2')
+  )
 }
 const { loadFromInstanceArray } = useLoadFromInstanceArray({ fitViewParams })
 const { loadFromCellML } = useLoadFromCellML({ fitViewParams })
@@ -1087,12 +1089,13 @@ onConnect(async (connection) => {
   if (!sourceNode || !targetNode) return
   if (sourceNode === targetNode) return
 
-  const isExistingConnection = edges.value.find((e) => e.sourceHandle === connection.sourceHandle && e.targetHandle === connection.targetHandle)
+  const isExistingConnection = edges.value.find(
+    (e) => e.sourceHandle === connection.sourceHandle && e.targetHandle === connection.targetHandle
+  )
   if (isExistingConnection) return
 
   const duplicate = edges.value.find((e) => e.source === connection.source && e.target === connection.target)
 
-  
   const duplicateSnapshot = duplicate ? detachReactivity(duplicate) : null
 
   const sourceHandleUid = connection.sourceHandle ? getHandleUidFromHandleId(connection.sourceHandle) : null
@@ -1762,7 +1765,9 @@ async function loadFlowSnapshot(fileName, flowSnapshot, parameterData = {}, { no
     // Update variables with parameter data if available.
     if (parameterData[node.data.name]) {
       const paramVars = parameterData[node.data.name]
-      const result = applyParameterValues(node.data.variables, (name) => paramVars.find((p) => p.name.trimEnd() === name))
+      const result = applyParameterValues(node.data.variables, (name) =>
+        paramVars.find((p) => p.name.trimEnd() === name)
+      )
       node.data.variables = result.variables
       skippedParameters.push(...result.skipped.map((name) => ({ nodeName: node.data.name, name })))
     }
@@ -1910,7 +1915,9 @@ async function processImportedOmexArchive(archivePayload, result, fileName) {
     // Second best scenario: if we don't have a flow snapshot, we can still load the CellML file and module configuration to build the workspace.
     const moduleConfigFile = archive.file(result.files.moduleConfig)
     console.warn('------------------------------------------')
-    console.warn('This case is not fully implemented yet, but we will load the CellML file but the module configuration is not currently used to build the workspace.')
+    console.warn(
+      'This case is not fully implemented yet, but we will load the CellML file but the module configuration is not currently used to build the workspace.'
+    )
     console.warn('moduleConfigFile', moduleConfigFile)
     const cellmlPayload = parseCellMLConnections(cellmlContent, result.files.cellml)
     await loadCellMLData(cellmlContent, result.files.cellml, { notify: false })
@@ -2735,11 +2742,14 @@ function doImageExport() {
   return withoutSelection(async () => {
     root.classList.add('image-export')
     root.classList.toggle('image-export--no-warnings', !includeWarnings)
-    
+
     try {
       await capture(root, { format: format, viewport: viewport.value, includeWarnings, shouldDownload: true })
       if (captureError.value) {
-        notify.error({ title: 'Screenshot error', message: 'Something went wrong while taking the screenshot.\n - ' + captureError.value.message })
+        notify.error({
+          title: 'Screenshot error',
+          message: 'Something went wrong while taking the screenshot.\n - ' + captureError.value.message,
+        })
       }
     } finally {
       root.classList.remove('image-export', 'image-export--no-warnings')
