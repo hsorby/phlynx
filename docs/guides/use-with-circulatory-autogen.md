@@ -39,10 +39,27 @@ When you are ready to return to Circulatory Autogen, you must export the updated
 
 ### Output
 
-PhLynx will generate and download a `.zip` archive containing the two essential files required by Circulatory Autogen:
+PhLynx will generate and download a `.zip` archive. For an export named `<name>`, it contains:
 
-* `instance_array.csv`: The updated network topology defining all modules and their connections.
-* `module_config.json`: The definitions for parameters, ports, and units for every module in the workspace.
+* `<name>_module_array.csv`: The network topology defining all modules and their connections.
+* `<name>_parameters.csv`: The values of constants, boundary conditions and global constants.
+* `<name>_obs_data.json`: The workspace's protocol, when it has one.
+* A `modules` folder holding:
+  * `<name>_module_config.json`: The definitions for ports, variables and units for every module in the workspace.
+  * One `*modules.cellml` file per CellML file the modules use, holding the components they use, with any math edited in PhLynx. A file whose name doesn't end in `modules.cellml` is renamed so that Circulatory Autogen finds it, for example `my_math.cellml` becomes `my_math_modules.cellml`. With a heart, the export also writes the components Circulatory Autogen adds around it: `zero_flow`, and the `arterial_simple`/`vp` module it uses for a pulmonary artery and vein when the heart has one output.
+  * `<name>_units.cellml`: The units those components use, including units made in PhLynx.
+
+The zip holds everything the model needs. To run it, unzip it and set these in Circulatory Autogen's `user_inputs.yaml`:
+
+```yaml
+file_prefix: <name>
+resources_dir: <unzipped folder>
+input_param_file: <name>_parameters.csv
+external_modules_dir: <unzipped folder>/modules
+use_builtin_modules: false
+```
+
+With the built-in modules on, a component exported from a built-in file would be written twice, and units defined differently in PhLynx would clash. To use the protocol, also set `param_id_obs_path` to `<name>_obs_data.json`.
 
 ### Requirements for Successful Export
 
@@ -50,3 +67,4 @@ To ensure the exported files are valid for simulation, ensure the following befo
 * At least one module is placed in the workspace.
 * All connected modules have their **ports** correctly defined.
 * A **Parameter File** has been loaded to correctly categorise variables (constants vs. global constants).
+* Every boundary condition with nothing connected to it has a value. PhLynx warns about any that don't, and Circulatory Autogen asks for them (`EMPTY_MUST_BE_FILLED`).

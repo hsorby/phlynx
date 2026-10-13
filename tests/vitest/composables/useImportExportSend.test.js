@@ -84,11 +84,12 @@ describe('useImportExportSend selection exports', () => {
   /**
    * Sets up the composable over the test's workspace.
    *
+   * @param {string} [libcellmlStatus]
    * @returns {ReturnType<typeof useImportExportSend>}
    */
-  function setup() {
+  function setup(libcellmlStatus = 'ready') {
     return useImportExportSend({
-      libcellml: { status: 'ready' },
+      libcellml: { status: libcellmlStatus },
       nodes,
       edges,
       importDialogVisible: ref(false),
@@ -114,6 +115,11 @@ describe('useImportExportSend selection exports', () => {
     selectedNodeIds.value = ['a']
     expect(menuItem(exportMenuItems, 'CellML (selection)').disabled).toBe(false)
     expect(menuItem(sendMenuItems, 'OpenCOR (selection)').disabled).toBe(false)
+  })
+
+  it('offers the Circulatory Autogen export once libCellML is ready, as it writes CellML', () => {
+    expect(menuItem(setup('loading').exportMenuItems, 'Circulatory Autogen').disabled).toBe(true)
+    expect(menuItem(setup().exportMenuItems, 'Circulatory Autogen').disabled).toBe(false)
   })
 
   it('exports a selection that builds cleanly without asking', async () => {

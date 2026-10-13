@@ -1479,6 +1479,36 @@ export function doesComponentExistInModel(cellmlString, componentName) {
   return false
 }
 
+/**
+ * Puts the components of several one-component models (as the library stores math) into one model.
+ *
+ * @param {string} modelName - The combined model's name.
+ * @param {string[]} componentModels - CellML models, each holding one component.
+ * @returns {string} The combined model's CellML, one element per line.
+ */
+export function combineComponentModels(modelName, componentModels) {
+  const parser = new _libcellml.Parser(false)
+  const printer = new _libcellml.Printer()
+  const model = new _libcellml.Model()
+  model.setName(modelName)
+  try {
+    for (const componentModel of componentModels) {
+      const source = parser.parseModel(componentModel)
+      const component = source.componentByIndex(0)
+      const clone = component.clone()
+      model.addComponent(clone)
+      clone.delete()
+      component.delete()
+      source.delete()
+    }
+    return printer.printModel(model, false)
+  } finally {
+    model.delete()
+    printer.delete()
+    parser.delete()
+  }
+}
+
 export function mergeModelComponents(targetModelString, sourceModelString, newComponentName, oldComponentName) {
   const parser = new _libcellml.Parser(false)
 

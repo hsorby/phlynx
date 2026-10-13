@@ -198,7 +198,7 @@ export function useImportExportSend({
       key: EXPORT_KEYS.CA,
       label: 'Circulatory Autogen',
       icon: 'pi pi-box',
-      disabled: false,
+      disabled: libcellml.status !== 'ready',
       suffix: '.zip',
       fileTypes: ZIP_FILE_TYPES,
       message: 'Generating and zipping CA files.',
