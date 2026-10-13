@@ -18,6 +18,8 @@ Every Simulation panel control. For a walkthrough, see [Simulating Your Model](.
 
 The protocol and sweep buttons switch what Play runs, and run it.
 
+The **status line** under the toolbar says what ran, or why nothing did (*Can’t simulate yet: N problems*). When it shows a down arrow, click it to list the problems, warnings or solver messages. See [Reading the Status Line](../guides/simulating-your-model.md#status-line).
+
 ## Controls {#controls}
 
 Views: **Plots**, **Sliders**, **Sweep**, **Runs**. Search matches every typed word in an `instance/variable` path.
@@ -47,16 +49,18 @@ Views: **Plots**, **Sliders**, **Sweep**, **Runs**. Search matches every typed w
 
 ### Tracked Runs {#tracked-runs}
 
-- Up to 5. Not for protocol runs or sweeps with curves. Cleared when the run type changes (time course, steady state, another sweep).
+- Up to 5. Not for protocol runs or sweeps with curves. Cleared when the scope or the run type changes (time course, <GlossaryLink term="steady-state" label="steady state"/>, another sweep).
 - In **Runs**: rename, hide or remove runs; hide the live run.
 
 ## Simulation Page {#simulation-page}
 
 ![The /simulation page](../assets/images/simulation-page.png){.align-center width="800px"}
 
-- Runs the whole model; **Workspace** goes back.
-- **Time course / Protocol / Sweep** sets what Play runs.
-- The controls panel resizes and collapses. Its folding **Simulation settings** section holds **Starts at**, **Plots start at**, **Ends at**, **Point interval** and **Solver**.
+- Open it from **Simulation** in the top navigation, or **Open the simulation page** (external-link icon) in the Simulation tab. **Workspace** (arrow icon) goes back.
+- Runs the whole model.
+- When a protocol or sweep is set, a **Time course / Protocol / Sweep** switch on the bar under the toolbar sets what Play runs, and runs it.
+- The **CSV**, **PNG** and **SED-ML** [downloads](#downloads) are on the same bar.
+- The controls panel resizes and collapses. Its folding **Simulation settings** section holds the [Solver tab's](#simulation-settings) fields (the first is **Starts at**); changes there apply as you make them.
 
 ## Floating Viewer {#floating-viewer}
 
@@ -64,7 +68,19 @@ One plot at a time (picker, or **New plot**), with **Edit this plot's variables*
 
 ## Simulation Settings {#simulation-settings}
 
-From the cog or the main toolbar's **Configure simulation settings**. Tabs: **Plots**, **Sliders & sweep**, **Solver**. Web OpenCOR doesn’t support a later **Plots start at**, so an export may not match.
+From the cog (opens on **Solver**) or the main toolbar's **Configure simulation settings** (opens on **Plots**). Tabs: **Plots**, **Sliders & sweep**, **Solver**. Changes apply on **Save**. Steps: [Setting the Run Length](../guides/simulating-your-model.md#run-length).
+
+| Solver tab field | Meaning |
+| :--- | :--- |
+| **Simulation starts at** | Where the solver starts, from the initial values. Times are in the VoI's units, though the dialog says *In seconds*. |
+| **Plots start at** | Results before this are solved but not kept, so the model can settle first. |
+| **Ends at** | Where the run ends. |
+| **Point interval** | The spacing between the points kept. |
+| **Solver** | CVODE (default), Forward Euler, Heun, Second-order Runge–Kutta or Fourth-order Runge–Kutta. |
+| **Tolerance**, **Maximum Steps**, **Maximum Step** | CVODE only: the relative and absolute tolerance; the steps allowed between two output points; the largest step (0 for no limit). |
+| **Time Step** | Fixed-step solvers only: the step size. |
+
+Web OpenCOR doesn’t support a later **Plots start at**, so an export may not match.
 
 ## Downloads {#downloads}
 

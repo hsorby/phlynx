@@ -6,7 +6,7 @@ PhLynx reads and writes [Circulatory Autogen](https://physiomelinks.github.io/ci
 
 1. Open the **Import** menu (arrow beside the Import button) and choose **Instance Array**.
 2. In **Import Instance Array File**, select your instance array CSV and, optionally, a parameters CSV. See [Supported File Formats](../reference/file-types.md#instance-array) for the formats.
-3. If module types are unknown, **Additional Files Required** lists the missing module configs and CellML components. Add them, drop their folder on the dialog, or click **Connect Folder** to auto-load them.
+3. If module types are unknown, **Additional Files Required** lists the missing module configs and CellML components. Add them, drop their folder on the dialog, or select several files at once. In browsers that allow folder access (Chrome, Edge), **Connect Folder** loads them from a folder you choose. PhLynx remembers that folder; on a later visit it may ask you to click **Reconnect** to allow access again.
 
 ![Import Instance Array File dialog](../assets/images/import-vessel-array.png){.align-center width="550px"}
 
@@ -29,7 +29,7 @@ For an export named `<name>`:
 | `modules/*modules.cellml` | One per CellML file used, with PhLynx edits, renamed to end in `modules.cellml` (`my_math.cellml` → `my_math_modules.cellml`). With a heart, also `zero_flow`, plus `arterial_simple:vp` when CA adds a pulmonary circuit. |
 | `modules/<name>_units.cellml` | Units those components use. |
 
-To run it, unzip it and set CA's `user_inputs.yaml`:
+To run it, unzip it and set these entries in `user_inputs.yaml`, CA's settings file in your Circulatory Autogen checkout (see the [CA documentation](https://physiomelinks.github.io/circulatory_autogen/) for installing and running CA):
 
 ```yaml
 file_prefix: <name>

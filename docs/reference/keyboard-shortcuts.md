@@ -26,16 +26,39 @@ On Mac, use Cmd wherever Ctrl appears. Workspace shortcuts are ignored while you
 | Action | Shortcut |
 | :--- | :--- |
 | Focus search | / or Ctrl/Cmd+F |
+| Choose a mode (box empty) | ↑ / ↓, then Enter |
 | Next / previous match | Enter / Shift+Enter (or ↓ / ↑) |
-| Search by variable | Start with `var:` |
-| Clear search | Esc |
+| Search by variable | Start with `var:` (`var: inst/var` limits it to matching instances) |
+| Clear search / leave the empty box | Esc |
+
+For what each mode matches, see [Searching the workspace](./ui-overview.md#search).
 
 ## Instance Editor {#instance-editor}
 
 | Action | Shortcut |
 | :--- | :--- |
 | Save and close | Ctrl/Cmd+Enter |
-| Undo / redo | Ctrl/Cmd+Z / Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y |
+| Undo / redo (shared by CellML Text and the Math Editor) | Ctrl/Cmd+Z / Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y |
+| Close (asks first if there are unsaved changes) | Esc |
+| Units field: choose / take / close a suggestion | ↑ ↓ / Enter or Tab / Esc |
+
+### Math Editor {#math-editor}
+
+| Action | Shortcut |
+| :--- | :--- |
+| Leave a fraction, power or bracket | Space, or → at the end of the slot |
+| Move through the equation | ← / → |
+| Next / previous empty slot | Tab / Shift+Tab |
+| Move between numerator and denominator, or lines | ↑ / ↓ |
+| Start / end of the equation | Home / End |
+| New equation line (a new case inside a piecewise) | Enter |
+| Move the line up / down | Alt+↑ / Alt+↓ (Option on Mac), or drag the line's number |
+| Select | Shift+← / →, Shift+Home / End, or drag |
+| Wrap the selection | `(`, `\|`, `/`, `^` or a `\` command |
+| Copy / cut / paste | Ctrl/Cmd+C / X / V |
+| Open the command list | `\` (then ↑ ↓ to choose, Tab to insert, Esc to close) |
+
+For what to type for fractions, powers, derivatives and the rest, see [Using the Math Editor](../guides/writing-cellml.md#math-editor-input).
 
 ## Simulation {#simulation}
 

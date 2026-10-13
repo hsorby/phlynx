@@ -42,6 +42,8 @@ Written by **Save workspace** (floppy-disk icon, Ctrl/Cmd+S), opened by **Load w
 
 Opened with **Import ▸ COMBINE Archive** (`.omex` or `.zip`); written by **Export ▸ OpenCOR**, **CUFLynx** or **OpenCOR (selection)**. Holds the flattened CellML, `document.sedml`, `flow-snapshot.json` (the PhLynx graph), `simulation.json` (plots and sliders), [`params_for_id.csv`](#params_for_idcsv) and any extra files it was imported with.
 
+If the library already holds a component with the same file and name but different math, importing warns **Math Mismatch** and the instance uses the library's version, so the archive's edits to that component are not kept. Built-in components are always in the library, so to carry edits to one in an archive, give the edited component a new **Component** name in the Instance Editor before exporting.
+
 ## Circulatory Autogen files
 
 ### Module configuration {#module-configuration}
@@ -73,11 +75,11 @@ var_SN,nn,var_SN,axon_SN,
 
 ### params_for_id.csv {#params_for_idcsv}
 
-Parameter ranges for CUFLynx and Circulatory Autogen. PhLynx reads it from an imported COMBINE archive as [sliders](./simulation-ui-overview.md#sliders) (**Simulation Settings ▸ Sliders & sweep**) and writes the current sliders back on OpenCOR or CUFLynx export.
+`params_for_id.csv` ("parameters for identification") lists the parameters a CUFLynx or Circulatory Autogen calibration may vary, with their bounds. PhLynx reads it from an imported COMBINE archive as [sliders](./simulation-ui-overview.md#sliders) (**Simulation Settings ▸ Sliders & sweep**) and writes the current sliders back on OpenCOR or CUFLynx export.
 
 | Column | Description |
 | :--- | :--- |
-| `vessel_name` | Instance name, or `global`. |
+| `vessel_name` | Instance name, or `global` for a global constant (CA calls instances vessels). |
 | `param_name` | Parameter name. |
 | `param_type` | Always `const`. |
 | `min`, `max` | Slider range. |
