@@ -13,7 +13,9 @@
     >
       <template #option="{ option }">
         <!-- Named "Plots (3)" for a screen reader, the count shown as a badge. -->
-        <span class="controls-view-label">{{ option.name }}</span> <span class="controls-view-count"><span class="visually-hidden">(</span>{{ option.count }}<span class="visually-hidden">)</span></span>
+        <span class="controls-view-label" aria-hidden="true">{{ option.name }}</span>
+        <span class="controls-view-count" aria-hidden="true">{{ option.count }}</span>
+        <span class="visually-hidden">{{ option.label }}</span>
       </template>
     </SelectButton>
 
