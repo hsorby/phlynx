@@ -85,7 +85,7 @@
             iconOnly
             variant="text"
             severity="secondary"
-            v-tooltip.bottom="{ value: 'Add top handle', showDelay: 300 }"
+            v-tooltip.bottom="{ value: 'Add left handle', showDelay: 300 }"
             :disabled="!somethingSelected"
             @click="addHandle('left')"
           >
@@ -2088,7 +2088,7 @@ const imageExportTitle = computed(
  * Exports the canvas in the format chosen in Settings. Edit buttons are always hidden, warning badges
  * unless Settings asks for them; hiding (rather than removing) keeps the rest of each card in place.
  */
-function doImageExport() {
+async function doImageExport() {
   const root = vueFlowRef.value
   const format = appSettings.imageExportFormat
   const includeWarnings = appSettings.imageExportWarnings

@@ -7,18 +7,21 @@
     }"
     ref="panelRef"
   >
-    <button
-      v-if="isCollapsed"
-      ref="expandToggleRef"
-      type="button"
-      class="library-expand-toggle"
-      aria-label="Show module library"
-      aria-expanded="false"
-      @click="toggleCollapsed"
-      v-tooltip.right="'Show module library'"
-    >
-      <i class="pi pi-bars"></i>
-    </button>
+    <!-- Fades in once the panel has rolled up into it, and goes at once when it drops back down. -->
+    <Transition name="library-toggle">
+      <button
+        v-if="isCollapsed"
+        ref="expandToggleRef"
+        type="button"
+        class="library-expand-toggle"
+        :aria-label="`Show ${subject}`"
+        aria-expanded="false"
+        @click="toggleCollapsed"
+        v-tooltip.right="`Show ${subject}`"
+      >
+        <i class="pi pi-bars"></i>
+      </button>
+    </Transition>
 
     <Transition name="library-drop">
       <div v-show="!isCollapsed" class="library-panel-body">
@@ -29,10 +32,10 @@
               ref="collapseToggleRef"
               type="button"
               class="library-collapse-toggle"
-              aria-label="Hide module library"
+              :aria-label="`Hide ${subject}`"
               aria-expanded="true"
               @click="toggleCollapsed"
-              v-tooltip.bottom="'Hide module library'"
+              v-tooltip.bottom="`Hide ${subject}`"
             >
               <i class="pi pi-chevron-left"></i>
             </button>
@@ -56,6 +59,11 @@ const props = defineProps({
   title: {
     type: String,
     default: 'Available Modules',
+  },
+  // What the show/hide buttons name, as in "Hide module library".
+  subject: {
+    type: String,
+    default: 'module library',
   },
   initialWidth: {
     type: Number,
@@ -259,7 +267,22 @@ defineExpose({ isCollapsed, toggleCollapsed })
   clip-path: inset(0 -8px 100% 0);
 }
 
+/* The hamburger waits for the panel's 120ms roll-up before fading in. */
+.library-toggle-enter-active {
+  transition: opacity 150ms ease-out 120ms;
+}
+
+.library-toggle-enter-from {
+  opacity: 0;
+}
+
+/* Gone at once, without waiting on the button's own colour transition. */
+.library-toggle-leave-active {
+  transition: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .library-toggle-enter-active,
   .library-drop-enter-active,
   .library-drop-leave-active {
     transition: none;

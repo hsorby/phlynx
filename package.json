@@ -30,6 +30,7 @@
     "build:glossary": "node src/services/generate/generateGlossaryIndex.js",
     "preview": "yarn build:glossary && vite preview",
     "update:docs:changelog": "node scripts/build-changelog.js",
+    "docs:screenshots": "python3 tests/playwright/docs_screenshots.py",
     "test": "vitest",
     "test:ui": "python3 tests/run_playwright_tests.py",
     "test:unit": "vitest run --dir tests/vitest/",

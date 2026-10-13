@@ -114,4 +114,16 @@ describe('ResizableLibraryPanel', () => {
     expect(wrapper.classes()).toContain('resizable-library-panel--collapsed')
     expect(expandButton().exists()).toBe(true)
   })
+
+  it('names what it shows and hides in its toggles', async () => {
+    mountPanel({ title: 'User Guide', subject: 'user guide menu' })
+
+    const hide = wrapper.find('button[aria-label="Hide user guide menu"]')
+    expect(hide.attributes('data-tooltip')).toBe('Hide user guide menu')
+    await hide.trigger('click')
+
+    const show = wrapper.find('button[aria-label="Show user guide menu"]')
+    expect(show.exists()).toBe(true)
+    expect(show.attributes('data-tooltip')).toBe('Show user guide menu')
+  })
 })
