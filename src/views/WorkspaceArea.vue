@@ -568,6 +568,7 @@ import { useLibraryStore } from '../stores/libraryStore'
 import { useSessionMetadataStore } from '../stores/sessionMetadataStore'
 import { useFlowHistoryStore } from '../stores/historyStore'
 import { getUndoRedoAction, useFlowHistory } from '../composables/useFlowHistory'
+import { useConnect } from '../composables/useConnect'
 import { useSimulationResultsStore } from '../stores/simulationResultsStore'
 import { useSimulationSettingsStore } from '../stores/simulationSettingsStore'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
@@ -660,7 +661,6 @@ import {
 } from '../utils/constants'
 import { getId as getNextNodeId, generateUniqueInstanceName } from '../utils/nodes'
 import { getId as getNextEdgeId, resolvePortCouplings } from '../utils/edges'
-import { getHandleUidFromHandleId } from '../utils/handles'
 import { parseParametersFile } from '../utils/import'
 import { applyParameterValues, applyParametersToNodes, skippedParametersMessage } from '../utils/parameters'
 import { detachReactivity } from '../utils/reactivity'
@@ -711,7 +711,6 @@ const {
   getSelectedNodes,
   getSelectedEdges,
   nodes,
-  onConnect,
   onConnectEnd,
   removeEdges,
   removeSelectedNodes,
@@ -1134,122 +1133,6 @@ onConnectEnd(() => {
   revertPendingGhostIfUnused()
 })
 
-onConnect(async (connection) => {
-  const sourceNode = findNode(connection.source)
-  const targetNode = findNode(connection.target)
-
-  if (!sourceNode || !targetNode) return
-  if (sourceNode === targetNode) return
-
-  const isExistingConnection = edges.value.find(
-    (e) => e.sourceHandle === connection.sourceHandle && e.targetHandle === connection.targetHandle
-  )
-  if (isExistingConnection) return
-
-  const duplicate = edges.value.find((e) => e.source === connection.source && e.target === connection.target)
-
-  const duplicateSnapshot = duplicate ? detachReactivity(duplicate) : null
-
-  const sourceHandleUid = connection.sourceHandle ? getHandleUidFromHandleId(connection.sourceHandle) : null
-  const targetHandleUid = connection.targetHandle ? getHandleUidFromHandleId(connection.targetHandle) : null
-
-  confirmActivation()
-
-  if (sourceHandleUid) {
-    activateHandle(connection.source, sourceHandleUid, { trackHistory: false })
-  }
-  if (targetHandleUid) {
-    activateHandle(connection.target, targetHandleUid, { trackHistory: false })
-  }
-
-  if (duplicate) {
-    const pendingEdge = {
-      ...connection,
-      id: `pending--${connection.source}--${connection.target}`,
-      style: { strokeDasharray: '8 8', opacity: 0.4 }, // visually mark "unconfirmed"
-    }
-
-    suppressedEdgeIds.add(pendingEdge.id)
-    addEdges(pendingEdge)
-
-    const shouldReplace = await confirm({
-      header: 'Connection already exists',
-      message:
-        'A connection already exists between these instances. Do you wish to replace it?\n\n' +
-        'If you select Cancel, the new connection will be discarded and the existing connection will remain.',
-      severity: 'warning',
-      acceptLabel: 'Replace',
-      rejectLabel: 'Cancel',
-    })
-
-    if (!shouldReplace) {
-      removeEdges(pendingEdge.id)
-      suppressedEdgeIds.delete(pendingEdge.id)
-      if (sourceHandleUid) revertHandleIfUnused(connection.source, sourceHandleUid, { trackHistory: false })
-      if (targetHandleUid) revertHandleIfUnused(connection.target, targetHandleUid, { trackHistory: false })
-      return
-    }
-
-    suppressedEdgeIds.add(duplicateSnapshot.id)
-    await revertHandlesForEdge(duplicateSnapshot, [duplicateSnapshot.id], { trackHistory: false })
-    removeEdges(duplicateSnapshot.id)
-    removeEdges(pendingEdge.id)
-    suppressedEdgeIds.delete(pendingEdge.id)
-  }
-
-  // Derive ordinal indices from the existing edge graph:
-  //   sourceIndex = how many edges already leave from this source node
-  //                 (i.e. this is the Nth output being connected)
-  //   targetIndex = how many edges already arrive at this target node
-  //                 (i.e. this is the Nth input being connected)
-  // These mirror the positional semantics of out_modules / inp_modules.
-  const sourceIndex = edges.value.filter((e) => e.source === connection.source).length
-  const targetIndex = edges.value.filter((e) => e.target === connection.target).length
-
-  // Resolve which port labels are coupled across this conduit, using ordinal
-  // indices to select the correct slot when a label appears multiple times.
-  const couplings = resolvePortCouplings(
-    sourceNode.data.ports ?? [],
-    targetNode.data.ports ?? [],
-    sourceIndex,
-    targetIndex
-  )
-
-  const newEdge = {
-    ...connection,
-    ...edgeLineOptions,
-    id: `${connection.source}--${connection.target}`,
-    data: {
-      couplings,
-    },
-  }
-
-  if (duplicate) {
-    suppressedEdgeIds.add(newEdge.id)
-    addEdges(newEdge)
-    suppressedEdgeIds.delete(duplicateSnapshot.id)
-    suppressedEdgeIds.delete(newEdge.id)
-
-    historyStore.addCommand({
-      type: 'replace-edge',
-      async undo() {
-        await revertHandlesForEdge(newEdge, [newEdge.id], { trackHistory: false })
-        removeEdges(newEdge.id)
-        addEdges(duplicateSnapshot)
-        await reactivateEdgeHandles(duplicateSnapshot, { trackHistory: false })
-      },
-      async redo() {
-        await revertHandlesForEdge(duplicateSnapshot, [duplicateSnapshot.id], { trackHistory: false })
-        removeEdges(duplicateSnapshot.id)
-        addEdges(newEdge)
-        await reactivateEdgeHandles(newEdge, { trackHistory: false })
-      },
-    })
-  } else {
-    addEdges(newEdge)
-  }
-})
-
 function selectAllNodes() {
   nodes.value.forEach((node) => {
     node.selected = true
@@ -1328,6 +1211,17 @@ const { onNodeChange, onEdgeChange } = useFlowHistory({
   indexAddEdge,
   indexRemoveEdge,
   updateHelperLines,
+  revertHandlesForEdge,
+  reactivateEdgeHandles,
+})
+
+useConnect({
+  suppressedEdgeIds,
+  confirm,
+  edgeLineOptions,
+  confirmActivation,
+  activateHandle,
+  revertHandleIfUnused,
   revertHandlesForEdge,
   reactivateEdgeHandles,
 })
