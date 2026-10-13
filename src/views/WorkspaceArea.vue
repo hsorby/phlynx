@@ -701,9 +701,7 @@ const toastTop = computed(() => SEARCH_BAR_TOP + TOAST_GAP_BELOW_SEARCH_BAR)
 const {
   addEdges,
   addNodes,
-  applyNodeChanges,
   addSelectedNodes,
-  applyEdgeChanges,
   dimensions,
   edges,
   findEdge,
@@ -716,7 +714,6 @@ const {
   onConnect,
   onConnectEnd,
   removeEdges,
-  removeNodes,
   removeSelectedNodes,
   screenToFlowCoordinate,
   setViewport,
