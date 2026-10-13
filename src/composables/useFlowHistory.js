@@ -14,10 +14,11 @@ import { detachReactivity } from '../utils/reactivity'
 export function getUndoRedoAction(event) {
   const isCtrl = event.ctrlKey || event.metaKey
   const isShift = event.shiftKey
+  const key = event.key.toLowerCase()
 
-  if (isCtrl && !isShift && event.key === 'z') return 'undo'
-  if (isCtrl && isShift && event.key === 'z') return 'redo'
-  if (isCtrl && event.key.toLowerCase() === 'y') return 'redo'
+  if (isCtrl && !isShift && key === 'z') return 'undo'
+  if (isCtrl && isShift && key === 'z') return 'redo'
+  if (isCtrl && key === 'y') return 'redo'
   return null
 }
 
