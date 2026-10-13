@@ -59,7 +59,7 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore, ob
       // --- PARAMETER CLASSIFICATION FOR THIS NODE ---
 
       const variablesAndUnits = restoreVariables(node.data.variables)
-      const { componentFile, componentType } = parseMathRef(node.data.mathRef)
+      const { componentFile, componentName } = parseMathRef(node.data.mathRef)
       const { moduleType, moduleSubtype } = parseModuleRef(node.data.moduleRef)
 
       const moduleData = libraryStore.availableModules.get(node.data.moduleRef)
@@ -73,7 +73,7 @@ export async function generateExportZip(fileName, nodes, edges, libraryStore, ob
           module_subtype: moduleSubtype,
           module_format: 'cellml', // TODO - will need to generalise 
           component_file: componentFile,
-          component_type: componentType,
+          component_type: componentName,
           entrance_ports: portsByType.entrance_ports || [],
           exit_ports: portsByType.exit_ports || [],
           general_ports: portsByType.general_ports || [],

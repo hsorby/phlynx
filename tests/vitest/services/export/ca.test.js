@@ -24,6 +24,22 @@ describe('generateExportZip', () => {
     expect(files['heart_obs_data.json']).toBe('{"protocol_info": {"pre_times": [0], "sim_times": [[1]]}}\n')
   })
 
+  it("names each config entry's CellML component, as CA's PhLynx schema needs", async () => {
+    const node = {
+      id: 'n1',
+      data: { name: 'heart', moduleRef: 'arterial_simple:vp', mathRef: 'BG_modules.cellml:vp_simple_type', ports: [], variables: [] },
+    }
+    const library = { ...LIBRARY, availableModules: new Map([['arterial_simple:vp', {}]]) }
+    const files = await readZip(await generateExportZip('heart', [node], [], library))
+    const [entry] = JSON.parse(files['heart_module_config.json'])
+    expect(entry).toMatchObject({
+      module_type: 'arterial_simple',
+      module_subtype: 'vp',
+      component_file: 'BG_modules.cellml',
+      component_type: 'vp_simple_type',
+    })
+  })
+
   it('writes no obs_data for a workspace without one', async () => {
     expect(Object.keys(await readZip(await generateExportZip('heart', [], [], LIBRARY)))).not.toContain('heart_obs_data.json')
   })
