@@ -320,6 +320,17 @@ describe('useSimulation', () => {
         expect(store.status).toBe('running')
         expect(engine.runs[0].options.sweep).toEqual({ ...TARGET, readout: 'end' })
       })
+
+      it('doesn’t warn that one without a value is set to 0, as the sweep gives it values', async () => {
+        nodes.value[0].data.variables[1].value = ''
+        useSimulationSettingsStore().setSimulationSettings({ ...useSimulationSettingsStore().simulationSettings, sweep: BC_SWEEP })
+        const { run } = useSimulation()
+
+        run(['a'])
+        await settle()
+        expect(store.status).toBe('running')
+        expect(store.report.warnings).toEqual([])
+      })
     })
 
     it('explains a sweep of something the model computes', async () => {

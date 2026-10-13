@@ -288,3 +288,13 @@ export function scopeHasOde(nodes, getMathAnalysis) {
   }
   return isKnown ? false : null
 }
+
+/**
+ * Lists the boundary conditions a sweep, and its family, give values of their own, so a run doesn't warn that one
+ * without a value is set to 0.
+ *
+ * @param {Object|null} sweep
+ * @returns {Set<string>} Their `nodeId::name`.
+ */
+export const listSweptBoundaries = (sweep) =>
+  new Set([sweep, sweep?.family].filter((target) => target?.type === 'boundary_condition').map((target) => mappingKey(target.nodeId, target.parameterName)))

@@ -17,7 +17,7 @@ import {
 import { NO_CLOCK, addProtocolClock, addProtocolDrivers } from '../services/simulation/protocolDriverModel'
 import { listFeatureOperands, resolveFeatureOperands } from '../services/simulation/protocolFeatures'
 import { clampSolverSettings, prepareProtocolRun } from '../services/simulation/protocolRun'
-import { familyValues, findBoundarySweepProblem, findSweepProblem, resolveSweepTarget, splitFamily, sweepLabel, sweepReadout, sweepValues } from '../services/simulation/sweep'
+import { familyValues, findBoundarySweepProblem, findSweepProblem, listSweptBoundaries, resolveSweepTarget, splitFamily, sweepLabel, sweepReadout, sweepValues } from '../services/simulation/sweep'
 import { buildVariableMapping, mapInspectionModules } from '../services/simulation/variableMapping'
 import { useInspectionModuleStore } from '../stores/inspectionModuleStore'
 import { useLibraryStore } from '../stores/libraryStore'
@@ -212,8 +212,10 @@ export function useSimulation() {
       })
 
     let built = null
-    // Checked every run, since cut connections and inspection modules outside the scope change its warnings.
-    store.report = summariseScopeReport(checkScope(scope, libraryStore))
+    // Checked every run, since cut connections and inspection modules outside the scope change its warnings. A swept
+    // boundary condition takes the sweep's values, so it isn't left at 0.
+    const suppliedKeys = isSweepRun ? listSweptBoundaries(settings.sweep) : new Set()
+    store.report = summariseScopeReport(checkScope(scope, libraryStore, { suppliedKeys }))
     if (isProtocolRun) {
       const { errors, warnings } = protocolStore.validation
       store.report = { ...store.report, errors: [...store.report.errors, ...errors], warnings: [...store.report.warnings, ...warnings] }

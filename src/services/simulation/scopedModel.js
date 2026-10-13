@@ -152,14 +152,17 @@ function resolveWholeBoundaryValues(scope) {
  * Checks a scope before it is flattened. Missing values, conflicts, incomplete nodes and boundary conditions
  * coupled only to each other in the whole model stop the build; lost Sum terms, trimmed inspection modules,
  * boundary conditions falling back to their own value and boundary conditions set to 0 for want of one are
- * warnings, since the scope still builds.
+ * warnings, since the scope still builds. A boundary condition the run itself supplies, as a sweep does, isn't set to 0
+ * for long, so it isn't warned about.
  *
  * @param {ReturnType<typeof resolveScope>} scope
  * @param {Object} libraryStore - Provides availableMath and getGlobalConstant(name).
+ * @param {{suppliedKeys?: Set<string>}} [options] - `suppliedKeys`: the `nodeId::name` of the boundary conditions the
+ *   run gives values of its own.
  * @returns {{canBuild: boolean, errors: string[], incompleteNodes: Array, missingValues: Array, conflicts: string[],
  *   lostSumTerms: Array, trimmedModules: Array, usesOwnValue: Array, zeroedBoundaries: Array, usesCelsius: Array}}
  */
-export function checkScope(scope, libraryStore) {
+export function checkScope(scope, libraryStore, { suppliedKeys = new Set() } = {}) {
   const errors = []
   const incompleteNodes = []
   const missingValues = []
@@ -198,7 +201,9 @@ export function checkScope(scope, libraryStore) {
       for (const row of node.data?.variables ?? []) {
         const entry = { nodeId: node.id, nodeName, variableName: row.name }
         if (row.units === 'celsius') usesCelsius.push(entry)
-        if (scoped.missing.get(node.id)?.has(row.name)) zeroedBoundaries.push(entry)
+        if (scoped.missing.get(node.id)?.has(row.name)) {
+          if (!suppliedKeys.has(`${node.id}::${row.name}`)) zeroedBoundaries.push(entry)
+        }
         else if (row.type === 'constant' && isEmpty(row.value)) missingValues.push({ ...entry, kind: 'constant' })
         else if (row.type === 'global_constant' && isEmpty(libraryStore.getGlobalConstant(row.name)?.value)) {
           missingValues.push({ ...entry, kind: 'global_constant' })

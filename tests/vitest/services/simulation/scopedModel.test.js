@@ -106,6 +106,15 @@ describe('checkScope', () => {
     expect(fixed.usesOwnValue).toEqual([{ nodeId: 'b', nodeName: 'b_name', variableName: 'v' }])
   })
 
+  it('doesn’t warn about a boundary condition without a value that the run supplies, as a sweep does', () => {
+    const a = createNode('a', { vType: 'variable' })
+    const b = createNode('b')
+
+    const report = checkScope(resolveScope(['b'], [a, b], [connect(a, b)]), library(), { suppliedKeys: new Set(['b::v']) })
+    expect(report.canBuild).toBe(true)
+    expect(report.zeroedBoundaries).toEqual([])
+  })
+
   it('doesn’t report a boundary condition whose supplier is in the scope', () => {
     const a = createNode('a', { vType: 'variable' })
     const b = createNode('b')

@@ -6,6 +6,7 @@ import {
   createSweep,
   familyValues,
   findBoundarySweepProblem,
+  listSweptBoundaries,
   findSweepProblem,
   isSweepableEntry,
   isSweepableRow,
@@ -290,5 +291,14 @@ describe('scopeHasOde', () => {
     expect(scopeHasOde([withMath('a', 'algebraic'), withMath('b', 'missing')], getMathAnalysis)).toBeNull()
     expect(scopeHasOde([withMath('a', 'missing'), withMath('b', 'ode')], getMathAnalysis)).toBe(true)
     expect(scopeHasOde([{ id: 'c', data: { name: 'c', variables: [] } }], getMathAnalysis)).toBeNull()
+  })
+})
+
+describe('listSweptBoundaries', () => {
+  it('lists the boundary conditions a sweep and its curves vary, and nothing else', () => {
+    const bc = { nodeId: 'a', parameterName: 'v', type: 'boundary_condition' }
+    expect(listSweptBoundaries(null)).toEqual(new Set())
+    expect(listSweptBoundaries({ nodeId: 'a', parameterName: 'k', type: 'constant' })).toEqual(new Set())
+    expect(listSweptBoundaries({ ...bc, family: { nodeId: 'b', parameterName: 'w', type: 'boundary_condition' } })).toEqual(new Set(['a::v', 'b::w']))
   })
 })
