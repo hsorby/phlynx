@@ -63,7 +63,7 @@
         <Button icon="pi pi-times" text rounded size="small" severity="secondary" aria-label="Cancel" @click="choosingXFor = null" />
       </div>
       <div v-else-if="plot.xAxis" class="plot-x">
-        <span class="plot-x-text" :title="`Plotted against ${plot.xAxis.label}`">
+        <span class="plot-x-text" v-overflow-title="`Plotted against ${plot.xAxis.label}`">
           Against <span class="plot-variable-component">{{ plot.xAxis.componentLabel }}/</span><span class="plot-variable-name">{{ plot.xAxis.variableName }}</span>
         </span>
         <Button
@@ -78,10 +78,10 @@
         />
       </div>
 
-      <ul v-if="plot.selections.length" class="plot-variables">
+      <ul v-if="plot.selections.length" class="plot-variables plot-variables--columns" :class="{ 'plot-variables--movable': plots.length > 1 }">
         <li v-for="selection in plot.selections" :key="selection.key" class="plot-variable" :class="{ 'plot-variable--elsewhere': !selection.inScope }">
           <span class="plot-swatch" :class="{ 'plot-swatch--none': !selection.colour }" :style="{ background: selection.colour ?? 'transparent' }" aria-hidden="true"></span>
-          <span class="plot-variable-text" :title="selection.title">
+          <span class="plot-variable-text" v-overflow-title="selection.title">
             <span class="plot-variable-component">{{ selection.componentLabel }}/</span><span class="plot-variable-name">{{ selection.variableName }}</span>
           </span>
           <span class="plot-variable-units">{{ selection.units }}</span>
@@ -130,7 +130,7 @@
       </header>
       <ul class="plot-variables">
         <li v-for="selection in unassigned" :key="selection.key" class="plot-variable">
-          <span class="plot-variable-text">
+          <span class="plot-variable-text" v-overflow-title="selection.title">
             <span class="plot-variable-component">{{ selection.componentLabel }}/</span><span class="plot-variable-name">{{ selection.variableName }}</span>
           </span>
           <Button
@@ -168,6 +168,7 @@ import Select from 'primevue/select'
 import VariablePathPicker from './VariablePathPicker.vue'
 import { useColorScheme } from '../../composables/useColorScheme'
 import { useConfirmDialog } from '../../composables/useConfirmDialog'
+import { vOverflowTitle } from '../../directives/overflowTitle'
 import {
   acceptsUnits,
   addPlot,
@@ -486,6 +487,24 @@ function openMenu(event, plot) {
   font-size: 0.8125rem;
 }
 
+/* A plot's rows share their columns, so the units, the plot to move to and the remove button line up down
+   the plot, whatever each variable's name; only the name shrinks. */
+.plot-variables--columns {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  column-gap: 6px;
+}
+
+.plot-variables--columns.plot-variables--movable {
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+}
+
+.plot-variables--columns > .plot-variable {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
 .plot-variable--elsewhere {
   opacity: 0.6;
 }
@@ -502,20 +521,28 @@ function openMenu(event, plot) {
   visibility: hidden;
 }
 
+/* The instance gives way first, so the variable's name is what stays. */
 .plot-variable-text {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
+  display: flex;
   white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .plot-variable-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-weight: 600;
   color: var(--p-text-color);
 }
 
 .plot-variable-component {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--p-text-muted-color);
 }
 
@@ -571,6 +598,11 @@ function openMenu(event, plot) {
   .plot-move,
   .plot-variable-units {
     display: none;
+  }
+
+  .plot-variables--columns,
+  .plot-variables--columns.plot-variables--movable {
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 }
 </style>

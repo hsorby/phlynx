@@ -91,6 +91,39 @@
     </header>
 
     <div class="page-body">
+      <aside
+        class="page-controls"
+        :class="{ 'page-controls--collapsed': isControlsCollapsed }"
+        :style="{ width: isControlsCollapsed ? '0px' : `${controlsWidth}px` }"
+      >
+        <SimulationControls
+          v-if="!isControlsCollapsed"
+          has-settings
+          v-model:view="controlsView"
+          v-model:target-plot-id="targetPlotId"
+          :nodes="nodes"
+          :scope-node-ids="hasScope ? store.scopeNodeIds : null"
+          :keep-current="keepCurrent"
+          @change="rerunForSliders"
+        />
+      </aside>
+      <div
+        class="resize-handle"
+        :class="{ 'resize-handle--disabled': isControlsCollapsed }"
+        @mousedown="onHandleMousedown"
+      >
+        <button
+          type="button"
+          class="aside-collapse-toggle"
+          :aria-label="isControlsCollapsed ? 'Show what gets plotted and tried out' : 'Hide what gets plotted and tried out'"
+          :aria-expanded="!isControlsCollapsed"
+          v-tooltip.right="isControlsCollapsed ? 'Show the controls' : 'Hide the controls'"
+          @mousedown.stop
+          @click="isControlsCollapsed = !isControlsCollapsed"
+        >
+          <i :class="isControlsCollapsed ? 'pi pi-chevron-right' : 'pi pi-chevron-left'" aria-hidden="true"></i>
+        </button>
+      </div>
       <main class="page-main" aria-label="Simulation results">
         <div ref="chartsEl" class="page-charts">
           <template v-if="hasFigures">
@@ -134,38 +167,6 @@
         <p v-if="hasFigures" class="page-hint">Drag across a chart to zoom in; double-click it to zoom out.</p>
       </main>
 
-      <div
-        class="resize-handle"
-        :class="{ 'resize-handle--disabled': isControlsCollapsed }"
-        @mousedown="onHandleMousedown"
-      >
-        <button
-          type="button"
-          class="aside-collapse-toggle"
-          :aria-label="isControlsCollapsed ? 'Show what gets plotted and tried out' : 'Hide what gets plotted and tried out'"
-          :aria-expanded="!isControlsCollapsed"
-          v-tooltip.left="isControlsCollapsed ? 'Show the controls' : 'Hide the controls'"
-          @mousedown.stop
-          @click="isControlsCollapsed = !isControlsCollapsed"
-        >
-          <i :class="isControlsCollapsed ? 'pi pi-chevron-left' : 'pi pi-chevron-right'" aria-hidden="true"></i>
-        </button>
-      </div>
-      <aside
-        class="page-controls"
-        :class="{ 'page-controls--collapsed': isControlsCollapsed }"
-        :style="{ width: isControlsCollapsed ? '0px' : `${controlsWidth}px` }"
-      >
-        <SimulationControls
-          v-if="!isControlsCollapsed"
-          v-model:view="controlsView"
-          v-model:target-plot-id="targetPlotId"
-          :nodes="nodes"
-          :scope-node-ids="hasScope ? store.scopeNodeIds : null"
-          :keep-current="keepCurrent"
-          @change="rerunForSliders"
-        />
-      </aside>
     </div>
   </div>
 </template>
@@ -281,7 +282,7 @@ const emptyHint = computed(() => {
 const controlsView = ref('plots')
 const targetPlotId = ref(null)
 const isControlsCollapsed = ref(false)
-const { width: controlsWidth, startResize } = useResizableAside(360, 280, 640, 'right')
+const { width: controlsWidth, startResize } = useResizableAside(360, 280, 640, 'left')
 // As the page's styles stack the controls under the charts.
 const NARROW_QUERY = '(max-width: 820px)'
 
@@ -563,13 +564,13 @@ function downloadPng() {
   overflow: hidden;
 }
 
-/* Too narrow for both side by side: the controls go under the charts. */
+/* Too narrow for both side by side: the controls go above the charts. */
 @media (max-width: 820px) {
   .page-body {
     flex-direction: column;
   }
 
-  /* A bar above the controls, still with its button to show or hide them, but not dragged. */
+  /* A bar below the controls, still with its button to show or hide them, but not dragged. */
   .resize-handle {
     width: auto;
     height: 6px;
@@ -587,7 +588,7 @@ function downloadPng() {
   .page-controls {
     width: auto !important;
     max-height: 45%;
-    border-top: 1px solid var(--p-content-border-color);
+    border-bottom: 1px solid var(--p-content-border-color);
   }
 }
 </style>
