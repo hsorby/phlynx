@@ -45,7 +45,7 @@ const WorkbenchStub = defineComponent({
     validate: { type: String, default: 'input' },
     autofocus: Boolean,
   },
-  emits: ['equations-change', 'line-commit'],
+  emits: ['equations-change', 'line-commit', 'variable-click'],
   setup(_, { emit, expose }) {
     expose({
       setMathML: (xml) => {
@@ -314,6 +314,13 @@ describe('MathWorkbenchEditor', () => {
     expect(wrapper.emitted('undo')).toHaveLength(1)
     expect(wrapper.emitted('redo')).toHaveLength(1)
     expect(wrapper.emitted('save')).toHaveLength(1)
+  })
+
+  it('passes on the name of a variable clicked in the math', async () => {
+    await mountEditor()
+    workbench().vm.$emit('variable-click', { name: 'x', lineId: 'loaded' })
+
+    expect(wrapper.emitted('variable-click')).toEqual([['x']])
   })
 
   it('round-trips a model through the real workbench', async () => {

@@ -1169,6 +1169,52 @@ class TestSimulationTab(unittest.TestCase):
             context.close()
             browser.close()
 
+    def test_instance_editor_plots_a_variable_clicked_in_the_math_editor(self):
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=HEADLESS_MODE)
+
+            context = browser.new_context(viewport={"width": 1600, "height": 1000})
+            context.add_init_script(OPT_IN_TO_ISOLATION)
+            page = context.new_page()
+            with open(os.path.join(RESOURCE_PATH, "workspace-json.base64")) as f:
+                workspace_json = f.read().strip()
+            page.goto(BASE_URL + f"?open=workspace_json#{workspace_json}", wait_until="commit")
+
+            # ---------- START -----------
+            soma = page.get_by_text("SN_somacell_modules.cellmlsoma_SN")
+            soma.wait_for(timeout=APP_MOUNT_TIMEOUT)
+            page.wait_for_function("window.crossOriginIsolated === true", timeout=APP_MOUNT_TIMEOUT)
+            page.evaluate(SHORTEN_SIMULATION)
+            soma.dblclick()
+            dialog = page.get_by_role("dialog")
+            dialog.get_by_role("tab", name="Math Editor").click()
+            dialog.get_by_role("tab", name=re.compile(r"Plot \(")).click()
+            dialog.get_by_role("button", name="Simulate the whole model").click()
+            expect(dialog.get_by_text("Simulated the whole model")).to_be_visible(timeout=120000)
+
+            # A typeset name in the Math Editor plots the variable it names.
+            name = dialog.locator("[data-name]").filter(has_text=re.compile(r"^Vsensed")).first
+            name.scroll_into_view_if_needed()
+            name.click()
+            expect(dialog.locator(".simulation-plot .plot-title")).to_have_text("soma_SN/V_sensed")
+            expect(dialog.get_by_role("tab", name="Plot (1)")).to_be_visible()
+
+            # A single-letter name isn't wrapped as a name, but its letter still plots it.
+            letter = dialog.locator("[data-atom]:not([data-name] [data-atom])").filter(has_text=re.compile(r"^V$")).first
+            letter.scroll_into_view_if_needed()
+            letter.click()
+            expect(dialog.locator(".simulation-plot .plot-title")).to_have_text("soma_SN/V")
+
+            # A name in a denominator is clicked too (a constant, so it says why it isn't plotted).
+            denominator = dialog.locator('[data-row$=".den"] [data-name]').filter(has_text=re.compile(r"^RdiffSensed")).first
+            denominator.scroll_into_view_if_needed()
+            denominator.click()
+            expect(dialog.locator(".plot-tab-auto-notice")).to_have_text("R_diffSensed is set, not computed, so it isn’t plotted")
+            # ----------- END ------------
+
+            context.close()
+            browser.close()
+
     def test_floating_viewer_stays_over_the_canvas_with_the_sidebar_closed(self):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=HEADLESS_MODE)
