@@ -17,13 +17,21 @@
     </div>
 
     <aside
-      :style="{ width: isCollapsed ? '0px' : width + 'px' }"
+      :style="{ width: effectiveWidth + 'px' }"
       class="context-aside"
       :class="{ 'context-aside--collapsed': isCollapsed }"
     >
-      <Tabs v-model:value="activeTabId" class="context-tabs">
+      <!-- One-way value: tab clicks go through onTabClick, and no tab is selected while collapsed. -->
+      <Tabs :value="isCollapsed ? null : activeTabId" class="context-tabs">
         <TabList>
-          <Tab v-for="tab in tabs" :key="tab.id" :value="tab.id" v-tooltip.right="tab.label">
+          <Tab
+            v-for="tab in tabs"
+            :key="tab.id"
+            :value="tab.id"
+            :tabindex="tab.id === activeTabId ? 0 : -1"
+            v-tooltip.left="tab.label"
+            @click="onTabClick(tab.id)"
+          >
             <i :class="['pi', tab.icon]"></i>
           </Tab>
         </TabList>
@@ -301,10 +309,13 @@ const props = defineProps({
 
 const emit = defineEmits(['resize', 'open-inspection-module-dialog'])
 
+/** Width of the collapsed icon rail: 1px border + 8px padding either side of a 34px tab. */
+const COLLAPSED_WIDTH = 51
+
 const { width, startResize } = useResizableAside(props.initialWidth, props.minWidth, props.maxWidth, 'right')
 const isCollapsed = ref(true)
 
-const effectiveWidth = computed(() => (isCollapsed.value ? 0 : width.value))
+const effectiveWidth = computed(() => (isCollapsed.value ? COLLAPSED_WIDTH : width.value))
 watch(effectiveWidth, (newWidth) => emit('resize', newWidth), { immediate: true })
 
 function toggleCollapsed() {
@@ -349,7 +360,17 @@ function showTab(tabId) {
   isCollapsed.value = false
 }
 
-/** Hides the panel, leaving the canvas its width. */
+/**
+ * Opens the panel on a rail icon's tab, or collapses it when that tab is already open.
+ *
+ * @param {string} tabId
+ */
+function onTabClick(tabId) {
+  if (!isCollapsed.value && activeTabId.value === tabId) collapse()
+  else showTab(tabId)
+}
+
+/** Hides the panel down to its icon rail. */
 function collapse() {
   isCollapsed.value = true
 }
@@ -623,8 +644,21 @@ function handleParameterTypeChange(row) {
 }
 
 .context-aside--collapsed {
-  padding: 0;
-  border-left: none;
+  padding: 1rem 8px;
+}
+
+.context-aside--collapsed :deep(.context-tabs.p-tabs) {
+  min-width: 0;
+  gap: 0;
+}
+
+.context-aside--collapsed :deep(.context-tabs .p-tablist-tab-list) {
+  border-right: none;
+  padding-right: 0;
+}
+
+.context-aside--collapsed :deep(.context-tabs .p-tabpanels) {
+  display: none;
 }
 
 :deep(.context-tabs.p-tabs) {
