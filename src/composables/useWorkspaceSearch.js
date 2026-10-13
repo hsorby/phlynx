@@ -1,22 +1,9 @@
 /**
- * The workspace search: finds instances by name, module or maths file, highlights them and steps through them.
+ * The workspace search: finds instances by name or (with `var:`) by variable, highlights them and steps through them.
  */
 import { computed, ref, watch } from 'vue'
 
-/**
- * Finds the nodes whose name, module or maths file contains the query, in workspace order.
- *
- * @param {Array<Object>} nodes
- * @param {string} query - Already trimmed and lowercased.
- * @returns {string[]} Node ids.
- */
-function findNameMatches(nodes, query) {
-  return nodes
-    .filter((node) =>
-      [node.data?.moduleRef, node.data?.name, node.data?.mathRef].some((field) => field?.toLowerCase().includes(query))
-    )
-    .map((node) => node.id)
-}
+import { SEARCH_MODES, findWorkspaceMatches, parseSearchQuery } from '../utils/workspaceSearch'
 
 /**
  * Builds the search state for a workspace.
@@ -29,14 +16,22 @@ function findNameMatches(nodes, query) {
  */
 export function useWorkspaceSearch({ nodes, findNode, zoomToNode }) {
   const searchQuery = ref('')
-  const matchIds = ref([])
-  const currentMatchIndex = ref(0)
+  const matches = ref([])
+  // -1 until the user steps to a match.
+  const currentMatchIndex = ref(-1)
+  const isSearchFocused = ref(false)
+  const isPickerDismissed = ref(false)
+  const pickerIndex = ref(0)
 
-  const trimmedQuery = computed(() => searchQuery.value.trim().toLowerCase())
-  const isActive = computed(() => trimmedQuery.value !== '')
+  const parsedQuery = computed(() => parseSearchQuery(searchQuery.value))
+  const isActive = computed(() => parsedQuery.value.term !== '')
+  const matchIds = computed(() => matches.value.map((match) => match.nodeId))
   const matchingNodeIds = computed(() => new Set(matchIds.value))
-  const matchCount = computed(() => (isActive.value ? matchIds.value.length : null))
-  const matchingNodesList = computed(() => matchIds.value.map((id) => findNode(id)).filter(Boolean))
+  const matchCount = computed(() => (isActive.value ? matches.value.length : null))
+  const matchingNodesList = computed(() =>
+    matches.value.map((match) => ({ node: findNode(match.nodeId), variables: match.variables })).filter((match) => match.node)
+  )
+  const showModePicker = computed(() => isSearchFocused.value && !searchQuery.value && !isPickerDismissed.value)
 
   /**
    * Re-runs the search, optionally keeping the current match if it still matches.
@@ -46,9 +41,8 @@ export function useWorkspaceSearch({ nodes, findNode, zoomToNode }) {
    */
   const runSearch = ({ keepCurrent = false } = {}) => {
     const currentId = matchIds.value[currentMatchIndex.value]
-    matchIds.value = isActive.value ? findNameMatches(nodes.value, trimmedQuery.value) : []
-    const keptIndex = keepCurrent ? matchIds.value.indexOf(currentId) : -1
-    currentMatchIndex.value = Math.max(keptIndex, 0)
+    matches.value = findWorkspaceMatches(nodes.value, parsedQuery.value)
+    currentMatchIndex.value = keepCurrent ? matchIds.value.indexOf(currentId) : -1
   }
 
   const clearSearch = () => {
@@ -69,15 +63,59 @@ export function useWorkspaceSearch({ nodes, findNode, zoomToNode }) {
 
   const cycleToNextMatch = () => {
     const count = matchIds.value.length
-    if (count === 0) return
-    // A single match is zoomed to again rather than stepped past.
-    selectMatch(count === 1 ? 0 : (currentMatchIndex.value + 1) % count)
+    if (count) selectMatch((currentMatchIndex.value + 1) % count)
   }
 
   const cycleToPreviousMatch = () => {
     const count = matchIds.value.length
-    if (count <= 1) return
-    selectMatch((currentMatchIndex.value - 1 + count) % count)
+    if (count) selectMatch(currentMatchIndex.value <= 0 ? count - 1 : currentMatchIndex.value - 1)
+  }
+
+  /**
+   * Starts a search in a mode: its prefix goes in the box, ready for the term.
+   *
+   * @param {number} index - Into SEARCH_MODES.
+   */
+  const pickMode = (index) => {
+    searchQuery.value = SEARCH_MODES[index].prefix
+    runSearch()
+    isPickerDismissed.value = true
+  }
+
+  const onSearchFocus = () => {
+    isSearchFocused.value = true
+    isPickerDismissed.value = false
+    pickerIndex.value = 0
+  }
+
+  const onSearchBlur = () => {
+    isSearchFocused.value = false
+  }
+
+  /**
+   * Handles the search box's keys: the mode picker's arrows and Enter while it shows (Tab too, unless the name
+   * search is highlighted, so Tab still leaves the box), otherwise the arrows or Enter and Shift+Enter to step
+   * through matches. Escape clears the box, or leaves it once empty.
+   *
+   * @param {KeyboardEvent} event
+   */
+  const onSearchKeydown = (event) => {
+    if (showModePicker.value && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
+      event.preventDefault()
+      const step = event.key === 'ArrowDown' ? 1 : -1
+      pickerIndex.value = (pickerIndex.value + step + SEARCH_MODES.length) % SEARCH_MODES.length
+    } else if (showModePicker.value && (event.key === 'Enter' || (event.key === 'Tab' && !event.shiftKey && pickerIndex.value > 0))) {
+      event.preventDefault()
+      pickMode(pickerIndex.value)
+    } else if (event.key === 'Enter' || (matchIds.value.length && ['ArrowDown', 'ArrowUp'].includes(event.key))) {
+      event.preventDefault()
+      if (event.key === 'ArrowUp' || (event.key === 'Enter' && event.shiftKey)) cycleToPreviousMatch()
+      else cycleToNextMatch()
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      if (searchQuery.value) clearSearch()
+      else event.target.blur?.()
+    }
   }
 
   /**
@@ -91,12 +129,31 @@ export function useWorkspaceSearch({ nodes, findNode, zoomToNode }) {
     return matchingNodeIds.value.has(props.id) ? 'node-search-match' : 'node-search-dimmed'
   }
 
+  // Emptying the box offers the modes again.
+  watch(
+    searchQuery,
+    (query) => {
+      if (!query) {
+        isPickerDismissed.value = false
+        pickerIndex.value = 0
+      }
+    },
+    { flush: 'sync' }
+  )
+
   // Track only the fields the search reads; a deep watch walked every node on each drag frame and selection change.
   watch(
-    () =>
-      isActive.value
-        ? nodes.value.map((n) => `${n.id}|${n.data?.name}|${n.data?.moduleRef}|${n.data?.mathRef}`).join('\n')
-        : '',
+    () => {
+      if (!isActive.value) return ''
+      const isVarMode = parsedQuery.value.mode === 'var'
+      return nodes.value
+        .map((n) => {
+          const key = `${n.id}|${n.data?.name}|${n.data?.moduleRef}|${n.data?.mathRef}`
+          if (!isVarMode) return key
+          return `${key}|${(n.data?.variables ?? []).map((row) => `${row?.name}:${row?.type}:${row?.stateRole}`).join(',')}`
+        })
+        .join('\n')
+    },
     () => {
       if (isActive.value) runSearch({ keepCurrent: true })
     }
@@ -104,16 +161,24 @@ export function useWorkspaceSearch({ nodes, findNode, zoomToNode }) {
 
   return {
     searchQuery,
+    parsedQuery,
     isActive,
     matchCount,
     matchingNodeIds,
     matchingNodesList,
     currentMatchIndex,
+    isSearchFocused,
+    showModePicker,
+    pickerIndex,
     runSearch,
     clearSearch,
     selectMatch,
     cycleToNextMatch,
     cycleToPreviousMatch,
+    pickMode,
+    onSearchFocus,
+    onSearchBlur,
+    onSearchKeydown,
     getNodeClass,
   }
 }
