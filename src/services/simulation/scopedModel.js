@@ -358,7 +358,13 @@ export function summariseScopeReport(report) {
     ),
   ]
 
-  const notes = report.usesOwnValue.map((entry) => `${variable(entry)} uses its own value, since what supplies it is outside the selection.`)
+  // One note for every boundary condition falling back to its own value, rather than a line each.
+  const ownValues = report.usesOwnValue.map(variable)
+  const notes = !ownValues.length
+    ? []
+    : ownValues.length === 1
+      ? [`${ownValues[0]} uses its own value, since what supplies it is outside the selection.`]
+      : [`These use their own values, since what supplies them is outside the selection: ${ownValues.join(', ')}.`]
 
   return { errors, warnings, notes }
 }

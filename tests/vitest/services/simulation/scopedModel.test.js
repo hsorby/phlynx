@@ -282,6 +282,16 @@ describe('summariseScopeReport', () => {
     // Falling back to its own value is expected, so it is a note rather than a warning.
     expect(notes).toEqual(['"a_name.u" uses its own value, since what supplies it is outside the selection.'])
   })
+
+  it('groups the boundary conditions using their own values into one note', () => {
+    const entry = (variableName) => ({ nodeId: 'a', nodeName: 'a_name', variableName })
+    const report = { errors: [], incompleteNodes: [], missingValues: [], conflicts: [], lostSumTerms: [], trimmedModules: [], zeroedBoundaries: [] }
+
+    expect(summariseScopeReport({ ...report, usesOwnValue: [] }).notes).toEqual([])
+    expect(summariseScopeReport({ ...report, usesOwnValue: [entry('u'), entry('v'), entry('w')] }).notes).toEqual([
+      'These use their own values, since what supplies them is outside the selection: "a_name.u", "a_name.v", "a_name.w".',
+    ])
+  })
 })
 
 describe('scopeFlowObject', () => {
